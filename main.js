@@ -6558,6 +6558,7 @@ var $author$project$Main$init = function (flagsJson) {
 	var today = dec('today');
 	var model = {
 		anthropicKey: dec('anthropicKey'),
+		editingEntry: $elm$core$Maybe$Nothing,
 		entries: _List_Nil,
 		error: $elm$core$Maybe$Nothing,
 		googleClientId: dec('googleClientId'),
@@ -6780,6 +6781,16 @@ var $author$project$Main$deleteEntry = F3(
 				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ':batchUpdate')
 			});
 	});
+var $elm$core$String$fromFloat = _String_fromNumber;
+var $author$project$Main$entryToPending = function (entry) {
+	return {
+		amount: $elm$core$String$fromFloat(entry.amount),
+		category: entry.category,
+		date: entry.date,
+		merchant: entry.merchant,
+		note: entry.note
+	};
+};
 var $author$project$Main$extractBase64 = function (dataUrl) {
 	var _v0 = A2($elm$core$String$split, ',', dataUrl);
 	if (_v0.b && _v0.b.b) {
@@ -6801,7 +6812,6 @@ var $elm$core$List$filter = F2(
 			_List_Nil,
 			list);
 	});
-var $elm$core$String$fromFloat = _String_fromNumber;
 var $author$project$Main$getMimeType = function (dataUrl) {
 	return A2($elm$core$String$contains, 'image/png', dataUrl) ? 'image/png' : (A2($elm$core$String$contains, 'image/gif', dataUrl) ? 'image/gif' : (A2($elm$core$String$contains, 'image/webp', dataUrl) ? 'image/webp' : 'image/jpeg'));
 };
@@ -7338,6 +7348,49 @@ var $author$project$Main$stripCodeFence = function (s) {
 					$elm$core$String$lines(trimmed))))) : trimmed;
 };
 var $elm$file$File$toUrl = _File_toUrl;
+var $author$project$Main$updateEntry = F3(
+	function (token, sheetId, entry) {
+		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':G' + $elm$core$String$fromInt(entry.rowIndex)));
+		var body = $elm$json$Json$Encode$object(
+			_List_fromArray(
+				[
+					_Utils_Tuple2(
+					'values',
+					A2(
+						$elm$json$Json$Encode$list,
+						$elm$core$Basics$identity,
+						_List_fromArray(
+							[
+								A2(
+								$elm$json$Json$Encode$list,
+								$elm$core$Basics$identity,
+								_List_fromArray(
+									[
+										$elm$json$Json$Encode$string(entry.id),
+										$elm$json$Json$Encode$string(entry.date),
+										$elm$json$Json$Encode$float(entry.amount),
+										$elm$json$Json$Encode$string(
+										$author$project$Main$categoryLabel(entry.category)),
+										$elm$json$Json$Encode$string(entry.note),
+										$elm$json$Json$Encode$string(entry.merchant),
+										$elm$json$Json$Encode$string(entry.createdAt)
+									]))
+							])))
+				]));
+		return $elm$http$Http$request(
+			{
+				body: $elm$http$Http$jsonBody(body),
+				expect: $author$project$Main$expectWhateverBody($author$project$Main$EntrySubmitted),
+				headers: _List_fromArray(
+					[
+						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + token)
+					]),
+				method: 'PUT',
+				timeout: $elm$core$Maybe$Nothing,
+				tracker: $elm$core$Maybe$Nothing,
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (range + '?valueInputOption=RAW')))
+			});
+	});
 var $author$project$Main$updatePending = F2(
 	function (f, model) {
 		return _Utils_Tuple2(
@@ -7382,7 +7435,7 @@ var $author$project$Main$update = F2(
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{entries: _List_Nil, oauthToken: $elm$core$Maybe$Nothing, tab: $author$project$Main$LedgerTab}),
+						{editingEntry: $elm$core$Maybe$Nothing, entries: _List_Nil, oauthToken: $elm$core$Maybe$Nothing, tab: $author$project$Main$LedgerTab}),
 					$author$project$Main$clearStorage(_Utils_Tuple0));
 			case 'FileSelected':
 				var file = msg.a;
@@ -7571,23 +7624,43 @@ var $author$project$Main$update = F2(
 				var posix = msg.a;
 				var token = A2($elm$core$Maybe$withDefault, '', model.oauthToken);
 				var p = model.pendingEntry;
-				var entry = {
-					amount: A2(
-						$elm$core$Maybe$withDefault,
-						0,
-						$elm$core$String$toFloat(p.amount)),
-					category: p.category,
-					createdAt: $author$project$Main$posixToIso(posix),
-					date: p.date,
-					id: 'e-' + $elm$core$String$fromInt(
-						$elm$time$Time$posixToMillis(posix)),
-					merchant: p.merchant,
-					note: p.note,
-					rowIndex: 0
-				};
-				return _Utils_Tuple2(
-					model,
-					A3($author$project$Main$appendEntry, token, model.sheetId, entry));
+				var _v7 = model.editingEntry;
+				if (_v7.$ === 'Just') {
+					var original = _v7.a;
+					var updated = _Utils_update(
+						original,
+						{
+							amount: A2(
+								$elm$core$Maybe$withDefault,
+								0,
+								$elm$core$String$toFloat(p.amount)),
+							category: p.category,
+							date: p.date,
+							merchant: p.merchant,
+							note: p.note
+						});
+					return _Utils_Tuple2(
+						model,
+						A3($author$project$Main$updateEntry, token, model.sheetId, updated));
+				} else {
+					var entry = {
+						amount: A2(
+							$elm$core$Maybe$withDefault,
+							0,
+							$elm$core$String$toFloat(p.amount)),
+						category: p.category,
+						createdAt: $author$project$Main$posixToIso(posix),
+						date: p.date,
+						id: 'e-' + $elm$core$String$fromInt(
+							$elm$time$Time$posixToMillis(posix)),
+						merchant: p.merchant,
+						note: p.note,
+						rowIndex: 0
+					};
+					return _Utils_Tuple2(
+						model,
+						A3($author$project$Main$appendEntry, token, model.sheetId, entry));
+				}
 			case 'EntrySubmitted':
 				var result = msg.a;
 				if (result.$ === 'Ok') {
@@ -7595,6 +7668,7 @@ var $author$project$Main$update = F2(
 						_Utils_update(
 							model,
 							{
+								editingEntry: $elm$core$Maybe$Nothing,
 								loadingEntries: true,
 								pendingEntry: $author$project$Main$defaultPendingEntry(model.today),
 								submitting: false,
@@ -7697,13 +7771,39 @@ var $author$project$Main$update = F2(
 							$elm$core$Platform$Cmd$none);
 					}
 				}
+			case 'EditEntry':
+				var entry = msg.a;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							editingEntry: $elm$core$Maybe$Just(entry),
+							error: $elm$core$Maybe$Nothing,
+							pendingEntry: $author$project$Main$entryToPending(entry),
+							tab: $author$project$Main$AddTab
+						}),
+					$elm$core$Platform$Cmd$none);
+			case 'CancelEdit':
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							editingEntry: $elm$core$Maybe$Nothing,
+							pendingEntry: $author$project$Main$defaultPendingEntry(model.today),
+							tab: $author$project$Main$LedgerTab
+						}),
+					$elm$core$Platform$Cmd$none);
 			case 'TabChanged':
 				var tab = msg.a;
 				var shouldFetch = _Utils_eq(tab, $author$project$Main$LedgerTab) && ((!_Utils_eq(model.oauthToken, $elm$core$Maybe$Nothing)) && (model.sheetId !== ''));
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{loadingEntries: shouldFetch, tab: tab}),
+						{
+							editingEntry: (!_Utils_eq(tab, $author$project$Main$AddTab)) ? $elm$core$Maybe$Nothing : model.editingEntry,
+							loadingEntries: shouldFetch,
+							tab: tab
+						}),
 					shouldFetch ? A2(
 						$author$project$Main$fetchEntries,
 						A2($elm$core$Maybe$withDefault, '', model.oauthToken),
@@ -7764,6 +7864,7 @@ var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
 var $author$project$Main$AmountChanged = function (a) {
 	return {$: 'AmountChanged', a: a};
 };
+var $author$project$Main$CancelEdit = {$: 'CancelEdit'};
 var $author$project$Main$DateChanged = function (a) {
 	return {$: 'DateChanged', a: a};
 };
@@ -7969,6 +8070,7 @@ var $author$project$Main$viewCategoryBtn = F2(
 	});
 var $author$project$Main$viewAddTab = function (model) {
 	var p = model.pendingEntry;
+	var isEditing = !_Utils_eq(model.editingEntry, $elm$core$Maybe$Nothing);
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
@@ -7978,12 +8080,41 @@ var $author$project$Main$viewAddTab = function (model) {
 		_List_fromArray(
 			[
 				A2(
-				$elm$html$Html$h2,
-				_List_fromArray(
-					[$author$project$Main$sectionHead]),
+				$elm$html$Html$div,
 				_List_fromArray(
 					[
-						$elm$html$Html$text('ADD EXPENSE')
+						A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+						A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
+						A2($elm$html$Html$Attributes$style, 'justify-content', 'space-between'),
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '20px')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$h2,
+						_List_fromArray(
+							[$author$project$Main$sectionHead]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text(
+								isEditing ? 'EDIT EXPENSE' : 'ADD EXPENSE')
+							])),
+						isEditing ? A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$CancelEdit),
+								A2($elm$html$Html$Attributes$style, 'background', 'none'),
+								A2($elm$html$Html$Attributes$style, 'border', 'none'),
+								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+								A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
+								A2($elm$html$Html$Attributes$style, 'padding', '4px 0')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('← cancel')
+							])) : $elm$html$Html$text('')
 					])),
 				A2(
 				$author$project$Main$formField,
@@ -8117,7 +8248,7 @@ var $author$project$Main$viewAddTab = function (model) {
 				_List_fromArray(
 					[
 						$elm$html$Html$text(
-						model.submitting ? 'SAVING...' : 'SAVE EXPENSE')
+						model.submitting ? 'SAVING...' : (isEditing ? 'UPDATE EXPENSE' : 'SAVE EXPENSE'))
 					]))
 			]));
 };
@@ -8438,18 +8569,24 @@ var $author$project$Main$uniqueDates = function (entries) {
 var $author$project$Main$DeleteEntry = function (a) {
 	return {$: 'DeleteEntry', a: a};
 };
+var $author$project$Main$EditEntry = function (a) {
+	return {$: 'EditEntry', a: a};
+};
 var $author$project$Main$viewEntryRow = function (entry) {
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
 			[
+				$elm$html$Html$Events$onClick(
+				$author$project$Main$EditEntry(entry)),
 				A2($elm$html$Html$Attributes$style, 'background', '#161918'),
 				A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
 				A2($elm$html$Html$Attributes$style, 'padding', '14px 16px'),
 				A2($elm$html$Html$Attributes$style, 'margin-bottom', '8px'),
 				A2($elm$html$Html$Attributes$style, 'display', 'flex'),
 				A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
-				A2($elm$html$Html$Attributes$style, 'gap', '12px')
+				A2($elm$html$Html$Attributes$style, 'gap', '12px'),
+				A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
 			]),
 		_List_fromArray(
 			[
@@ -8533,8 +8670,13 @@ var $author$project$Main$viewEntryRow = function (entry) {
 				$elm$html$Html$button,
 				_List_fromArray(
 					[
-						$elm$html$Html$Events$onClick(
-						$author$project$Main$DeleteEntry(entry)),
+						A2(
+						$elm$html$Html$Events$stopPropagationOn,
+						'click',
+						$elm$json$Json$Decode$succeed(
+							_Utils_Tuple2(
+								$author$project$Main$DeleteEntry(entry),
+								true))),
 						A2($elm$html$Html$Attributes$style, 'background', 'none'),
 						A2($elm$html$Html$Attributes$style, 'border', 'none'),
 						A2($elm$html$Html$Attributes$style, 'color', '#e85030'),
@@ -8979,7 +9121,7 @@ var $author$project$Main$viewScanTab = function (model) {
 									]),
 								_List_fromArray(
 									[
-										$elm$html$Html$text('Tap to photograph receipt')
+										$elm$html$Html$text('Tap to use camera or choose from library')
 									])),
 								A2(
 								$elm$html$Html$input,
@@ -8987,7 +9129,6 @@ var $author$project$Main$viewScanTab = function (model) {
 									[
 										$elm$html$Html$Attributes$type_('file'),
 										$elm$html$Html$Attributes$accept('image/*'),
-										A2($elm$html$Html$Attributes$attribute, 'capture', 'environment'),
 										A2($elm$html$Html$Attributes$style, 'display', 'none'),
 										A2(
 										$elm$html$Html$Events$on,

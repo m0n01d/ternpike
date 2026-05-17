@@ -85,6 +85,7 @@ type alias Model =
     , entries : List Entry
     , loadingEntries : Bool
     , pendingEntry : PendingEntry
+    , editingEntry : Maybe Entry
     , scanImage : Maybe String
     , scanLoading : Bool
     , error : Maybe String
@@ -111,6 +112,8 @@ type Msg
     | EntriesFetched (Result Http.Error (List Entry))
     | DeleteEntry Entry
     | EntryDeleted (Result Http.Error ())
+    | EditEntry Entry
+    | CancelEdit
     | TabChanged Tab
     | ApiKeyChanged String
     | SheetIdChanged String
@@ -222,6 +225,7 @@ init flagsJson =
             , entries = []
             , loadingEntries = False
             , pendingEntry = defaultPendingEntry today
+            , editingEntry = Nothing
             , scanImage = Nothing
             , scanLoading = False
             , error = Nothing
@@ -278,6 +282,7 @@ update msg model =
             ( { model
                 | oauthToken = Nothing
                 , entries = []
+                , editingEntry = Nothing
                 , tab = LedgerTab
               }
             , clearStorage ()
@@ -370,23 +375,37 @@ update msg model =
                 p =
                     model.pendingEntry
 
-                entry =
-                    { id = "e-" ++ String.fromInt (Time.posixToMillis posix)
-                    , date = p.date
-                    , amount = String.toFloat p.amount |> Maybe.withDefault 0
-                    , category = p.category
-                    , note = p.note
-                    , merchant = p.merchant
-                    , createdAt = posixToIso posix
-                    , rowIndex = 0
-                    }
-
                 token =
                     Maybe.withDefault "" model.oauthToken
             in
-            ( model
-            , appendEntry token model.sheetId entry
-            )
+            case model.editingEntry of
+                Just original ->
+                    let
+                        updated =
+                            { original
+                                | date = p.date
+                                , amount = String.toFloat p.amount |> Maybe.withDefault 0
+                                , category = p.category
+                                , note = p.note
+                                , merchant = p.merchant
+                            }
+                    in
+                    ( model, updateEntry token model.sheetId updated )
+
+                Nothing ->
+                    let
+                        entry =
+                            { id = "e-" ++ String.fromInt (Time.posixToMillis posix)
+                            , date = p.date
+                            , amount = String.toFloat p.amount |> Maybe.withDefault 0
+                            , category = p.category
+                            , note = p.note
+                            , merchant = p.merchant
+                            , createdAt = posixToIso posix
+                            , rowIndex = 0
+                            }
+                    in
+                    ( model, appendEntry token model.sheetId entry )
 
         EntrySubmitted result ->
             case result of
@@ -394,6 +413,7 @@ update msg model =
                     ( { model
                         | submitting = False
                         , pendingEntry = defaultPendingEntry model.today
+                        , editingEntry = Nothing
                         , tab = LedgerTab
                         , loadingEntries = True
                       }
@@ -441,12 +461,40 @@ update msg model =
                     , Cmd.none
                     )
 
+        EditEntry entry ->
+            ( { model
+                | editingEntry = Just entry
+                , pendingEntry = entryToPending entry
+                , tab = AddTab
+                , error = Nothing
+              }
+            , Cmd.none
+            )
+
+        CancelEdit ->
+            ( { model
+                | editingEntry = Nothing
+                , pendingEntry = defaultPendingEntry model.today
+                , tab = LedgerTab
+              }
+            , Cmd.none
+            )
+
         TabChanged tab ->
             let
                 shouldFetch =
                     tab == LedgerTab && model.oauthToken /= Nothing && model.sheetId /= ""
             in
-            ( { model | tab = tab, loadingEntries = shouldFetch }
+            ( { model
+                | tab = tab
+                , loadingEntries = shouldFetch
+                , editingEntry =
+                    if tab /= AddTab then
+                        Nothing
+
+                    else
+                        model.editingEntry
+              }
             , if shouldFetch then
                 fetchEntries (Maybe.withDefault "" model.oauthToken) model.sheetId
 
@@ -486,6 +534,16 @@ update msg model =
 updatePending : (PendingEntry -> PendingEntry) -> Model -> ( Model, Cmd Msg )
 updatePending f model =
     ( { model | pendingEntry = f model.pendingEntry }, Cmd.none )
+
+
+entryToPending : Entry -> PendingEntry
+entryToPending entry =
+    { amount = String.fromFloat entry.amount
+    , category = entry.category
+    , note = entry.note
+    , merchant = entry.merchant
+    , date = entry.date
+    }
 
 
 
@@ -567,6 +625,40 @@ deleteEntry token sheetId rowIndex =
         , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ ":batchUpdate"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntryDeleted
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+updateEntry : String -> String -> Entry -> Cmd Msg
+updateEntry token sheetId entry =
+    let
+        range =
+            "Expenses!A" ++ String.fromInt entry.rowIndex ++ ":G" ++ String.fromInt entry.rowIndex
+
+        body =
+            E.object
+                [ ( "values"
+                  , E.list identity
+                        [ E.list identity
+                            [ E.string entry.id
+                            , E.string entry.date
+                            , E.float entry.amount
+                            , E.string (categoryLabel entry.category)
+                            , E.string entry.note
+                            , E.string entry.merchant
+                            , E.string entry.createdAt
+                            ]
+                        ]
+                  )
+                ]
+    in
+    Http.request
+        { method = "PUT"
+        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/" ++ range ++ "?valueInputOption=RAW"
+        , body = Http.jsonBody body
+        , expect = expectWhateverBody EntrySubmitted
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -1241,11 +1333,10 @@ viewScanTab model =
                     , style "min-height" "160px"
                     ]
                     [ div [ style "font-size" "48px", style "margin-bottom" "12px" ] [ text "📷" ]
-                    , p [ style "color" "#7a8a80", style "font-size" "16px" ] [ text "Tap to photograph receipt" ]
+                    , p [ style "color" "#7a8a80", style "font-size" "16px" ] [ text "Tap to use camera or choose from library" ]
                     , input
                         [ type_ "file"
                         , accept "image/*"
-                        , attribute "capture" "environment"
                         , style "display" "none"
                         , on "change" (D.map FileSelected (D.at [ "target", "files", "0" ] File.decoder))
                         ]
@@ -1288,9 +1379,33 @@ viewAddTab model =
     let
         p =
             model.pendingEntry
+
+        isEditing =
+            model.editingEntry /= Nothing
     in
     div [ style "padding" "24px 20px" ]
-        [ h2 [ sectionHead ] [ text "ADD EXPENSE" ]
+        [ div
+            [ style "display" "flex"
+            , style "align-items" "center"
+            , style "justify-content" "space-between"
+            , style "margin-bottom" "20px"
+            ]
+            [ h2 [ sectionHead ] [ text (if isEditing then "EDIT EXPENSE" else "ADD EXPENSE") ]
+            , if isEditing then
+                button
+                    [ onClick CancelEdit
+                    , style "background" "none"
+                    , style "border" "none"
+                    , style "color" "#7a8a80"
+                    , style "font-size" "14px"
+                    , style "cursor" "pointer"
+                    , style "padding" "4px 0"
+                    ]
+                    [ text "← cancel" ]
+
+              else
+                text ""
+            ]
         , formField "AMOUNT"
             (div [ style "position" "relative" ]
                 [ span
@@ -1375,7 +1490,17 @@ viewAddTab model =
             , style "min-height" "56px"
             , style "opacity" (if model.submitting then "0.6" else "1")
             ]
-            [ text (if model.submitting then "SAVING..." else "SAVE EXPENSE") ]
+            [ text
+                (if model.submitting then
+                    "SAVING..."
+
+                 else if isEditing then
+                    "UPDATE EXPENSE"
+
+                 else
+                    "SAVE EXPENSE"
+                )
+            ]
         ]
 
 
@@ -1552,13 +1677,15 @@ viewLedgerTab model =
 viewEntryRow : Entry -> Html Msg
 viewEntryRow entry =
     div
-        [ style "background" "#161918"
+        [ onClick (EditEntry entry)
+        , style "background" "#161918"
         , style "border-radius" "8px"
         , style "padding" "14px 16px"
         , style "margin-bottom" "8px"
         , style "display" "flex"
         , style "align-items" "center"
         , style "gap" "12px"
+        , style "cursor" "pointer"
         ]
         [ div
             [ style "width" "10px"
@@ -1602,7 +1729,7 @@ viewEntryRow entry =
             ]
             [ text (formatAmount entry.amount) ]
         , button
-            [ onClick (DeleteEntry entry)
+            [ Html.Events.stopPropagationOn "click" (D.succeed ( DeleteEntry entry, True ))
             , style "background" "none"
             , style "border" "none"
             , style "color" "#e85030"
