@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f0e" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Alaska Tracker</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet" />
+  <!-- Google Identity Services — handles token refresh silently after initial sign-in -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; background: #0d0f0e; }
+    body { overscroll-behavior: none; }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"] {
+      width: 100%;
+      padding: 14px;
+      background: #1e2220;
+      border: 1px solid #3a4240;
+      color: #c8d0c8;
+      border-radius: 8px;
+      font-family: 'Barlow Condensed', system-ui, sans-serif;
+      font-size: 16px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input:focus { outline: 2px solid #e8a020; border-color: transparent; }
+    input[type="number"] { font-family: 'Courier New', monospace; }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); }
+    h2 {
+      font-size: 13px !important;
+      letter-spacing: 0.1em;
+      color: #7a8a80;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="main.js"></script>
+  <script>
+  (async function () {
+
+    // ── IndexedDB key/value store ──────────────────────────────────────────
+
+    const IDB_NAME  = 'alaska-tracker';
+    const IDB_STORE = 'kv';
+    let _db = null;
+
+    function openDB() {
+      if (_db) return Promise.resolve(_db);
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+        req.onsuccess  = e => { _db = e.target.result; resolve(_db); };
+        req.onerror    = e => reject(e.target.error);
+      });
+    }
+
+    async function idbGet(key) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const req = db.transaction(IDB_STORE).objectStore(IDB_STORE).get(key);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror   = () => reject(req.error);
+      });
+    }
+
+    async function idbSet(key, value) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror    = () => reject(tx.error);
+      });
+    }
+
+    async function idbDel(...keys) {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        keys.forEach(k => tx.objectStore(IDB_STORE).delete(k));
+        tx.oncomplete = () => resolve();
+        tx.onerror    = () => reject(tx.error);
+      });
+    }
+
+    // ── One-time migration: localStorage → IndexedDB ──────────────────────
+    // Runs once if IDB is empty but localStorage still has values from the old build.
+    const APP_KEYS = ['oauth_token','sheet_id','google_client_id','anthropic_key','trip_start'];
+    const hasMigrated = await idbGet('_migrated');
+    if (!hasMigrated) {
+      for (const k of APP_KEYS) {
+        const v = localStorage.getItem(k);
+        if (v) await idbSet(k, v);
+      }
+      await idbSet('_migrated', '1');
+    }
+
+    // ── Load all persisted settings before starting Elm ───────────────────
+
+    const stored   = await Promise.all(APP_KEYS.map(idbGet));
+    const [token, sheetId, googleClientId, anthropicKey, tripStart] = stored;
+
+    const flags = {
+      token:          token || null,
+      sheetId:        sheetId        || '',
+      googleClientId: googleClientId || '',
+      anthropicKey:   anthropicKey   || '',
+      tripStart:      tripStart       || '2026-05-22',
+      today:          new Date().toISOString().slice(0, 10),
+    };
+
+    // ── Start Elm ──────────────────────────────────────────────────────────
+
+    const app = Elm.Main.init({ node: document.getElementById('app'), flags });
+
+    // ── Google Identity Services token client ──────────────────────────────
+    //
+    // GIS handles the full OAuth lifecycle:
+    //   • First sign-in → shows Google account chooser popup
+    //   • Subsequent calls (e.g. after a 401) → silent grant, no popup
+    //   • No redirect needed; no server needed; no refresh-token needed.
+    //   • Tokens last ~1 h; GIS silently renews them on demand.
+
+    let tokenClient = null;
+
+    function setupGoogleAuth(clientId) {
+      if (!clientId) return;
+      // GIS may still be loading; retry up to ~3 s
+      if (!window.google?.accounts?.oauth2) {
+        setTimeout(() => setupGoogleAuth(clientId), 300);
+        return;
+      }
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/spreadsheets',
+        callback: async (resp) => {
+          if (resp.error) { console.error('GIS error:', resp); return; }
+          await idbSet('oauth_token', resp.access_token);
+          app.ports.gotNewToken.send(resp.access_token);
+        },
+      });
+    }
+
+    // Init with whatever clientId we already have stored
+    if (googleClientId) setupGoogleAuth(googleClientId);
+
+    // ── Port handlers ──────────────────────────────────────────────────────
+
+    // Save a value to IndexedDB; also re-init GIS if the client ID changed
+    app.ports.saveStorage.subscribe(async ({ key, value }) => {
+      await idbSet(key, value);
+      if (key === 'google_client_id') setupGoogleAuth(value);
+    });
+
+    // Clear all app data (sign out)
+    app.ports.clearStorage.subscribe(() => idbDel(...APP_KEYS));
+
+    // Request an OAuth token.
+    // forcePrompt=true  → first sign-in (shows account chooser)
+    // forcePrompt=false → silent re-auth after 401 (usually no popup)
+    app.ports.requestOAuthToken.subscribe((forcePrompt) => {
+      if (!tokenClient) {
+        console.warn('GIS not ready — clientId missing?');
+        return;
+      }
+      tokenClient.requestAccessToken(forcePrompt ? { prompt: 'consent' } : { prompt: '' });
+    });
+
+    // ── PWA service worker ─────────────────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(console.error);
+    }
+
+  })();
+  </script>
+</body>
+</html>
