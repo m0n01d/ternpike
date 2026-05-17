@@ -1341,6 +1341,75 @@ viewCategoryBtn selected cat =
 -- LEDGER TAB
 
 
+viewLedgerSummary : List Entry -> Html Msg
+viewLedgerSummary entries =
+    let
+        total =
+            List.sum (List.map .amount entries)
+
+        catRow =
+            allCategories
+                |> List.filterMap
+                    (\cat ->
+                        let
+                            t =
+                                entries
+                                    |> List.filter (\e -> e.category == cat)
+                                    |> List.map .amount
+                                    |> List.sum
+                        in
+                        if t > 0 then
+                            Just ( cat, t )
+                        else
+                            Nothing
+                    )
+    in
+    div
+        [ style "background" "#161918"
+        , style "border-radius" "10px"
+        , style "padding" "14px 16px"
+        , style "margin-bottom" "20px"
+        ]
+        [ div
+            [ style "font-family" "monospace"
+            , style "font-size" "22px"
+            , style "color" "#e8a020"
+            , style "margin-bottom" "12px"
+            ]
+            [ text (formatAmount total) ]
+        , div
+            [ style "display" "flex"
+            , style "flex-wrap" "wrap"
+            , style "gap" "10px"
+            ]
+            (List.map
+                (\( cat, t ) ->
+                    div
+                        [ style "display" "flex"
+                        , style "align-items" "center"
+                        , style "gap" "5px"
+                        ]
+                        [ div
+                            [ style "width" "8px"
+                            , style "height" "8px"
+                            , style "border-radius" "50%"
+                            , style "background" (categoryColor cat)
+                            , style "flex-shrink" "0"
+                            ]
+                            []
+                        , span
+                            [ style "font-family" "monospace"
+                            , style "font-size" "13px"
+                            , style "color" "#7a8a80"
+                            ]
+                            [ text (formatAmount t) ]
+                        ]
+                )
+                catRow
+            )
+        ]
+
+
 viewLedgerTab : Model -> Html Msg
 viewLedgerTab model =
     div [ style "padding" "20px" ]
@@ -1363,6 +1432,11 @@ viewLedgerTab model =
                 ]
                 [ text "↻ refresh" ]
             ]
+        , if not (List.isEmpty model.entries) then
+            viewLedgerSummary model.entries
+
+          else
+            text ""
         , if model.sheetId == "" then
             p [ style "color" "#7a8a80", style "text-align" "center", style "padding" "32px 0" ]
                 [ text "Enter your Sheet ID in Settings to get started." ]

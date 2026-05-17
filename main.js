@@ -6552,10 +6552,10 @@ var $author$project$Main$init = function (flagsJson) {
 	var today = dec('today');
 	var model = {
 		J: dec('anthropicKey'),
-		t: _List_Nil,
+		p: _List_Nil,
 		i: $elm$core$Maybe$Nothing,
 		R: dec('googleClientId'),
-		s: false,
+		t: false,
 		l: token,
 		w: $author$project$Main$defaultPendingEntry(today),
 		M: $elm$core$Maybe$Nothing,
@@ -6573,7 +6573,7 @@ var $author$project$Main$init = function (flagsJson) {
 		_Utils_update(
 			model,
 			{
-				s: !_Utils_eq(fetchCmd, $elm$core$Platform$Cmd$none)
+				t: !_Utils_eq(fetchCmd, $elm$core$Platform$Cmd$none)
 			}),
 		fetchCmd);
 };
@@ -7360,7 +7360,7 @@ var $author$project$Main$update = F2(
 					_Utils_update(
 						model,
 						{
-							s: shouldFetch,
+							t: shouldFetch,
 							l: $elm$core$Maybe$Just(token)
 						}),
 					$elm$core$Platform$Cmd$batch(
@@ -7374,7 +7374,7 @@ var $author$project$Main$update = F2(
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{t: _List_Nil, l: $elm$core$Maybe$Nothing, k: 2}),
+						{p: _List_Nil, l: $elm$core$Maybe$Nothing, k: 2}),
 					$author$project$Main$clearStorage(0));
 			case 3:
 				var file = msg.a;
@@ -7587,7 +7587,7 @@ var $author$project$Main$update = F2(
 						_Utils_update(
 							model,
 							{
-								s: true,
+								t: true,
 								w: $author$project$Main$defaultPendingEntry(model.an),
 								x: false,
 								k: 2
@@ -7623,14 +7623,14 @@ var $author$project$Main$update = F2(
 					return _Utils_Tuple2(
 						_Utils_update(
 							model,
-							{t: entries, s: false}),
+							{p: entries, t: false}),
 						$elm$core$Platform$Cmd$none);
 				} else {
 					if ((result.a.$ === 3) && (result.a.a === 401)) {
 						return _Utils_Tuple2(
 							_Utils_update(
 								model,
-								{s: false}),
+								{t: false}),
 							$author$project$Main$requestOAuthToken(false));
 					} else {
 						var e = result.a;
@@ -7640,7 +7640,7 @@ var $author$project$Main$update = F2(
 								{
 									i: $elm$core$Maybe$Just(
 										'Load failed: ' + $author$project$Main$httpErrString(e)),
-									s: false
+									t: false
 								}),
 							$elm$core$Platform$Cmd$none);
 					}
@@ -7651,12 +7651,12 @@ var $author$project$Main$update = F2(
 					_Utils_update(
 						model,
 						{
-							t: A2(
+							p: A2(
 								$elm$core$List$filter,
 								function (e) {
 									return !_Utils_eq(e.F, entry.F);
 								},
-								model.t)
+								model.p)
 						}),
 					A3(
 						$author$project$Main$deleteEntry,
@@ -7695,7 +7695,7 @@ var $author$project$Main$update = F2(
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{s: shouldFetch, k: tab}),
+						{t: shouldFetch, k: tab}),
 					shouldFetch ? A2(
 						$author$project$Main$fetchEntries,
 						A2($elm$core$Maybe$withDefault, '', model.l),
@@ -7704,7 +7704,7 @@ var $author$project$Main$update = F2(
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{s: true}),
+						{t: true}),
 					A2(
 						$author$project$Main$fetchEntries,
 						A2($elm$core$Maybe$withDefault, '', model.l),
@@ -8356,6 +8356,7 @@ var $elm$virtual_dom$VirtualDom$keyedNode = function (tag) {
 		_VirtualDom_noScript(tag));
 };
 var $elm$html$Html$Keyed$node = $elm$virtual_dom$VirtualDom$keyedNode;
+var $elm$core$Basics$not = _Basics_not;
 var $elm$html$Html$p = _VirtualDom_node('p');
 var $elm$core$String$toUpper = _String_toUpper;
 var $elm$core$List$any = F2(
@@ -8542,6 +8543,116 @@ var $author$project$Main$viewEntryRow = function (entry) {
 					]))
 			]));
 };
+var $elm$core$List$sum = function (numbers) {
+	return A3($elm$core$List$foldl, $elm$core$Basics$add, 0, numbers);
+};
+var $author$project$Main$viewLedgerSummary = function (entries) {
+	var total = $elm$core$List$sum(
+		A2(
+			$elm$core$List$map,
+			function ($) {
+				return $.a;
+			},
+			entries));
+	var catRow = A2(
+		$elm$core$List$filterMap,
+		function (cat) {
+			var t = $elm$core$List$sum(
+				A2(
+					$elm$core$List$map,
+					function ($) {
+						return $.a;
+					},
+					A2(
+						$elm$core$List$filter,
+						function (e) {
+							return _Utils_eq(e.b, cat);
+						},
+						entries)));
+			return (t > 0) ? $elm$core$Maybe$Just(
+				_Utils_Tuple2(cat, t)) : $elm$core$Maybe$Nothing;
+		},
+		$author$project$Main$allCategories);
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'background', '#161918'),
+				A2($elm$html$Html$Attributes$style, 'border-radius', '10px'),
+				A2($elm$html$Html$Attributes$style, 'padding', '14px 16px'),
+				A2($elm$html$Html$Attributes$style, 'margin-bottom', '20px')
+			]),
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'font-family', 'monospace'),
+						A2($elm$html$Html$Attributes$style, 'font-size', '22px'),
+						A2($elm$html$Html$Attributes$style, 'color', '#e8a020'),
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '12px')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text(
+						$author$project$Main$formatAmount(total))
+					])),
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+						A2($elm$html$Html$Attributes$style, 'flex-wrap', 'wrap'),
+						A2($elm$html$Html$Attributes$style, 'gap', '10px')
+					]),
+				A2(
+					$elm$core$List$map,
+					function (_v0) {
+						var cat = _v0.a;
+						var t = _v0.b;
+						return A2(
+							$elm$html$Html$div,
+							_List_fromArray(
+								[
+									A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+									A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
+									A2($elm$html$Html$Attributes$style, 'gap', '5px')
+								]),
+							_List_fromArray(
+								[
+									A2(
+									$elm$html$Html$div,
+									_List_fromArray(
+										[
+											A2($elm$html$Html$Attributes$style, 'width', '8px'),
+											A2($elm$html$Html$Attributes$style, 'height', '8px'),
+											A2($elm$html$Html$Attributes$style, 'border-radius', '50%'),
+											A2(
+											$elm$html$Html$Attributes$style,
+											'background',
+											$author$project$Main$categoryColor(cat)),
+											A2($elm$html$Html$Attributes$style, 'flex-shrink', '0')
+										]),
+									_List_Nil),
+									A2(
+									$elm$html$Html$span,
+									_List_fromArray(
+										[
+											A2($elm$html$Html$Attributes$style, 'font-family', 'monospace'),
+											A2($elm$html$Html$Attributes$style, 'font-size', '13px'),
+											A2($elm$html$Html$Attributes$style, 'color', '#7a8a80')
+										]),
+									_List_fromArray(
+										[
+											$elm$html$Html$text(
+											$author$project$Main$formatAmount(t))
+										]))
+								]));
+					},
+					catRow))
+			]));
+};
 var $elm$core$List$repeatHelp = F3(
 	function (result, n, value) {
 		repeatHelp:
@@ -8659,6 +8770,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 								$elm$html$Html$text('↻ refresh')
 							]))
 					])),
+				(!$elm$core$List$isEmpty(model.p)) ? $author$project$Main$viewLedgerSummary(model.p) : $elm$html$Html$text(''),
 				(model.m === '') ? A2(
 				$elm$html$Html$p,
 				_List_fromArray(
@@ -8670,7 +8782,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 				_List_fromArray(
 					[
 						$elm$html$Html$text('Enter your Sheet ID in Settings to get started.')
-					])) : (model.s ? $author$project$Main$viewSkeleton : ($elm$core$List$isEmpty(model.t) ? A2(
+					])) : (model.t ? $author$project$Main$viewSkeleton : ($elm$core$List$isEmpty(model.p) ? A2(
 				$elm$html$Html$p,
 				_List_fromArray(
 					[
@@ -8693,7 +8805,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 							function (e) {
 								return _Utils_eq(e.o, date);
 							},
-							model.t);
+							model.p);
 						return _Utils_Tuple2(
 							date,
 							A2(
@@ -8735,7 +8847,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 											dayEntries))
 									])));
 					},
-					$author$project$Main$uniqueDates(model.t)))))
+					$author$project$Main$uniqueDates(model.p)))))
 			]));
 };
 var $author$project$Main$FileSelected = function (a) {
@@ -9063,9 +9175,6 @@ var $author$project$Main$statCard = F2(
 						]))
 				]));
 	});
-var $elm$core$List$sum = function (numbers) {
-	return A3($elm$core$List$foldl, $elm$core$Basics$add, 0, numbers);
-};
 var $elm$core$List$takeReverse = F3(
 	function (n, list, kept) {
 		takeReverse:
@@ -9341,7 +9450,7 @@ var $author$project$Main$viewBarChart = function (entries) {
 				catTotals)));
 };
 var $author$project$Main$viewStatsTab = function (model) {
-	var entries = model.t;
+	var entries = model.p;
 	var top5 = A2(
 		$elm$core$List$take,
 		5,
