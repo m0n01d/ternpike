@@ -9,8 +9,8 @@ import Html.Events exposing (..)
 import Http
 import Json.Decode as D
 import Json.Encode as E
-import Svg
-import Svg.Attributes as SA
+import Chart as C
+import Chart.Attributes as CA
 import Task
 import Time
 
@@ -941,6 +941,75 @@ uniqueDates entries =
         |> List.reverse
 
 
+medianAmount : List Entry -> Float
+medianAmount entries =
+    let
+        amounts =
+            List.sort (List.map .amount entries)
+
+        n =
+            List.length amounts
+
+        mid =
+            n // 2
+    in
+    if n == 0 then
+        0
+
+    else if remainderBy 2 n == 1 then
+        amounts |> List.drop mid |> List.head |> Maybe.withDefault 0
+
+    else
+        let
+            a =
+                amounts |> List.drop (mid - 1) |> List.head |> Maybe.withDefault 0
+
+            b =
+                amounts |> List.drop mid |> List.head |> Maybe.withDefault 0
+        in
+        (a + b) / 2
+
+
+topCategory : List Entry -> Maybe Category
+topCategory entries =
+    allCategories
+        |> List.map
+            (\cat ->
+                ( cat
+                , entries
+                    |> List.filter (\e -> e.category == cat)
+                    |> List.map .amount
+                    |> List.sum
+                )
+            )
+        |> List.sortBy (negate << Tuple.second)
+        |> List.head
+        |> Maybe.andThen
+            (\( cat, total ) ->
+                if total > 0 then
+                    Just cat
+
+                else
+                    Nothing
+            )
+
+
+biggestDay : List Entry -> Maybe ( String, Float )
+biggestDay entries =
+    uniqueDates entries
+        |> List.map
+            (\date ->
+                ( date
+                , entries
+                    |> List.filter (\e -> e.date == date)
+                    |> List.map .amount
+                    |> List.sum
+                )
+            )
+        |> List.sortBy (negate << Tuple.second)
+        |> List.head
+
+
 
 -- VIEW
 
@@ -1460,8 +1529,18 @@ viewLedgerTab model =
                                     , style "margin-bottom" "8px"
                                     , style "padding-bottom" "6px"
                                     , style "border-bottom" "1px solid #2a3230"
+                                    , style "display" "flex"
+                                    , style "justify-content" "space-between"
+                                    , style "align-items" "center"
                                     ]
-                                    [ text (String.toUpper (formatDateDisplay date)) ]
+                                    [ text (String.toUpper (formatDateDisplay date))
+                                    , span
+                                        [ style "font-family" "monospace"
+                                        , style "color" "#e8a020"
+                                        , style "letter-spacing" "0"
+                                        ]
+                                        [ text (formatAmount (List.sum (List.map .amount dayEntries))) ]
+                                    ]
                                 , Keyed.node "div" [] (List.map (\e -> ( e.id, viewEntryRow e )) dayEntries)
                                 ]
                             )
@@ -1574,11 +1653,11 @@ viewStatsTab model =
         total =
             List.sum (List.map .amount entries)
 
-        dates =
-            uniqueDates entries
-
         numDays =
-            List.length dates
+            List.length (uniqueDates entries)
+
+        numEntries =
+            List.length entries
 
         avgPerDay =
             if numDays > 0 then
@@ -1587,8 +1666,21 @@ viewStatsTab model =
             else
                 0
 
-        daysOnRoad =
-            List.length (uniqueDates entries)
+        avgPerEntry =
+            if numEntries > 0 then
+                total / toFloat numEntries
+
+            else
+                0
+
+        median =
+            medianAmount entries
+
+        topCat =
+            topCategory entries
+
+        bigDay =
+            biggestDay entries
 
         top5 =
             entries
@@ -1604,20 +1696,50 @@ viewStatsTab model =
             , style "margin-bottom" "24px"
             ]
             [ statCard "TOTAL SPENT" (formatAmount total)
-            , statCard "DAYS ON ROAD" (String.fromInt daysOnRoad)
+            , statCard "ENTRIES" (String.fromInt numEntries)
+            , statCard "DAYS ON ROAD" (String.fromInt numDays)
             , statCard "AVG / DAY" (formatAmount avgPerDay)
-            , statCard "ENTRIES" (String.fromInt (List.length entries))
+            , statCard "AVG / ENTRY" (formatAmount avgPerEntry)
+            , statCard "MEDIAN" (formatAmount median)
+            , statCard "TOP CATEGORY"
+                (topCat
+                    |> Maybe.map (\c -> categoryIcon c ++ " " ++ categoryLabel c)
+                    |> Maybe.withDefault "—"
+                )
+            , statCard "BIGGEST DAY"
+                (bigDay
+                    |> Maybe.map (\( _, t ) -> formatAmount t)
+                    |> Maybe.withDefault "—"
+                )
             ]
-        , div
-            [ style "background" "#161918"
-            , style "border-radius" "10px"
-            , style "padding" "20px"
-            , style "margin-bottom" "24px"
-            ]
-            [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "16px" ]
-                [ text "BY CATEGORY" ]
-            , viewBarChart entries
-            ]
+        , if List.isEmpty entries then
+            text ""
+
+          else
+            div
+                [ style "background" "#161918"
+                , style "border-radius" "10px"
+                , style "padding" "20px"
+                , style "margin-bottom" "16px"
+                ]
+                [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "8px" ]
+                    [ text "BY CATEGORY" ]
+                , viewCategoryChart entries
+                ]
+        , if numDays > 1 then
+            div
+                [ style "background" "#161918"
+                , style "border-radius" "10px"
+                , style "padding" "20px"
+                , style "margin-bottom" "16px"
+                ]
+                [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "8px" ]
+                    [ text "DAILY SPENDING" ]
+                , viewDailyChart entries
+                ]
+
+          else
+            text ""
         , if List.isEmpty top5 then
             text ""
 
@@ -1665,83 +1787,67 @@ statCard label_ value =
         ]
         [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "6px" ]
             [ text label_ ]
-        , div [ style "font-size" "24px", style "font-family" "monospace", style "color" "#e8a020" ]
+        , div [ style "font-size" "22px", style "font-family" "monospace", style "color" "#e8a020" ]
             [ text value ]
         ]
 
 
-viewBarChart : List Entry -> Html Msg
-viewBarChart entries =
+viewCategoryChart : List Entry -> Html Msg
+viewCategoryChart entries =
     let
-        catTotals =
-            List.map (\cat -> ( cat, List.filter (\e -> e.category == cat) entries |> List.map .amount |> List.sum )) allCategories
-
-        maxVal =
-            catTotals |> List.map Tuple.second |> List.maximum |> Maybe.withDefault 1 |> Basics.max 1
-
-        barW =
-            32
-
-        spacing =
-            48
-
-        chartH =
-            100
-
-        totalW =
-            List.length allCategories * spacing
+        rows =
+            allCategories
+                |> List.map
+                    (\cat ->
+                        { color = categoryColor cat
+                        , label = categoryLabel cat
+                        , total =
+                            entries
+                                |> List.filter (\e -> e.category == cat)
+                                |> List.map .amount
+                                |> List.sum
+                        }
+                    )
     in
-    Svg.svg
-        [ SA.viewBox ("0 0 " ++ String.fromInt totalW ++ " 140")
-        , SA.width "100%"
+    C.chart
+        [ CA.height 140
+        , CA.margin { top = 10, bottom = 28, left = 0, right = 0 }
         ]
-        (List.concat
-            (List.indexedMap
-                (\i ( cat, total ) ->
-                    let
-                        bh =
-                            if total > 0 then
-                                (total / maxVal) * toFloat chartH
+        [ C.bars []
+            [ C.bar .total []
+                |> C.variation (\_ d -> [ CA.color d.color ])
+            ]
+            rows
+        , C.binLabels .label [ CA.moveDown 16, CA.color "#7a8a80", CA.fontSize 9 ]
+        ]
 
-                            else
-                                0
 
-                        x =
-                            i * spacing + (spacing - barW) // 2
-
-                        y =
-                            chartH - round bh + 10
-                    in
-                    [ Svg.rect
-                        [ SA.x (String.fromInt x)
-                        , SA.y (String.fromInt y)
-                        , SA.width (String.fromInt barW)
-                        , SA.height (String.fromFloat bh |> (\s -> if bh < 1 then "0" else s))
-                        , SA.fill (categoryColor cat)
-                        , SA.rx "4"
-                        ]
-                        []
-                    , Svg.text_
-                        [ SA.x (String.fromInt (x + barW // 2))
-                        , SA.y "128"
-                        , SA.fill "#7a8a80"
-                        , SA.fontSize "9"
-                        , SA.textAnchor "middle"
-                        ]
-                        [ Svg.text (categoryLabel cat) ]
-                    , Svg.text_
-                        [ SA.x (String.fromInt (x + barW // 2))
-                        , SA.y "140"
-                        , SA.fill (categoryColor cat)
-                        , SA.fontSize "8"
-                        , SA.textAnchor "middle"
-                        ]
-                        [ Svg.text (if total > 0 then formatAmount total else "") ]
-                    ]
-                )
-                catTotals
-            )
-        )
+viewDailyChart : List Entry -> Html Msg
+viewDailyChart entries =
+    let
+        days =
+            uniqueDates entries
+                |> List.reverse
+                |> List.map
+                    (\date ->
+                        { date = String.slice 5 10 date
+                        , total =
+                            entries
+                                |> List.filter (\e -> e.date == date)
+                                |> List.map .amount
+                                |> List.sum
+                        }
+                    )
+    in
+    C.chart
+        [ CA.height 140
+        , CA.margin { top = 10, bottom = 28, left = 0, right = 0 }
+        ]
+        [ C.bars []
+            [ C.bar .total [ CA.color "#e8a020" ] ]
+            days
+        , C.binLabels .date [ CA.moveDown 16, CA.color "#7a8a80", CA.fontSize 8 ]
+        ]
 
 
 
