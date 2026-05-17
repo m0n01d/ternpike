@@ -8364,6 +8364,7 @@ var $elm$virtual_dom$VirtualDom$keyedNode = function (tag) {
 		_VirtualDom_noScript(tag));
 };
 var $elm$html$Html$Keyed$node = $elm$virtual_dom$VirtualDom$keyedNode;
+var $elm$core$Basics$not = _Basics_not;
 var $elm$html$Html$p = _VirtualDom_node('p');
 var $elm$core$String$toUpper = _String_toUpper;
 var $elm$core$List$any = F2(
@@ -8550,6 +8551,116 @@ var $author$project$Main$viewEntryRow = function (entry) {
 					]))
 			]));
 };
+var $elm$core$List$sum = function (numbers) {
+	return A3($elm$core$List$foldl, $elm$core$Basics$add, 0, numbers);
+};
+var $author$project$Main$viewLedgerSummary = function (entries) {
+	var total = $elm$core$List$sum(
+		A2(
+			$elm$core$List$map,
+			function ($) {
+				return $.amount;
+			},
+			entries));
+	var catRow = A2(
+		$elm$core$List$filterMap,
+		function (cat) {
+			var t = $elm$core$List$sum(
+				A2(
+					$elm$core$List$map,
+					function ($) {
+						return $.amount;
+					},
+					A2(
+						$elm$core$List$filter,
+						function (e) {
+							return _Utils_eq(e.category, cat);
+						},
+						entries)));
+			return (t > 0) ? $elm$core$Maybe$Just(
+				_Utils_Tuple2(cat, t)) : $elm$core$Maybe$Nothing;
+		},
+		$author$project$Main$allCategories);
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'background', '#161918'),
+				A2($elm$html$Html$Attributes$style, 'border-radius', '10px'),
+				A2($elm$html$Html$Attributes$style, 'padding', '14px 16px'),
+				A2($elm$html$Html$Attributes$style, 'margin-bottom', '20px')
+			]),
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'font-family', 'monospace'),
+						A2($elm$html$Html$Attributes$style, 'font-size', '22px'),
+						A2($elm$html$Html$Attributes$style, 'color', '#e8a020'),
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '12px')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text(
+						$author$project$Main$formatAmount(total))
+					])),
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+						A2($elm$html$Html$Attributes$style, 'flex-wrap', 'wrap'),
+						A2($elm$html$Html$Attributes$style, 'gap', '10px')
+					]),
+				A2(
+					$elm$core$List$map,
+					function (_v0) {
+						var cat = _v0.a;
+						var t = _v0.b;
+						return A2(
+							$elm$html$Html$div,
+							_List_fromArray(
+								[
+									A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+									A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
+									A2($elm$html$Html$Attributes$style, 'gap', '5px')
+								]),
+							_List_fromArray(
+								[
+									A2(
+									$elm$html$Html$div,
+									_List_fromArray(
+										[
+											A2($elm$html$Html$Attributes$style, 'width', '8px'),
+											A2($elm$html$Html$Attributes$style, 'height', '8px'),
+											A2($elm$html$Html$Attributes$style, 'border-radius', '50%'),
+											A2(
+											$elm$html$Html$Attributes$style,
+											'background',
+											$author$project$Main$categoryColor(cat)),
+											A2($elm$html$Html$Attributes$style, 'flex-shrink', '0')
+										]),
+									_List_Nil),
+									A2(
+									$elm$html$Html$span,
+									_List_fromArray(
+										[
+											A2($elm$html$Html$Attributes$style, 'font-family', 'monospace'),
+											A2($elm$html$Html$Attributes$style, 'font-size', '13px'),
+											A2($elm$html$Html$Attributes$style, 'color', '#7a8a80')
+										]),
+									_List_fromArray(
+										[
+											$elm$html$Html$text(
+											$author$project$Main$formatAmount(t))
+										]))
+								]));
+					},
+					catRow))
+			]));
+};
 var $elm$core$List$repeatHelp = F3(
 	function (result, n, value) {
 		repeatHelp:
@@ -8667,6 +8778,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 								$elm$html$Html$text('↻ refresh')
 							]))
 					])),
+				(!$elm$core$List$isEmpty(model.entries)) ? $author$project$Main$viewLedgerSummary(model.entries) : $elm$html$Html$text(''),
 				(model.sheetId === '') ? A2(
 				$elm$html$Html$p,
 				_List_fromArray(
@@ -9071,9 +9183,6 @@ var $author$project$Main$statCard = F2(
 						]))
 				]));
 	});
-var $elm$core$List$sum = function (numbers) {
-	return A3($elm$core$List$foldl, $elm$core$Basics$add, 0, numbers);
-};
 var $elm$core$List$takeReverse = F3(
 	function (n, list, kept) {
 		takeReverse:
