@@ -8617,24 +8617,21 @@ var $author$project$Main$viewLedgerSummary = function (entries) {
 								[
 									A2($elm$html$Html$Attributes$style, 'display', 'flex'),
 									A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
-									A2($elm$html$Html$Attributes$style, 'gap', '5px')
+									A2($elm$html$Html$Attributes$style, 'gap', '4px')
 								]),
 							_List_fromArray(
 								[
 									A2(
-									$elm$html$Html$div,
+									$elm$html$Html$span,
 									_List_fromArray(
 										[
-											A2($elm$html$Html$Attributes$style, 'width', '8px'),
-											A2($elm$html$Html$Attributes$style, 'height', '8px'),
-											A2($elm$html$Html$Attributes$style, 'border-radius', '50%'),
-											A2(
-											$elm$html$Html$Attributes$style,
-											'background',
-											$author$project$Main$categoryColor(cat)),
-											A2($elm$html$Html$Attributes$style, 'flex-shrink', '0')
+											A2($elm$html$Html$Attributes$style, 'font-size', '15px')
 										]),
-									_List_Nil),
+									_List_fromArray(
+										[
+											$elm$html$Html$text(
+											$author$project$Main$categoryIcon(cat))
+										])),
 									A2(
 									$elm$html$Html$span,
 									_List_fromArray(
