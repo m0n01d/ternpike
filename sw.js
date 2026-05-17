@@ -1,4 +1,6 @@
-const CACHE = 'alaska-v1';
+// CI stamps this with the git SHA on every deploy (sed replaces alaska-d1036bc44914326874454712d61559da077341e8 → alaska-<sha>)
+// so the service worker is always treated as new, triggering a fresh install + cache wipe.
+const CACHE = 'alaska-d1036bc44914326874454712d61559da077341e8';
 const PRECACHE = [
   '/',
   '/index.html',
