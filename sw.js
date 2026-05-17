@@ -1,21 +1,25 @@
-// CI stamps this with the git SHA on every deploy (sed replaces alaska-v1 → alaska-<sha>)
-// so the service worker is always treated as new, triggering a fresh install + cache wipe.
+// Cache name is stamped with git SHA by CI — ensures old caches are cleaned up on deploy.
 const CACHE = 'alaska-v1';
-const PRECACHE = [
-  '/',
-  '/index.html',
-  '/main.js',
-  '/manifest.json',
-  'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&display=swap',
+
+const SKIP_CACHE = [
+  'googleapis.com',
+  'anthropic.com',
+  'accounts.google.com',
+  'gsi/client',
+];
+
+const STATIC_CACHE_FIRST = [
+  'fonts.googleapis.com',
+  'fonts.gstatic.com',
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
-  );
+  // Activate immediately — don't wait for old tabs to close
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
+  // Delete any old caches from previous deploys
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
@@ -26,16 +30,37 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Never cache Google API / Anthropic calls — always go to network
-  if (url.hostname.includes('googleapis.com') ||
-      url.hostname.includes('anthropic.com') ||
-      url.hostname.includes('accounts.google.com')) {
+  // Never touch API / auth calls
+  if (SKIP_CACHE.some(h => url.href.includes(h))) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // Cache-first for app shell assets
+  // Cache-first for fonts (immutable content-addressed URLs)
+  if (STATIC_CACHE_FIRST.some(h => url.hostname.includes(h))) {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(response => {
+          const clone = response.clone();
+          caches.open(CACHE).then(c => c.put(event.request, clone));
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Network-first for everything else (index.html, main.js, manifest, icons).
+  // This means: when online you always get the latest build instantly,
+  // no cache-clearing needed. Falls back to cache only when offline.
   event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
+    fetch(event.request)
+      .then(response => {
+        const clone = response.clone();
+        caches.open(CACHE).then(c => c.put(event.request, clone));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
