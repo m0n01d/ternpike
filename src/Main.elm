@@ -1387,16 +1387,9 @@ viewLedgerSummary entries =
                     div
                         [ style "display" "flex"
                         , style "align-items" "center"
-                        , style "gap" "5px"
+                        , style "gap" "4px"
                         ]
-                        [ div
-                            [ style "width" "8px"
-                            , style "height" "8px"
-                            , style "border-radius" "50%"
-                            , style "background" (categoryColor cat)
-                            , style "flex-shrink" "0"
-                            ]
-                            []
+                        [ span [ style "font-size" "15px" ] [ text (categoryIcon cat) ]
                         , span
                             [ style "font-family" "monospace"
                             , style "font-size" "13px"
