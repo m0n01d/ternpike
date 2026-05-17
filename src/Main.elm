@@ -4,6 +4,7 @@ import Browser
 import File exposing (File)
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Html.Keyed as Keyed
 import Html.Events exposing (..)
 import Http
 import Json.Decode as D
@@ -1374,7 +1375,8 @@ viewLedgerTab model =
                 [ text "No expenses yet. Add your first one!" ]
 
           else
-            div []
+            Keyed.node "div"
+                []
                 (uniqueDates model.entries
                     |> List.map
                         (\date ->
@@ -1382,7 +1384,8 @@ viewLedgerTab model =
                                 dayEntries =
                                     List.filter (\e -> e.date == date) model.entries
                             in
-                            div [ style "margin-bottom" "24px" ]
+                            ( date
+                            , div [ style "margin-bottom" "24px" ]
                                 [ div
                                     [ style "font-size" "11px"
                                     , style "letter-spacing" "0.1em"
@@ -1392,8 +1395,9 @@ viewLedgerTab model =
                                     , style "border-bottom" "1px solid #2a3230"
                                     ]
                                     [ text (String.toUpper (formatDateDisplay date)) ]
-                                , div [] (List.map viewEntryRow dayEntries)
+                                , Keyed.node "div" [] (List.map (\e -> ( e.id, viewEntryRow e )) dayEntries)
                                 ]
+                            )
                         )
                 )
         ]

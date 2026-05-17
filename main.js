@@ -8359,6 +8359,11 @@ var $elm$core$List$isEmpty = function (xs) {
 		return false;
 	}
 };
+var $elm$virtual_dom$VirtualDom$keyedNode = function (tag) {
+	return _VirtualDom_keyedNode(
+		_VirtualDom_noScript(tag));
+};
+var $elm$html$Html$Keyed$node = $elm$virtual_dom$VirtualDom$keyedNode;
 var $elm$html$Html$p = _VirtualDom_node('p');
 var $elm$core$String$toUpper = _String_toUpper;
 var $elm$core$List$any = F2(
@@ -8684,8 +8689,9 @@ var $author$project$Main$viewLedgerTab = function (model) {
 				_List_fromArray(
 					[
 						$elm$html$Html$text('No expenses yet. Add your first one!')
-					])) : A2(
-				$elm$html$Html$div,
+					])) : A3(
+				$elm$html$Html$Keyed$node,
+				'div',
 				_List_Nil,
 				A2(
 					$elm$core$List$map,
@@ -8696,36 +8702,46 @@ var $author$project$Main$viewLedgerTab = function (model) {
 								return _Utils_eq(e.date, date);
 							},
 							model.entries);
-						return A2(
-							$elm$html$Html$div,
-							_List_fromArray(
-								[
-									A2($elm$html$Html$Attributes$style, 'margin-bottom', '24px')
-								]),
-							_List_fromArray(
-								[
-									A2(
-									$elm$html$Html$div,
-									_List_fromArray(
-										[
-											A2($elm$html$Html$Attributes$style, 'font-size', '11px'),
-											A2($elm$html$Html$Attributes$style, 'letter-spacing', '0.1em'),
-											A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
-											A2($elm$html$Html$Attributes$style, 'margin-bottom', '8px'),
-											A2($elm$html$Html$Attributes$style, 'padding-bottom', '6px'),
-											A2($elm$html$Html$Attributes$style, 'border-bottom', '1px solid #2a3230')
-										]),
-									_List_fromArray(
-										[
-											$elm$html$Html$text(
-											$elm$core$String$toUpper(
-												$author$project$Main$formatDateDisplay(date)))
-										])),
-									A2(
-									$elm$html$Html$div,
-									_List_Nil,
-									A2($elm$core$List$map, $author$project$Main$viewEntryRow, dayEntries))
-								]));
+						return _Utils_Tuple2(
+							date,
+							A2(
+								$elm$html$Html$div,
+								_List_fromArray(
+									[
+										A2($elm$html$Html$Attributes$style, 'margin-bottom', '24px')
+									]),
+								_List_fromArray(
+									[
+										A2(
+										$elm$html$Html$div,
+										_List_fromArray(
+											[
+												A2($elm$html$Html$Attributes$style, 'font-size', '11px'),
+												A2($elm$html$Html$Attributes$style, 'letter-spacing', '0.1em'),
+												A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+												A2($elm$html$Html$Attributes$style, 'margin-bottom', '8px'),
+												A2($elm$html$Html$Attributes$style, 'padding-bottom', '6px'),
+												A2($elm$html$Html$Attributes$style, 'border-bottom', '1px solid #2a3230')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text(
+												$elm$core$String$toUpper(
+													$author$project$Main$formatDateDisplay(date)))
+											])),
+										A3(
+										$elm$html$Html$Keyed$node,
+										'div',
+										_List_Nil,
+										A2(
+											$elm$core$List$map,
+											function (e) {
+												return _Utils_Tuple2(
+													e.id,
+													$author$project$Main$viewEntryRow(e));
+											},
+											dayEntries))
+									])));
 					},
 					$author$project$Main$uniqueDates(model.entries)))))
 			]));
