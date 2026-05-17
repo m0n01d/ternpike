@@ -13,10 +13,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Elm
-        uses: jorelali/setup-elm@v5
+      - uses: actions/setup-node@v4
         with:
-          elm-version: 0.19.1
+          node-version: 20
+
+      - name: Install Elm
+        run: npm install -g elm
 
       - name: Build (optimized)
         run: elm make src/Main.elm --output=main.js --optimize
@@ -28,3 +30,4 @@ jobs:
           clean-exclude: |
             .git
             .github
+            elm-stuff
