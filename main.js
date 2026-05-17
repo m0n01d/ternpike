@@ -6213,7 +6213,7 @@ var $author$project$Main$rowDecoder = A8(
 	$elm$json$Json$Decode$map7,
 	F7(
 		function (id, date, amount, category, note, merchant, createdAt) {
-			return {a: amount, b: category, Z: createdAt, o: date, K: id, g: merchant, e: note, T: 0};
+			return {a: amount, b: category, Z: createdAt, o: date, F: id, g: merchant, e: note, T: 0};
 		}),
 	A2($elm$json$Json$Decode$index, 0, $elm$json$Json$Decode$string),
 	A2($elm$json$Json$Decode$index, 1, $elm$json$Json$Decode$string),
@@ -6551,7 +6551,7 @@ var $author$project$Main$init = function (flagsJson) {
 	}();
 	var today = dec('today');
 	var model = {
-		I: dec('anthropicKey'),
+		J: dec('anthropicKey'),
 		t: _List_Nil,
 		i: $elm$core$Maybe$Nothing,
 		R: dec('googleClientId'),
@@ -6676,7 +6676,7 @@ var $author$project$Main$appendEntry = F3(
 								$elm$core$Basics$identity,
 								_List_fromArray(
 									[
-										$elm$json$Json$Encode$string(entry.K),
+										$elm$json$Json$Encode$string(entry.F),
 										$elm$json$Json$Encode$string(entry.o),
 										$elm$json$Json$Encode$float(entry.a),
 										$elm$json$Json$Encode$string(
@@ -7388,7 +7388,7 @@ var $author$project$Main$update = F2(
 						$elm$file$File$toUrl(file)));
 			case 4:
 				var dataUrl = msg.a;
-				return (model.I === '') ? _Utils_Tuple2(
+				return (model.J === '') ? _Utils_Tuple2(
 					_Utils_update(
 						model,
 						{
@@ -7405,7 +7405,7 @@ var $author$project$Main$update = F2(
 						}),
 					A3(
 						$author$project$Main$makeOcrCall,
-						model.I,
+						model.J,
 						$author$project$Main$extractBase64(dataUrl),
 						$author$project$Main$getMimeType(dataUrl)));
 			case 5:
@@ -7571,7 +7571,7 @@ var $author$project$Main$update = F2(
 					b: p.b,
 					Z: $author$project$Main$posixToIso(posix),
 					o: p.o,
-					K: 'e-' + $elm$core$String$fromInt(
+					F: 'e-' + $elm$core$String$fromInt(
 						$elm$time$Time$posixToMillis(posix)),
 					g: p.g,
 					e: p.e,
@@ -7654,7 +7654,7 @@ var $author$project$Main$update = F2(
 							t: A2(
 								$elm$core$List$filter,
 								function (e) {
-									return !_Utils_eq(e.K, entry.K);
+									return !_Utils_eq(e.F, entry.F);
 								},
 								model.t)
 						}),
@@ -7714,7 +7714,7 @@ var $author$project$Main$update = F2(
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{I: s}),
+						{J: s}),
 					$author$project$Main$saveStorage(
 						{L: 'anthropic_key', O: s}));
 			case 19:
@@ -8351,6 +8351,11 @@ var $elm$core$List$isEmpty = function (xs) {
 		return false;
 	}
 };
+var $elm$virtual_dom$VirtualDom$keyedNode = function (tag) {
+	return _VirtualDom_keyedNode(
+		_VirtualDom_noScript(tag));
+};
+var $elm$html$Html$Keyed$node = $elm$virtual_dom$VirtualDom$keyedNode;
 var $elm$html$Html$p = _VirtualDom_node('p');
 var $elm$core$String$toUpper = _String_toUpper;
 var $elm$core$List$any = F2(
@@ -8676,8 +8681,9 @@ var $author$project$Main$viewLedgerTab = function (model) {
 				_List_fromArray(
 					[
 						$elm$html$Html$text('No expenses yet. Add your first one!')
-					])) : A2(
-				$elm$html$Html$div,
+					])) : A3(
+				$elm$html$Html$Keyed$node,
+				'div',
 				_List_Nil,
 				A2(
 					$elm$core$List$map,
@@ -8688,36 +8694,46 @@ var $author$project$Main$viewLedgerTab = function (model) {
 								return _Utils_eq(e.o, date);
 							},
 							model.t);
-						return A2(
-							$elm$html$Html$div,
-							_List_fromArray(
-								[
-									A2($elm$html$Html$Attributes$style, 'margin-bottom', '24px')
-								]),
-							_List_fromArray(
-								[
-									A2(
-									$elm$html$Html$div,
-									_List_fromArray(
-										[
-											A2($elm$html$Html$Attributes$style, 'font-size', '11px'),
-											A2($elm$html$Html$Attributes$style, 'letter-spacing', '0.1em'),
-											A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
-											A2($elm$html$Html$Attributes$style, 'margin-bottom', '8px'),
-											A2($elm$html$Html$Attributes$style, 'padding-bottom', '6px'),
-											A2($elm$html$Html$Attributes$style, 'border-bottom', '1px solid #2a3230')
-										]),
-									_List_fromArray(
-										[
-											$elm$html$Html$text(
-											$elm$core$String$toUpper(
-												$author$project$Main$formatDateDisplay(date)))
-										])),
-									A2(
-									$elm$html$Html$div,
-									_List_Nil,
-									A2($elm$core$List$map, $author$project$Main$viewEntryRow, dayEntries))
-								]));
+						return _Utils_Tuple2(
+							date,
+							A2(
+								$elm$html$Html$div,
+								_List_fromArray(
+									[
+										A2($elm$html$Html$Attributes$style, 'margin-bottom', '24px')
+									]),
+								_List_fromArray(
+									[
+										A2(
+										$elm$html$Html$div,
+										_List_fromArray(
+											[
+												A2($elm$html$Html$Attributes$style, 'font-size', '11px'),
+												A2($elm$html$Html$Attributes$style, 'letter-spacing', '0.1em'),
+												A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+												A2($elm$html$Html$Attributes$style, 'margin-bottom', '8px'),
+												A2($elm$html$Html$Attributes$style, 'padding-bottom', '6px'),
+												A2($elm$html$Html$Attributes$style, 'border-bottom', '1px solid #2a3230')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text(
+												$elm$core$String$toUpper(
+													$author$project$Main$formatDateDisplay(date)))
+											])),
+										A3(
+										$elm$html$Html$Keyed$node,
+										'div',
+										_List_Nil,
+										A2(
+											$elm$core$List$map,
+											function (e) {
+												return _Utils_Tuple2(
+													e.F,
+													$author$project$Main$viewEntryRow(e));
+											},
+											dayEntries))
+									])));
 					},
 					$author$project$Main$uniqueDates(model.t)))))
 			]));
@@ -8953,7 +8969,7 @@ var $author$project$Main$viewSettingsTab = function (model) {
 					_List_fromArray(
 						[
 							$elm$html$Html$Attributes$type_('password'),
-							$elm$html$Html$Attributes$value(model.I),
+							$elm$html$Html$Attributes$value(model.J),
 							$elm$html$Html$Events$onInput($author$project$Main$ApiKeyChanged),
 							$elm$html$Html$Attributes$placeholder('sk-ant-...'),
 							$author$project$Main$textInputStyle
