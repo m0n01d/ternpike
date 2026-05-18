@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; background: #0d0f0e; }
@@ -211,6 +212,49 @@
 
     customElements.define('map-picker', MapPicker);
 
+    // ── <waypoint-map> custom element ──────────────────────────────────────
+    class WaypointMap extends HTMLElement {
+      connectedCallback() {
+        this._map = L.map(this).setView([64.2008, -153.4937], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+        }).addTo(this._map);
+        this._markers = [];
+        this._renderPoints(this.getAttribute('points'));
+        setTimeout(() => this._map && this._map.invalidateSize(), 100);
+      }
+
+      disconnectedCallback() {
+        if (this._map) { this._map.remove(); this._map = null; }
+        this._markers = [];
+      }
+
+      _renderPoints(raw) {
+        this._markers.forEach(m => m.remove());
+        this._markers = [];
+        let pts; try { pts = JSON.parse(raw || '[]'); } catch (_) { return; }
+        if (!pts.length) return;
+        const lls = [];
+        pts.forEach(p => {
+          const m = L.marker([p.lat, p.lon]).addTo(this._map);
+          if (p.label) m.bindPopup(p.label);
+          this._markers.push(m);
+          lls.push([p.lat, p.lon]);
+        });
+        if (lls.length === 1) this._map.setView(lls[0], 13);
+        else this._map.fitBounds(lls, { padding: [20, 20] });
+      }
+
+      attributeChangedCallback(name, _old, val) {
+        if (name === 'points' && this._map) this._renderPoints(val);
+      }
+
+      static get observedAttributes() { return ['points']; }
+    }
+
+    customElements.define('waypoint-map', WaypointMap);
+
     // ── Start Elm ──────────────────────────────────────────────────────────
 
     const app = Elm.Main.init({ node: document.getElementById('app'), flags });
@@ -254,8 +298,11 @@
       if (key === 'google_client_id') setupGoogleAuth(value);
     });
 
-    // Clear all app data (sign out)
-    app.ports.clearStorage.subscribe(() => idbDel(...APP_KEYS));
+    // Clear only the OAuth token on sign-out (config survives for next login)
+    app.ports.clearStorage.subscribe(() => idbDel('oauth_token'));
+
+    // Full wipe — triggered by "Reset all settings"
+    app.ports.clearAllStorage.subscribe(() => idbDel(...APP_KEYS));
 
     // Request an OAuth token.
     // forcePrompt=true  → first sign-in (shows account chooser)

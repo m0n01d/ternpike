@@ -26,6 +26,9 @@ port saveStorage : { key : String, value : String } -> Cmd msg
 port clearStorage : () -> Cmd msg
 
 
+port clearAllStorage : () -> Cmd msg
+
+
 -- Bool = force consent prompt (True when user explicitly clicks Sign In,
 -- False for silent re-auth after a 401)
 port requestOAuthToken : Bool -> Cmd msg
@@ -67,10 +70,17 @@ type Tab
     | SettingsTab
 
 
+type LocationSource
+    = ExifGps
+    | BrowserGeo
+    | ManualPin
+
+
 type LocationState
     = LocationIdle
     | LocationFetching
-    | LocationGot Float Float
+    | LocationCheckingExif
+    | LocationGot Float Float LocationSource
     | LocationSkipped
 
 
@@ -116,6 +126,7 @@ type alias Model =
     , today : String
     , geoBlocked : Bool
     , showMapPicker : Bool
+    , showLedgerMap : Bool
     }
 
 
@@ -123,6 +134,8 @@ type Msg
     = GotOAuthToken String
     | SignInClicked
     | SignOutClicked
+    | ResetSettingsClicked
+    | ToggleLedgerMap
     | FileSelected File
     | GotFileUrl String
     | GotOcrResult (Result Http.Error String)
@@ -234,7 +247,7 @@ entryToPending e =
     , locationState =
         case ( e.lat, e.lon ) of
             ( Just la, Just lo ) ->
-                LocationGot la lo
+                LocationGot la lo ManualPin
 
             _ ->
                 LocationIdle
@@ -289,6 +302,7 @@ init flagsJson =
             , today = today
             , geoBlocked = False
             , showMapPicker = False
+            , showLedgerMap = False
             }
 
         fetchCmd =
@@ -346,8 +360,22 @@ update msg model =
             , clearStorage ()
             )
 
+        ResetSettingsClicked ->
+            ( { model
+                | anthropicKey = ""
+                , sheetId = ""
+                , googleClientId = ""
+                , oauthToken = Nothing
+                , entries = []
+                , editingEntry = Nothing
+                , tab = LedgerTab
+              }
+            , clearAllStorage ()
+            )
+
         FileSelected file ->
-            ( { model | scanLoading = True, scanImage = Nothing, error = Nothing }
+            ( { model | scanLoading = True, scanImage = Nothing, error = Nothing
+              , pendingEntry = setLocation LocationCheckingExif model.pendingEntry }
             , Task.perform GotFileUrl (File.toUrl file)
             )
 
@@ -451,12 +479,12 @@ update msg model =
                                 , merchant = p.merchant
                                 , lat =
                                     case p.locationState of
-                                        LocationGot la _ -> Just la
+                                        LocationGot la _ _ -> Just la
                                         LocationSkipped -> Nothing
                                         _ -> original.lat
                                 , lon =
                                     case p.locationState of
-                                        LocationGot _ lo -> Just lo
+                                        LocationGot _ lo _ -> Just lo
                                         LocationSkipped -> Nothing
                                         _ -> original.lon
                             }
@@ -467,7 +495,7 @@ update msg model =
                     let
                         ( eLat, eLon ) =
                             case p.locationState of
-                                LocationGot la lo ->
+                                LocationGot la lo _ ->
                                     ( Just la, Just lo )
 
                                 _ ->
@@ -630,7 +658,7 @@ update msg model =
             ( { model | error = Nothing }, Cmd.none )
 
         GotGpsCoords lat lon ->
-            ( { model | pendingEntry = setLocation (LocationGot lat lon) model.pendingEntry }, Cmd.none )
+            ( { model | pendingEntry = setLocation (LocationGot lat lon BrowserGeo) model.pendingEntry }, Cmd.none )
 
         GeolocationDenied ->
             ( { model | geoBlocked = True, pendingEntry = setLocation LocationIdle model.pendingEntry }, Cmd.none )
@@ -639,7 +667,7 @@ update msg model =
             ( { model | showMapPicker = True }, Cmd.none )
 
         MapPickerConfirmed lat lon ->
-            ( { model | showMapPicker = False, pendingEntry = setLocation (LocationGot lat lon) model.pendingEntry }, Cmd.none )
+            ( { model | showMapPicker = False, pendingEntry = setLocation (LocationGot lat lon ManualPin) model.pendingEntry }, Cmd.none )
 
         DismissMapPicker ->
             ( { model | showMapPicker = False }, Cmd.none )
@@ -647,11 +675,19 @@ update msg model =
         SkipLocation ->
             ( { model | showMapPicker = False, pendingEntry = setLocation LocationSkipped model.pendingEntry }, Cmd.none )
 
+        ToggleLedgerMap ->
+            ( { model | showLedgerMap = not model.showLedgerMap }, Cmd.none )
+
         GotExifCoords (Just lat) (Just lon) ->
-            ( { model | pendingEntry = setLocation (LocationGot lat lon) model.pendingEntry }, Cmd.none )
+            ( { model | pendingEntry = setLocation (LocationGot lat lon ExifGps) model.pendingEntry }, Cmd.none )
 
         GotExifCoords _ _ ->
-            ( model, Cmd.none )
+            case model.pendingEntry.locationState of
+                LocationCheckingExif ->
+                    ( { model | pendingEntry = setLocation LocationIdle model.pendingEntry }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
 
 updatePending : (PendingEntry -> PendingEntry) -> Model -> ( Model, Cmd Msg )
@@ -1160,6 +1196,36 @@ formatCoord lat lon =
     String.left 9 (String.fromFloat lat) ++ ", " ++ String.left 9 (String.fromFloat lon)
 
 
+encodeWaypoints : List Entry -> String
+encodeWaypoints entries =
+    let
+        withCoords =
+            List.filterMap
+                (\e ->
+                    case ( e.lat, e.lon ) of
+                        ( Just la, Just lo ) ->
+                            Just
+                                (E.object
+                                    [ ( "lat", E.float la )
+                                    , ( "lon", E.float lo )
+                                    , ( "label"
+                                      , E.string
+                                            ((if e.merchant /= "" then e.merchant else categoryLabel e.category)
+                                                ++ " "
+                                                ++ formatAmount e.amount
+                                            )
+                                      )
+                                    ]
+                                )
+
+                        _ ->
+                            Nothing
+                )
+                entries
+    in
+    E.encode 0 (E.list identity withCoords)
+
+
 uniqueDates : List Entry -> List String
 uniqueDates entries =
     entries
@@ -1488,13 +1554,16 @@ viewScanTab model =
                     ]
                 , case model.scanImage of
                     Just dataUrl ->
-                        img
-                            [ src dataUrl
-                            , style "width" "100%"
-                            , style "border-radius" "8px"
-                            , style "margin-bottom" "16px"
+                        div []
+                            [ img
+                                [ src dataUrl
+                                , style "width" "100%"
+                                , style "border-radius" "8px"
+                                , style "margin-bottom" "16px"
+                                ]
+                                []
+                            , viewLocationWidget model
                             ]
-                            []
 
                     Nothing ->
                         text ""
@@ -1657,7 +1726,7 @@ viewLocationWidget model =
             Html.node "map-picker"
                 [ attribute "lat"
                     (case model.pendingEntry.locationState of
-                        LocationGot la _ ->
+                        LocationGot la _ _ ->
                             String.fromFloat la
 
                         _ ->
@@ -1665,7 +1734,7 @@ viewLocationWidget model =
                     )
                 , attribute "lon"
                     (case model.pendingEntry.locationState of
-                        LocationGot _ lo ->
+                        LocationGot _ lo _ ->
                             String.fromFloat lo
 
                         _ ->
@@ -1696,35 +1765,29 @@ viewLocationStatus ls =
                 ]
                 [ text "📍 Getting location…" ]
 
-        LocationGot lat lon ->
-            div
-                [ style "display" "flex"
-                , style "align-items" "center"
-                , style "gap" "12px"
-                , style "padding" "8px 0"
-                ]
-                [ span [ style "color" "#4090e0", style "font-size" "13px" ]
-                    [ text ("📍 " ++ formatCoord lat lon) ]
+        LocationCheckingExif ->
+            div [ class "text-[#4a5a50] text-sm py-2" ]
+                [ text "📍 Reading photo…" ]
+
+        LocationGot lat lon source ->
+            let
+                sourceLabel =
+                    case source of
+                        ExifGps    -> "📍 from photo"
+                        BrowserGeo -> "📍 GPS"
+                        ManualPin  -> "📍 pinned"
+            in
+            div [ class "flex items-center gap-3 py-2" ]
+                [ span [ class "text-[#4090e0] text-sm" ]
+                    [ text (sourceLabel ++ " — " ++ formatCoord lat lon) ]
                 , button
                     [ onClick OpenMapPicker
-                    , style "background" "none"
-                    , style "border" "none"
-                    , style "color" "#4a5a50"
-                    , style "font-size" "12px"
-                    , style "cursor" "pointer"
-                    , style "padding" "0"
-                    , style "font-family" "inherit"
+                    , class "bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]"
                     ]
                     [ text "adjust" ]
                 , button
                     [ onClick SkipLocation
-                    , style "background" "none"
-                    , style "border" "none"
-                    , style "color" "#4a5a50"
-                    , style "font-size" "12px"
-                    , style "cursor" "pointer"
-                    , style "padding" "0"
-                    , style "font-family" "inherit"
+                    , class "bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]"
                     ]
                     [ text "remove" ]
                 ]
@@ -1814,6 +1877,20 @@ viewCategoryBtn selected cat =
 -- LEDGER TAB
 
 
+viewLedgerMap : Model -> Html Msg
+viewLedgerMap model =
+    if model.showLedgerMap then
+        Html.node "waypoint-map"
+            [ attribute "points" (encodeWaypoints model.entries)
+            , class "block w-full rounded-xl overflow-hidden mb-5"
+            , style "height" "260px"
+            ]
+            []
+
+    else
+        text ""
+
+
 viewLedgerSummary : List Entry -> Html Msg
 viewLedgerSummary entries =
     let
@@ -1879,30 +1956,33 @@ viewLedgerSummary entries =
 viewLedgerTab : Model -> Html Msg
 viewLedgerTab model =
     div [ style "padding" "20px" ]
-        [ div
-            [ style "display" "flex"
-            , style "align-items" "center"
-            , style "justify-content" "space-between"
-            , style "margin-bottom" "20px"
-            ]
+        [ div [ class "flex items-center justify-between mb-5" ]
             [ h2 [ sectionHead ] [ text "LEDGER" ]
-            , button
-                [ onClick RefreshClicked
-                , style "background" "none"
-                , style "border" "1px solid #3a4240"
-                , style "color" "#7a8a80"
-                , style "border-radius" "6px"
-                , style "padding" "6px 12px"
-                , style "font-size" "13px"
-                , style "cursor" "pointer"
+            , div [ class "flex gap-2" ]
+                [ button
+                    [ onClick ToggleLedgerMap
+                    , class
+                        (if model.showLedgerMap then
+                            "px-3 py-1.5 rounded border border-[#3a4240] bg-[#1e3a50] text-[#4090e0] text-sm cursor-pointer font-[inherit]"
+
+                         else
+                            "px-3 py-1.5 rounded border border-[#3a4240] bg-transparent text-[#7a8a80] text-sm cursor-pointer font-[inherit]"
+                        )
+                    ]
+                    [ text "🗺 map" ]
+                , button
+                    [ onClick RefreshClicked
+                    , class "px-3 py-1.5 rounded border border-[#3a4240] bg-transparent text-[#7a8a80] text-sm cursor-pointer font-[inherit]"
+                    ]
+                    [ text "↻ refresh" ]
                 ]
-                [ text "↻ refresh" ]
             ]
         , if not (List.isEmpty model.entries) then
             viewLedgerSummary model.entries
 
           else
             text ""
+        , viewLedgerMap model
         , if model.sheetId == "" then
             p [ style "color" "#7a8a80", style "text-align" "center", style "padding" "32px 0" ]
                 [ text "Enter your Sheet ID in Settings to get started." ]
@@ -2334,6 +2414,13 @@ viewSettingsTab model =
 
             Nothing ->
                 text ""
+        , div [ style "margin-top" "8px" ]
+            [ button
+                [ onClick ResetSettingsClicked
+                , Html.Attributes.class "w-full py-3.5 rounded-lg border border-red-900/60 text-red-400/80 text-sm cursor-pointer bg-transparent font-[inherit] hover:border-red-700 hover:text-red-300 transition-colors"
+                ]
+                [ text "Reset all settings" ]
+            ]
         ]
 
 
