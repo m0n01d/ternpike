@@ -4895,9 +4895,9 @@ var $elm$core$Basics$EQ = {$: 'EQ'};
 var $elm$core$Basics$GT = {$: 'GT'};
 var $elm$core$Basics$LT = {$: 'LT'};
 var $author$project$Main$GeolocationDenied = {$: 'GeolocationDenied'};
-var $author$project$Main$GotExifCoords = F3(
-	function (a, b, c) {
-		return {$: 'GotExifCoords', a: a, b: b, c: c};
+var $author$project$Main$GotExifCoords = F4(
+	function (a, b, c, d) {
+		return {$: 'GotExifCoords', a: a, b: b, c: c, d: d};
 	});
 var $author$project$Main$GotGpsCoords = F2(
 	function (a, b) {
@@ -5635,8 +5635,13 @@ var $author$project$Main$gotExifResult = _Platform_incomingPort(
 							return A2(
 								$elm$json$Json$Decode$andThen,
 								function (hasGps) {
-									return $elm$json$Json$Decode$succeed(
-										{hasGps: hasGps, id: id, lat: lat, lon: lon});
+									return A2(
+										$elm$json$Json$Decode$andThen,
+										function (debug) {
+											return $elm$json$Json$Decode$succeed(
+												{debug: debug, hasGps: hasGps, id: id, lat: lat, lon: lon});
+										},
+										A2($elm$json$Json$Decode$field, 'debug', $elm$json$Json$Decode$string));
 								},
 								A2($elm$json$Json$Decode$field, 'hasGps', $elm$json$Json$Decode$bool));
 						},
@@ -7016,7 +7021,7 @@ var $elm$core$List$filter = F2(
 var $author$project$Main$LocationCheckingExif = {$: 'LocationCheckingExif'};
 var $author$project$Main$ScanQueued = {$: 'ScanQueued'};
 var $author$project$Main$freshScanItem = function (id) {
-	return {id: id, imageUrl: '', locationState: $author$project$Main$LocationCheckingExif, ocrData: $elm$core$Maybe$Nothing, status: $author$project$Main$ScanQueued};
+	return {exifDebug: '', id: id, imageUrl: '', locationState: $author$project$Main$LocationCheckingExif, ocrData: $elm$core$Maybe$Nothing, status: $author$project$Main$ScanQueued};
 };
 var $author$project$Main$getMimeType = function (dataUrl) {
 	return A2($elm$core$String$contains, 'image/png', dataUrl) ? 'image/png' : (A2($elm$core$String$contains, 'image/gif', dataUrl) ? 'image/gif' : (A2($elm$core$String$contains, 'image/webp', dataUrl) ? 'image/webp' : 'image/jpeg'));
@@ -8346,6 +8351,7 @@ var $author$project$Main$update = F2(
 						$elm$core$Platform$Cmd$none);
 				} else {
 					var itemId = msg.a;
+					var debug = msg.d;
 					return _Utils_Tuple2(
 						_Utils_update(
 							model,
@@ -8356,7 +8362,7 @@ var $author$project$Main$update = F2(
 									function (i) {
 										return _Utils_update(
 											i,
-											{locationState: $author$project$Main$LocationNoExifGps});
+											{exifDebug: debug, locationState: $author$project$Main$LocationNoExifGps});
 									},
 									model.scanQueue)
 							}),
@@ -10248,12 +10254,62 @@ var $author$project$Main$viewScanTab = function (model) {
 						_List_fromArray(
 							[
 								$elm$html$Html$Events$onClick($author$project$Main$ClearDoneItems),
-								$elm$html$Html$Attributes$class('w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit]')
+								$elm$html$Html$Attributes$class('w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit] mb-4')
 							]),
 						_List_fromArray(
 							[
 								$elm$html$Html$text('Clear submitted')
-							])) : $elm$html$Html$text('')
+							])) : $elm$html$Html$text(''),
+						function () {
+						var debugItems = A2(
+							$elm$core$List$filter,
+							function (i) {
+								return i.exifDebug !== '';
+							},
+							model.scanQueue);
+						return $elm$core$List$isEmpty(debugItems) ? $elm$html$Html$text('') : A2(
+							$elm$html$Html$div,
+							_List_fromArray(
+								[
+									$elm$html$Html$Attributes$class('mt-2')
+								]),
+							A2(
+								$elm$core$List$indexedMap,
+								F2(
+									function (idx, item) {
+										return A2(
+											$elm$html$Html$div,
+											_List_fromArray(
+												[
+													$elm$html$Html$Attributes$class('mb-3 rounded-lg bg-[#161918] p-3')
+												]),
+											_List_fromArray(
+												[
+													A2(
+													$elm$html$Html$div,
+													_List_fromArray(
+														[
+															$elm$html$Html$Attributes$class('text-[#4a5a50] text-xs mb-1')
+														]),
+													_List_fromArray(
+														[
+															$elm$html$Html$text(
+															'EXIF dump — photo ' + $elm$core$String$fromInt(idx + 1))
+														])),
+													A2(
+													$elm$html$Html$div,
+													_List_fromArray(
+														[
+															$elm$html$Html$Attributes$class('font-mono text-[10px] text-[#7a8a80] break-all whitespace-pre-wrap max-h-40 overflow-y-auto')
+														]),
+													_List_fromArray(
+														[
+															$elm$html$Html$text(item.exifDebug)
+														]))
+												]));
+									}),
+								debugItems));
+					}()
 					]))
 			]));
 };
@@ -15197,11 +15253,12 @@ var $author$project$Main$main = $elm$browser$Browser$element(
 						}),
 						$author$project$Main$gotExifResult(
 						function (r) {
-							return r.hasGps ? A3(
+							return r.hasGps ? A4(
 								$author$project$Main$GotExifCoords,
 								r.id,
 								$elm$core$Maybe$Just(r.lat),
-								$elm$core$Maybe$Just(r.lon)) : A3($author$project$Main$GotExifCoords, r.id, $elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing);
+								$elm$core$Maybe$Just(r.lon),
+								'') : A4($author$project$Main$GotExifCoords, r.id, $elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing, r.debug);
 						})
 					]));
 		},
