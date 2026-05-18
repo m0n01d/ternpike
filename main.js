@@ -5684,7 +5684,7 @@ var $elm$json$Json$Decode$decodeValue = _Json_run;
 var $author$project$Main$Fuel = {$: 'Fuel'};
 var $author$project$Main$LocationIdle = {$: 'LocationIdle'};
 var $author$project$Main$defaultPendingEntry = function (today) {
-	return {amount: '', category: $author$project$Main$Fuel, date: today, locationState: $author$project$Main$LocationIdle, merchant: '', note: ''};
+	return {amount: '', category: $author$project$Main$Fuel, date: today, locationState: $author$project$Main$LocationIdle, longNote: '', merchant: '', note: ''};
 };
 var $author$project$Main$EntriesFetched = function (a) {
 	return {$: 'EntriesFetched', a: a};
@@ -6234,11 +6234,16 @@ var $elm$core$Dict$update = F3(
 var $elm$http$Http$emptyBody = _Http_emptyBody;
 var $elm$json$Json$Decode$list = _Json_decodeList;
 var $elm$json$Json$Decode$oneOf = _Json_oneOf;
+var $author$project$Main$Activities = {$: 'Activities'};
 var $author$project$Main$Camp = {$: 'Camp'};
 var $author$project$Main$Ferry = {$: 'Ferry'};
 var $author$project$Main$Food = {$: 'Food'};
 var $author$project$Main$Gear = {$: 'Gear'};
+var $author$project$Main$Lodging = {$: 'Lodging'};
+var $author$project$Main$Medical = {$: 'Medical'};
 var $author$project$Main$Misc = {$: 'Misc'};
+var $author$project$Main$Shopping = {$: 'Shopping'};
+var $author$project$Main$Transport = {$: 'Transport'};
 var $author$project$Main$categoryFromString = function (s) {
 	switch (s) {
 		case 'fuel':
@@ -6251,6 +6256,16 @@ var $author$project$Main$categoryFromString = function (s) {
 			return $author$project$Main$Ferry;
 		case 'gear':
 			return $author$project$Main$Gear;
+		case 'lodging':
+			return $author$project$Main$Lodging;
+		case 'activities':
+			return $author$project$Main$Activities;
+		case 'shopping':
+			return $author$project$Main$Shopping;
+		case 'medical':
+			return $author$project$Main$Medical;
+		case 'transport':
+			return $author$project$Main$Transport;
 		default:
 			return $author$project$Main$Misc;
 	}
@@ -6295,41 +6310,61 @@ var $author$project$Main$parseAmountStr = function (s) {
 };
 var $author$project$Main$rowDecoder = A2(
 	$author$project$Json$Decode$Pipeline$custom,
-	$author$project$Main$optMaybeFloat(8),
+	A3($author$project$Main$optIndex, 9, $elm$json$Json$Decode$string, ''),
 	A2(
 		$author$project$Json$Decode$Pipeline$custom,
-		$author$project$Main$optMaybeFloat(7),
+		$author$project$Main$optMaybeFloat(8),
 		A2(
 			$author$project$Json$Decode$Pipeline$custom,
-			A3($author$project$Main$optIndex, 6, $elm$json$Json$Decode$string, ''),
+			$author$project$Main$optMaybeFloat(7),
 			A2(
 				$author$project$Json$Decode$Pipeline$custom,
-				A3($author$project$Main$optIndex, 5, $elm$json$Json$Decode$string, ''),
+				A3($author$project$Main$optIndex, 6, $elm$json$Json$Decode$string, ''),
 				A2(
 					$author$project$Json$Decode$Pipeline$custom,
-					A3($author$project$Main$optIndex, 4, $elm$json$Json$Decode$string, ''),
+					A3($author$project$Main$optIndex, 5, $elm$json$Json$Decode$string, ''),
 					A2(
 						$author$project$Json$Decode$Pipeline$custom,
-						A2(
-							$elm$json$Json$Decode$index,
-							3,
-							A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
+						A3($author$project$Main$optIndex, 4, $elm$json$Json$Decode$string, ''),
 						A2(
 							$author$project$Json$Decode$Pipeline$custom,
 							A2(
 								$elm$json$Json$Decode$index,
-								2,
-								A2($elm$json$Json$Decode$andThen, $author$project$Main$parseAmountStr, $elm$json$Json$Decode$string)),
+								3,
+								A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
 							A2(
 								$author$project$Json$Decode$Pipeline$custom,
-								A2($elm$json$Json$Decode$index, 1, $elm$json$Json$Decode$string),
+								A2(
+									$elm$json$Json$Decode$index,
+									2,
+									A2($elm$json$Json$Decode$andThen, $author$project$Main$parseAmountStr, $elm$json$Json$Decode$string)),
 								A2(
 									$author$project$Json$Decode$Pipeline$custom,
-									A2($elm$json$Json$Decode$index, 0, $elm$json$Json$Decode$string),
-									$elm$json$Json$Decode$succeed(
-										F9(
-											function (id, date, amount, category, note, merchant, createdAt, lat, lon) {
-												return {amount: amount, category: category, createdAt: createdAt, date: date, id: id, lat: lat, lon: lon, merchant: merchant, note: note, rowIndex: 0};
+									A2($elm$json$Json$Decode$index, 1, $elm$json$Json$Decode$string),
+									A2(
+										$author$project$Json$Decode$Pipeline$custom,
+										A2($elm$json$Json$Decode$index, 0, $elm$json$Json$Decode$string),
+										$elm$json$Json$Decode$succeed(
+											function (id) {
+												return function (date) {
+													return function (amount) {
+														return function (category) {
+															return function (note) {
+																return function (merchant) {
+																	return function (createdAt) {
+																		return function (lat) {
+																			return function (lon) {
+																				return function (longNote) {
+																					return {amount: amount, category: category, createdAt: createdAt, date: date, id: id, lat: lat, lon: lon, longNote: longNote, merchant: merchant, note: note, rowIndex: 0};
+																				};
+																			};
+																		};
+																	};
+																};
+															};
+														};
+													};
+												};
 											})))))))))));
 var $author$project$Main$entriesDecoder = $elm$json$Json$Decode$oneOf(
 	_List_fromArray(
@@ -6597,7 +6632,7 @@ var $author$project$Main$fetchEntries = F2(
 				method: 'GET',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
-				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A2:I')
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A2:J')
 			});
 	});
 var $elm$json$Json$Decode$maybe = function (decoder) {
@@ -6744,6 +6779,16 @@ var $author$project$Main$categoryLabel = function (cat) {
 			return 'ferry';
 		case 'Gear':
 			return 'gear';
+		case 'Lodging':
+			return 'lodging';
+		case 'Activities':
+			return 'activities';
+		case 'Shopping':
+			return 'shopping';
+		case 'Medical':
+			return 'medical';
+		case 'Transport':
+			return 'transport';
 		default:
 			return 'misc';
 	}
@@ -6868,7 +6913,8 @@ var $author$project$Main$appendEntry = F3(
 												return $elm$json$Json$Encode$string(
 													$elm$core$String$fromFloat(v));
 											},
-											entry.lon))
+											entry.lon)),
+										$elm$json$Json$Encode$string(entry.longNote)
 									]))
 							])))
 				]));
@@ -6883,7 +6929,7 @@ var $author$project$Main$appendEntry = F3(
 				method: 'POST',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
-				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A:I:append?valueInputOption=RAW')
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A:J:append?valueInputOption=RAW')
 			});
 	});
 var $author$project$Main$claudeTextDecoder = A2(
@@ -6979,6 +7025,7 @@ var $author$project$Main$entryToPending = function (e) {
 				return $author$project$Main$LocationIdle;
 			}
 		}(),
+		longNote: e.longNote,
 		merchant: e.merchant,
 		note: e.note
 	};
@@ -7117,7 +7164,7 @@ var $elm$http$Http$expectString = function (toMsg) {
 		toMsg,
 		$elm$http$Http$resolve($elm$core$Result$Ok));
 };
-var $author$project$Main$ocrSystemPrompt = 'You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<fuel|food|camp|ferry|gear|misc>\", \"note\": \"<brief description max 50 chars>\", \"merchant\": \"<store name>\"}. Choose the best matching category.';
+var $author$project$Main$ocrSystemPrompt = 'You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<fuel|food|camp|ferry|gear|lodging|activities|shopping|medical|transport|misc>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 280 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\"}. Choose the best matching category.';
 var $author$project$Main$makeOcrCall = F4(
 	function (itemId, apiKey, base64Data, mimeType) {
 		var body = $elm$json$Json$Encode$object(
@@ -7222,9 +7269,9 @@ var $elm$time$Time$Posix = function (a) {
 };
 var $elm$time$Time$millisToPosix = $elm$time$Time$Posix;
 var $elm$time$Time$now = _Time_now($elm$time$Time$millisToPosix);
-var $author$project$Main$OcrData = F4(
-	function (amount, category, note, merchant) {
-		return {amount: amount, category: category, merchant: merchant, note: note};
+var $author$project$Main$OcrData = F6(
+	function (amount, category, note, merchant, date, longNote) {
+		return {amount: amount, category: category, date: date, longNote: longNote, merchant: merchant, note: note};
 	});
 var $elm$json$Json$Decode$null = _Json_decodeNull;
 var $elm$json$Json$Decode$value = _Json_decodeValue;
@@ -7278,28 +7325,38 @@ var $author$project$Json$Decode$Pipeline$optional = F4(
 	});
 var $author$project$Main$ocrDataDecoder = A4(
 	$author$project$Json$Decode$Pipeline$optional,
-	'merchant',
+	'longNote',
 	A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
 	$elm$core$Maybe$Nothing,
 	A4(
 		$author$project$Json$Decode$Pipeline$optional,
-		'note',
+		'date',
 		A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
 		$elm$core$Maybe$Nothing,
 		A4(
 			$author$project$Json$Decode$Pipeline$optional,
-			'category',
-			A2(
-				$elm$json$Json$Decode$map,
-				$elm$core$Maybe$Just,
-				A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
+			'merchant',
+			A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
 			$elm$core$Maybe$Nothing,
 			A4(
 				$author$project$Json$Decode$Pipeline$optional,
-				'amount',
-				A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$float),
+				'note',
+				A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
 				$elm$core$Maybe$Nothing,
-				$elm$json$Json$Decode$succeed($author$project$Main$OcrData)))));
+				A4(
+					$author$project$Json$Decode$Pipeline$optional,
+					'category',
+					A2(
+						$elm$json$Json$Decode$map,
+						$elm$core$Maybe$Just,
+						A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
+					$elm$core$Maybe$Nothing,
+					A4(
+						$author$project$Json$Decode$Pipeline$optional,
+						'amount',
+						A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$float),
+						$elm$core$Maybe$Nothing,
+						$elm$json$Json$Decode$succeed($author$project$Main$OcrData)))))));
 var $author$project$Main$monthNum = function (month) {
 	switch (month.$) {
 		case 'Jan':
@@ -7624,7 +7681,7 @@ var $author$project$Main$toastFor = function (_v0) {
 };
 var $author$project$Main$updateEntry = F3(
 	function (token, sheetId, entry) {
-		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':I' + $elm$core$String$fromInt(entry.rowIndex)));
+		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':J' + $elm$core$String$fromInt(entry.rowIndex)));
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -7667,7 +7724,8 @@ var $author$project$Main$updateEntry = F3(
 												return $elm$json$Json$Encode$string(
 													$elm$core$String$fromFloat(v));
 											},
-											entry.lon))
+											entry.lon)),
+										$elm$json$Json$Encode$string(entry.longNote)
 									]))
 							])))
 				]));
@@ -7880,6 +7938,16 @@ var $author$project$Main$update = F2(
 							{note: s});
 					},
 					model);
+			case 'LongNoteChanged':
+				var s = msg.a;
+				return A2(
+					$author$project$Main$updatePending,
+					function (p) {
+						return _Utils_update(
+							p,
+							{longNote: s});
+					},
+					model);
 			case 'MerchantChanged':
 				var s = msg.a;
 				return A2(
@@ -7971,6 +8039,7 @@ var $author$project$Main$update = F2(
 										return original.lon;
 								}
 							}(),
+							longNote: p.longNote,
 							merchant: p.merchant,
 							note: p.note
 						});
@@ -8004,6 +8073,7 @@ var $author$project$Main$update = F2(
 							$elm$time$Time$posixToMillis(posix)),
 						lat: eLat,
 						lon: eLon,
+						longNote: p.longNote,
 						merchant: p.merchant,
 						note: p.note,
 						rowIndex: 0
@@ -8383,7 +8453,7 @@ var $author$project$Main$update = F2(
 					var item = _v18.a;
 					var ocr = A2(
 						$elm$core$Maybe$withDefault,
-						{amount: $elm$core$Maybe$Nothing, category: $elm$core$Maybe$Nothing, merchant: $elm$core$Maybe$Nothing, note: $elm$core$Maybe$Nothing},
+						{amount: $elm$core$Maybe$Nothing, category: $elm$core$Maybe$Nothing, date: $elm$core$Maybe$Nothing, longNote: $elm$core$Maybe$Nothing, merchant: $elm$core$Maybe$Nothing, note: $elm$core$Maybe$Nothing},
 						item.ocrData);
 					var newPending = {
 						amount: A2(
@@ -8391,8 +8461,9 @@ var $author$project$Main$update = F2(
 							'',
 							A2($elm$core$Maybe$map, $elm$core$String$fromFloat, ocr.amount)),
 						category: A2($elm$core$Maybe$withDefault, $author$project$Main$Fuel, ocr.category),
-						date: model.today,
+						date: A2($elm$core$Maybe$withDefault, model.today, ocr.date),
 						locationState: item.locationState,
+						longNote: A2($elm$core$Maybe$withDefault, '', ocr.longNote),
 						merchant: A2($elm$core$Maybe$withDefault, '', ocr.merchant),
 						note: A2($elm$core$Maybe$withDefault, '', ocr.note)
 					};
@@ -8443,6 +8514,9 @@ var $author$project$Main$CancelEdit = {$: 'CancelEdit'};
 var $author$project$Main$DateChanged = function (a) {
 	return {$: 'DateChanged', a: a};
 };
+var $author$project$Main$LongNoteChanged = function (a) {
+	return {$: 'LongNoteChanged', a: a};
+};
 var $author$project$Main$MerchantChanged = function (a) {
 	return {$: 'MerchantChanged', a: a};
 };
@@ -8451,7 +8525,7 @@ var $author$project$Main$NoteChanged = function (a) {
 };
 var $author$project$Main$SubmitEntry = {$: 'SubmitEntry'};
 var $author$project$Main$allCategories = _List_fromArray(
-	[$author$project$Main$Fuel, $author$project$Main$Food, $author$project$Main$Camp, $author$project$Main$Ferry, $author$project$Main$Gear, $author$project$Main$Misc]);
+	[$author$project$Main$Fuel, $author$project$Main$Food, $author$project$Main$Camp, $author$project$Main$Lodging, $author$project$Main$Ferry, $author$project$Main$Activities, $author$project$Main$Shopping, $author$project$Main$Gear, $author$project$Main$Transport, $author$project$Main$Medical, $author$project$Main$Misc]);
 var $elm$virtual_dom$VirtualDom$attribute = F2(
 	function (key, value) {
 		return A2(
@@ -8555,6 +8629,7 @@ var $elm$html$Html$Attributes$placeholder = $elm$html$Html$Attributes$stringProp
 var $author$project$Main$sectionHead = A2($elm$html$Html$Attributes$style, 'font-size', '13px');
 var $elm$html$Html$span = _VirtualDom_node('span');
 var $author$project$Main$textInputStyle = A2($elm$html$Html$Attributes$style, 'width', '100%');
+var $elm$html$Html$textarea = _VirtualDom_node('textarea');
 var $elm$html$Html$Attributes$type_ = $elm$html$Html$Attributes$stringProperty('type');
 var $elm$html$Html$Attributes$value = $elm$html$Html$Attributes$stringProperty('value');
 var $author$project$Main$CategorySelected = function (a) {
@@ -8572,6 +8647,16 @@ var $author$project$Main$categoryColor = function (cat) {
 			return '#c060e0';
 		case 'Gear':
 			return '#e85030';
+		case 'Lodging':
+			return '#40c0b0';
+		case 'Activities':
+			return '#f0b040';
+		case 'Shopping':
+			return '#e060a0';
+		case 'Medical':
+			return '#ff6060';
+		case 'Transport':
+			return '#a0a0e0';
 		default:
 			return '#7a8a80';
 	}
@@ -8588,6 +8673,16 @@ var $author$project$Main$categoryIcon = function (cat) {
 			return '⛴';
 		case 'Gear':
 			return '🔧';
+		case 'Lodging':
+			return '🏨';
+		case 'Activities':
+			return '🎯';
+		case 'Shopping':
+			return '🛍';
+		case 'Medical':
+			return '💊';
+		case 'Transport':
+			return '🚌';
 		default:
 			return '📦';
 	}
@@ -9040,9 +9135,7 @@ var $author$project$Main$viewAddTab = function (model) {
 					$elm$html$Html$div,
 					_List_fromArray(
 						[
-							A2($elm$html$Html$Attributes$style, 'display', 'grid'),
-							A2($elm$html$Html$Attributes$style, 'grid-template-columns', 'repeat(3, 1fr)'),
-							A2($elm$html$Html$Attributes$style, 'gap', '8px')
+							$elm$html$Html$Attributes$class('grid grid-cols-4 gap-2')
 						]),
 					A2(
 						$elm$core$List$map,
@@ -9058,8 +9151,25 @@ var $author$project$Main$viewAddTab = function (model) {
 							$elm$html$Html$Attributes$type_('text'),
 							$elm$html$Html$Attributes$value(p.note),
 							$elm$html$Html$Events$onInput($author$project$Main$NoteChanged),
-							$elm$html$Html$Attributes$placeholder('optional'),
+							$elm$html$Html$Attributes$placeholder('brief (50 chars)'),
+							A2($elm$html$Html$Attributes$attribute, 'maxlength', '50'),
 							$author$project$Main$textInputStyle
+						]),
+					_List_Nil)),
+				A2(
+				$author$project$Main$formField,
+				'DETAILS',
+				A2(
+					$elm$html$Html$textarea,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$value(p.longNote),
+							$elm$html$Html$Events$onInput($author$project$Main$LongNoteChanged),
+							$elm$html$Html$Attributes$placeholder('optional — what happened, where, any context (280 chars)'),
+							A2($elm$html$Html$Attributes$attribute, 'maxlength', '280'),
+							A2($elm$html$Html$Attributes$attribute, 'rows', '3'),
+							$elm$html$Html$Attributes$class('w-full p-3 bg-[#1e2220] border border-[#3a4240] text-[#c8d0c8] rounded-lg font-[inherit] text-base resize-none leading-snug'),
+							A2($elm$html$Html$Attributes$style, 'outline', 'none')
 						]),
 					_List_Nil)),
 				A2(
@@ -9500,6 +9610,16 @@ var $author$project$Main$viewEntryRow = function (entry) {
 						_List_fromArray(
 							[
 								$elm$html$Html$text(entry.merchant)
+							])) : $elm$html$Html$text(''),
+						(entry.longNote !== '') ? A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('text-xs text-[#4a5a50] mt-1 leading-snug line-clamp-2')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text(entry.longNote)
 							])) : $elm$html$Html$text('')
 					])),
 				A2(
