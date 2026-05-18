@@ -2458,11 +2458,14 @@ viewStatsTab model =
                     |> Maybe.map (\c -> categoryIcon c ++ " " ++ categoryLabel c)
                     |> Maybe.withDefault "—"
                 )
-            , statCard "BIGGEST DAY"
-                (bigDay
-                    |> Maybe.map (\( d, t ) -> String.slice 5 10 d ++ "  " ++ formatAmount t)
-                    |> Maybe.withDefault "—"
-                )
+            , if numDays > 1 then
+                statCard "BIGGEST DAY"
+                    (bigDay
+                        |> Maybe.map (\( d, t ) -> String.slice 5 10 d ++ "  " ++ formatAmount t)
+                        |> Maybe.withDefault "—"
+                    )
+              else
+                statCard "ENTRIES TODAY" (String.fromInt numEntries)
             , statCard "DAYS INTO TRIP"
                 (if daysIn > 0 then String.fromInt daysIn else "—")
             , statCard "PROJ / 30 DAYS"

@@ -15854,7 +15854,7 @@ var $author$project$Main$viewStatsTab = function (model) {
 									return $author$project$Main$categoryIcon(c) + (' ' + $author$project$Main$categoryLabel(c));
 								},
 								topCat))),
-						A2(
+						(numDays > 1) ? A2(
 						$author$project$Main$statCard,
 						'BIGGEST DAY',
 						A2(
@@ -15867,7 +15867,10 @@ var $author$project$Main$viewStatsTab = function (model) {
 									var t = _v0.b;
 									return A3($elm$core$String$slice, 5, 10, d) + ('  ' + $author$project$Main$formatAmount(t));
 								},
-								bigDay))),
+								bigDay))) : A2(
+						$author$project$Main$statCard,
+						'ENTRIES TODAY',
+						$elm$core$String$fromInt(numEntries)),
 						A2(
 						$author$project$Main$statCard,
 						'DAYS INTO TRIP',
