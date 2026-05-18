@@ -212,6 +212,49 @@
 
     customElements.define('map-picker', MapPicker);
 
+    // ── <waypoint-map> custom element ──────────────────────────────────────
+    class WaypointMap extends HTMLElement {
+      connectedCallback() {
+        this._map = L.map(this).setView([64.2008, -153.4937], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+        }).addTo(this._map);
+        this._markers = [];
+        this._renderPoints(this.getAttribute('points'));
+        setTimeout(() => this._map && this._map.invalidateSize(), 100);
+      }
+
+      disconnectedCallback() {
+        if (this._map) { this._map.remove(); this._map = null; }
+        this._markers = [];
+      }
+
+      _renderPoints(raw) {
+        this._markers.forEach(m => m.remove());
+        this._markers = [];
+        let pts; try { pts = JSON.parse(raw || '[]'); } catch (_) { return; }
+        if (!pts.length) return;
+        const lls = [];
+        pts.forEach(p => {
+          const m = L.marker([p.lat, p.lon]).addTo(this._map);
+          if (p.label) m.bindPopup(p.label);
+          this._markers.push(m);
+          lls.push([p.lat, p.lon]);
+        });
+        if (lls.length === 1) this._map.setView(lls[0], 13);
+        else this._map.fitBounds(lls, { padding: [20, 20] });
+      }
+
+      attributeChangedCallback(name, _old, val) {
+        if (name === 'points' && this._map) this._renderPoints(val);
+      }
+
+      static get observedAttributes() { return ['points']; }
+    }
+
+    customElements.define('waypoint-map', WaypointMap);
+
     // ── Start Elm ──────────────────────────────────────────────────────────
 
     const app = Elm.Main.init({ node: document.getElementById('app'), flags });
