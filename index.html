@@ -354,23 +354,10 @@
       }
     });
 
-    // ── PWA service worker ─────────────────────────────────────────────────
+    // ── PWA service worker — unregister all SWs to avoid caching issues ──────
     if ('serviceWorker' in navigator) {
-      const hadController = !!navigator.serviceWorker.controller;
-
-      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
-        .then(reg => {
-          // Long-running SPA tabs never navigate, so the browser's default SW
-          // update check never fires. Poll every 30 min to catch new deploys.
-          setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
-        })
-        .catch(console.error);
-
-      // When a new SW activates and calls clients.claim(), reload so the new
-      // main.js actually executes. hadController prevents a loop on first install.
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (hadController) window.location.reload();
-      });
+      navigator.serviceWorker.getRegistrations()
+        .then(regs => regs.forEach(r => r.unregister()));
     }
 
   })();
