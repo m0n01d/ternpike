@@ -127,6 +127,7 @@ type alias Model =
     , geoBlocked : Bool
     , showMapPicker : Bool
     , showLedgerMap : Bool
+    , version : String
     }
 
 
@@ -303,6 +304,7 @@ init flagsJson =
             , geoBlocked = False
             , showMapPicker = False
             , showLedgerMap = False
+            , version = dec "version"
             }
 
         fetchCmd =
@@ -2421,6 +2423,12 @@ viewSettingsTab model =
                 ]
                 [ text "Reset all settings" ]
             ]
+        , if model.version /= "" then
+            p [ Html.Attributes.class "text-[#3a4a40] text-xs text-center mt-6 font-mono" ]
+                [ text model.version ]
+
+          else
+            text ""
         ]
 
 
