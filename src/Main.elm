@@ -81,6 +81,7 @@ type LocationState
     = LocationIdle
     | LocationFetching
     | LocationCheckingExif
+    | LocationNoExifGps
     | LocationGot Float Float LocationSource
     | LocationSkipped
 
@@ -707,12 +708,21 @@ update msg model =
             ( { model | toast = Nothing }, Cmd.none )
 
         GotExifCoords (Just lat) (Just lon) ->
-            ( { model | pendingEntry = setLocation (LocationGot lat lon ExifGps) model.pendingEntry }, Cmd.none )
+            let
+                toastMsg =
+                    "📍 GPS found in photo"
+            in
+            ( { model | pendingEntry = setLocation (LocationGot lat lon ExifGps) model.pendingEntry
+                      , toast = Just toastMsg }
+            , toastFor toastMsg
+            )
 
         GotExifCoords _ _ ->
             case model.pendingEntry.locationState of
                 LocationCheckingExif ->
-                    ( { model | pendingEntry = setLocation LocationIdle model.pendingEntry }, Cmd.none )
+                    ( { model | pendingEntry = setLocation LocationNoExifGps model.pendingEntry }
+                    , toastFor "No GPS data in this photo"
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -1814,6 +1824,14 @@ viewLocationStatus ls =
         LocationCheckingExif ->
             div [ class "text-[#4a5a50] text-sm py-2" ]
                 [ text "📍 Reading photo…" ]
+
+        LocationNoExifGps ->
+            div [ class "flex items-center gap-3 py-2" ]
+                [ span [ class "text-[#4a5a50] text-sm" ] [ text "No GPS in photo" ]
+                , button [ onClick OpenMapPicker
+                         , class "bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]" ]
+                    [ text "pin manually" ]
+                ]
 
         LocationGot lat lon source ->
             let
