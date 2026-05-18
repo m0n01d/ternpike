@@ -12,6 +12,7 @@ import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 import Chart as C
 import Chart.Attributes as CA
+import Process
 import Task
 import Time
 
@@ -128,6 +129,7 @@ type alias Model =
     , showMapPicker : Bool
     , showLedgerMap : Bool
     , version : String
+    , toast : Maybe String
     }
 
 
@@ -137,6 +139,8 @@ type Msg
     | SignOutClicked
     | ResetSettingsClicked
     | ToggleLedgerMap
+    | ShowToast String
+    | ToastExpired
     | FileSelected File
     | GotFileUrl String
     | GotOcrResult (Result Http.Error String)
@@ -255,6 +259,11 @@ entryToPending e =
     }
 
 
+toastFor : String -> Cmd Msg
+toastFor _ =
+    Task.perform (\_ -> ToastExpired) (Process.sleep 4000)
+
+
 setLocation : LocationState -> PendingEntry -> PendingEntry
 setLocation ls p =
     { p | locationState = ls }
@@ -305,6 +314,7 @@ init flagsJson =
             , showMapPicker = False
             , showLedgerMap = False
             , version = dec "version"
+            , toast = Nothing
             }
 
         fetchCmd =
@@ -532,11 +542,21 @@ update msg model =
                     )
 
                 Err (Http.BadStatus 401) ->
-                    ( { model | submitting = False }, requestOAuthToken False )
+                    let
+                        toastMsg =
+                            "Session expired — please try saving again"
+                    in
+                    ( { model | submitting = False, toast = Just toastMsg }
+                    , Cmd.batch [ requestOAuthToken False, toastFor toastMsg ]
+                    )
 
                 Err e ->
-                    ( { model | submitting = False, error = Just ("Save failed: " ++ httpErrString e) }
-                    , Cmd.none
+                    let
+                        toastMsg =
+                            "Save failed: " ++ httpErrString e
+                    in
+                    ( { model | submitting = False, toast = Just toastMsg }
+                    , toastFor toastMsg
                     )
 
         EntriesFetched result ->
@@ -679,6 +699,12 @@ update msg model =
 
         ToggleLedgerMap ->
             ( { model | showLedgerMap = not model.showLedgerMap }, Cmd.none )
+
+        ShowToast message ->
+            ( { model | toast = Just message }, toastFor message )
+
+        ToastExpired ->
+            ( { model | toast = Nothing }, Cmd.none )
 
         GotExifCoords (Just lat) (Just lon) ->
             ( { model | pendingEntry = setLocation (LocationGot lat lon ExifGps) model.pendingEntry }, Cmd.none )
@@ -1421,7 +1447,25 @@ viewApp model =
                     viewSettingsTab model
             ]
         , viewBottomNav model.tab
+        , viewToast model
         ]
+
+
+viewToast : Model -> Html Msg
+viewToast model =
+    case model.toast of
+        Nothing ->
+            text ""
+
+        Just message ->
+            div [ class "fixed bottom-16 left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-[#1e2220] border border-[#e85030] shadow-lg" ]
+                [ span [ class "text-[#e8c080] text-sm flex-1" ] [ text message ]
+                , button
+                    [ onClick ToastExpired
+                    , class "bg-transparent border-none text-[#7a8a80] text-lg leading-none cursor-pointer p-0 flex-shrink-0"
+                    ]
+                    [ text "✕" ]
+                ]
 
 
 viewHeader : Model -> Html Msg
