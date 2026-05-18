@@ -126,7 +126,7 @@
       anthropicKey:   anthropicKey   || '',
       tripStart:      tripStart       || '2026-05-22',
       today:          new Date().toISOString().slice(0, 10),
-      version:        '222a71100bf8fd9d35cd59f0e963775ad6ffcb7e',
+      version:        '6dcb0341f666e5268b4e1f4de18a7c81b5fe57ea',
     };
 
     // ── <map-picker> custom element ────────────────────────────────────────
@@ -345,7 +345,21 @@
 
     // ── PWA service worker ─────────────────────────────────────────────────
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(console.error);
+      const hadController = !!navigator.serviceWorker.controller;
+
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+        .then(reg => {
+          // Long-running SPA tabs never navigate, so the browser's default SW
+          // update check never fires. Poll every 30 min to catch new deploys.
+          setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
+        })
+        .catch(console.error);
+
+      // When a new SW activates and calls clients.claim(), reload so the new
+      // main.js actually executes. hadController prevents a loop on first install.
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hadController) window.location.reload();
+      });
     }
 
   })();
