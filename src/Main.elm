@@ -1389,6 +1389,23 @@ uniqueDates entries =
         |> List.reverse
 
 
+isoToDayCount : String -> Int
+isoToDayCount s =
+    case List.filterMap String.toInt (String.split "-" s) of
+        [ y, m, d ] ->
+            let
+                monthOffsets =
+                    [ 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 ]
+
+                offset =
+                    List.drop (m - 1) monthOffsets |> List.head |> Maybe.withDefault 0
+            in
+            y * 365 + offset + d
+
+        _ ->
+            0
+
+
 medianAmount : List Entry -> Float
 medianAmount entries =
     let
@@ -2414,6 +2431,13 @@ viewStatsTab model =
             entries
                 |> List.sortBy (\e -> negate e.amount)
                 |> List.take 5
+
+        daysIn =
+            if model.tripStart /= "" && model.today /= "" then
+                isoToDayCount model.today - isoToDayCount model.tripStart + 1
+
+            else
+                0
     in
     div [ style "padding" "20px" ]
         [ h2 [ sectionHead ] [ text "STATS" ]
@@ -2436,9 +2460,13 @@ viewStatsTab model =
                 )
             , statCard "BIGGEST DAY"
                 (bigDay
-                    |> Maybe.map (\( _, t ) -> formatAmount t)
+                    |> Maybe.map (\( d, t ) -> String.slice 5 10 d ++ "  " ++ formatAmount t)
                     |> Maybe.withDefault "—"
                 )
+            , statCard "DAYS INTO TRIP"
+                (if daysIn > 0 then String.fromInt daysIn else "—")
+            , statCard "PROJ / 30 DAYS"
+                (if avgPerDay > 0 then formatAmount (avgPerDay * 30) else "—")
             ]
         , if List.isEmpty entries then
             text ""
@@ -2464,6 +2492,20 @@ viewStatsTab model =
                 [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "8px" ]
                     [ text "DAILY SPENDING" ]
                 , viewDailyChart entries
+                ]
+
+          else
+            text ""
+        , if numDays > 1 then
+            div
+                [ style "background" "#161918"
+                , style "border-radius" "10px"
+                , style "padding" "20px"
+                , style "margin-bottom" "16px"
+                ]
+                [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "8px" ]
+                    [ text "CUMULATIVE SPEND" ]
+                , viewCumulativeChart entries
                 ]
 
           else
@@ -2575,6 +2617,35 @@ viewDailyChart entries =
             [ C.bar .total [ CA.color "#e8a020" ] ]
             days
         , C.binLabels .date [ CA.moveDown 16, CA.color "#7a8a80", CA.fontSize 8 ]
+        ]
+
+
+viewCumulativeChart : List Entry -> Html Msg
+viewCumulativeChart entries =
+    let
+        sorted =
+            uniqueDates entries |> List.reverse
+
+        points =
+            List.indexedMap
+                (\i date ->
+                    { x = toFloat (i + 1)
+                    , y =
+                        entries
+                            |> List.filter (\e -> e.date <= date)
+                            |> List.map .amount
+                            |> List.sum
+                    }
+                )
+                sorted
+    in
+    C.chart
+        [ CA.height 160
+        , CA.margin { top = 10, bottom = 10, left = 0, right = 0 }
+        ]
+        [ C.series .x
+            [ C.interpolated .y [ CA.color "#4090e0", CA.width 2 ] [] ]
+            points
         ]
 
 
