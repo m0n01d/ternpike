@@ -6,6 +6,8 @@ const SKIP_CACHE = [
   'anthropic.com',
   'accounts.google.com',
   'gsi/client',
+  'unpkg.com',
+  'cdn.jsdelivr.net',
 ];
 
 const STATIC_CACHE_FIRST = [
