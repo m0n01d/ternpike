@@ -41,13 +41,13 @@ port gotNewToken : (String -> msg) -> Sub msg
 port requestGeolocation : () -> Cmd msg
 
 
-port extractExifGps : String -> Cmd msg
+port extractExifGps : { id : String, dataUrl : String } -> Cmd msg
 
 
 port gotGpsCoords : ({ lat : Float, lon : Float, denied : Bool } -> msg) -> Sub msg
 
 
-port gotExifResult : ({ lat : Float, lon : Float, hasGps : Bool } -> msg) -> Sub msg
+port gotExifResult : ({ id : String, lat : Float, lon : Float, hasGps : Bool } -> msg) -> Sub msg
 
 
 
@@ -86,6 +86,22 @@ type LocationState
     | LocationSkipped
 
 
+type ScanStatus
+    = ScanQueued
+    | ScanProcessing
+    | ScanReady
+    | ScanSubmitted
+
+
+type alias ScanItem =
+    { id : String
+    , imageUrl : String
+    , status : ScanStatus
+    , ocrData : Maybe OcrData
+    , locationState : LocationState
+    }
+
+
 type alias Entry =
     { id : String
     , date : String
@@ -121,8 +137,8 @@ type alias Model =
     , loadingEntries : Bool
     , pendingEntry : PendingEntry
     , editingEntry : Maybe Entry
-    , scanImage : Maybe String
-    , scanLoading : Bool
+    , scanQueue : List ScanItem
+    , activeScanItemId : Maybe String
     , error : Maybe String
     , submitting : Bool
     , today : String
@@ -142,9 +158,12 @@ type Msg
     | ToggleLedgerMap
     | ShowToast String
     | ToastExpired
-    | FileSelected File
-    | GotFileUrl String
-    | GotOcrResult (Result Http.Error String)
+    | FilesSelected (List File)
+    | GotFileUrl String String
+    | GotOcrResult String (Result Http.Error String)
+    | ReviewScanItem String
+    | BackToQueue
+    | ClearDoneItems
     | AmountChanged String
     | CategorySelected Category
     | NoteChanged String
@@ -171,7 +190,7 @@ type Msg
     | MapPickerConfirmed Float Float
     | DismissMapPicker
     | SkipLocation
-    | GotExifCoords (Maybe Float) (Maybe Float)
+    | GotExifCoords String (Maybe Float) (Maybe Float)
 
 
 
@@ -270,6 +289,21 @@ setLocation ls p =
     { p | locationState = ls }
 
 
+freshScanItem : String -> ScanItem
+freshScanItem id =
+    { id = id
+    , imageUrl = ""
+    , status = ScanQueued
+    , ocrData = Nothing
+    , locationState = LocationCheckingExif
+    }
+
+
+updateScanItem : String -> (ScanItem -> ScanItem) -> List ScanItem -> List ScanItem
+updateScanItem id f =
+    List.map (\item -> if item.id == id then f item else item)
+
+
 init : D.Value -> ( Model, Cmd Msg )
 init flagsJson =
     let
@@ -306,8 +340,8 @@ init flagsJson =
             , loadingEntries = False
             , pendingEntry = defaultPendingEntry today
             , editingEntry = Nothing
-            , scanImage = Nothing
-            , scanLoading = False
+            , scanQueue = []
+            , activeScanItemId = Nothing
             , error = Nothing
             , submitting = False
             , today = today
@@ -386,63 +420,69 @@ update msg model =
             , clearAllStorage ()
             )
 
-        FileSelected file ->
-            ( { model | scanLoading = True, scanImage = Nothing, error = Nothing
-              , pendingEntry = setLocation LocationCheckingExif model.pendingEntry }
-            , Task.perform GotFileUrl (File.toUrl file)
+        FilesSelected files ->
+            let
+                startIdx =
+                    List.length model.scanQueue
+
+                indexed =
+                    List.indexedMap (\i f -> ( "scan-" ++ String.fromInt (startIdx + i), f )) files
+
+                newItems =
+                    List.map (\( id, _ ) -> freshScanItem id) indexed
+
+                urlCmds =
+                    List.map (\( id, f ) -> Task.perform (GotFileUrl id) (File.toUrl f)) indexed
+            in
+            ( { model | scanQueue = model.scanQueue ++ newItems }
+            , Cmd.batch urlCmds
             )
 
-        GotFileUrl dataUrl ->
-            if model.anthropicKey == "" then
-                ( { model | scanLoading = False, scanImage = Just dataUrl, error = Just "No Anthropic API key — enter it in Settings or fill form manually.", tab = AddTab }
-                , extractExifGps dataUrl
-                )
+        GotFileUrl itemId dataUrl ->
+            let
+                newStatus =
+                    if model.anthropicKey /= "" then
+                        ScanProcessing
+                    else
+                        ScanReady
 
-            else
-                ( { model | scanImage = Just dataUrl }
-                , Cmd.batch
-                    [ makeOcrCall model.anthropicKey (extractBase64 dataUrl) (getMimeType dataUrl)
-                    , extractExifGps dataUrl
-                    ]
-                )
+                updatedQueue =
+                    updateScanItem itemId (\i -> { i | imageUrl = dataUrl, status = newStatus }) model.scanQueue
+            in
+            ( { model | scanQueue = updatedQueue }
+            , Cmd.batch
+                [ if model.anthropicKey /= "" then
+                    makeOcrCall itemId model.anthropicKey (extractBase64 dataUrl) (getMimeType dataUrl)
+                  else
+                    Cmd.none
+                , extractExifGps { id = itemId, dataUrl = dataUrl }
+                ]
+            )
 
-        GotOcrResult result ->
-            case result of
-                Err e ->
-                    ( { model | scanLoading = False, error = Just ("OCR failed: " ++ httpErrString e), tab = AddTab }
-                    , Cmd.none
-                    )
+        GotOcrResult itemId result ->
+            let
+                ocrData =
+                    case result of
+                        Ok responseBody ->
+                            case D.decodeString claudeTextDecoder responseBody of
+                                Ok innerJson ->
+                                    case D.decodeString ocrDataDecoder (stripCodeFence innerJson) of
+                                        Ok data ->
+                                            Just data
 
-                Ok responseBody ->
-                    case D.decodeString claudeTextDecoder responseBody of
-                        Err _ ->
-                            ( { model | scanLoading = False, error = Just "Could not parse OCR response — fill form manually.", tab = AddTab }
-                            , Cmd.none
-                            )
+                                        Err _ ->
+                                            Nothing
 
-                        Ok innerJson ->
-                            case D.decodeString ocrDataDecoder (stripCodeFence innerJson) of
                                 Err _ ->
-                                    ( { model | scanLoading = False, error = Just "Could not read receipt data — fill form manually.", tab = AddTab }
-                                    , Cmd.none
-                                    )
+                                    Nothing
 
-                                Ok ocrData ->
-                                    let
-                                        p =
-                                            model.pendingEntry
+                        Err _ ->
+                            Nothing
 
-                                        updated =
-                                            { p
-                                                | amount = ocrData.amount |> Maybe.map (\a -> String.fromFloat a) |> Maybe.withDefault p.amount
-                                                , category = Maybe.withDefault p.category ocrData.category
-                                                , note = Maybe.withDefault p.note ocrData.note
-                                                , merchant = Maybe.withDefault p.merchant ocrData.merchant
-                                            }
-                                    in
-                                    ( { model | scanLoading = False, pendingEntry = updated, tab = AddTab }
-                                    , Cmd.none
-                                    )
+                updatedQueue =
+                    updateScanItem itemId (\i -> { i | status = ScanReady, ocrData = ocrData }) model.scanQueue
+            in
+            ( { model | scanQueue = updatedQueue }, Cmd.none )
 
         AmountChanged s ->
             updatePending (\p -> { p | amount = s }) model
@@ -532,11 +572,32 @@ update msg model =
         EntrySubmitted result ->
             case result of
                 Ok () ->
+                    let
+                        updatedQueue =
+                            case model.activeScanItemId of
+                                Just id ->
+                                    updateScanItem id (\i -> { i | status = ScanSubmitted }) model.scanQueue
+
+                                Nothing ->
+                                    model.scanQueue
+
+                        hasRemaining =
+                            List.any (\i -> i.status /= ScanSubmitted) updatedQueue
+
+                        nextTab =
+                            if model.activeScanItemId /= Nothing && hasRemaining then
+                                ScanTab
+
+                            else
+                                LedgerTab
+                    in
                     ( { model
                         | submitting = False
                         , pendingEntry = defaultPendingEntry model.today
                         , editingEntry = Nothing
-                        , tab = LedgerTab
+                        , activeScanItemId = Nothing
+                        , scanQueue = updatedQueue
+                        , tab = nextTab
                         , loadingEntries = True
                       }
                     , fetchEntries (Maybe.withDefault "" model.oauthToken) model.sheetId
@@ -707,25 +768,59 @@ update msg model =
         ToastExpired ->
             ( { model | toast = Nothing }, Cmd.none )
 
-        GotExifCoords (Just lat) (Just lon) ->
-            let
-                toastMsg =
-                    "📍 GPS found in photo"
-            in
-            ( { model | pendingEntry = setLocation (LocationGot lat lon ExifGps) model.pendingEntry
-                      , toast = Just toastMsg }
-            , toastFor toastMsg
+        GotExifCoords itemId (Just lat) (Just lon) ->
+            ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationGot lat lon ExifGps }) model.scanQueue }
+            , Cmd.none
             )
 
-        GotExifCoords _ _ ->
-            case model.pendingEntry.locationState of
-                LocationCheckingExif ->
-                    ( { model | pendingEntry = setLocation LocationNoExifGps model.pendingEntry }
-                    , toastFor "No GPS data in this photo"
+        GotExifCoords itemId _ _ ->
+            ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationNoExifGps }) model.scanQueue }
+            , Cmd.none
+            )
+
+        ReviewScanItem itemId ->
+            case List.head (List.filter (\i -> i.id == itemId) model.scanQueue) of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just item ->
+                    let
+                        ocr =
+                            Maybe.withDefault
+                                { amount = Nothing, category = Nothing, note = Nothing, merchant = Nothing }
+                                item.ocrData
+
+                        newPending =
+                            { amount = ocr.amount |> Maybe.map String.fromFloat |> Maybe.withDefault ""
+                            , category = Maybe.withDefault Fuel ocr.category
+                            , note = Maybe.withDefault "" ocr.note
+                            , merchant = Maybe.withDefault "" ocr.merchant
+                            , date = model.today
+                            , locationState = item.locationState
+                            }
+                    in
+                    ( { model
+                        | activeScanItemId = Just itemId
+                        , pendingEntry = newPending
+                        , tab = AddTab
+                        , error = Nothing
+                      }
+                    , Cmd.none
                     )
 
-                _ ->
-                    ( model, Cmd.none )
+        BackToQueue ->
+            ( { model
+                | activeScanItemId = Nothing
+                , pendingEntry = defaultPendingEntry model.today
+                , tab = ScanTab
+              }
+            , Cmd.none
+            )
+
+        ClearDoneItems ->
+            ( { model | scanQueue = List.filter (\i -> i.status /= ScanSubmitted) model.scanQueue }
+            , Cmd.none
+            )
 
 
 updatePending : (PendingEntry -> PendingEntry) -> Model -> ( Model, Cmd Msg )
@@ -855,8 +950,8 @@ updateEntry token sheetId entry =
         }
 
 
-makeOcrCall : String -> String -> String -> Cmd Msg
-makeOcrCall apiKey base64Data mimeType =
+makeOcrCall : String -> String -> String -> String -> Cmd Msg
+makeOcrCall itemId apiKey base64Data mimeType =
     let
         body =
             E.object
@@ -899,7 +994,7 @@ makeOcrCall apiKey base64Data mimeType =
             ]
         , url = "https://api.anthropic.com/v1/messages"
         , body = Http.jsonBody body
-        , expect = Http.expectString GotOcrResult
+        , expect = Http.expectString (GotOcrResult itemId)
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -1061,6 +1156,17 @@ ocrDataDecoder =
         |> Pipeline.optional "category" (D.map Just (D.map categoryFromString D.string)) Nothing
         |> Pipeline.optional "note" (D.map Just D.string) Nothing
         |> Pipeline.optional "merchant" (D.map Just D.string) Nothing
+
+
+fileListDecoder : D.Decoder (List File)
+fileListDecoder =
+    D.field "length" D.int
+        |> D.andThen
+            (\n ->
+                List.range 0 (n - 1)
+                    |> List.map (\i -> D.field (String.fromInt i) File.decoder)
+                    |> List.foldr (D.map2 (::)) (D.succeed [])
+            )
 
 
 
@@ -1571,72 +1677,95 @@ viewNavTab currentTab ( tab, icon, label_ ) =
 
 viewScanTab : Model -> Html Msg
 viewScanTab model =
-    div [ style "padding" "24px 20px" ]
-        [ h2 [ sectionHead ] [ text "SCAN RECEIPT" ]
-        , if model.scanLoading then
-            div
-                [ style "text-align" "center"
-                , style "padding" "48px"
-                , style "color" "#e8a020"
+    div [ class "px-5 pt-6 pb-4" ]
+        [ h2 [ sectionHead ] [ text "SCAN RECEIPTS" ]
+        , label [ class "flex flex-col items-center justify-center bg-[#1e2220] border-2 border-dashed border-[#3a4240] rounded-xl py-10 px-6 cursor-pointer mb-5" ]
+            [ div [ class "text-5xl mb-3" ] [ text "📷" ]
+            , p [ class "text-[#7a8a80] text-base text-center" ] [ text "Tap to add photos" ]
+            , p [ class "text-[#4a5a50] text-xs mt-1 text-center" ] [ text "Select multiple for batch upload" ]
+            , input
+                [ type_ "file"
+                , accept "image/*"
+                , attribute "multiple" "true"
+                , class "hidden"
+                , on "change" (D.map FilesSelected (D.at [ "target", "files" ] fileListDecoder))
                 ]
-                [ div [ style "font-size" "32px", style "margin-bottom" "12px" ] [ text "⏳" ]
-                , p [] [ text "Reading receipt..." ]
+                []
+            ]
+        , if List.isEmpty model.scanQueue then
+            button
+                [ onClick (TabChanged AddTab)
+                , class "w-full py-3.5 rounded-lg border border-[#3a4240] text-[#7a8a80] text-sm cursor-pointer bg-transparent font-[inherit]"
                 ]
+                [ text "Fill in manually →" ]
 
           else
             div []
-                [ label
-                    [ style "display" "flex"
-                    , style "flex-direction" "column"
-                    , style "align-items" "center"
-                    , style "justify-content" "center"
-                    , style "background" "#1e2220"
-                    , style "border" "2px dashed #3a4240"
-                    , style "border-radius" "12px"
-                    , style "padding" "48px 24px"
-                    , style "cursor" "pointer"
-                    , style "margin-bottom" "20px"
-                    , style "min-height" "160px"
-                    ]
-                    [ div [ style "font-size" "48px", style "margin-bottom" "12px" ] [ text "📷" ]
-                    , p [ style "color" "#7a8a80", style "font-size" "16px" ] [ text "Tap to use camera or choose from library" ]
-                    , input
-                        [ type_ "file"
-                        , accept "image/*"
-                        , style "display" "none"
-                        , on "change" (D.map FileSelected (D.at [ "target", "files", "0" ] File.decoder))
+                [ div [ class "grid grid-cols-2 gap-3 mb-4" ]
+                    (List.map viewScanCard model.scanQueue)
+                , if List.any (\i -> i.status == ScanSubmitted) model.scanQueue then
+                    button
+                        [ onClick ClearDoneItems
+                        , class "w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit]"
                         ]
-                        []
-                    ]
-                , case model.scanImage of
-                    Just dataUrl ->
-                        div []
-                            [ img
-                                [ src dataUrl
-                                , style "width" "100%"
-                                , style "border-radius" "8px"
-                                , style "margin-bottom" "16px"
+                        [ text "Clear submitted" ]
+
+                  else
+                    text ""
+                ]
+        ]
+
+
+viewScanCard : ScanItem -> Html Msg
+viewScanCard item =
+    div [ class "bg-[#161918] rounded-xl overflow-hidden" ]
+        [ if item.imageUrl /= "" then
+            img [ src item.imageUrl, class "w-full h-28 object-cover" ] []
+
+          else
+            div [ class "w-full h-28 bg-[#1e2220] flex items-center justify-center text-3xl text-[#3a4240]" ]
+                [ text "📷" ]
+        , div [ class "p-2" ]
+            [ viewScanCardStatus item ]
+        ]
+
+
+viewScanCardStatus : ScanItem -> Html Msg
+viewScanCardStatus item =
+    case item.status of
+        ScanQueued ->
+            div [ class "text-[#4a5a50] text-xs py-1" ] [ text "Queued…" ]
+
+        ScanProcessing ->
+            div [ class "text-[#e8a020] text-xs py-1" ] [ text "⏳ Reading…" ]
+
+        ScanReady ->
+            div []
+                [ case item.ocrData of
+                    Just ocr ->
+                        div [ class "mb-2" ]
+                            [ div [ class "text-[#e8a020] font-mono text-sm font-bold" ]
+                                [ text (ocr.amount |> Maybe.map (\a -> "$" ++ String.fromFloat a) |> Maybe.withDefault "—") ]
+                            , div [ class "text-[#7a8a80] text-xs truncate" ]
+                                [ text
+                                    (ocr.merchant
+                                        |> Maybe.withDefault
+                                            (ocr.category |> Maybe.map categoryLabel |> Maybe.withDefault "receipt")
+                                    )
                                 ]
-                                []
-                            , viewLocationWidget model
                             ]
 
                     Nothing ->
-                        text ""
+                        div [ class "text-[#7a8a80] text-xs mb-2" ] [ text "Fill manually" ]
                 , button
-                    [ onClick (TabChanged AddTab)
-                    , style "width" "100%"
-                    , style "background" "none"
-                    , style "border" "1px solid #3a4240"
-                    , style "color" "#7a8a80"
-                    , style "border-radius" "8px"
-                    , style "padding" "14px"
-                    , style "font-size" "15px"
-                    , style "cursor" "pointer"
+                    [ onClick (ReviewScanItem item.id)
+                    , class "w-full py-1.5 rounded-lg bg-[#e8a020] text-[#0d0f0e] text-xs font-bold cursor-pointer border-none font-[inherit]"
                     ]
-                    [ text "Fill in manually →" ]
+                    [ text "Review →" ]
                 ]
-        ]
+
+        ScanSubmitted ->
+            div [ class "text-[#4a5a50] text-xs text-center py-1" ] [ text "✓ Submitted" ]
 
 
 
@@ -1659,16 +1788,29 @@ viewAddTab model =
             , style "justify-content" "space-between"
             , style "margin-bottom" "20px"
             ]
-            [ h2 [ sectionHead ] [ text (if isEditing then "EDIT EXPENSE" else "ADD EXPENSE") ]
-            , if isEditing then
+            [ h2 [ sectionHead ]
+                [ text
+                    (if isEditing then
+                        "EDIT EXPENSE"
+
+                     else if model.activeScanItemId /= Nothing then
+                        "REVIEW SCAN"
+
+                     else
+                        "ADD EXPENSE"
+                    )
+                ]
+            , if model.activeScanItemId /= Nothing then
+                button
+                    [ onClick BackToQueue
+                    , class "bg-transparent border-none text-[#7a8a80] text-sm cursor-pointer p-1 font-[inherit]"
+                    ]
+                    [ text "← queue" ]
+
+              else if isEditing then
                 button
                     [ onClick CancelEdit
-                    , style "background" "none"
-                    , style "border" "none"
-                    , style "color" "#7a8a80"
-                    , style "font-size" "14px"
-                    , style "cursor" "pointer"
-                    , style "padding" "4px 0"
+                    , class "bg-transparent border-none text-[#7a8a80] text-sm cursor-pointer p-1 font-[inherit]"
                     ]
                     [ text "← cancel" ]
 
@@ -2570,6 +2712,6 @@ main =
                 Sub.batch
                     [ gotNewToken GotOAuthToken
                     , gotGpsCoords (\r -> if r.denied then GeolocationDenied else GotGpsCoords r.lat r.lon)
-                    , gotExifResult (\r -> if r.hasGps then GotExifCoords (Just r.lat) (Just r.lon) else GotExifCoords Nothing Nothing)
+                    , gotExifResult (\r -> if r.hasGps then GotExifCoords r.id (Just r.lat) (Just r.lon) else GotExifCoords r.id Nothing Nothing)
                     ]
         }

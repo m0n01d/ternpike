@@ -80,271 +80,6 @@ function A9(fun, a, b, c, d, e, f, g, h, i) {
 console.warn('Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.1/optimize for better performance and smaller assets.');
 
 
-// EQUALITY
-
-function _Utils_eq(x, y)
-{
-	for (
-		var pair, stack = [], isEqual = _Utils_eqHelp(x, y, 0, stack);
-		isEqual && (pair = stack.pop());
-		isEqual = _Utils_eqHelp(pair.a, pair.b, 0, stack)
-		)
-	{}
-
-	return isEqual;
-}
-
-function _Utils_eqHelp(x, y, depth, stack)
-{
-	if (x === y)
-	{
-		return true;
-	}
-
-	if (typeof x !== 'object' || x === null || y === null)
-	{
-		typeof x === 'function' && _Debug_crash(5);
-		return false;
-	}
-
-	if (depth > 100)
-	{
-		stack.push(_Utils_Tuple2(x,y));
-		return true;
-	}
-
-	/**/
-	if (x.$ === 'Set_elm_builtin')
-	{
-		x = $elm$core$Set$toList(x);
-		y = $elm$core$Set$toList(y);
-	}
-	if (x.$ === 'RBNode_elm_builtin' || x.$ === 'RBEmpty_elm_builtin')
-	{
-		x = $elm$core$Dict$toList(x);
-		y = $elm$core$Dict$toList(y);
-	}
-	//*/
-
-	/**_UNUSED/
-	if (x.$ < 0)
-	{
-		x = $elm$core$Dict$toList(x);
-		y = $elm$core$Dict$toList(y);
-	}
-	//*/
-
-	for (var key in x)
-	{
-		if (!_Utils_eqHelp(x[key], y[key], depth + 1, stack))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
-var _Utils_equal = F2(_Utils_eq);
-var _Utils_notEqual = F2(function(a, b) { return !_Utils_eq(a,b); });
-
-
-
-// COMPARISONS
-
-// Code in Generate/JavaScript.hs, Basics.js, and List.js depends on
-// the particular integer values assigned to LT, EQ, and GT.
-
-function _Utils_cmp(x, y, ord)
-{
-	if (typeof x !== 'object')
-	{
-		return x === y ? /*EQ*/ 0 : x < y ? /*LT*/ -1 : /*GT*/ 1;
-	}
-
-	/**/
-	if (x instanceof String)
-	{
-		var a = x.valueOf();
-		var b = y.valueOf();
-		return a === b ? 0 : a < b ? -1 : 1;
-	}
-	//*/
-
-	/**_UNUSED/
-	if (typeof x.$ === 'undefined')
-	//*/
-	/**/
-	if (x.$[0] === '#')
-	//*/
-	{
-		return (ord = _Utils_cmp(x.a, y.a))
-			? ord
-			: (ord = _Utils_cmp(x.b, y.b))
-				? ord
-				: _Utils_cmp(x.c, y.c);
-	}
-
-	// traverse conses until end of a list or a mismatch
-	for (; x.b && y.b && !(ord = _Utils_cmp(x.a, y.a)); x = x.b, y = y.b) {} // WHILE_CONSES
-	return ord || (x.b ? /*GT*/ 1 : y.b ? /*LT*/ -1 : /*EQ*/ 0);
-}
-
-var _Utils_lt = F2(function(a, b) { return _Utils_cmp(a, b) < 0; });
-var _Utils_le = F2(function(a, b) { return _Utils_cmp(a, b) < 1; });
-var _Utils_gt = F2(function(a, b) { return _Utils_cmp(a, b) > 0; });
-var _Utils_ge = F2(function(a, b) { return _Utils_cmp(a, b) >= 0; });
-
-var _Utils_compare = F2(function(x, y)
-{
-	var n = _Utils_cmp(x, y);
-	return n < 0 ? $elm$core$Basics$LT : n ? $elm$core$Basics$GT : $elm$core$Basics$EQ;
-});
-
-
-// COMMON VALUES
-
-var _Utils_Tuple0_UNUSED = 0;
-var _Utils_Tuple0 = { $: '#0' };
-
-function _Utils_Tuple2_UNUSED(a, b) { return { a: a, b: b }; }
-function _Utils_Tuple2(a, b) { return { $: '#2', a: a, b: b }; }
-
-function _Utils_Tuple3_UNUSED(a, b, c) { return { a: a, b: b, c: c }; }
-function _Utils_Tuple3(a, b, c) { return { $: '#3', a: a, b: b, c: c }; }
-
-function _Utils_chr_UNUSED(c) { return c; }
-function _Utils_chr(c) { return new String(c); }
-
-
-// RECORDS
-
-function _Utils_update(oldRecord, updatedFields)
-{
-	var newRecord = {};
-
-	for (var key in oldRecord)
-	{
-		newRecord[key] = oldRecord[key];
-	}
-
-	for (var key in updatedFields)
-	{
-		newRecord[key] = updatedFields[key];
-	}
-
-	return newRecord;
-}
-
-
-// APPEND
-
-var _Utils_append = F2(_Utils_ap);
-
-function _Utils_ap(xs, ys)
-{
-	// append Strings
-	if (typeof xs === 'string')
-	{
-		return xs + ys;
-	}
-
-	// append Lists
-	if (!xs.b)
-	{
-		return ys;
-	}
-	var root = _List_Cons(xs.a, ys);
-	xs = xs.b
-	for (var curr = root; xs.b; xs = xs.b) // WHILE_CONS
-	{
-		curr = curr.b = _List_Cons(xs.a, ys);
-	}
-	return root;
-}
-
-
-
-var _List_Nil_UNUSED = { $: 0 };
-var _List_Nil = { $: '[]' };
-
-function _List_Cons_UNUSED(hd, tl) { return { $: 1, a: hd, b: tl }; }
-function _List_Cons(hd, tl) { return { $: '::', a: hd, b: tl }; }
-
-
-var _List_cons = F2(_List_Cons);
-
-function _List_fromArray(arr)
-{
-	var out = _List_Nil;
-	for (var i = arr.length; i--; )
-	{
-		out = _List_Cons(arr[i], out);
-	}
-	return out;
-}
-
-function _List_toArray(xs)
-{
-	for (var out = []; xs.b; xs = xs.b) // WHILE_CONS
-	{
-		out.push(xs.a);
-	}
-	return out;
-}
-
-var _List_map2 = F3(function(f, xs, ys)
-{
-	for (var arr = []; xs.b && ys.b; xs = xs.b, ys = ys.b) // WHILE_CONSES
-	{
-		arr.push(A2(f, xs.a, ys.a));
-	}
-	return _List_fromArray(arr);
-});
-
-var _List_map3 = F4(function(f, xs, ys, zs)
-{
-	for (var arr = []; xs.b && ys.b && zs.b; xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
-	{
-		arr.push(A3(f, xs.a, ys.a, zs.a));
-	}
-	return _List_fromArray(arr);
-});
-
-var _List_map4 = F5(function(f, ws, xs, ys, zs)
-{
-	for (var arr = []; ws.b && xs.b && ys.b && zs.b; ws = ws.b, xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
-	{
-		arr.push(A4(f, ws.a, xs.a, ys.a, zs.a));
-	}
-	return _List_fromArray(arr);
-});
-
-var _List_map5 = F6(function(f, vs, ws, xs, ys, zs)
-{
-	for (var arr = []; vs.b && ws.b && xs.b && ys.b && zs.b; vs = vs.b, ws = ws.b, xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
-	{
-		arr.push(A5(f, vs.a, ws.a, xs.a, ys.a, zs.a));
-	}
-	return _List_fromArray(arr);
-});
-
-var _List_sortBy = F2(function(f, xs)
-{
-	return _List_fromArray(_List_toArray(xs).sort(function(a, b) {
-		return _Utils_cmp(f(a), f(b));
-	}));
-});
-
-var _List_sortWith = F2(function(f, xs)
-{
-	return _List_fromArray(_List_toArray(xs).sort(function(a, b) {
-		var ord = A2(f, a, b);
-		return ord === $elm$core$Basics$EQ ? 0 : ord === $elm$core$Basics$LT ? -1 : 1;
-	}));
-});
-
-
-
 var _JsArray_empty = [];
 
 function _JsArray_singleton(value)
@@ -790,6 +525,271 @@ function _Debug_regionToString(region)
 	}
 	return 'on lines ' + region.start.line + ' through ' + region.end.line;
 }
+
+
+
+// EQUALITY
+
+function _Utils_eq(x, y)
+{
+	for (
+		var pair, stack = [], isEqual = _Utils_eqHelp(x, y, 0, stack);
+		isEqual && (pair = stack.pop());
+		isEqual = _Utils_eqHelp(pair.a, pair.b, 0, stack)
+		)
+	{}
+
+	return isEqual;
+}
+
+function _Utils_eqHelp(x, y, depth, stack)
+{
+	if (x === y)
+	{
+		return true;
+	}
+
+	if (typeof x !== 'object' || x === null || y === null)
+	{
+		typeof x === 'function' && _Debug_crash(5);
+		return false;
+	}
+
+	if (depth > 100)
+	{
+		stack.push(_Utils_Tuple2(x,y));
+		return true;
+	}
+
+	/**/
+	if (x.$ === 'Set_elm_builtin')
+	{
+		x = $elm$core$Set$toList(x);
+		y = $elm$core$Set$toList(y);
+	}
+	if (x.$ === 'RBNode_elm_builtin' || x.$ === 'RBEmpty_elm_builtin')
+	{
+		x = $elm$core$Dict$toList(x);
+		y = $elm$core$Dict$toList(y);
+	}
+	//*/
+
+	/**_UNUSED/
+	if (x.$ < 0)
+	{
+		x = $elm$core$Dict$toList(x);
+		y = $elm$core$Dict$toList(y);
+	}
+	//*/
+
+	for (var key in x)
+	{
+		if (!_Utils_eqHelp(x[key], y[key], depth + 1, stack))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+var _Utils_equal = F2(_Utils_eq);
+var _Utils_notEqual = F2(function(a, b) { return !_Utils_eq(a,b); });
+
+
+
+// COMPARISONS
+
+// Code in Generate/JavaScript.hs, Basics.js, and List.js depends on
+// the particular integer values assigned to LT, EQ, and GT.
+
+function _Utils_cmp(x, y, ord)
+{
+	if (typeof x !== 'object')
+	{
+		return x === y ? /*EQ*/ 0 : x < y ? /*LT*/ -1 : /*GT*/ 1;
+	}
+
+	/**/
+	if (x instanceof String)
+	{
+		var a = x.valueOf();
+		var b = y.valueOf();
+		return a === b ? 0 : a < b ? -1 : 1;
+	}
+	//*/
+
+	/**_UNUSED/
+	if (typeof x.$ === 'undefined')
+	//*/
+	/**/
+	if (x.$[0] === '#')
+	//*/
+	{
+		return (ord = _Utils_cmp(x.a, y.a))
+			? ord
+			: (ord = _Utils_cmp(x.b, y.b))
+				? ord
+				: _Utils_cmp(x.c, y.c);
+	}
+
+	// traverse conses until end of a list or a mismatch
+	for (; x.b && y.b && !(ord = _Utils_cmp(x.a, y.a)); x = x.b, y = y.b) {} // WHILE_CONSES
+	return ord || (x.b ? /*GT*/ 1 : y.b ? /*LT*/ -1 : /*EQ*/ 0);
+}
+
+var _Utils_lt = F2(function(a, b) { return _Utils_cmp(a, b) < 0; });
+var _Utils_le = F2(function(a, b) { return _Utils_cmp(a, b) < 1; });
+var _Utils_gt = F2(function(a, b) { return _Utils_cmp(a, b) > 0; });
+var _Utils_ge = F2(function(a, b) { return _Utils_cmp(a, b) >= 0; });
+
+var _Utils_compare = F2(function(x, y)
+{
+	var n = _Utils_cmp(x, y);
+	return n < 0 ? $elm$core$Basics$LT : n ? $elm$core$Basics$GT : $elm$core$Basics$EQ;
+});
+
+
+// COMMON VALUES
+
+var _Utils_Tuple0_UNUSED = 0;
+var _Utils_Tuple0 = { $: '#0' };
+
+function _Utils_Tuple2_UNUSED(a, b) { return { a: a, b: b }; }
+function _Utils_Tuple2(a, b) { return { $: '#2', a: a, b: b }; }
+
+function _Utils_Tuple3_UNUSED(a, b, c) { return { a: a, b: b, c: c }; }
+function _Utils_Tuple3(a, b, c) { return { $: '#3', a: a, b: b, c: c }; }
+
+function _Utils_chr_UNUSED(c) { return c; }
+function _Utils_chr(c) { return new String(c); }
+
+
+// RECORDS
+
+function _Utils_update(oldRecord, updatedFields)
+{
+	var newRecord = {};
+
+	for (var key in oldRecord)
+	{
+		newRecord[key] = oldRecord[key];
+	}
+
+	for (var key in updatedFields)
+	{
+		newRecord[key] = updatedFields[key];
+	}
+
+	return newRecord;
+}
+
+
+// APPEND
+
+var _Utils_append = F2(_Utils_ap);
+
+function _Utils_ap(xs, ys)
+{
+	// append Strings
+	if (typeof xs === 'string')
+	{
+		return xs + ys;
+	}
+
+	// append Lists
+	if (!xs.b)
+	{
+		return ys;
+	}
+	var root = _List_Cons(xs.a, ys);
+	xs = xs.b
+	for (var curr = root; xs.b; xs = xs.b) // WHILE_CONS
+	{
+		curr = curr.b = _List_Cons(xs.a, ys);
+	}
+	return root;
+}
+
+
+
+var _List_Nil_UNUSED = { $: 0 };
+var _List_Nil = { $: '[]' };
+
+function _List_Cons_UNUSED(hd, tl) { return { $: 1, a: hd, b: tl }; }
+function _List_Cons(hd, tl) { return { $: '::', a: hd, b: tl }; }
+
+
+var _List_cons = F2(_List_Cons);
+
+function _List_fromArray(arr)
+{
+	var out = _List_Nil;
+	for (var i = arr.length; i--; )
+	{
+		out = _List_Cons(arr[i], out);
+	}
+	return out;
+}
+
+function _List_toArray(xs)
+{
+	for (var out = []; xs.b; xs = xs.b) // WHILE_CONS
+	{
+		out.push(xs.a);
+	}
+	return out;
+}
+
+var _List_map2 = F3(function(f, xs, ys)
+{
+	for (var arr = []; xs.b && ys.b; xs = xs.b, ys = ys.b) // WHILE_CONSES
+	{
+		arr.push(A2(f, xs.a, ys.a));
+	}
+	return _List_fromArray(arr);
+});
+
+var _List_map3 = F4(function(f, xs, ys, zs)
+{
+	for (var arr = []; xs.b && ys.b && zs.b; xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
+	{
+		arr.push(A3(f, xs.a, ys.a, zs.a));
+	}
+	return _List_fromArray(arr);
+});
+
+var _List_map4 = F5(function(f, ws, xs, ys, zs)
+{
+	for (var arr = []; ws.b && xs.b && ys.b && zs.b; ws = ws.b, xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
+	{
+		arr.push(A4(f, ws.a, xs.a, ys.a, zs.a));
+	}
+	return _List_fromArray(arr);
+});
+
+var _List_map5 = F6(function(f, vs, ws, xs, ys, zs)
+{
+	for (var arr = []; vs.b && ws.b && xs.b && ys.b && zs.b; vs = vs.b, ws = ws.b, xs = xs.b, ys = ys.b, zs = zs.b) // WHILE_CONSES
+	{
+		arr.push(A5(f, vs.a, ws.a, xs.a, ys.a, zs.a));
+	}
+	return _List_fromArray(arr);
+});
+
+var _List_sortBy = F2(function(f, xs)
+{
+	return _List_fromArray(_List_toArray(xs).sort(function(a, b) {
+		return _Utils_cmp(f(a), f(b));
+	}));
+});
+
+var _List_sortWith = F2(function(f, xs)
+{
+	return _List_fromArray(_List_toArray(xs).sort(function(a, b) {
+		var ord = A2(f, a, b);
+		return ord === $elm$core$Basics$EQ ? 0 : ord === $elm$core$Basics$LT ? -1 : 1;
+	}));
+});
 
 
 
@@ -4814,13 +4814,31 @@ function _File_toUrl(blob)
 	});
 }
 
-var $author$project$Main$GotOAuthToken = function (a) {
-	return {$: 'GotOAuthToken', a: a};
-};
-var $elm$core$Basics$EQ = {$: 'EQ'};
-var $elm$core$Basics$GT = {$: 'GT'};
-var $elm$core$Basics$LT = {$: 'LT'};
 var $elm$core$List$cons = _List_cons;
+var $elm$core$Elm$JsArray$foldr = _JsArray_foldr;
+var $elm$core$Array$foldr = F3(
+	function (func, baseCase, _v0) {
+		var tree = _v0.c;
+		var tail = _v0.d;
+		var helper = F2(
+			function (node, acc) {
+				if (node.$ === 'SubTree') {
+					var subTree = node.a;
+					return A3($elm$core$Elm$JsArray$foldr, helper, acc, subTree);
+				} else {
+					var values = node.a;
+					return A3($elm$core$Elm$JsArray$foldr, func, acc, values);
+				}
+			});
+		return A3(
+			$elm$core$Elm$JsArray$foldr,
+			helper,
+			A3($elm$core$Elm$JsArray$foldr, func, baseCase, tail),
+			tree);
+	});
+var $elm$core$Array$toList = function (array) {
+	return A3($elm$core$Array$foldr, $elm$core$List$cons, _List_Nil, array);
+};
 var $elm$core$Dict$foldr = F3(
 	function (func, acc, t) {
 		foldr:
@@ -4873,30 +4891,25 @@ var $elm$core$Set$toList = function (_v0) {
 	var dict = _v0.a;
 	return $elm$core$Dict$keys(dict);
 };
-var $elm$core$Elm$JsArray$foldr = _JsArray_foldr;
-var $elm$core$Array$foldr = F3(
-	function (func, baseCase, _v0) {
-		var tree = _v0.c;
-		var tail = _v0.d;
-		var helper = F2(
-			function (node, acc) {
-				if (node.$ === 'SubTree') {
-					var subTree = node.a;
-					return A3($elm$core$Elm$JsArray$foldr, helper, acc, subTree);
-				} else {
-					var values = node.a;
-					return A3($elm$core$Elm$JsArray$foldr, func, acc, values);
-				}
-			});
-		return A3(
-			$elm$core$Elm$JsArray$foldr,
-			helper,
-			A3($elm$core$Elm$JsArray$foldr, func, baseCase, tail),
-			tree);
+var $elm$core$Basics$EQ = {$: 'EQ'};
+var $elm$core$Basics$GT = {$: 'GT'};
+var $elm$core$Basics$LT = {$: 'LT'};
+var $author$project$Main$GeolocationDenied = {$: 'GeolocationDenied'};
+var $author$project$Main$GotExifCoords = F3(
+	function (a, b, c) {
+		return {$: 'GotExifCoords', a: a, b: b, c: c};
 	});
-var $elm$core$Array$toList = function (array) {
-	return A3($elm$core$Array$foldr, $elm$core$List$cons, _List_Nil, array);
+var $author$project$Main$GotGpsCoords = F2(
+	function (a, b) {
+		return {$: 'GotGpsCoords', a: a, b: b};
+	});
+var $author$project$Main$GotOAuthToken = function (a) {
+	return {$: 'GotOAuthToken', a: a};
 };
+var $elm$core$Maybe$Just = function (a) {
+	return {$: 'Just', a: a};
+};
+var $elm$core$Maybe$Nothing = {$: 'Nothing'};
 var $elm$core$Result$Err = function (a) {
 	return {$: 'Err', a: a};
 };
@@ -4920,10 +4933,6 @@ var $elm$json$Json$Decode$OneOf = function (a) {
 };
 var $elm$core$Basics$False = {$: 'False'};
 var $elm$core$Basics$add = _Basics_add;
-var $elm$core$Maybe$Just = function (a) {
-	return {$: 'Just', a: a};
-};
-var $elm$core$Maybe$Nothing = {$: 'Nothing'};
 var $elm$core$String$all = _String_all;
 var $elm$core$Basics$and = _Basics_and;
 var $elm$core$Basics$append = _Utils_append;
@@ -5292,6 +5301,7 @@ var $elm$core$Result$isOk = function (result) {
 		return false;
 	}
 };
+var $elm$core$Platform$Sub$batch = _Platform_batch;
 var $elm$json$Json$Decode$map = _Json_map1;
 var $elm$json$Json$Decode$map2 = _Json_map2;
 var $elm$json$Json$Decode$succeed = _Json_succeed;
@@ -5606,7 +5616,54 @@ var $elm$core$Task$perform = F2(
 				A2($elm$core$Task$map, toMessage, task)));
 	});
 var $elm$browser$Browser$element = _Browser_element;
+var $elm$json$Json$Decode$andThen = _Json_andThen;
+var $elm$json$Json$Decode$bool = _Json_decodeBool;
+var $elm$json$Json$Decode$field = _Json_decodeField;
+var $elm$json$Json$Decode$float = _Json_decodeFloat;
 var $elm$json$Json$Decode$string = _Json_decodeString;
+var $author$project$Main$gotExifResult = _Platform_incomingPort(
+	'gotExifResult',
+	A2(
+		$elm$json$Json$Decode$andThen,
+		function (lon) {
+			return A2(
+				$elm$json$Json$Decode$andThen,
+				function (lat) {
+					return A2(
+						$elm$json$Json$Decode$andThen,
+						function (id) {
+							return A2(
+								$elm$json$Json$Decode$andThen,
+								function (hasGps) {
+									return $elm$json$Json$Decode$succeed(
+										{hasGps: hasGps, id: id, lat: lat, lon: lon});
+								},
+								A2($elm$json$Json$Decode$field, 'hasGps', $elm$json$Json$Decode$bool));
+						},
+						A2($elm$json$Json$Decode$field, 'id', $elm$json$Json$Decode$string));
+				},
+				A2($elm$json$Json$Decode$field, 'lat', $elm$json$Json$Decode$float));
+		},
+		A2($elm$json$Json$Decode$field, 'lon', $elm$json$Json$Decode$float)));
+var $author$project$Main$gotGpsCoords = _Platform_incomingPort(
+	'gotGpsCoords',
+	A2(
+		$elm$json$Json$Decode$andThen,
+		function (lon) {
+			return A2(
+				$elm$json$Json$Decode$andThen,
+				function (lat) {
+					return A2(
+						$elm$json$Json$Decode$andThen,
+						function (denied) {
+							return $elm$json$Json$Decode$succeed(
+								{denied: denied, lat: lat, lon: lon});
+						},
+						A2($elm$json$Json$Decode$field, 'denied', $elm$json$Json$Decode$bool));
+				},
+				A2($elm$json$Json$Decode$field, 'lat', $elm$json$Json$Decode$float));
+		},
+		A2($elm$json$Json$Decode$field, 'lon', $elm$json$Json$Decode$float)));
 var $author$project$Main$gotNewToken = _Platform_incomingPort('gotNewToken', $elm$json$Json$Decode$string);
 var $author$project$Main$LedgerTab = {$: 'LedgerTab'};
 var $elm$core$Maybe$andThen = F2(
@@ -5620,8 +5677,9 @@ var $elm$core$Maybe$andThen = F2(
 	});
 var $elm$json$Json$Decode$decodeValue = _Json_run;
 var $author$project$Main$Fuel = {$: 'Fuel'};
+var $author$project$Main$LocationIdle = {$: 'LocationIdle'};
 var $author$project$Main$defaultPendingEntry = function (today) {
-	return {amount: '', category: $author$project$Main$Fuel, date: today, merchant: '', note: ''};
+	return {amount: '', category: $author$project$Main$Fuel, date: today, locationState: $author$project$Main$LocationIdle, merchant: '', note: ''};
 };
 var $author$project$Main$EntriesFetched = function (a) {
 	return {$: 'EntriesFetched', a: a};
@@ -6169,10 +6227,8 @@ var $elm$core$Dict$update = F3(
 		}
 	});
 var $elm$http$Http$emptyBody = _Http_emptyBody;
-var $elm$json$Json$Decode$field = _Json_decodeField;
 var $elm$json$Json$Decode$list = _Json_decodeList;
 var $elm$json$Json$Decode$oneOf = _Json_oneOf;
-var $elm$json$Json$Decode$andThen = _Json_andThen;
 var $author$project$Main$Camp = {$: 'Camp'};
 var $author$project$Main$Ferry = {$: 'Ferry'};
 var $author$project$Main$Food = {$: 'Food'};
@@ -6194,8 +6250,8 @@ var $author$project$Main$categoryFromString = function (s) {
 			return $author$project$Main$Misc;
 	}
 };
+var $author$project$Json$Decode$Pipeline$custom = $elm$json$Json$Decode$map2($elm$core$Basics$apR);
 var $elm$json$Json$Decode$index = _Json_decodeIndex;
-var $elm$json$Json$Decode$map7 = _Json_map7;
 var $author$project$Main$optIndex = F3(
 	function (i, decoder, fallback) {
 		return $elm$json$Json$Decode$oneOf(
@@ -6206,6 +6262,23 @@ var $author$project$Main$optIndex = F3(
 				]));
 	});
 var $elm$core$String$toFloat = _String_toFloat;
+var $author$project$Main$optMaybeFloat = function (i) {
+	return $elm$json$Json$Decode$oneOf(
+		_List_fromArray(
+			[
+				A2(
+				$elm$json$Json$Decode$index,
+				i,
+				A2(
+					$elm$json$Json$Decode$andThen,
+					function (s) {
+						return (s === '') ? $elm$json$Json$Decode$succeed($elm$core$Maybe$Nothing) : $elm$json$Json$Decode$succeed(
+							$elm$core$String$toFloat(s));
+					},
+					$elm$json$Json$Decode$string)),
+				$elm$json$Json$Decode$succeed($elm$core$Maybe$Nothing)
+			]));
+};
 var $author$project$Main$parseAmountStr = function (s) {
 	var _v0 = $elm$core$String$toFloat(s);
 	if (_v0.$ === 'Just') {
@@ -6215,25 +6288,44 @@ var $author$project$Main$parseAmountStr = function (s) {
 		return $elm$json$Json$Decode$succeed(0.0);
 	}
 };
-var $author$project$Main$rowDecoder = A8(
-	$elm$json$Json$Decode$map7,
-	F7(
-		function (id, date, amount, category, note, merchant, createdAt) {
-			return {amount: amount, category: category, createdAt: createdAt, date: date, id: id, merchant: merchant, note: note, rowIndex: 0};
-		}),
-	A2($elm$json$Json$Decode$index, 0, $elm$json$Json$Decode$string),
-	A2($elm$json$Json$Decode$index, 1, $elm$json$Json$Decode$string),
+var $author$project$Main$rowDecoder = A2(
+	$author$project$Json$Decode$Pipeline$custom,
+	$author$project$Main$optMaybeFloat(8),
 	A2(
-		$elm$json$Json$Decode$index,
-		2,
-		A2($elm$json$Json$Decode$andThen, $author$project$Main$parseAmountStr, $elm$json$Json$Decode$string)),
-	A2(
-		$elm$json$Json$Decode$index,
-		3,
-		A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
-	A3($author$project$Main$optIndex, 4, $elm$json$Json$Decode$string, ''),
-	A3($author$project$Main$optIndex, 5, $elm$json$Json$Decode$string, ''),
-	A3($author$project$Main$optIndex, 6, $elm$json$Json$Decode$string, ''));
+		$author$project$Json$Decode$Pipeline$custom,
+		$author$project$Main$optMaybeFloat(7),
+		A2(
+			$author$project$Json$Decode$Pipeline$custom,
+			A3($author$project$Main$optIndex, 6, $elm$json$Json$Decode$string, ''),
+			A2(
+				$author$project$Json$Decode$Pipeline$custom,
+				A3($author$project$Main$optIndex, 5, $elm$json$Json$Decode$string, ''),
+				A2(
+					$author$project$Json$Decode$Pipeline$custom,
+					A3($author$project$Main$optIndex, 4, $elm$json$Json$Decode$string, ''),
+					A2(
+						$author$project$Json$Decode$Pipeline$custom,
+						A2(
+							$elm$json$Json$Decode$index,
+							3,
+							A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
+						A2(
+							$author$project$Json$Decode$Pipeline$custom,
+							A2(
+								$elm$json$Json$Decode$index,
+								2,
+								A2($elm$json$Json$Decode$andThen, $author$project$Main$parseAmountStr, $elm$json$Json$Decode$string)),
+							A2(
+								$author$project$Json$Decode$Pipeline$custom,
+								A2($elm$json$Json$Decode$index, 1, $elm$json$Json$Decode$string),
+								A2(
+									$author$project$Json$Decode$Pipeline$custom,
+									A2($elm$json$Json$Decode$index, 0, $elm$json$Json$Decode$string),
+									$elm$json$Json$Decode$succeed(
+										F9(
+											function (id, date, amount, category, note, merchant, createdAt, lat, lon) {
+												return {amount: amount, category: category, createdAt: createdAt, date: date, id: id, lat: lat, lon: lon, merchant: merchant, note: note, rowIndex: 0};
+											})))))))))));
 var $author$project$Main$entriesDecoder = $elm$json$Json$Decode$oneOf(
 	_List_fromArray(
 		[
@@ -6500,7 +6592,7 @@ var $author$project$Main$fetchEntries = F2(
 				method: 'GET',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
-				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A2:G')
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A2:I')
 			});
 	});
 var $elm$json$Json$Decode$maybe = function (decoder) {
@@ -6557,24 +6649,29 @@ var $author$project$Main$init = function (flagsJson) {
 	}();
 	var today = dec('today');
 	var model = {
+		activeScanItemId: $elm$core$Maybe$Nothing,
 		anthropicKey: dec('anthropicKey'),
 		editingEntry: $elm$core$Maybe$Nothing,
 		entries: _List_Nil,
 		error: $elm$core$Maybe$Nothing,
+		geoBlocked: false,
 		googleClientId: dec('googleClientId'),
 		loadingEntries: false,
 		oauthToken: token,
 		pendingEntry: $author$project$Main$defaultPendingEntry(today),
-		scanImage: $elm$core$Maybe$Nothing,
-		scanLoading: false,
+		scanQueue: _List_Nil,
 		sheetId: sheetId,
+		showLedgerMap: false,
+		showMapPicker: false,
 		submitting: false,
 		tab: $author$project$Main$LedgerTab,
+		toast: $elm$core$Maybe$Nothing,
 		today: today,
 		tripStart: function (s) {
 			return (s === '') ? '2026-05-22' : s;
 		}(
-			dec('tripStart'))
+			dec('tripStart')),
+		version: dec('version')
 	};
 	return _Utils_Tuple2(
 		_Utils_update(
@@ -6585,12 +6682,48 @@ var $author$project$Main$init = function (flagsJson) {
 		fetchCmd);
 };
 var $author$project$Main$AddTab = {$: 'AddTab'};
-var $author$project$Main$GotFileUrl = function (a) {
-	return {$: 'GotFileUrl', a: a};
-};
+var $author$project$Main$BrowserGeo = {$: 'BrowserGeo'};
+var $author$project$Main$ExifGps = {$: 'ExifGps'};
+var $author$project$Main$GotFileUrl = F2(
+	function (a, b) {
+		return {$: 'GotFileUrl', a: a, b: b};
+	});
 var $author$project$Main$GotSubmitTime = function (a) {
 	return {$: 'GotSubmitTime', a: a};
 };
+var $author$project$Main$LocationFetching = {$: 'LocationFetching'};
+var $author$project$Main$LocationGot = F3(
+	function (a, b, c) {
+		return {$: 'LocationGot', a: a, b: b, c: c};
+	});
+var $author$project$Main$LocationNoExifGps = {$: 'LocationNoExifGps'};
+var $author$project$Main$LocationSkipped = {$: 'LocationSkipped'};
+var $author$project$Main$ManualPin = {$: 'ManualPin'};
+var $author$project$Main$ScanProcessing = {$: 'ScanProcessing'};
+var $author$project$Main$ScanReady = {$: 'ScanReady'};
+var $author$project$Main$ScanSubmitted = {$: 'ScanSubmitted'};
+var $author$project$Main$ScanTab = {$: 'ScanTab'};
+var $elm$core$List$any = F2(
+	function (isOkay, list) {
+		any:
+		while (true) {
+			if (!list.b) {
+				return false;
+			} else {
+				var x = list.a;
+				var xs = list.b;
+				if (isOkay(x)) {
+					return true;
+				} else {
+					var $temp$isOkay = isOkay,
+						$temp$list = xs;
+					isOkay = $temp$isOkay;
+					list = $temp$list;
+					continue any;
+				}
+			}
+		}
+	});
 var $author$project$Main$EntrySubmitted = function (a) {
 	return {$: 'EntrySubmitted', a: a};
 };
@@ -6637,6 +6770,7 @@ var $author$project$Main$expectWhateverBody = function (toMsg) {
 		});
 };
 var $elm$json$Json$Encode$float = _Json_wrap;
+var $elm$core$String$fromFloat = _String_fromNumber;
 var $elm$http$Http$jsonBody = function (value) {
 	return A2(
 		_Http_pair,
@@ -6652,6 +6786,16 @@ var $elm$json$Json$Encode$list = F2(
 				_Json_emptyArray(_Utils_Tuple0),
 				entries));
 	});
+var $elm$core$Maybe$map = F2(
+	function (f, maybe) {
+		if (maybe.$ === 'Just') {
+			var value = maybe.a;
+			return $elm$core$Maybe$Just(
+				f(value));
+		} else {
+			return $elm$core$Maybe$Nothing;
+		}
+	});
 var $elm$json$Json$Encode$object = function (pairs) {
 	return _Json_wrap(
 		A3(
@@ -6666,6 +6810,15 @@ var $elm$json$Json$Encode$object = function (pairs) {
 			pairs));
 };
 var $elm$json$Json$Encode$string = _Json_wrap;
+var $elm$core$Maybe$withDefault = F2(
+	function (_default, maybe) {
+		if (maybe.$ === 'Just') {
+			var value = maybe.a;
+			return value;
+		} else {
+			return _default;
+		}
+	});
 var $author$project$Main$appendEntry = F3(
 	function (token, sheetId, entry) {
 		var body = $elm$json$Json$Encode$object(
@@ -6690,7 +6843,27 @@ var $author$project$Main$appendEntry = F3(
 										$author$project$Main$categoryLabel(entry.category)),
 										$elm$json$Json$Encode$string(entry.note),
 										$elm$json$Json$Encode$string(entry.merchant),
-										$elm$json$Json$Encode$string(entry.createdAt)
+										$elm$json$Json$Encode$string(entry.createdAt),
+										A2(
+										$elm$core$Maybe$withDefault,
+										$elm$json$Json$Encode$string(''),
+										A2(
+											$elm$core$Maybe$map,
+											function (v) {
+												return $elm$json$Json$Encode$string(
+													$elm$core$String$fromFloat(v));
+											},
+											entry.lat)),
+										A2(
+										$elm$core$Maybe$withDefault,
+										$elm$json$Json$Encode$string(''),
+										A2(
+											$elm$core$Maybe$map,
+											function (v) {
+												return $elm$json$Json$Encode$string(
+													$elm$core$String$fromFloat(v));
+											},
+											entry.lon))
 									]))
 							])))
 				]));
@@ -6705,7 +6878,7 @@ var $author$project$Main$appendEntry = F3(
 				method: 'POST',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
-				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A:G:append?valueInputOption=RAW')
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A:I:append?valueInputOption=RAW')
 			});
 	});
 var $author$project$Main$claudeTextDecoder = A2(
@@ -6716,6 +6889,11 @@ var $author$project$Main$claudeTextDecoder = A2(
 		0,
 		A2($elm$json$Json$Decode$field, 'text', $elm$json$Json$Decode$string)));
 var $elm$json$Json$Encode$null = _Json_encodeNull;
+var $author$project$Main$clearAllStorage = _Platform_outgoingPort(
+	'clearAllStorage',
+	function ($) {
+		return $elm$json$Json$Encode$null;
+	});
 var $author$project$Main$clearStorage = _Platform_outgoingPort(
 	'clearStorage',
 	function ($) {
@@ -6781,14 +6959,23 @@ var $author$project$Main$deleteEntry = F3(
 				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ':batchUpdate')
 			});
 	});
-var $elm$core$String$fromFloat = _String_fromNumber;
-var $author$project$Main$entryToPending = function (entry) {
+var $author$project$Main$entryToPending = function (e) {
 	return {
-		amount: $elm$core$String$fromFloat(entry.amount),
-		category: entry.category,
-		date: entry.date,
-		merchant: entry.merchant,
-		note: entry.note
+		amount: $elm$core$String$fromFloat(e.amount),
+		category: e.category,
+		date: e.date,
+		locationState: function () {
+			var _v0 = _Utils_Tuple2(e.lat, e.lon);
+			if ((_v0.a.$ === 'Just') && (_v0.b.$ === 'Just')) {
+				var la = _v0.a.a;
+				var lo = _v0.b.a;
+				return A3($author$project$Main$LocationGot, la, lo, $author$project$Main$ManualPin);
+			} else {
+				return $author$project$Main$LocationIdle;
+			}
+		}(),
+		merchant: e.merchant,
+		note: e.note
 	};
 };
 var $author$project$Main$extractBase64 = function (dataUrl) {
@@ -6801,6 +6988,20 @@ var $author$project$Main$extractBase64 = function (dataUrl) {
 		return dataUrl;
 	}
 };
+var $author$project$Main$extractExifGps = _Platform_outgoingPort(
+	'extractExifGps',
+	function ($) {
+		return $elm$json$Json$Encode$object(
+			_List_fromArray(
+				[
+					_Utils_Tuple2(
+					'dataUrl',
+					$elm$json$Json$Encode$string($.dataUrl)),
+					_Utils_Tuple2(
+					'id',
+					$elm$json$Json$Encode$string($.id))
+				]));
+	});
 var $elm$core$List$filter = F2(
 	function (isGood, list) {
 		return A3(
@@ -6812,8 +7013,22 @@ var $elm$core$List$filter = F2(
 			_List_Nil,
 			list);
 	});
+var $author$project$Main$LocationCheckingExif = {$: 'LocationCheckingExif'};
+var $author$project$Main$ScanQueued = {$: 'ScanQueued'};
+var $author$project$Main$freshScanItem = function (id) {
+	return {id: id, imageUrl: '', locationState: $author$project$Main$LocationCheckingExif, ocrData: $elm$core$Maybe$Nothing, status: $author$project$Main$ScanQueued};
+};
 var $author$project$Main$getMimeType = function (dataUrl) {
 	return A2($elm$core$String$contains, 'image/png', dataUrl) ? 'image/png' : (A2($elm$core$String$contains, 'image/gif', dataUrl) ? 'image/gif' : (A2($elm$core$String$contains, 'image/webp', dataUrl) ? 'image/webp' : 'image/jpeg'));
+};
+var $elm$core$List$head = function (list) {
+	if (list.b) {
+		var x = list.a;
+		var xs = list.b;
+		return $elm$core$Maybe$Just(x);
+	} else {
+		return $elm$core$Maybe$Nothing;
+	}
 };
 var $elm$json$Json$Decode$at = F2(
 	function (fields, decoder) {
@@ -6853,9 +7068,10 @@ var $author$project$Main$httpErrString = function (err) {
 					jsonPart));
 	}
 };
-var $author$project$Main$GotOcrResult = function (a) {
-	return {$: 'GotOcrResult', a: a};
-};
+var $author$project$Main$GotOcrResult = F2(
+	function (a, b) {
+		return {$: 'GotOcrResult', a: a, b: b};
+	});
 var $elm$core$Result$mapError = F2(
 	function (f, result) {
 		if (result.$ === 'Ok') {
@@ -6897,8 +7113,8 @@ var $elm$http$Http$expectString = function (toMsg) {
 		$elm$http$Http$resolve($elm$core$Result$Ok));
 };
 var $author$project$Main$ocrSystemPrompt = 'You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<fuel|food|camp|ferry|gear|misc>\", \"note\": \"<brief description max 50 chars>\", \"merchant\": \"<store name>\"}. Choose the best matching category.';
-var $author$project$Main$makeOcrCall = F3(
-	function (apiKey, base64Data, mimeType) {
+var $author$project$Main$makeOcrCall = F4(
+	function (itemId, apiKey, base64Data, mimeType) {
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -6970,7 +7186,8 @@ var $author$project$Main$makeOcrCall = F3(
 		return $elm$http$Http$request(
 			{
 				body: $elm$http$Http$jsonBody(body),
-				expect: $elm$http$Http$expectString($author$project$Main$GotOcrResult),
+				expect: $elm$http$Http$expectString(
+					$author$project$Main$GotOcrResult(itemId)),
 				headers: _List_fromArray(
 					[
 						A2($elm$http$Http$header, 'x-api-key', apiKey),
@@ -6983,16 +7200,7 @@ var $author$project$Main$makeOcrCall = F3(
 				url: 'https://api.anthropic.com/v1/messages'
 			});
 	});
-var $elm$core$Maybe$map = F2(
-	function (f, maybe) {
-		if (maybe.$ === 'Just') {
-			var value = maybe.a;
-			return $elm$core$Maybe$Just(
-				f(value));
-		} else {
-			return $elm$core$Maybe$Nothing;
-		}
-	});
+var $elm$core$Basics$not = _Basics_not;
 var $elm$time$Time$Name = function (a) {
 	return {$: 'Name', a: a};
 };
@@ -7013,22 +7221,80 @@ var $author$project$Main$OcrData = F4(
 	function (amount, category, note, merchant) {
 		return {amount: amount, category: category, merchant: merchant, note: note};
 	});
-var $elm$json$Json$Decode$float = _Json_decodeFloat;
-var $elm$json$Json$Decode$map4 = _Json_map4;
-var $author$project$Main$ocrDataDecoder = A5(
-	$elm$json$Json$Decode$map4,
-	$author$project$Main$OcrData,
-	$elm$json$Json$Decode$maybe(
-		A2($elm$json$Json$Decode$field, 'amount', $elm$json$Json$Decode$float)),
-	$elm$json$Json$Decode$maybe(
-		A2(
-			$elm$json$Json$Decode$field,
+var $elm$json$Json$Decode$null = _Json_decodeNull;
+var $elm$json$Json$Decode$value = _Json_decodeValue;
+var $author$project$Json$Decode$Pipeline$optionalDecoder = F3(
+	function (path, valDecoder, fallback) {
+		var nullOr = function (decoder) {
+			return $elm$json$Json$Decode$oneOf(
+				_List_fromArray(
+					[
+						decoder,
+						$elm$json$Json$Decode$null(fallback)
+					]));
+		};
+		var handleResult = function (input) {
+			var _v0 = A2(
+				$elm$json$Json$Decode$decodeValue,
+				A2($elm$json$Json$Decode$at, path, $elm$json$Json$Decode$value),
+				input);
+			if (_v0.$ === 'Ok') {
+				var rawValue = _v0.a;
+				var _v1 = A2(
+					$elm$json$Json$Decode$decodeValue,
+					nullOr(valDecoder),
+					rawValue);
+				if (_v1.$ === 'Ok') {
+					var finalResult = _v1.a;
+					return $elm$json$Json$Decode$succeed(finalResult);
+				} else {
+					return A2(
+						$elm$json$Json$Decode$at,
+						path,
+						nullOr(valDecoder));
+				}
+			} else {
+				return $elm$json$Json$Decode$succeed(fallback);
+			}
+		};
+		return A2($elm$json$Json$Decode$andThen, handleResult, $elm$json$Json$Decode$value);
+	});
+var $author$project$Json$Decode$Pipeline$optional = F4(
+	function (key, valDecoder, fallback, decoder) {
+		return A2(
+			$author$project$Json$Decode$Pipeline$custom,
+			A3(
+				$author$project$Json$Decode$Pipeline$optionalDecoder,
+				_List_fromArray(
+					[key]),
+				valDecoder,
+				fallback),
+			decoder);
+	});
+var $author$project$Main$ocrDataDecoder = A4(
+	$author$project$Json$Decode$Pipeline$optional,
+	'merchant',
+	A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
+	$elm$core$Maybe$Nothing,
+	A4(
+		$author$project$Json$Decode$Pipeline$optional,
+		'note',
+		A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
+		$elm$core$Maybe$Nothing,
+		A4(
+			$author$project$Json$Decode$Pipeline$optional,
 			'category',
-			A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string))),
-	$elm$json$Json$Decode$maybe(
-		A2($elm$json$Json$Decode$field, 'note', $elm$json$Json$Decode$string)),
-	$elm$json$Json$Decode$maybe(
-		A2($elm$json$Json$Decode$field, 'merchant', $elm$json$Json$Decode$string)));
+			A2(
+				$elm$json$Json$Decode$map,
+				$elm$core$Maybe$Just,
+				A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
+			$elm$core$Maybe$Nothing,
+			A4(
+				$author$project$Json$Decode$Pipeline$optional,
+				'amount',
+				A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$float),
+				$elm$core$Maybe$Nothing,
+				$elm$json$Json$Decode$succeed($author$project$Main$OcrData)))));
 var $author$project$Main$monthNum = function (month) {
 	switch (month.$) {
 		case 'Jan':
@@ -7265,6 +7531,11 @@ var $author$project$Main$posixToIso = function (posix) {
 			A2($elm$time$Time$toDay, $elm$time$Time$utc, posix)));
 	return y + ('-' + (m + ('-' + (d + ('T' + (h + (':' + (mi + (':' + (s + 'Z'))))))))));
 };
+var $author$project$Main$requestGeolocation = _Platform_outgoingPort(
+	'requestGeolocation',
+	function ($) {
+		return $elm$json$Json$Encode$null;
+	});
 var $elm$json$Json$Encode$bool = _Json_wrap;
 var $author$project$Main$requestOAuthToken = _Platform_outgoingPort('requestOAuthToken', $elm$json$Json$Encode$bool);
 var $author$project$Main$saveStorage = _Platform_outgoingPort(
@@ -7280,6 +7551,12 @@ var $author$project$Main$saveStorage = _Platform_outgoingPort(
 					'value',
 					$elm$json$Json$Encode$string($.value))
 				]));
+	});
+var $author$project$Main$setLocation = F2(
+	function (ls, p) {
+		return _Utils_update(
+			p,
+			{locationState: ls});
 	});
 var $elm$core$List$drop = F2(
 	function (n, list) {
@@ -7302,26 +7579,8 @@ var $elm$core$List$drop = F2(
 			}
 		}
 	});
-var $elm$core$List$head = function (list) {
-	if (list.b) {
-		var x = list.a;
-		var xs = list.b;
-		return $elm$core$Maybe$Just(x);
-	} else {
-		return $elm$core$Maybe$Nothing;
-	}
-};
 var $elm$core$String$lines = _String_lines;
 var $elm$core$String$trim = _String_trim;
-var $elm$core$Maybe$withDefault = F2(
-	function (_default, maybe) {
-		if (maybe.$ === 'Just') {
-			var value = maybe.a;
-			return value;
-		} else {
-			return _default;
-		}
-	});
 var $author$project$Main$stripCodeFence = function (s) {
 	var trimmed = $elm$core$String$trim(s);
 	return A2($elm$core$String$startsWith, '```', trimmed) ? $elm$core$String$trim(
@@ -7348,9 +7607,19 @@ var $author$project$Main$stripCodeFence = function (s) {
 					$elm$core$String$lines(trimmed))))) : trimmed;
 };
 var $elm$file$File$toUrl = _File_toUrl;
+var $author$project$Main$ToastExpired = {$: 'ToastExpired'};
+var $elm$core$Process$sleep = _Process_sleep;
+var $author$project$Main$toastFor = function (_v0) {
+	return A2(
+		$elm$core$Task$perform,
+		function (_v1) {
+			return $author$project$Main$ToastExpired;
+		},
+		$elm$core$Process$sleep(4000));
+};
 var $author$project$Main$updateEntry = F3(
 	function (token, sheetId, entry) {
-		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':G' + $elm$core$String$fromInt(entry.rowIndex)));
+		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':I' + $elm$core$String$fromInt(entry.rowIndex)));
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -7373,7 +7642,27 @@ var $author$project$Main$updateEntry = F3(
 										$author$project$Main$categoryLabel(entry.category)),
 										$elm$json$Json$Encode$string(entry.note),
 										$elm$json$Json$Encode$string(entry.merchant),
-										$elm$json$Json$Encode$string(entry.createdAt)
+										$elm$json$Json$Encode$string(entry.createdAt),
+										A2(
+										$elm$core$Maybe$withDefault,
+										$elm$json$Json$Encode$string(''),
+										A2(
+											$elm$core$Maybe$map,
+											function (v) {
+												return $elm$json$Json$Encode$string(
+													$elm$core$String$fromFloat(v));
+											},
+											entry.lat)),
+										A2(
+										$elm$core$Maybe$withDefault,
+										$elm$json$Json$Encode$string(''),
+										A2(
+											$elm$core$Maybe$map,
+											function (v) {
+												return $elm$json$Json$Encode$string(
+													$elm$core$String$fromFloat(v));
+											},
+											entry.lon))
 									]))
 							])))
 				]));
@@ -7400,6 +7689,13 @@ var $author$project$Main$updatePending = F2(
 					pendingEntry: f(model.pendingEntry)
 				}),
 			$elm$core$Platform$Cmd$none);
+	});
+var $author$project$Main$updateScanItem = F2(
+	function (id, f) {
+		return $elm$core$List$map(
+			function (item) {
+				return _Utils_eq(item.id, id) ? f(item) : item;
+			});
 	});
 var $author$project$Main$update = F2(
 	function (msg, model) {
@@ -7437,108 +7733,118 @@ var $author$project$Main$update = F2(
 						model,
 						{editingEntry: $elm$core$Maybe$Nothing, entries: _List_Nil, oauthToken: $elm$core$Maybe$Nothing, tab: $author$project$Main$LedgerTab}),
 					$author$project$Main$clearStorage(_Utils_Tuple0));
-			case 'FileSelected':
-				var file = msg.a;
+			case 'ResetSettingsClicked':
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{error: $elm$core$Maybe$Nothing, scanImage: $elm$core$Maybe$Nothing, scanLoading: true}),
-					A2(
-						$elm$core$Task$perform,
-						$author$project$Main$GotFileUrl,
-						$elm$file$File$toUrl(file)));
+						{anthropicKey: '', editingEntry: $elm$core$Maybe$Nothing, entries: _List_Nil, googleClientId: '', oauthToken: $elm$core$Maybe$Nothing, sheetId: '', tab: $author$project$Main$LedgerTab}),
+					$author$project$Main$clearAllStorage(_Utils_Tuple0));
+			case 'FilesSelected':
+				var files = msg.a;
+				var startIdx = $elm$core$List$length(model.scanQueue);
+				var indexed = A2(
+					$elm$core$List$indexedMap,
+					F2(
+						function (i, f) {
+							return _Utils_Tuple2(
+								'scan-' + $elm$core$String$fromInt(startIdx + i),
+								f);
+						}),
+					files);
+				var newItems = A2(
+					$elm$core$List$map,
+					function (_v2) {
+						var id = _v2.a;
+						return $author$project$Main$freshScanItem(id);
+					},
+					indexed);
+				var urlCmds = A2(
+					$elm$core$List$map,
+					function (_v1) {
+						var id = _v1.a;
+						var f = _v1.b;
+						return A2(
+							$elm$core$Task$perform,
+							$author$project$Main$GotFileUrl(id),
+							$elm$file$File$toUrl(f));
+					},
+					indexed);
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							scanQueue: _Utils_ap(model.scanQueue, newItems)
+						}),
+					$elm$core$Platform$Cmd$batch(urlCmds));
 			case 'GotFileUrl':
-				var dataUrl = msg.a;
-				return (model.anthropicKey === '') ? _Utils_Tuple2(
+				var itemId = msg.a;
+				var dataUrl = msg.b;
+				var newStatus = (model.anthropicKey !== '') ? $author$project$Main$ScanProcessing : $author$project$Main$ScanReady;
+				var updatedQueue = A3(
+					$author$project$Main$updateScanItem,
+					itemId,
+					function (i) {
+						return _Utils_update(
+							i,
+							{imageUrl: dataUrl, status: newStatus});
+					},
+					model.scanQueue);
+				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{
-							error: $elm$core$Maybe$Just('No Anthropic API key — enter it in Settings or fill form manually.'),
-							scanImage: $elm$core$Maybe$Just(dataUrl),
-							scanLoading: false,
-							tab: $author$project$Main$AddTab
-						}),
-					$elm$core$Platform$Cmd$none) : _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							scanImage: $elm$core$Maybe$Just(dataUrl)
-						}),
-					A3(
-						$author$project$Main$makeOcrCall,
-						model.anthropicKey,
-						$author$project$Main$extractBase64(dataUrl),
-						$author$project$Main$getMimeType(dataUrl)));
+						{scanQueue: updatedQueue}),
+					$elm$core$Platform$Cmd$batch(
+						_List_fromArray(
+							[
+								(model.anthropicKey !== '') ? A4(
+								$author$project$Main$makeOcrCall,
+								itemId,
+								model.anthropicKey,
+								$author$project$Main$extractBase64(dataUrl),
+								$author$project$Main$getMimeType(dataUrl)) : $elm$core$Platform$Cmd$none,
+								$author$project$Main$extractExifGps(
+								{dataUrl: dataUrl, id: itemId})
+							])));
 			case 'GotOcrResult':
-				var result = msg.a;
-				if (result.$ === 'Err') {
-					var e = result.a;
-					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{
-								error: $elm$core$Maybe$Just(
-									'OCR failed: ' + $author$project$Main$httpErrString(e)),
-								scanLoading: false,
-								tab: $author$project$Main$AddTab
-							}),
-						$elm$core$Platform$Cmd$none);
-				} else {
-					var responseBody = result.a;
-					var _v2 = A2($elm$json$Json$Decode$decodeString, $author$project$Main$claudeTextDecoder, responseBody);
-					if (_v2.$ === 'Err') {
-						return _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{
-									error: $elm$core$Maybe$Just('Could not parse OCR response — fill form manually.'),
-									scanLoading: false,
-									tab: $author$project$Main$AddTab
-								}),
-							$elm$core$Platform$Cmd$none);
-					} else {
-						var innerJson = _v2.a;
-						var _v3 = A2(
-							$elm$json$Json$Decode$decodeString,
-							$author$project$Main$ocrDataDecoder,
-							$author$project$Main$stripCodeFence(innerJson));
-						if (_v3.$ === 'Err') {
-							return _Utils_Tuple2(
-								_Utils_update(
-									model,
-									{
-										error: $elm$core$Maybe$Just('Could not read receipt data — fill form manually.'),
-										scanLoading: false,
-										tab: $author$project$Main$AddTab
-									}),
-								$elm$core$Platform$Cmd$none);
+				var itemId = msg.a;
+				var result = msg.b;
+				var ocrData = function () {
+					if (result.$ === 'Ok') {
+						var responseBody = result.a;
+						var _v4 = A2($elm$json$Json$Decode$decodeString, $author$project$Main$claudeTextDecoder, responseBody);
+						if (_v4.$ === 'Ok') {
+							var innerJson = _v4.a;
+							var _v5 = A2(
+								$elm$json$Json$Decode$decodeString,
+								$author$project$Main$ocrDataDecoder,
+								$author$project$Main$stripCodeFence(innerJson));
+							if (_v5.$ === 'Ok') {
+								var data = _v5.a;
+								return $elm$core$Maybe$Just(data);
+							} else {
+								return $elm$core$Maybe$Nothing;
+							}
 						} else {
-							var ocrData = _v3.a;
-							var p = model.pendingEntry;
-							var updated = _Utils_update(
-								p,
-								{
-									amount: A2(
-										$elm$core$Maybe$withDefault,
-										p.amount,
-										A2(
-											$elm$core$Maybe$map,
-											function (a) {
-												return $elm$core$String$fromFloat(a);
-											},
-											ocrData.amount)),
-									category: A2($elm$core$Maybe$withDefault, p.category, ocrData.category),
-									merchant: A2($elm$core$Maybe$withDefault, p.merchant, ocrData.merchant),
-									note: A2($elm$core$Maybe$withDefault, p.note, ocrData.note)
-								});
-							return _Utils_Tuple2(
-								_Utils_update(
-									model,
-									{pendingEntry: updated, scanLoading: false, tab: $author$project$Main$AddTab}),
-								$elm$core$Platform$Cmd$none);
+							return $elm$core$Maybe$Nothing;
 						}
+					} else {
+						return $elm$core$Maybe$Nothing;
 					}
-				}
+				}();
+				var updatedQueue = A3(
+					$author$project$Main$updateScanItem,
+					itemId,
+					function (i) {
+						return _Utils_update(
+							i,
+							{ocrData: ocrData, status: $author$project$Main$ScanReady});
+					},
+					model.scanQueue);
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{scanQueue: updatedQueue}),
+					$elm$core$Platform$Cmd$none);
 			case 'AmountChanged':
 				var s = msg.a;
 				return A2(
@@ -7590,18 +7896,18 @@ var $author$project$Main$update = F2(
 					},
 					model);
 			case 'SubmitEntry':
-				var _v4 = _Utils_Tuple2(
+				var _v6 = _Utils_Tuple2(
 					model.oauthToken,
 					$elm$core$String$toFloat(model.pendingEntry.amount));
-				if (_v4.a.$ === 'Just') {
-					if (_v4.b.$ === 'Just') {
+				if (_v6.a.$ === 'Just') {
+					if (_v6.b.$ === 'Just') {
 						return _Utils_Tuple2(
 							_Utils_update(
 								model,
 								{error: $elm$core$Maybe$Nothing, submitting: true}),
 							A2($elm$core$Task$perform, $author$project$Main$GotSubmitTime, $elm$time$Time$now));
 					} else {
-						var _v6 = _v4.b;
+						var _v8 = _v6.b;
 						return _Utils_Tuple2(
 							_Utils_update(
 								model,
@@ -7611,7 +7917,7 @@ var $author$project$Main$update = F2(
 							$elm$core$Platform$Cmd$none);
 					}
 				} else {
-					var _v5 = _v4.a;
+					var _v7 = _v6.a;
 					return _Utils_Tuple2(
 						_Utils_update(
 							model,
@@ -7624,9 +7930,9 @@ var $author$project$Main$update = F2(
 				var posix = msg.a;
 				var token = A2($elm$core$Maybe$withDefault, '', model.oauthToken);
 				var p = model.pendingEntry;
-				var _v7 = model.editingEntry;
-				if (_v7.$ === 'Just') {
-					var original = _v7.a;
+				var _v9 = model.editingEntry;
+				if (_v9.$ === 'Just') {
+					var original = _v9.a;
 					var updated = _Utils_update(
 						original,
 						{
@@ -7636,6 +7942,30 @@ var $author$project$Main$update = F2(
 								$elm$core$String$toFloat(p.amount)),
 							category: p.category,
 							date: p.date,
+							lat: function () {
+								var _v10 = p.locationState;
+								switch (_v10.$) {
+									case 'LocationGot':
+										var la = _v10.a;
+										return $elm$core$Maybe$Just(la);
+									case 'LocationSkipped':
+										return $elm$core$Maybe$Nothing;
+									default:
+										return original.lat;
+								}
+							}(),
+							lon: function () {
+								var _v11 = p.locationState;
+								switch (_v11.$) {
+									case 'LocationGot':
+										var lo = _v11.b;
+										return $elm$core$Maybe$Just(lo);
+									case 'LocationSkipped':
+										return $elm$core$Maybe$Nothing;
+									default:
+										return original.lon;
+								}
+							}(),
 							merchant: p.merchant,
 							note: p.note
 						});
@@ -7643,6 +7973,20 @@ var $author$project$Main$update = F2(
 						model,
 						A3($author$project$Main$updateEntry, token, model.sheetId, updated));
 				} else {
+					var _v12 = function () {
+						var _v13 = p.locationState;
+						if (_v13.$ === 'LocationGot') {
+							var la = _v13.a;
+							var lo = _v13.b;
+							return _Utils_Tuple2(
+								$elm$core$Maybe$Just(la),
+								$elm$core$Maybe$Just(lo));
+						} else {
+							return _Utils_Tuple2($elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing);
+						}
+					}();
+					var eLat = _v12.a;
+					var eLon = _v12.b;
 					var entry = {
 						amount: A2(
 							$elm$core$Maybe$withDefault,
@@ -7653,6 +7997,8 @@ var $author$project$Main$update = F2(
 						date: p.date,
 						id: 'e-' + $elm$core$String$fromInt(
 							$elm$time$Time$posixToMillis(posix)),
+						lat: eLat,
+						lon: eLon,
 						merchant: p.merchant,
 						note: p.note,
 						rowIndex: 0
@@ -7664,15 +8010,41 @@ var $author$project$Main$update = F2(
 			case 'EntrySubmitted':
 				var result = msg.a;
 				if (result.$ === 'Ok') {
+					var updatedQueue = function () {
+						var _v15 = model.activeScanItemId;
+						if (_v15.$ === 'Just') {
+							var id = _v15.a;
+							return A3(
+								$author$project$Main$updateScanItem,
+								id,
+								function (i) {
+									return _Utils_update(
+										i,
+										{status: $author$project$Main$ScanSubmitted});
+								},
+								model.scanQueue);
+						} else {
+							return model.scanQueue;
+						}
+					}();
+					var hasRemaining = A2(
+						$elm$core$List$any,
+						function (i) {
+							return !_Utils_eq(i.status, $author$project$Main$ScanSubmitted);
+						},
+						updatedQueue);
+					var nextTab = ((!_Utils_eq(model.activeScanItemId, $elm$core$Maybe$Nothing)) && hasRemaining) ? $author$project$Main$ScanTab : $author$project$Main$LedgerTab;
 					return _Utils_Tuple2(
 						_Utils_update(
 							model,
 							{
+								activeScanItemId: $elm$core$Maybe$Nothing,
 								editingEntry: $elm$core$Maybe$Nothing,
 								loadingEntries: true,
 								pendingEntry: $author$project$Main$defaultPendingEntry(model.today),
+								scanQueue: updatedQueue,
 								submitting: false,
-								tab: $author$project$Main$LedgerTab
+								tab: nextTab
 							}),
 						A2(
 							$author$project$Main$fetchEntries,
@@ -7680,22 +8052,31 @@ var $author$project$Main$update = F2(
 							model.sheetId));
 				} else {
 					if ((result.a.$ === 'BadStatus') && (result.a.a === 401)) {
-						return _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{submitting: false}),
-							$author$project$Main$requestOAuthToken(false));
-					} else {
-						var e = result.a;
+						var toastMsg = 'Session expired — please try saving again';
 						return _Utils_Tuple2(
 							_Utils_update(
 								model,
 								{
-									error: $elm$core$Maybe$Just(
-										'Save failed: ' + $author$project$Main$httpErrString(e)),
-									submitting: false
+									submitting: false,
+									toast: $elm$core$Maybe$Just(toastMsg)
 								}),
-							$elm$core$Platform$Cmd$none);
+							$elm$core$Platform$Cmd$batch(
+								_List_fromArray(
+									[
+										$author$project$Main$requestOAuthToken(false),
+										$author$project$Main$toastFor(toastMsg)
+									])));
+					} else {
+						var e = result.a;
+						var toastMsg = 'Save failed: ' + $author$project$Main$httpErrString(e);
+						return _Utils_Tuple2(
+							_Utils_update(
+								model,
+								{
+									submitting: false,
+									toast: $elm$core$Maybe$Just(toastMsg)
+								}),
+							$author$project$Main$toastFor(toastMsg));
 					}
 				}
 			case 'EntriesFetched':
@@ -7796,18 +8177,26 @@ var $author$project$Main$update = F2(
 			case 'TabChanged':
 				var tab = msg.a;
 				var shouldFetch = _Utils_eq(tab, $author$project$Main$LedgerTab) && ((!_Utils_eq(model.oauthToken, $elm$core$Maybe$Nothing)) && (model.sheetId !== ''));
+				var newPending = (_Utils_eq(tab, $author$project$Main$AddTab) && (!model.geoBlocked)) ? A2($author$project$Main$setLocation, $author$project$Main$LocationFetching, model.pendingEntry) : model.pendingEntry;
+				var geoCmd = (_Utils_eq(tab, $author$project$Main$AddTab) && (!model.geoBlocked)) ? $author$project$Main$requestGeolocation(_Utils_Tuple0) : $elm$core$Platform$Cmd$none;
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
 						{
 							editingEntry: (!_Utils_eq(tab, $author$project$Main$AddTab)) ? $elm$core$Maybe$Nothing : model.editingEntry,
 							loadingEntries: shouldFetch,
+							pendingEntry: newPending,
 							tab: tab
 						}),
-					shouldFetch ? A2(
-						$author$project$Main$fetchEntries,
-						A2($elm$core$Maybe$withDefault, '', model.oauthToken),
-						model.sheetId) : $elm$core$Platform$Cmd$none);
+					$elm$core$Platform$Cmd$batch(
+						_List_fromArray(
+							[
+								shouldFetch ? A2(
+								$author$project$Main$fetchEntries,
+								A2($elm$core$Maybe$withDefault, '', model.oauthToken),
+								model.sheetId) : $elm$core$Platform$Cmd$none,
+								geoCmd
+							])));
 			case 'RefreshClicked':
 				return _Utils_Tuple2(
 					_Utils_update(
@@ -7849,21 +8238,201 @@ var $author$project$Main$update = F2(
 						{tripStart: s}),
 					$author$project$Main$saveStorage(
 						{key: 'trip_start', value: s}));
-			default:
+			case 'DismissError':
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
 						{error: $elm$core$Maybe$Nothing}),
 					$elm$core$Platform$Cmd$none);
+			case 'GotGpsCoords':
+				var lat = msg.a;
+				var lon = msg.b;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							pendingEntry: A2(
+								$author$project$Main$setLocation,
+								A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$BrowserGeo),
+								model.pendingEntry)
+						}),
+					$elm$core$Platform$Cmd$none);
+			case 'GeolocationDenied':
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							geoBlocked: true,
+							pendingEntry: A2($author$project$Main$setLocation, $author$project$Main$LocationIdle, model.pendingEntry)
+						}),
+					$elm$core$Platform$Cmd$none);
+			case 'OpenMapPicker':
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{showMapPicker: true}),
+					$elm$core$Platform$Cmd$none);
+			case 'MapPickerConfirmed':
+				var lat = msg.a;
+				var lon = msg.b;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							pendingEntry: A2(
+								$author$project$Main$setLocation,
+								A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$ManualPin),
+								model.pendingEntry),
+							showMapPicker: false
+						}),
+					$elm$core$Platform$Cmd$none);
+			case 'DismissMapPicker':
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{showMapPicker: false}),
+					$elm$core$Platform$Cmd$none);
+			case 'SkipLocation':
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							pendingEntry: A2($author$project$Main$setLocation, $author$project$Main$LocationSkipped, model.pendingEntry),
+							showMapPicker: false
+						}),
+					$elm$core$Platform$Cmd$none);
+			case 'ToggleLedgerMap':
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{showLedgerMap: !model.showLedgerMap}),
+					$elm$core$Platform$Cmd$none);
+			case 'ShowToast':
+				var message = msg.a;
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							toast: $elm$core$Maybe$Just(message)
+						}),
+					$author$project$Main$toastFor(message));
+			case 'ToastExpired':
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{toast: $elm$core$Maybe$Nothing}),
+					$elm$core$Platform$Cmd$none);
+			case 'GotExifCoords':
+				if ((msg.b.$ === 'Just') && (msg.c.$ === 'Just')) {
+					var itemId = msg.a;
+					var lat = msg.b.a;
+					var lon = msg.c.a;
+					return _Utils_Tuple2(
+						_Utils_update(
+							model,
+							{
+								scanQueue: A3(
+									$author$project$Main$updateScanItem,
+									itemId,
+									function (i) {
+										return _Utils_update(
+											i,
+											{
+												locationState: A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$ExifGps)
+											});
+									},
+									model.scanQueue)
+							}),
+						$elm$core$Platform$Cmd$none);
+				} else {
+					var itemId = msg.a;
+					return _Utils_Tuple2(
+						_Utils_update(
+							model,
+							{
+								scanQueue: A3(
+									$author$project$Main$updateScanItem,
+									itemId,
+									function (i) {
+										return _Utils_update(
+											i,
+											{locationState: $author$project$Main$LocationNoExifGps});
+									},
+									model.scanQueue)
+							}),
+						$elm$core$Platform$Cmd$none);
+				}
+			case 'ReviewScanItem':
+				var itemId = msg.a;
+				var _v18 = $elm$core$List$head(
+					A2(
+						$elm$core$List$filter,
+						function (i) {
+							return _Utils_eq(i.id, itemId);
+						},
+						model.scanQueue));
+				if (_v18.$ === 'Nothing') {
+					return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
+				} else {
+					var item = _v18.a;
+					var ocr = A2(
+						$elm$core$Maybe$withDefault,
+						{amount: $elm$core$Maybe$Nothing, category: $elm$core$Maybe$Nothing, merchant: $elm$core$Maybe$Nothing, note: $elm$core$Maybe$Nothing},
+						item.ocrData);
+					var newPending = {
+						amount: A2(
+							$elm$core$Maybe$withDefault,
+							'',
+							A2($elm$core$Maybe$map, $elm$core$String$fromFloat, ocr.amount)),
+						category: A2($elm$core$Maybe$withDefault, $author$project$Main$Fuel, ocr.category),
+						date: model.today,
+						locationState: item.locationState,
+						merchant: A2($elm$core$Maybe$withDefault, '', ocr.merchant),
+						note: A2($elm$core$Maybe$withDefault, '', ocr.note)
+					};
+					return _Utils_Tuple2(
+						_Utils_update(
+							model,
+							{
+								activeScanItemId: $elm$core$Maybe$Just(itemId),
+								error: $elm$core$Maybe$Nothing,
+								pendingEntry: newPending,
+								tab: $author$project$Main$AddTab
+							}),
+						$elm$core$Platform$Cmd$none);
+				}
+			case 'BackToQueue':
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							activeScanItemId: $elm$core$Maybe$Nothing,
+							pendingEntry: $author$project$Main$defaultPendingEntry(model.today),
+							tab: $author$project$Main$ScanTab
+						}),
+					$elm$core$Platform$Cmd$none);
+			default:
+				return _Utils_Tuple2(
+					_Utils_update(
+						model,
+						{
+							scanQueue: A2(
+								$elm$core$List$filter,
+								function (i) {
+									return !_Utils_eq(i.status, $author$project$Main$ScanSubmitted);
+								},
+								model.scanQueue)
+						}),
+					$elm$core$Platform$Cmd$none);
 		}
 	});
-var $elm$json$Json$Decode$value = _Json_decodeValue;
 var $elm$html$Html$div = _VirtualDom_node('div');
 var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
 var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
 var $author$project$Main$AmountChanged = function (a) {
 	return {$: 'AmountChanged', a: a};
 };
+var $author$project$Main$BackToQueue = {$: 'BackToQueue'};
 var $author$project$Main$CancelEdit = {$: 'CancelEdit'};
 var $author$project$Main$DateChanged = function (a) {
 	return {$: 'DateChanged', a: a};
@@ -7886,6 +8455,14 @@ var $elm$virtual_dom$VirtualDom$attribute = F2(
 	});
 var $elm$html$Html$Attributes$attribute = $elm$virtual_dom$VirtualDom$attribute;
 var $elm$html$Html$button = _VirtualDom_node('button');
+var $elm$html$Html$Attributes$stringProperty = F2(
+	function (key, string) {
+		return A2(
+			_VirtualDom_property,
+			key,
+			$elm$json$Json$Encode$string(string));
+	});
+var $elm$html$Html$Attributes$class = $elm$html$Html$Attributes$stringProperty('className');
 var $elm$html$Html$Attributes$boolProperty = F2(
 	function (key, bool) {
 		return A2(
@@ -7968,13 +8545,6 @@ var $elm$html$Html$Events$onInput = function (tagger) {
 			$elm$html$Html$Events$alwaysStop,
 			A2($elm$json$Json$Decode$map, tagger, $elm$html$Html$Events$targetValue)));
 };
-var $elm$html$Html$Attributes$stringProperty = F2(
-	function (key, string) {
-		return A2(
-			_VirtualDom_property,
-			key,
-			$elm$json$Json$Encode$string(string));
-	});
 var $elm$html$Html$Attributes$placeholder = $elm$html$Html$Attributes$stringProperty('placeholder');
 var $author$project$Main$sectionHead = A2($elm$html$Html$Attributes$style, 'font-size', '13px');
 var $elm$html$Html$span = _VirtualDom_node('span');
@@ -8068,6 +8638,295 @@ var $author$project$Main$viewCategoryBtn = F2(
 					$author$project$Main$categoryLabel(cat))
 				]));
 	});
+var $author$project$Main$DismissMapPicker = {$: 'DismissMapPicker'};
+var $author$project$Main$MapPickerConfirmed = F2(
+	function (a, b) {
+		return {$: 'MapPickerConfirmed', a: a, b: b};
+	});
+var $elm$virtual_dom$VirtualDom$node = function (tag) {
+	return _VirtualDom_node(
+		_VirtualDom_noScript(tag));
+};
+var $elm$html$Html$node = $elm$virtual_dom$VirtualDom$node;
+var $author$project$Main$OpenMapPicker = {$: 'OpenMapPicker'};
+var $author$project$Main$SkipLocation = {$: 'SkipLocation'};
+var $author$project$Main$formatCoord = F2(
+	function (lat, lon) {
+		return A2(
+			$elm$core$String$left,
+			9,
+			$elm$core$String$fromFloat(lat)) + (', ' + A2(
+			$elm$core$String$left,
+			9,
+			$elm$core$String$fromFloat(lon)));
+	});
+var $author$project$Main$viewLocationStatus = function (ls) {
+	switch (ls.$) {
+		case 'LocationFetching':
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'color', '#4a5a50'),
+						A2($elm$html$Html$Attributes$style, 'font-size', '13px'),
+						A2($elm$html$Html$Attributes$style, 'padding', '8px 0')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('📍 Getting location…')
+					]));
+		case 'LocationCheckingExif':
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('text-[#4a5a50] text-sm py-2')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('📍 Reading photo…')
+					]));
+		case 'LocationNoExifGps':
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('flex items-center gap-3 py-2')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$span,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('text-[#4a5a50] text-sm')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('No GPS in photo')
+							])),
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$OpenMapPicker),
+								$elm$html$Html$Attributes$class('bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('pin manually')
+							]))
+					]));
+		case 'LocationGot':
+			var lat = ls.a;
+			var lon = ls.b;
+			var source = ls.c;
+			var sourceLabel = function () {
+				switch (source.$) {
+					case 'ExifGps':
+						return '📍 from photo';
+					case 'BrowserGeo':
+						return '📍 GPS';
+					default:
+						return '📍 pinned';
+				}
+			}();
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('flex items-center gap-3 py-2')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$span,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('text-[#4090e0] text-sm')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text(
+								sourceLabel + (' — ' + A2($author$project$Main$formatCoord, lat, lon)))
+							])),
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$OpenMapPicker),
+								$elm$html$Html$Attributes$class('bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('adjust')
+							])),
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$SkipLocation),
+								$elm$html$Html$Attributes$class('bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('remove')
+							]))
+					]));
+		case 'LocationSkipped':
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+						A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
+						A2($elm$html$Html$Attributes$style, 'gap', '12px'),
+						A2($elm$html$Html$Attributes$style, 'padding', '8px 0')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$span,
+						_List_fromArray(
+							[
+								A2($elm$html$Html$Attributes$style, 'color', '#4a5a50'),
+								A2($elm$html$Html$Attributes$style, 'font-size', '13px')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('no location')
+							])),
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$OpenMapPicker),
+								A2($elm$html$Html$Attributes$style, 'background', 'none'),
+								A2($elm$html$Html$Attributes$style, 'border', 'none'),
+								A2($elm$html$Html$Attributes$style, 'color', '#4a5a50'),
+								A2($elm$html$Html$Attributes$style, 'font-size', '12px'),
+								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
+								A2($elm$html$Html$Attributes$style, 'padding', '0'),
+								A2($elm$html$Html$Attributes$style, 'font-family', 'inherit')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('pin manually')
+							]))
+					]));
+		default:
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+						A2($elm$html$Html$Attributes$style, 'gap', '12px'),
+						A2($elm$html$Html$Attributes$style, 'align-items', 'center')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$OpenMapPicker),
+								A2($elm$html$Html$Attributes$style, 'background', '#1e2220'),
+								A2($elm$html$Html$Attributes$style, 'border', '1px solid #3a4240'),
+								A2($elm$html$Html$Attributes$style, 'color', '#c8d0c8'),
+								A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
+								A2($elm$html$Html$Attributes$style, 'padding', '12px 16px'),
+								A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
+								A2($elm$html$Html$Attributes$style, 'flex', '1'),
+								A2($elm$html$Html$Attributes$style, 'font-family', 'inherit')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('📍 Pin manually')
+							])),
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$SkipLocation),
+								A2($elm$html$Html$Attributes$style, 'background', 'none'),
+								A2($elm$html$Html$Attributes$style, 'border', 'none'),
+								A2($elm$html$Html$Attributes$style, 'color', '#4a5a50'),
+								A2($elm$html$Html$Attributes$style, 'font-size', '13px'),
+								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
+								A2($elm$html$Html$Attributes$style, 'padding', '8px'),
+								A2($elm$html$Html$Attributes$style, 'font-family', 'inherit')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('Skip location')
+							]))
+					]));
+	}
+};
+var $author$project$Main$viewLocationWidget = function (model) {
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'margin-bottom', '16px')
+			]),
+		_List_fromArray(
+			[
+				$author$project$Main$viewLocationStatus(model.pendingEntry.locationState),
+				model.showMapPicker ? A3(
+				$elm$html$Html$node,
+				'map-picker',
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$Attributes$attribute,
+						'lat',
+						function () {
+							var _v0 = model.pendingEntry.locationState;
+							if (_v0.$ === 'LocationGot') {
+								var la = _v0.a;
+								return $elm$core$String$fromFloat(la);
+							} else {
+								return '64.2008';
+							}
+						}()),
+						A2(
+						$elm$html$Html$Attributes$attribute,
+						'lon',
+						function () {
+							var _v1 = model.pendingEntry.locationState;
+							if (_v1.$ === 'LocationGot') {
+								var lo = _v1.b;
+								return $elm$core$String$fromFloat(lo);
+							} else {
+								return '-153.4937';
+							}
+						}()),
+						A2(
+						$elm$html$Html$Events$on,
+						'confirm',
+						A3(
+							$elm$json$Json$Decode$map2,
+							$author$project$Main$MapPickerConfirmed,
+							A2(
+								$elm$json$Json$Decode$at,
+								_List_fromArray(
+									['detail', 'lat']),
+								$elm$json$Json$Decode$float),
+							A2(
+								$elm$json$Json$Decode$at,
+								_List_fromArray(
+									['detail', 'lon']),
+								$elm$json$Json$Decode$float))),
+						A2(
+						$elm$html$Html$Events$on,
+						'dismiss',
+						$elm$json$Json$Decode$succeed($author$project$Main$DismissMapPicker))
+					]),
+				_List_Nil) : $elm$html$Html$text('')
+			]));
+};
 var $author$project$Main$viewAddTab = function (model) {
 	var p = model.pendingEntry;
 	var isEditing = !_Utils_eq(model.editingEntry, $elm$core$Maybe$Nothing);
@@ -8097,24 +8956,29 @@ var $author$project$Main$viewAddTab = function (model) {
 						_List_fromArray(
 							[
 								$elm$html$Html$text(
-								isEditing ? 'EDIT EXPENSE' : 'ADD EXPENSE')
+								isEditing ? 'EDIT EXPENSE' : ((!_Utils_eq(model.activeScanItemId, $elm$core$Maybe$Nothing)) ? 'REVIEW SCAN' : 'ADD EXPENSE'))
 							])),
-						isEditing ? A2(
+						(!_Utils_eq(model.activeScanItemId, $elm$core$Maybe$Nothing)) ? A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$BackToQueue),
+								$elm$html$Html$Attributes$class('bg-transparent border-none text-[#7a8a80] text-sm cursor-pointer p-1 font-[inherit]')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('← queue')
+							])) : (isEditing ? A2(
 						$elm$html$Html$button,
 						_List_fromArray(
 							[
 								$elm$html$Html$Events$onClick($author$project$Main$CancelEdit),
-								A2($elm$html$Html$Attributes$style, 'background', 'none'),
-								A2($elm$html$Html$Attributes$style, 'border', 'none'),
-								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
-								A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
-								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
-								A2($elm$html$Html$Attributes$style, 'padding', '4px 0')
+								$elm$html$Html$Attributes$class('bg-transparent border-none text-[#7a8a80] text-sm cursor-pointer p-1 font-[inherit]')
 							]),
 						_List_fromArray(
 							[
 								$elm$html$Html$text('← cancel')
-							])) : $elm$html$Html$text('')
+							])) : $elm$html$Html$text(''))
 					])),
 				A2(
 				$author$project$Main$formField,
@@ -8219,6 +9083,7 @@ var $author$project$Main$viewAddTab = function (model) {
 							$author$project$Main$textInputStyle
 						]),
 					_List_Nil)),
+				$author$project$Main$viewLocationWidget(model),
 				A2(
 				$elm$html$Html$button,
 				_List_fromArray(
@@ -8252,7 +9117,6 @@ var $author$project$Main$viewAddTab = function (model) {
 					]))
 			]));
 };
-var $author$project$Main$ScanTab = {$: 'ScanTab'};
 var $author$project$Main$StatsTab = {$: 'StatsTab'};
 var $elm$html$Html$nav = _VirtualDom_node('nav');
 var $author$project$Main$TabChanged = function (a) {
@@ -8435,6 +9299,7 @@ var $author$project$Main$viewHeader = function (model) {
 			]));
 };
 var $author$project$Main$RefreshClicked = {$: 'RefreshClicked'};
+var $author$project$Main$ToggleLedgerMap = {$: 'ToggleLedgerMap'};
 var $elm$core$Basics$abs = function (n) {
 	return (n < 0) ? (-n) : n;
 };
@@ -8509,33 +9374,11 @@ var $elm$virtual_dom$VirtualDom$keyedNode = function (tag) {
 		_VirtualDom_noScript(tag));
 };
 var $elm$html$Html$Keyed$node = $elm$virtual_dom$VirtualDom$keyedNode;
-var $elm$core$Basics$not = _Basics_not;
 var $elm$html$Html$p = _VirtualDom_node('p');
 var $elm$core$List$sum = function (numbers) {
 	return A3($elm$core$List$foldl, $elm$core$Basics$add, 0, numbers);
 };
 var $elm$core$String$toUpper = _String_toUpper;
-var $elm$core$List$any = F2(
-	function (isOkay, list) {
-		any:
-		while (true) {
-			if (!list.b) {
-				return false;
-			} else {
-				var x = list.a;
-				var xs = list.b;
-				if (isOkay(x)) {
-					return true;
-				} else {
-					var $temp$isOkay = isOkay,
-						$temp$list = xs;
-					isOkay = $temp$isOkay;
-					list = $temp$list;
-					continue any;
-				}
-			}
-		}
-	});
 var $elm$core$List$member = F2(
 	function (x, xs) {
 		return A2(
@@ -8572,6 +9415,7 @@ var $author$project$Main$DeleteEntry = function (a) {
 var $author$project$Main$EditEntry = function (a) {
 	return {$: 'EditEntry', a: a};
 };
+var $elm$html$Html$Attributes$title = $elm$html$Html$Attributes$stringProperty('title');
 var $author$project$Main$viewEntryRow = function (entry) {
 	return A2(
 		$elm$html$Html$div,
@@ -8666,6 +9510,26 @@ var $author$project$Main$viewEntryRow = function (entry) {
 						$elm$html$Html$text(
 						$author$project$Main$formatAmount(entry.amount))
 					])),
+				function () {
+				var _v0 = entry.lat;
+				if (_v0.$ === 'Just') {
+					return A2(
+						$elm$html$Html$span,
+						_List_fromArray(
+							[
+								A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+								A2($elm$html$Html$Attributes$style, 'color', '#4090e0'),
+								A2($elm$html$Html$Attributes$style, 'flex-shrink', '0'),
+								$elm$html$Html$Attributes$title('Has GPS coordinates')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('📍')
+							]));
+				} else {
+					return $elm$html$Html$text('');
+				}
+			}(),
 				A2(
 				$elm$html$Html$button,
 				_List_fromArray(
@@ -8695,6 +9559,54 @@ var $author$project$Main$viewEntryRow = function (entry) {
 						$elm$html$Html$text('✕')
 					]))
 			]));
+};
+var $author$project$Main$encodeWaypoints = function (entries) {
+	var withCoords = A2(
+		$elm$core$List$filterMap,
+		function (e) {
+			var _v0 = _Utils_Tuple2(e.lat, e.lon);
+			if ((_v0.a.$ === 'Just') && (_v0.b.$ === 'Just')) {
+				var la = _v0.a.a;
+				var lo = _v0.b.a;
+				return $elm$core$Maybe$Just(
+					$elm$json$Json$Encode$object(
+						_List_fromArray(
+							[
+								_Utils_Tuple2(
+								'lat',
+								$elm$json$Json$Encode$float(la)),
+								_Utils_Tuple2(
+								'lon',
+								$elm$json$Json$Encode$float(lo)),
+								_Utils_Tuple2(
+								'label',
+								$elm$json$Json$Encode$string(
+									((e.merchant !== '') ? e.merchant : $author$project$Main$categoryLabel(e.category)) + (' ' + $author$project$Main$formatAmount(e.amount))))
+							])));
+			} else {
+				return $elm$core$Maybe$Nothing;
+			}
+		},
+		entries);
+	return A2(
+		$elm$json$Json$Encode$encode,
+		0,
+		A2($elm$json$Json$Encode$list, $elm$core$Basics$identity, withCoords));
+};
+var $author$project$Main$viewLedgerMap = function (model) {
+	return model.showLedgerMap ? A3(
+		$elm$html$Html$node,
+		'waypoint-map',
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$Attributes$attribute,
+				'points',
+				$author$project$Main$encodeWaypoints(model.entries)),
+				$elm$html$Html$Attributes$class('block w-full rounded-xl overflow-hidden mb-5'),
+				A2($elm$html$Html$Attributes$style, 'height', '260px')
+			]),
+		_List_Nil) : $elm$html$Html$text('');
 };
 var $author$project$Main$viewLedgerSummary = function (entries) {
 	var total = $elm$core$List$sum(
@@ -8884,10 +9796,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 				$elm$html$Html$div,
 				_List_fromArray(
 					[
-						A2($elm$html$Html$Attributes$style, 'display', 'flex'),
-						A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
-						A2($elm$html$Html$Attributes$style, 'justify-content', 'space-between'),
-						A2($elm$html$Html$Attributes$style, 'margin-bottom', '20px')
+						$elm$html$Html$Attributes$class('flex items-center justify-between mb-5')
 					]),
 				_List_fromArray(
 					[
@@ -8900,24 +9809,40 @@ var $author$project$Main$viewLedgerTab = function (model) {
 								$elm$html$Html$text('LEDGER')
 							])),
 						A2(
-						$elm$html$Html$button,
+						$elm$html$Html$div,
 						_List_fromArray(
 							[
-								$elm$html$Html$Events$onClick($author$project$Main$RefreshClicked),
-								A2($elm$html$Html$Attributes$style, 'background', 'none'),
-								A2($elm$html$Html$Attributes$style, 'border', '1px solid #3a4240'),
-								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
-								A2($elm$html$Html$Attributes$style, 'border-radius', '6px'),
-								A2($elm$html$Html$Attributes$style, 'padding', '6px 12px'),
-								A2($elm$html$Html$Attributes$style, 'font-size', '13px'),
-								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+								$elm$html$Html$Attributes$class('flex gap-2')
 							]),
 						_List_fromArray(
 							[
-								$elm$html$Html$text('↻ refresh')
+								A2(
+								$elm$html$Html$button,
+								_List_fromArray(
+									[
+										$elm$html$Html$Events$onClick($author$project$Main$ToggleLedgerMap),
+										$elm$html$Html$Attributes$class(
+										model.showLedgerMap ? 'px-3 py-1.5 rounded border border-[#3a4240] bg-[#1e3a50] text-[#4090e0] text-sm cursor-pointer font-[inherit]' : 'px-3 py-1.5 rounded border border-[#3a4240] bg-transparent text-[#7a8a80] text-sm cursor-pointer font-[inherit]')
+									]),
+								_List_fromArray(
+									[
+										$elm$html$Html$text('🗺 map')
+									])),
+								A2(
+								$elm$html$Html$button,
+								_List_fromArray(
+									[
+										$elm$html$Html$Events$onClick($author$project$Main$RefreshClicked),
+										$elm$html$Html$Attributes$class('px-3 py-1.5 rounded border border-[#3a4240] bg-transparent text-[#7a8a80] text-sm cursor-pointer font-[inherit]')
+									]),
+								_List_fromArray(
+									[
+										$elm$html$Html$text('↻ refresh')
+									]))
 							]))
 					])),
 				(!$elm$core$List$isEmpty(model.entries)) ? $author$project$Main$viewLedgerSummary(model.entries) : $elm$html$Html$text(''),
+				$author$project$Main$viewLedgerMap(model),
 				(model.sheetId === '') ? A2(
 				$elm$html$Html$p,
 				_List_fromArray(
@@ -9020,25 +9945,205 @@ var $author$project$Main$viewLedgerTab = function (model) {
 					$author$project$Main$uniqueDates(model.entries)))))
 			]));
 };
-var $author$project$Main$FileSelected = function (a) {
-	return {$: 'FileSelected', a: a};
+var $author$project$Main$ClearDoneItems = {$: 'ClearDoneItems'};
+var $author$project$Main$FilesSelected = function (a) {
+	return {$: 'FilesSelected', a: a};
 };
 var $elm$html$Html$Attributes$accept = $elm$html$Html$Attributes$stringProperty('accept');
 var $elm$file$File$decoder = _File_decoder;
-var $elm$html$Html$img = _VirtualDom_node('img');
+var $elm$json$Json$Decode$int = _Json_decodeInt;
+var $author$project$Main$fileListDecoder = A2(
+	$elm$json$Json$Decode$andThen,
+	function (n) {
+		return A3(
+			$elm$core$List$foldr,
+			$elm$json$Json$Decode$map2($elm$core$List$cons),
+			$elm$json$Json$Decode$succeed(_List_Nil),
+			A2(
+				$elm$core$List$map,
+				function (i) {
+					return A2(
+						$elm$json$Json$Decode$field,
+						$elm$core$String$fromInt(i),
+						$elm$file$File$decoder);
+				},
+				A2($elm$core$List$range, 0, n - 1)));
+	},
+	A2($elm$json$Json$Decode$field, 'length', $elm$json$Json$Decode$int));
 var $elm$html$Html$label = _VirtualDom_node('label');
+var $elm$html$Html$img = _VirtualDom_node('img');
 var $elm$html$Html$Attributes$src = function (url) {
 	return A2(
 		$elm$html$Html$Attributes$stringProperty,
 		'src',
 		_VirtualDom_noJavaScriptOrHtmlUri(url));
 };
+var $author$project$Main$ReviewScanItem = function (a) {
+	return {$: 'ReviewScanItem', a: a};
+};
+var $author$project$Main$viewScanCardStatus = function (item) {
+	var _v0 = item.status;
+	switch (_v0.$) {
+		case 'ScanQueued':
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('text-[#4a5a50] text-xs py-1')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('Queued…')
+					]));
+		case 'ScanProcessing':
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('text-[#e8a020] text-xs py-1')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('⏳ Reading…')
+					]));
+		case 'ScanReady':
+			return A2(
+				$elm$html$Html$div,
+				_List_Nil,
+				_List_fromArray(
+					[
+						function () {
+						var _v1 = item.ocrData;
+						if (_v1.$ === 'Just') {
+							var ocr = _v1.a;
+							return A2(
+								$elm$html$Html$div,
+								_List_fromArray(
+									[
+										$elm$html$Html$Attributes$class('mb-2')
+									]),
+								_List_fromArray(
+									[
+										A2(
+										$elm$html$Html$div,
+										_List_fromArray(
+											[
+												$elm$html$Html$Attributes$class('text-[#e8a020] font-mono text-sm font-bold')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text(
+												A2(
+													$elm$core$Maybe$withDefault,
+													'—',
+													A2(
+														$elm$core$Maybe$map,
+														function (a) {
+															return '$' + $elm$core$String$fromFloat(a);
+														},
+														ocr.amount)))
+											])),
+										A2(
+										$elm$html$Html$div,
+										_List_fromArray(
+											[
+												$elm$html$Html$Attributes$class('text-[#7a8a80] text-xs truncate')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text(
+												A2(
+													$elm$core$Maybe$withDefault,
+													A2(
+														$elm$core$Maybe$withDefault,
+														'receipt',
+														A2($elm$core$Maybe$map, $author$project$Main$categoryLabel, ocr.category)),
+													ocr.merchant))
+											]))
+									]));
+						} else {
+							return A2(
+								$elm$html$Html$div,
+								_List_fromArray(
+									[
+										$elm$html$Html$Attributes$class('text-[#7a8a80] text-xs mb-2')
+									]),
+								_List_fromArray(
+									[
+										$elm$html$Html$text('Fill manually')
+									]));
+						}
+					}(),
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick(
+								$author$project$Main$ReviewScanItem(item.id)),
+								$elm$html$Html$Attributes$class('w-full py-1.5 rounded-lg bg-[#e8a020] text-[#0d0f0e] text-xs font-bold cursor-pointer border-none font-[inherit]')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('Review →')
+							]))
+					]));
+		default:
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('text-[#4a5a50] text-xs text-center py-1')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('✓ Submitted')
+					]));
+	}
+};
+var $author$project$Main$viewScanCard = function (item) {
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				$elm$html$Html$Attributes$class('bg-[#161918] rounded-xl overflow-hidden')
+			]),
+		_List_fromArray(
+			[
+				(item.imageUrl !== '') ? A2(
+				$elm$html$Html$img,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$src(item.imageUrl),
+						$elm$html$Html$Attributes$class('w-full h-28 object-cover')
+					]),
+				_List_Nil) : A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('w-full h-28 bg-[#1e2220] flex items-center justify-center text-3xl text-[#3a4240]')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('📷')
+					])),
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('p-2')
+					]),
+				_List_fromArray(
+					[
+						$author$project$Main$viewScanCardStatus(item)
+					]))
+			]));
+};
 var $author$project$Main$viewScanTab = function (model) {
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
 			[
-				A2($elm$html$Html$Attributes$style, 'padding', '24px 20px')
+				$elm$html$Html$Attributes$class('px-5 pt-6 pb-4')
 			]),
 		_List_fromArray(
 			[
@@ -9048,15 +10153,13 @@ var $author$project$Main$viewScanTab = function (model) {
 					[$author$project$Main$sectionHead]),
 				_List_fromArray(
 					[
-						$elm$html$Html$text('SCAN RECEIPT')
+						$elm$html$Html$text('SCAN RECEIPTS')
 					])),
-				model.scanLoading ? A2(
-				$elm$html$Html$div,
+				A2(
+				$elm$html$Html$label,
 				_List_fromArray(
 					[
-						A2($elm$html$Html$Attributes$style, 'text-align', 'center'),
-						A2($elm$html$Html$Attributes$style, 'padding', '48px'),
-						A2($elm$html$Html$Attributes$style, 'color', '#e8a020')
+						$elm$html$Html$Attributes$class('flex flex-col items-center justify-center bg-[#1e2220] border-2 border-dashed border-[#3a4240] rounded-xl py-10 px-6 cursor-pointer mb-5')
 					]),
 				_List_fromArray(
 					[
@@ -9064,123 +10167,93 @@ var $author$project$Main$viewScanTab = function (model) {
 						$elm$html$Html$div,
 						_List_fromArray(
 							[
-								A2($elm$html$Html$Attributes$style, 'font-size', '32px'),
-								A2($elm$html$Html$Attributes$style, 'margin-bottom', '12px')
+								$elm$html$Html$Attributes$class('text-5xl mb-3')
 							]),
 						_List_fromArray(
 							[
-								$elm$html$Html$text('⏳')
+								$elm$html$Html$text('📷')
 							])),
 						A2(
 						$elm$html$Html$p,
-						_List_Nil,
 						_List_fromArray(
 							[
-								$elm$html$Html$text('Reading receipt...')
-							]))
+								$elm$html$Html$Attributes$class('text-[#7a8a80] text-base text-center')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('Tap to add photos')
+							])),
+						A2(
+						$elm$html$Html$p,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('text-[#4a5a50] text-xs mt-1 text-center')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('Select multiple for batch upload')
+							])),
+						A2(
+						$elm$html$Html$input,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$type_('file'),
+								$elm$html$Html$Attributes$accept('image/*'),
+								A2($elm$html$Html$Attributes$attribute, 'multiple', 'true'),
+								$elm$html$Html$Attributes$class('hidden'),
+								A2(
+								$elm$html$Html$Events$on,
+								'change',
+								A2(
+									$elm$json$Json$Decode$map,
+									$author$project$Main$FilesSelected,
+									A2(
+										$elm$json$Json$Decode$at,
+										_List_fromArray(
+											['target', 'files']),
+										$author$project$Main$fileListDecoder)))
+							]),
+						_List_Nil)
+					])),
+				$elm$core$List$isEmpty(model.scanQueue) ? A2(
+				$elm$html$Html$button,
+				_List_fromArray(
+					[
+						$elm$html$Html$Events$onClick(
+						$author$project$Main$TabChanged($author$project$Main$AddTab)),
+						$elm$html$Html$Attributes$class('w-full py-3.5 rounded-lg border border-[#3a4240] text-[#7a8a80] text-sm cursor-pointer bg-transparent font-[inherit]')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('Fill in manually →')
 					])) : A2(
 				$elm$html$Html$div,
 				_List_Nil,
 				_List_fromArray(
 					[
 						A2(
-						$elm$html$Html$label,
+						$elm$html$Html$div,
 						_List_fromArray(
 							[
-								A2($elm$html$Html$Attributes$style, 'display', 'flex'),
-								A2($elm$html$Html$Attributes$style, 'flex-direction', 'column'),
-								A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
-								A2($elm$html$Html$Attributes$style, 'justify-content', 'center'),
-								A2($elm$html$Html$Attributes$style, 'background', '#1e2220'),
-								A2($elm$html$Html$Attributes$style, 'border', '2px dashed #3a4240'),
-								A2($elm$html$Html$Attributes$style, 'border-radius', '12px'),
-								A2($elm$html$Html$Attributes$style, 'padding', '48px 24px'),
-								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
-								A2($elm$html$Html$Attributes$style, 'margin-bottom', '20px'),
-								A2($elm$html$Html$Attributes$style, 'min-height', '160px')
+								$elm$html$Html$Attributes$class('grid grid-cols-2 gap-3 mb-4')
 							]),
-						_List_fromArray(
-							[
-								A2(
-								$elm$html$Html$div,
-								_List_fromArray(
-									[
-										A2($elm$html$Html$Attributes$style, 'font-size', '48px'),
-										A2($elm$html$Html$Attributes$style, 'margin-bottom', '12px')
-									]),
-								_List_fromArray(
-									[
-										$elm$html$Html$text('📷')
-									])),
-								A2(
-								$elm$html$Html$p,
-								_List_fromArray(
-									[
-										A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
-										A2($elm$html$Html$Attributes$style, 'font-size', '16px')
-									]),
-								_List_fromArray(
-									[
-										$elm$html$Html$text('Tap to use camera or choose from library')
-									])),
-								A2(
-								$elm$html$Html$input,
-								_List_fromArray(
-									[
-										$elm$html$Html$Attributes$type_('file'),
-										$elm$html$Html$Attributes$accept('image/*'),
-										A2($elm$html$Html$Attributes$style, 'display', 'none'),
-										A2(
-										$elm$html$Html$Events$on,
-										'change',
-										A2(
-											$elm$json$Json$Decode$map,
-											$author$project$Main$FileSelected,
-											A2(
-												$elm$json$Json$Decode$at,
-												_List_fromArray(
-													['target', 'files', '0']),
-												$elm$file$File$decoder)))
-									]),
-								_List_Nil)
-							])),
-						function () {
-						var _v0 = model.scanImage;
-						if (_v0.$ === 'Just') {
-							var dataUrl = _v0.a;
-							return A2(
-								$elm$html$Html$img,
-								_List_fromArray(
-									[
-										$elm$html$Html$Attributes$src(dataUrl),
-										A2($elm$html$Html$Attributes$style, 'width', '100%'),
-										A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
-										A2($elm$html$Html$Attributes$style, 'margin-bottom', '16px')
-									]),
-								_List_Nil);
-						} else {
-							return $elm$html$Html$text('');
-						}
-					}(),
+						A2($elm$core$List$map, $author$project$Main$viewScanCard, model.scanQueue)),
 						A2(
+						$elm$core$List$any,
+						function (i) {
+							return _Utils_eq(i.status, $author$project$Main$ScanSubmitted);
+						},
+						model.scanQueue) ? A2(
 						$elm$html$Html$button,
 						_List_fromArray(
 							[
-								$elm$html$Html$Events$onClick(
-								$author$project$Main$TabChanged($author$project$Main$AddTab)),
-								A2($elm$html$Html$Attributes$style, 'width', '100%'),
-								A2($elm$html$Html$Attributes$style, 'background', 'none'),
-								A2($elm$html$Html$Attributes$style, 'border', '1px solid #3a4240'),
-								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
-								A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
-								A2($elm$html$Html$Attributes$style, 'padding', '14px'),
-								A2($elm$html$Html$Attributes$style, 'font-size', '15px'),
-								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+								$elm$html$Html$Events$onClick($author$project$Main$ClearDoneItems),
+								$elm$html$Html$Attributes$class('w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit]')
 							]),
 						_List_fromArray(
 							[
-								$elm$html$Html$text('Fill in manually →')
-							]))
+								$elm$html$Html$text('Clear submitted')
+							])) : $elm$html$Html$text('')
 					]))
 			]));
 };
@@ -9190,6 +10263,7 @@ var $author$project$Main$ApiKeyChanged = function (a) {
 var $author$project$Main$GoogleClientIdChanged = function (a) {
 	return {$: 'GoogleClientIdChanged', a: a};
 };
+var $author$project$Main$ResetSettingsClicked = {$: 'ResetSettingsClicked'};
 var $author$project$Main$SheetIdChanged = function (a) {
 	return {$: 'SheetIdChanged', a: a};
 };
@@ -9302,7 +10376,37 @@ var $author$project$Main$viewSettingsTab = function (model) {
 				} else {
 					return $elm$html$Html$text('');
 				}
-			}()
+			}(),
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'margin-top', '8px')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$ResetSettingsClicked),
+								$elm$html$Html$Attributes$class('w-full py-3.5 rounded-lg border border-red-900/60 text-red-400/80 text-sm cursor-pointer bg-transparent font-[inherit] hover:border-red-700 hover:text-red-300 transition-colors')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('Reset all settings')
+							]))
+					])),
+				(model.version !== '') ? A2(
+				$elm$html$Html$p,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('text-[#3a4a40] text-xs text-center mt-6 font-mono')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text(model.version)
+					])) : $elm$html$Html$text('')
 			]));
 };
 var $elm$core$Basics$composeL = F3(
@@ -12602,13 +13706,12 @@ var $terezka$elm_charts$Chart$addIndexes = F2(
 			toIndexedElements,
 			_Utils_Tuple2(_List_Nil, startIndex));
 	});
-var $elm$html$Html$Attributes$class = $elm$html$Html$Attributes$stringProperty('className');
 var $elm$svg$Svg$clipPath = $elm$svg$Svg$trustedNode('clipPath');
 var $elm$json$Json$Decode$map3 = _Json_map3;
 var $K_Adam$elm_dom$DOM$offsetHeight = A2($elm$json$Json$Decode$field, 'offsetHeight', $elm$json$Json$Decode$float);
 var $K_Adam$elm_dom$DOM$offsetWidth = A2($elm$json$Json$Decode$field, 'offsetWidth', $elm$json$Json$Decode$float);
+var $elm$json$Json$Decode$map4 = _Json_map4;
 var $K_Adam$elm_dom$DOM$offsetLeft = A2($elm$json$Json$Decode$field, 'offsetLeft', $elm$json$Json$Decode$float);
-var $elm$json$Json$Decode$null = _Json_decodeNull;
 var $K_Adam$elm_dom$DOM$offsetParent = F2(
 	function (x, decoder) {
 		return $elm$json$Json$Decode$oneOf(
@@ -13863,6 +14966,44 @@ var $author$project$Main$viewStatsTab = function (model) {
 					]))
 			]));
 };
+var $author$project$Main$viewToast = function (model) {
+	var _v0 = model.toast;
+	if (_v0.$ === 'Nothing') {
+		return $elm$html$Html$text('');
+	} else {
+		var message = _v0.a;
+		return A2(
+			$elm$html$Html$div,
+			_List_fromArray(
+				[
+					$elm$html$Html$Attributes$class('fixed bottom-16 left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-[#1e2220] border border-[#e85030] shadow-lg')
+				]),
+			_List_fromArray(
+				[
+					A2(
+					$elm$html$Html$span,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$class('text-[#e8c080] text-sm flex-1')
+						]),
+					_List_fromArray(
+						[
+							$elm$html$Html$text(message)
+						])),
+					A2(
+					$elm$html$Html$button,
+					_List_fromArray(
+						[
+							$elm$html$Html$Events$onClick($author$project$Main$ToastExpired),
+							$elm$html$Html$Attributes$class('bg-transparent border-none text-[#7a8a80] text-lg leading-none cursor-pointer p-0 flex-shrink-0')
+						]),
+					_List_fromArray(
+						[
+							$elm$html$Html$text('✕')
+						]))
+				]));
+	}
+};
 var $author$project$Main$viewApp = function (model) {
 	return A2(
 		$elm$html$Html$div,
@@ -13895,7 +15036,8 @@ var $author$project$Main$viewApp = function (model) {
 						}
 					}()
 					])),
-				$author$project$Main$viewBottomNav(model.tab)
+				$author$project$Main$viewBottomNav(model.tab),
+				$author$project$Main$viewToast(model)
 			]));
 };
 var $author$project$Main$SignInClicked = {$: 'SignInClicked'};
@@ -14045,7 +15187,23 @@ var $author$project$Main$main = $elm$browser$Browser$element(
 	{
 		init: $author$project$Main$init,
 		subscriptions: function (_v0) {
-			return $author$project$Main$gotNewToken($author$project$Main$GotOAuthToken);
+			return $elm$core$Platform$Sub$batch(
+				_List_fromArray(
+					[
+						$author$project$Main$gotNewToken($author$project$Main$GotOAuthToken),
+						$author$project$Main$gotGpsCoords(
+						function (r) {
+							return r.denied ? $author$project$Main$GeolocationDenied : A2($author$project$Main$GotGpsCoords, r.lat, r.lon);
+						}),
+						$author$project$Main$gotExifResult(
+						function (r) {
+							return r.hasGps ? A3(
+								$author$project$Main$GotExifCoords,
+								r.id,
+								$elm$core$Maybe$Just(r.lat),
+								$elm$core$Maybe$Just(r.lon)) : A3($author$project$Main$GotExifCoords, r.id, $elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing);
+						})
+					]));
 		},
 		update: $author$project$Main$update,
 		view: $author$project$Main$view

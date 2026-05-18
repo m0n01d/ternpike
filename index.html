@@ -330,19 +330,19 @@
     });
 
     // EXIF GPS extraction from image data URL
-    app.ports.extractExifGps.subscribe(async (dataUrl) => {
+    app.ports.extractExifGps.subscribe(async ({ id, dataUrl }) => {
       try {
         const gps = await exifr.gps(dataUrl);
         if (gps && typeof gps.latitude === 'number') {
           console.log('[exifr] GPS found:', gps.latitude, gps.longitude);
-          app.ports.gotExifResult.send({ lat: gps.latitude, lon: gps.longitude, hasGps: true });
+          app.ports.gotExifResult.send({ id, lat: gps.latitude, lon: gps.longitude, hasGps: true });
         } else {
           console.log('[exifr] no GPS tags in image');
-          app.ports.gotExifResult.send({ lat: 0, lon: 0, hasGps: false });
+          app.ports.gotExifResult.send({ id, lat: 0, lon: 0, hasGps: false });
         }
       } catch (err) {
         console.error('[exifr] parse error:', err);
-        app.ports.gotExifResult.send({ lat: 0, lon: 0, hasGps: false });
+        app.ports.gotExifResult.send({ id, lat: 0, lon: 0, hasGps: false });
       }
     });
 
