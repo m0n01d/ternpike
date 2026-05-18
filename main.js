@@ -6313,7 +6313,7 @@ var $author$project$Main$rowDecoder = A2(
 									$elm$json$Json$Decode$succeed(
 										F9(
 											function (id, date, amount, category, note, merchant, createdAt, lat, lon) {
-												return {d: amount, h: category, aQ: createdAt, l: date, am: id, J: lat, M: lon, j: merchant, k: note, aw: 0};
+												return {d: amount, h: category, aQ: createdAt, l: date, am: id, J: lat, M: lon, j: merchant, k: note, ax: 0};
 											})))))))))));
 var $author$project$Main$entriesDecoder = $elm$json$Json$Decode$oneOf(
 	_List_fromArray(
@@ -6325,7 +6325,7 @@ var $author$project$Main$entriesDecoder = $elm$json$Json$Decode$oneOf(
 					function (i, e) {
 						return _Utils_update(
 							e,
-							{aw: i + 2});
+							{ax: i + 2});
 					})),
 			A2(
 				$elm$json$Json$Decode$field,
@@ -6638,7 +6638,7 @@ var $author$project$Main$init = function (flagsJson) {
 	}();
 	var today = dec('today');
 	var model = {
-		ar: dec('anthropicKey'),
+		as: dec('anthropicKey'),
 		U: $elm$core$Maybe$Nothing,
 		I: _List_Nil,
 		D: $elm$core$Maybe$Nothing,
@@ -6651,10 +6651,10 @@ var $author$project$Main$init = function (flagsJson) {
 		ak: false,
 		F: sheetId,
 		aI: false,
-		ax: false,
+		ay: false,
 		ah: false,
 		A: 2,
-		ay: $elm$core$Maybe$Nothing,
+		ap: $elm$core$Maybe$Nothing,
 		bj: today,
 		bl: function (s) {
 			return (s === '') ? '2026-05-22' : s;
@@ -6683,9 +6683,10 @@ var $author$project$Main$LocationCheckingExif = {$: 2};
 var $author$project$Main$LocationFetching = {$: 1};
 var $author$project$Main$LocationGot = F3(
 	function (a, b, c) {
-		return {$: 3, a: a, b: b, c: c};
+		return {$: 4, a: a, b: b, c: c};
 	});
-var $author$project$Main$LocationSkipped = {$: 4};
+var $author$project$Main$LocationNoExifGps = {$: 3};
+var $author$project$Main$LocationSkipped = {$: 5};
 var $author$project$Main$ManualPin = 2;
 var $author$project$Main$EntrySubmitted = function (a) {
 	return {$: 17, a: a};
@@ -7560,7 +7561,7 @@ var $author$project$Main$toastFor = function (_v0) {
 };
 var $author$project$Main$updateEntry = F3(
 	function (token, sheetId, entry) {
-		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.aw) + (':I' + $elm$core$String$fromInt(entry.aw)));
+		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.ax) + (':I' + $elm$core$String$fromInt(entry.ax)));
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -7671,7 +7672,7 @@ var $author$project$Main$update = F2(
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{ar: '', U: $elm$core$Maybe$Nothing, I: _List_Nil, aE: '', H: $elm$core$Maybe$Nothing, F: '', A: 2}),
+						{as: '', U: $elm$core$Maybe$Nothing, I: _List_Nil, aE: '', H: $elm$core$Maybe$Nothing, F: '', A: 2}),
 					$author$project$Main$clearAllStorage(0));
 			case 7:
 				var file = msg.a;
@@ -7690,7 +7691,7 @@ var $author$project$Main$update = F2(
 						$elm$file$File$toUrl(file)));
 			case 8:
 				var dataUrl = msg.a;
-				return (model.ar === '') ? _Utils_Tuple2(
+				return (model.as === '') ? _Utils_Tuple2(
 					_Utils_update(
 						model,
 						{
@@ -7710,7 +7711,7 @@ var $author$project$Main$update = F2(
 							[
 								A3(
 								$author$project$Main$makeOcrCall,
-								model.ar,
+								model.as,
 								$author$project$Main$extractBase64(dataUrl),
 								$author$project$Main$getMimeType(dataUrl)),
 								$author$project$Main$extractExifGps(dataUrl)
@@ -7885,10 +7886,10 @@ var $author$project$Main$update = F2(
 							J: function () {
 								var _v8 = p.X;
 								switch (_v8.$) {
-									case 3:
+									case 4:
 										var la = _v8.a;
 										return $elm$core$Maybe$Just(la);
-									case 4:
+									case 5:
 										return $elm$core$Maybe$Nothing;
 									default:
 										return original.J;
@@ -7897,10 +7898,10 @@ var $author$project$Main$update = F2(
 							M: function () {
 								var _v9 = p.X;
 								switch (_v9.$) {
-									case 3:
+									case 4:
 										var lo = _v9.b;
 										return $elm$core$Maybe$Just(lo);
-									case 4:
+									case 5:
 										return $elm$core$Maybe$Nothing;
 									default:
 										return original.M;
@@ -7915,7 +7916,7 @@ var $author$project$Main$update = F2(
 				} else {
 					var _v10 = function () {
 						var _v11 = p.X;
-						if (_v11.$ === 3) {
+						if (_v11.$ === 4) {
 							var la = _v11.a;
 							var lo = _v11.b;
 							return _Utils_Tuple2(
@@ -7941,7 +7942,7 @@ var $author$project$Main$update = F2(
 						M: eLon,
 						j: p.j,
 						k: p.k,
-						aw: 0
+						ax: 0
 					};
 					return _Utils_Tuple2(
 						model,
@@ -7972,7 +7973,7 @@ var $author$project$Main$update = F2(
 								model,
 								{
 									ah: false,
-									ay: $elm$core$Maybe$Just(toastMsg)
+									ap: $elm$core$Maybe$Just(toastMsg)
 								}),
 							$elm$core$Platform$Cmd$batch(
 								_List_fromArray(
@@ -7988,7 +7989,7 @@ var $author$project$Main$update = F2(
 								model,
 								{
 									ah: false,
-									ay: $elm$core$Maybe$Just(toastMsg)
+									ap: $elm$core$Maybe$Just(toastMsg)
 								}),
 							$author$project$Main$toastFor(toastMsg));
 					}
@@ -8039,7 +8040,7 @@ var $author$project$Main$update = F2(
 						$author$project$Main$deleteEntry,
 						A2($elm$core$Maybe$withDefault, '', model.H),
 						model.F,
-						entry.aw));
+						entry.ax));
 			case 20:
 				var result = msg.a;
 				if (!result.$) {
@@ -8125,7 +8126,7 @@ var $author$project$Main$update = F2(
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{ar: s}),
+						{as: s}),
 					$author$project$Main$saveStorage(
 						{aF: 'anthropic_key', aL: s}));
 			case 25:
@@ -8184,7 +8185,7 @@ var $author$project$Main$update = F2(
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{ax: true}),
+						{ay: true}),
 					$elm$core$Platform$Cmd$none);
 			case 33:
 				var lat = msg.a;
@@ -8197,14 +8198,14 @@ var $author$project$Main$update = F2(
 								$author$project$Main$setLocation,
 								A3($author$project$Main$LocationGot, lat, lon, 2),
 								model.c),
-							ax: false
+							ay: false
 						}),
 					$elm$core$Platform$Cmd$none);
 			case 34:
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{ax: false}),
+						{ay: false}),
 					$elm$core$Platform$Cmd$none);
 			case 35:
 				return _Utils_Tuple2(
@@ -8212,7 +8213,7 @@ var $author$project$Main$update = F2(
 						model,
 						{
 							c: A2($author$project$Main$setLocation, $author$project$Main$LocationSkipped, model.c),
-							ax: false
+							ay: false
 						}),
 					$elm$core$Platform$Cmd$none);
 			case 4:
@@ -8227,19 +8228,20 @@ var $author$project$Main$update = F2(
 					_Utils_update(
 						model,
 						{
-							ay: $elm$core$Maybe$Just(message)
+							ap: $elm$core$Maybe$Just(message)
 						}),
 					$author$project$Main$toastFor(message));
 			case 6:
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{ay: $elm$core$Maybe$Nothing}),
+						{ap: $elm$core$Maybe$Nothing}),
 					$elm$core$Platform$Cmd$none);
 			default:
 				if ((!msg.a.$) && (!msg.b.$)) {
 					var lat = msg.a.a;
 					var lon = msg.b.a;
+					var toastMsg = '📍 GPS found in photo';
 					return _Utils_Tuple2(
 						_Utils_update(
 							model,
@@ -8247,9 +8249,10 @@ var $author$project$Main$update = F2(
 								c: A2(
 									$author$project$Main$setLocation,
 									A3($author$project$Main$LocationGot, lat, lon, 0),
-									model.c)
+									model.c),
+								ap: $elm$core$Maybe$Just(toastMsg)
 							}),
-						$elm$core$Platform$Cmd$none);
+						$author$project$Main$toastFor(toastMsg));
 				} else {
 					var _v15 = model.c.X;
 					if (_v15.$ === 2) {
@@ -8257,9 +8260,9 @@ var $author$project$Main$update = F2(
 							_Utils_update(
 								model,
 								{
-									c: A2($author$project$Main$setLocation, $author$project$Main$LocationIdle, model.c)
+									c: A2($author$project$Main$setLocation, $author$project$Main$LocationNoExifGps, model.c)
 								}),
-							$elm$core$Platform$Cmd$none);
+							$author$project$Main$toastFor('No GPS data in this photo'));
 					} else {
 						return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
 					}
@@ -8526,6 +8529,37 @@ var $author$project$Main$viewLocationStatus = function (ls) {
 						$elm$html$Html$text('📍 Reading photo…')
 					]));
 		case 3:
+			return A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						$elm$html$Html$Attributes$class('flex items-center gap-3 py-2')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$span,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('text-[#4a5a50] text-sm')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('No GPS in photo')
+							])),
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$OpenMapPicker),
+								$elm$html$Html$Attributes$class('bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('pin manually')
+							]))
+					]));
+		case 4:
 			var lat = ls.a;
 			var lon = ls.b;
 			var source = ls.c;
@@ -8581,7 +8615,7 @@ var $author$project$Main$viewLocationStatus = function (ls) {
 								$elm$html$Html$text('remove')
 							]))
 					]));
-		case 4:
+		case 5:
 			return A2(
 				$elm$html$Html$div,
 				_List_fromArray(
@@ -8682,7 +8716,7 @@ var $author$project$Main$viewLocationWidget = function (model) {
 		_List_fromArray(
 			[
 				$author$project$Main$viewLocationStatus(model.c.X),
-				model.ax ? A3(
+				model.ay ? A3(
 				$elm$html$Html$node,
 				'map-picker',
 				_List_fromArray(
@@ -8692,7 +8726,7 @@ var $author$project$Main$viewLocationWidget = function (model) {
 						'lat',
 						function () {
 							var _v0 = model.c.X;
-							if (_v0.$ === 3) {
+							if (_v0.$ === 4) {
 								var la = _v0.a;
 								return $elm$core$String$fromFloat(la);
 							} else {
@@ -8704,7 +8738,7 @@ var $author$project$Main$viewLocationWidget = function (model) {
 						'lon',
 						function () {
 							var _v1 = model.c.X;
-							if (_v1.$ === 3) {
+							if (_v1.$ === 4) {
 								var lo = _v1.b;
 								return $elm$core$String$fromFloat(lo);
 							} else {
@@ -10008,7 +10042,7 @@ var $author$project$Main$viewSettingsTab = function (model) {
 					_List_fromArray(
 						[
 							$elm$html$Html$Attributes$type_('password'),
-							$elm$html$Html$Attributes$value(model.ar),
+							$elm$html$Html$Attributes$value(model.as),
 							$elm$html$Html$Events$onInput($author$project$Main$ApiKeyChanged),
 							$elm$html$Html$Attributes$placeholder('sk-ant-...'),
 							$author$project$Main$textInputStyle
@@ -14631,7 +14665,7 @@ var $author$project$Main$viewStatsTab = function (model) {
 			]));
 };
 var $author$project$Main$viewToast = function (model) {
-	var _v0 = model.ay;
+	var _v0 = model.ap;
 	if (_v0.$ === 1) {
 		return $elm$html$Html$text('');
 	} else {

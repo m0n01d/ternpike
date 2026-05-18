@@ -126,7 +126,7 @@
       anthropicKey:   anthropicKey   || '',
       tripStart:      tripStart       || '2026-05-22',
       today:          new Date().toISOString().slice(0, 10),
-      version:        '834f7de36a7301c5530cb012fd4eaf071d56f614',
+      version:        'ae6e015ebcf14cdb290be504abdc4b72859a948f',
     };
 
     // ── <map-picker> custom element ────────────────────────────────────────
@@ -334,11 +334,14 @@
       try {
         const gps = await exifr.gps(dataUrl);
         if (gps && typeof gps.latitude === 'number') {
+          console.log('[exifr] GPS found:', gps.latitude, gps.longitude);
           app.ports.gotExifResult.send({ lat: gps.latitude, lon: gps.longitude, hasGps: true });
         } else {
+          console.log('[exifr] no GPS tags in image');
           app.ports.gotExifResult.send({ lat: 0, lon: 0, hasGps: false });
         }
-      } catch (_) {
+      } catch (err) {
+        console.error('[exifr] parse error:', err);
         app.ports.gotExifResult.send({ lat: 0, lon: 0, hasGps: false });
       }
     });
