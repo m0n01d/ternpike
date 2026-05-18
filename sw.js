@@ -8,6 +8,7 @@ const SKIP_CACHE = [
   'gsi/client',
   'unpkg.com',
   'cdn.jsdelivr.net',
+  'cdn.tailwindcss.com',
 ];
 
 const STATIC_CACHE_FIRST = [

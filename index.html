@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; background: #0d0f0e; }
@@ -254,8 +255,11 @@
       if (key === 'google_client_id') setupGoogleAuth(value);
     });
 
-    // Clear all app data (sign out)
-    app.ports.clearStorage.subscribe(() => idbDel(...APP_KEYS));
+    // Clear only the OAuth token on sign-out (config survives for next login)
+    app.ports.clearStorage.subscribe(() => idbDel('oauth_token'));
+
+    // Full wipe — triggered by "Reset all settings"
+    app.ports.clearAllStorage.subscribe(() => idbDel(...APP_KEYS));
 
     // Request an OAuth token.
     // forcePrompt=true  → first sign-in (shows account chooser)

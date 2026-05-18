@@ -26,6 +26,9 @@ port saveStorage : { key : String, value : String } -> Cmd msg
 port clearStorage : () -> Cmd msg
 
 
+port clearAllStorage : () -> Cmd msg
+
+
 -- Bool = force consent prompt (True when user explicitly clicks Sign In,
 -- False for silent re-auth after a 401)
 port requestOAuthToken : Bool -> Cmd msg
@@ -123,6 +126,7 @@ type Msg
     = GotOAuthToken String
     | SignInClicked
     | SignOutClicked
+    | ResetSettingsClicked
     | FileSelected File
     | GotFileUrl String
     | GotOcrResult (Result Http.Error String)
@@ -344,6 +348,19 @@ update msg model =
                 , tab = LedgerTab
               }
             , clearStorage ()
+            )
+
+        ResetSettingsClicked ->
+            ( { model
+                | anthropicKey = ""
+                , sheetId = ""
+                , googleClientId = ""
+                , oauthToken = Nothing
+                , entries = []
+                , editingEntry = Nothing
+                , tab = LedgerTab
+              }
+            , clearAllStorage ()
             )
 
         FileSelected file ->
@@ -2334,6 +2351,13 @@ viewSettingsTab model =
 
             Nothing ->
                 text ""
+        , div [ style "margin-top" "8px" ]
+            [ button
+                [ onClick ResetSettingsClicked
+                , Html.Attributes.class "w-full py-3.5 rounded-lg border border-red-900/60 text-red-400/80 text-sm cursor-pointer bg-transparent font-[inherit] hover:border-red-700 hover:text-red-300 transition-colors"
+                ]
+                [ text "Reset all settings" ]
+            ]
         ]
 
 
