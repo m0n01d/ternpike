@@ -13,6 +13,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet" />
   <!-- Google Identity Services — handles token refresh silently after initial sign-in -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { height: 100%; background: #0d0f0e; }
@@ -124,6 +127,90 @@
       today:          new Date().toISOString().slice(0, 10),
     };
 
+    // ── <map-picker> custom element ────────────────────────────────────────
+    class MapPicker extends HTMLElement {
+      connectedCallback() {
+        this._overlay = document.createElement('div');
+        Object.assign(this._overlay.style, {
+          position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.85)',
+          zIndex: '9999', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+        });
+
+        const mapDiv = document.createElement('div');
+        Object.assign(mapDiv.style, {
+          width: 'min(460px,96vw)', height: '360px',
+          borderRadius: '12px', overflow: 'hidden',
+        });
+
+        const toolbar = document.createElement('div');
+        Object.assign(toolbar.style, {
+          display: 'flex', gap: '12px', marginTop: '16px', width: 'min(460px,96vw)',
+        });
+
+        const confirmBtn = document.createElement('button');
+        confirmBtn.textContent = 'Confirm location';
+        Object.assign(confirmBtn.style, {
+          flex: '1', background: '#e8a020', color: '#0d0f0e', border: 'none',
+          borderRadius: '8px', padding: '14px', fontSize: '16px',
+          fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit',
+        });
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        Object.assign(cancelBtn.style, {
+          background: 'none', border: '1px solid #3a4240', color: '#7a8a80',
+          borderRadius: '8px', padding: '14px 20px', fontSize: '14px',
+          cursor: 'pointer', fontFamily: 'inherit',
+        });
+
+        toolbar.append(confirmBtn, cancelBtn);
+        this._overlay.append(mapDiv, toolbar);
+        document.body.appendChild(this._overlay);
+
+        const lat = parseFloat(this.getAttribute('lat') || '64.2008');
+        const lon = parseFloat(this.getAttribute('lon') || '-153.4937');
+
+        this._map = L.map(mapDiv).setView([lat, lon], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+        }).addTo(this._map);
+        this._marker = L.marker([lat, lon], { draggable: true }).addTo(this._map);
+
+        // Leaflet needs visible container before sizing correctly
+        setTimeout(() => this._map && this._map.invalidateSize(), 100);
+
+        confirmBtn.addEventListener('click', () => {
+          const { lat: la, lng: lo } = this._marker.getLatLng();
+          this.dispatchEvent(new CustomEvent('confirm', { detail: { lat: la, lon: lo }, bubbles: true }));
+        });
+
+        cancelBtn.addEventListener('click', () => {
+          this.dispatchEvent(new CustomEvent('dismiss', { bubbles: true }));
+        });
+      }
+
+      disconnectedCallback() {
+        if (this._map) { this._map.remove(); this._map = null; }
+        if (this._overlay) { this._overlay.remove(); this._overlay = null; }
+      }
+
+      attributeChangedCallback(name, _old, val) {
+        if (!this._map || !this._marker) return;
+        if (name === 'lat' || name === 'lon') {
+          const la = parseFloat(this.getAttribute('lat') || '64.2008');
+          const lo = parseFloat(this.getAttribute('lon') || '-153.4937');
+          this._map.setView([la, lo]);
+          this._marker.setLatLng([la, lo]);
+        }
+      }
+
+      static get observedAttributes() { return ['lat', 'lon']; }
+    }
+
+    customElements.define('map-picker', MapPicker);
+
     // ── Start Elm ──────────────────────────────────────────────────────────
 
     const app = Elm.Main.init({ node: document.getElementById('app'), flags });
@@ -179,6 +266,33 @@
         return;
       }
       tokenClient.requestAccessToken(forcePrompt ? { prompt: 'consent' } : { prompt: '' });
+    });
+
+    // Geolocation
+    app.ports.requestGeolocation.subscribe(() => {
+      if (!('geolocation' in navigator)) {
+        app.ports.gotGpsCoords.send({ lat: 0, lon: 0, denied: true });
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        pos => app.ports.gotGpsCoords.send({ lat: pos.coords.latitude, lon: pos.coords.longitude, denied: false }),
+        _err => app.ports.gotGpsCoords.send({ lat: 0, lon: 0, denied: true }),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    });
+
+    // EXIF GPS extraction from image data URL
+    app.ports.extractExifGps.subscribe(async (dataUrl) => {
+      try {
+        const gps = await exifr.gps(dataUrl);
+        if (gps && typeof gps.latitude === 'number') {
+          app.ports.gotExifResult.send({ lat: gps.latitude, lon: gps.longitude, hasGps: true });
+        } else {
+          app.ports.gotExifResult.send({ lat: 0, lon: 0, hasGps: false });
+        }
+      } catch (_) {
+        app.ports.gotExifResult.send({ lat: 0, lon: 0, hasGps: false });
+      }
     });
 
     // ── PWA service worker ─────────────────────────────────────────────────

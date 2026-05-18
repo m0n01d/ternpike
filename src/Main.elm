@@ -8,6 +8,7 @@ import Html.Keyed as Keyed
 import Html.Events exposing (..)
 import Http
 import Json.Decode as D
+import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 import Chart as C
 import Chart.Attributes as CA
@@ -33,6 +34,18 @@ port requestOAuthToken : Bool -> Cmd msg
 port gotNewToken : (String -> msg) -> Sub msg
 
 
+port requestGeolocation : () -> Cmd msg
+
+
+port extractExifGps : String -> Cmd msg
+
+
+port gotGpsCoords : ({ lat : Float, lon : Float, denied : Bool } -> msg) -> Sub msg
+
+
+port gotExifResult : ({ lat : Float, lon : Float, hasGps : Bool } -> msg) -> Sub msg
+
+
 
 -- TYPES
 
@@ -54,6 +67,13 @@ type Tab
     | SettingsTab
 
 
+type LocationState
+    = LocationIdle
+    | LocationFetching
+    | LocationGot Float Float
+    | LocationSkipped
+
+
 type alias Entry =
     { id : String
     , date : String
@@ -63,6 +83,8 @@ type alias Entry =
     , merchant : String
     , createdAt : String
     , rowIndex : Int
+    , lat : Maybe Float
+    , lon : Maybe Float
     }
 
 
@@ -72,6 +94,7 @@ type alias PendingEntry =
     , note : String
     , merchant : String
     , date : String
+    , locationState : LocationState
     }
 
 
@@ -91,6 +114,8 @@ type alias Model =
     , error : Maybe String
     , submitting : Bool
     , today : String
+    , geoBlocked : Bool
+    , showMapPicker : Bool
     }
 
 
@@ -121,6 +146,13 @@ type Msg
     | TripStartChanged String
     | RefreshClicked
     | DismissError
+    | GotGpsCoords Float Float
+    | GeolocationDenied
+    | OpenMapPicker
+    | MapPickerConfirmed Float Float
+    | DismissMapPicker
+    | SkipLocation
+    | GotExifCoords (Maybe Float) (Maybe Float)
 
 
 
@@ -187,7 +219,31 @@ ocrSystemPrompt =
 
 defaultPendingEntry : String -> PendingEntry
 defaultPendingEntry today =
-    { amount = "", category = Fuel, note = "", merchant = "", date = today }
+    { amount = "", category = Fuel, note = "", merchant = "", date = today
+    , locationState = LocationIdle
+    }
+
+
+entryToPending : Entry -> PendingEntry
+entryToPending e =
+    { amount = String.fromFloat e.amount
+    , category = e.category
+    , note = e.note
+    , merchant = e.merchant
+    , date = e.date
+    , locationState =
+        case ( e.lat, e.lon ) of
+            ( Just la, Just lo ) ->
+                LocationGot la lo
+
+            _ ->
+                LocationIdle
+    }
+
+
+setLocation : LocationState -> PendingEntry -> PendingEntry
+setLocation ls p =
+    { p | locationState = ls }
 
 
 init : D.Value -> ( Model, Cmd Msg )
@@ -231,6 +287,8 @@ init flagsJson =
             , error = Nothing
             , submitting = False
             , today = today
+            , geoBlocked = False
+            , showMapPicker = False
             }
 
         fetchCmd =
@@ -296,12 +354,15 @@ update msg model =
         GotFileUrl dataUrl ->
             if model.anthropicKey == "" then
                 ( { model | scanLoading = False, scanImage = Just dataUrl, error = Just "No Anthropic API key — enter it in Settings or fill form manually.", tab = AddTab }
-                , Cmd.none
+                , extractExifGps dataUrl
                 )
 
             else
                 ( { model | scanImage = Just dataUrl }
-                , makeOcrCall model.anthropicKey (extractBase64 dataUrl) (getMimeType dataUrl)
+                , Cmd.batch
+                    [ makeOcrCall model.anthropicKey (extractBase64 dataUrl) (getMimeType dataUrl)
+                    , extractExifGps dataUrl
+                    ]
                 )
 
         GotOcrResult result ->
@@ -388,12 +449,30 @@ update msg model =
                                 , category = p.category
                                 , note = p.note
                                 , merchant = p.merchant
+                                , lat =
+                                    case p.locationState of
+                                        LocationGot la _ -> Just la
+                                        LocationSkipped -> Nothing
+                                        _ -> original.lat
+                                , lon =
+                                    case p.locationState of
+                                        LocationGot _ lo -> Just lo
+                                        LocationSkipped -> Nothing
+                                        _ -> original.lon
                             }
                     in
                     ( model, updateEntry token model.sheetId updated )
 
                 Nothing ->
                     let
+                        ( eLat, eLon ) =
+                            case p.locationState of
+                                LocationGot la lo ->
+                                    ( Just la, Just lo )
+
+                                _ ->
+                                    ( Nothing, Nothing )
+
                         entry =
                             { id = "e-" ++ String.fromInt (Time.posixToMillis posix)
                             , date = p.date
@@ -403,6 +482,8 @@ update msg model =
                             , merchant = p.merchant
                             , createdAt = posixToIso posix
                             , rowIndex = 0
+                            , lat = eLat
+                            , lon = eLon
                             }
                     in
                     ( model, appendEntry token model.sheetId entry )
@@ -484,10 +565,25 @@ update msg model =
             let
                 shouldFetch =
                     tab == LedgerTab && model.oauthToken /= Nothing && model.sheetId /= ""
+
+                geoCmd =
+                    if tab == AddTab && not model.geoBlocked then
+                        requestGeolocation ()
+
+                    else
+                        Cmd.none
+
+                newPending =
+                    if tab == AddTab && not model.geoBlocked then
+                        setLocation LocationFetching model.pendingEntry
+
+                    else
+                        model.pendingEntry
             in
             ( { model
                 | tab = tab
                 , loadingEntries = shouldFetch
+                , pendingEntry = newPending
                 , editingEntry =
                     if tab /= AddTab then
                         Nothing
@@ -495,11 +591,14 @@ update msg model =
                     else
                         model.editingEntry
               }
-            , if shouldFetch then
-                fetchEntries (Maybe.withDefault "" model.oauthToken) model.sheetId
+            , Cmd.batch
+                [ if shouldFetch then
+                    fetchEntries (Maybe.withDefault "" model.oauthToken) model.sheetId
 
-              else
-                Cmd.none
+                  else
+                    Cmd.none
+                , geoCmd
+                ]
             )
 
         RefreshClicked ->
@@ -530,20 +629,34 @@ update msg model =
         DismissError ->
             ( { model | error = Nothing }, Cmd.none )
 
+        GotGpsCoords lat lon ->
+            ( { model | pendingEntry = setLocation (LocationGot lat lon) model.pendingEntry }, Cmd.none )
+
+        GeolocationDenied ->
+            ( { model | geoBlocked = True, pendingEntry = setLocation LocationIdle model.pendingEntry }, Cmd.none )
+
+        OpenMapPicker ->
+            ( { model | showMapPicker = True }, Cmd.none )
+
+        MapPickerConfirmed lat lon ->
+            ( { model | showMapPicker = False, pendingEntry = setLocation (LocationGot lat lon) model.pendingEntry }, Cmd.none )
+
+        DismissMapPicker ->
+            ( { model | showMapPicker = False }, Cmd.none )
+
+        SkipLocation ->
+            ( { model | showMapPicker = False, pendingEntry = setLocation LocationSkipped model.pendingEntry }, Cmd.none )
+
+        GotExifCoords (Just lat) (Just lon) ->
+            ( { model | pendingEntry = setLocation (LocationGot lat lon) model.pendingEntry }, Cmd.none )
+
+        GotExifCoords _ _ ->
+            ( model, Cmd.none )
+
 
 updatePending : (PendingEntry -> PendingEntry) -> Model -> ( Model, Cmd Msg )
 updatePending f model =
     ( { model | pendingEntry = f model.pendingEntry }, Cmd.none )
-
-
-entryToPending : Entry -> PendingEntry
-entryToPending entry =
-    { amount = String.fromFloat entry.amount
-    , category = entry.category
-    , note = entry.note
-    , merchant = entry.merchant
-    , date = entry.date
-    }
 
 
 
@@ -555,7 +668,7 @@ fetchEntries token sheetId =
     Http.request
         { method = "GET"
         , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
-        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A2:G"
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A2:I"
         , body = Http.emptyBody
         , expect = expectJsonBody EntriesFetched entriesDecoder
         , timeout = Nothing
@@ -578,6 +691,8 @@ appendEntry token sheetId entry =
                             , E.string entry.note
                             , E.string entry.merchant
                             , E.string entry.createdAt
+                            , entry.lat |> Maybe.map (\v -> E.string (String.fromFloat v)) |> Maybe.withDefault (E.string "")
+                            , entry.lon |> Maybe.map (\v -> E.string (String.fromFloat v)) |> Maybe.withDefault (E.string "")
                             ]
                         ]
                   )
@@ -586,7 +701,7 @@ appendEntry token sheetId entry =
     Http.request
         { method = "POST"
         , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
-        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A:G:append?valueInputOption=RAW"
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A:I:append?valueInputOption=RAW"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntrySubmitted
         , timeout = Nothing
@@ -634,7 +749,7 @@ updateEntry : String -> String -> Entry -> Cmd Msg
 updateEntry token sheetId entry =
     let
         range =
-            "Expenses!A" ++ String.fromInt entry.rowIndex ++ ":G" ++ String.fromInt entry.rowIndex
+            "Expenses!A" ++ String.fromInt entry.rowIndex ++ ":I" ++ String.fromInt entry.rowIndex
 
         body =
             E.object
@@ -648,6 +763,8 @@ updateEntry token sheetId entry =
                             , E.string entry.note
                             , E.string entry.merchant
                             , E.string entry.createdAt
+                            , entry.lat |> Maybe.map (\v -> E.string (String.fromFloat v)) |> Maybe.withDefault (E.string "")
+                            , entry.lon |> Maybe.map (\v -> E.string (String.fromFloat v)) |> Maybe.withDefault (E.string "")
                             ]
                         ]
                   )
@@ -789,8 +906,8 @@ entriesDecoder =
 
 rowDecoder : D.Decoder Entry
 rowDecoder =
-    D.map7
-        (\id date amount category note merchant createdAt ->
+    D.succeed
+        (\id date amount category note merchant createdAt lat lon ->
             { id = id
             , date = date
             , amount = amount
@@ -799,15 +916,19 @@ rowDecoder =
             , merchant = merchant
             , createdAt = createdAt
             , rowIndex = 0
+            , lat = lat
+            , lon = lon
             }
         )
-        (D.index 0 D.string)
-        (D.index 1 D.string)
-        (D.index 2 (D.string |> D.andThen parseAmountStr))
-        (D.index 3 (D.string |> D.map categoryFromString))
-        (optIndex 4 D.string "")
-        (optIndex 5 D.string "")
-        (optIndex 6 D.string "")
+        |> Pipeline.custom (D.index 0 D.string)
+        |> Pipeline.custom (D.index 1 D.string)
+        |> Pipeline.custom (D.index 2 (D.string |> D.andThen parseAmountStr))
+        |> Pipeline.custom (D.index 3 (D.string |> D.map categoryFromString))
+        |> Pipeline.custom (optIndex 4 D.string "")
+        |> Pipeline.custom (optIndex 5 D.string "")
+        |> Pipeline.custom (optIndex 6 D.string "")
+        |> Pipeline.custom (optMaybeFloat 7)
+        |> Pipeline.custom (optMaybeFloat 8)
 
 
 optIndex : Int -> D.Decoder a -> a -> D.Decoder a
@@ -815,6 +936,24 @@ optIndex i decoder fallback =
     D.oneOf
         [ D.index i decoder
         , D.succeed fallback
+        ]
+
+
+optMaybeFloat : Int -> D.Decoder (Maybe Float)
+optMaybeFloat i =
+    D.oneOf
+        [ D.index i
+            (D.string
+                |> D.andThen
+                    (\s ->
+                        if s == "" then
+                            D.succeed Nothing
+
+                        else
+                            D.succeed (String.toFloat s)
+                    )
+            )
+        , D.succeed Nothing
         ]
 
 
@@ -843,11 +982,11 @@ type alias OcrData =
 
 ocrDataDecoder : D.Decoder OcrData
 ocrDataDecoder =
-    D.map4 OcrData
-        (D.maybe (D.field "amount" D.float))
-        (D.maybe (D.field "category" (D.string |> D.map categoryFromString)))
-        (D.maybe (D.field "note" D.string))
-        (D.maybe (D.field "merchant" D.string))
+    D.succeed OcrData
+        |> Pipeline.optional "amount" (D.map Just D.float) Nothing
+        |> Pipeline.optional "category" (D.map Just (D.map categoryFromString D.string)) Nothing
+        |> Pipeline.optional "note" (D.map Just D.string) Nothing
+        |> Pipeline.optional "merchant" (D.map Just D.string) Nothing
 
 
 
@@ -1014,6 +1153,11 @@ formatAmount amount =
             remainderBy 100 (abs cents)
     in
     "$" ++ String.fromInt dollars ++ "." ++ String.padLeft 2 '0' (String.fromInt centsRem)
+
+
+formatCoord : Float -> Float -> String
+formatCoord lat lon =
+    String.left 9 (String.fromFloat lat) ++ ", " ++ String.left 9 (String.fromFloat lon)
 
 
 uniqueDates : List Entry -> List String
@@ -1473,6 +1617,7 @@ viewAddTab model =
                 ]
                 []
             )
+        , viewLocationWidget model
         , button
             [ onClick SubmitEntry
             , disabled model.submitting
@@ -1502,6 +1647,140 @@ viewAddTab model =
                 )
             ]
         ]
+
+
+viewLocationWidget : Model -> Html Msg
+viewLocationWidget model =
+    div [ style "margin-bottom" "16px" ]
+        [ viewLocationStatus model.pendingEntry.locationState
+        , if model.showMapPicker then
+            Html.node "map-picker"
+                [ attribute "lat"
+                    (case model.pendingEntry.locationState of
+                        LocationGot la _ ->
+                            String.fromFloat la
+
+                        _ ->
+                            "64.2008"
+                    )
+                , attribute "lon"
+                    (case model.pendingEntry.locationState of
+                        LocationGot _ lo ->
+                            String.fromFloat lo
+
+                        _ ->
+                            "-153.4937"
+                    )
+                , on "confirm"
+                    (D.map2 MapPickerConfirmed
+                        (D.at [ "detail", "lat" ] D.float)
+                        (D.at [ "detail", "lon" ] D.float)
+                    )
+                , on "dismiss" (D.succeed DismissMapPicker)
+                ]
+                []
+
+          else
+            text ""
+        ]
+
+
+viewLocationStatus : LocationState -> Html Msg
+viewLocationStatus ls =
+    case ls of
+        LocationFetching ->
+            div
+                [ style "color" "#4a5a50"
+                , style "font-size" "13px"
+                , style "padding" "8px 0"
+                ]
+                [ text "📍 Getting location…" ]
+
+        LocationGot lat lon ->
+            div
+                [ style "display" "flex"
+                , style "align-items" "center"
+                , style "gap" "12px"
+                , style "padding" "8px 0"
+                ]
+                [ span [ style "color" "#4090e0", style "font-size" "13px" ]
+                    [ text ("📍 " ++ formatCoord lat lon) ]
+                , button
+                    [ onClick OpenMapPicker
+                    , style "background" "none"
+                    , style "border" "none"
+                    , style "color" "#4a5a50"
+                    , style "font-size" "12px"
+                    , style "cursor" "pointer"
+                    , style "padding" "0"
+                    , style "font-family" "inherit"
+                    ]
+                    [ text "adjust" ]
+                , button
+                    [ onClick SkipLocation
+                    , style "background" "none"
+                    , style "border" "none"
+                    , style "color" "#4a5a50"
+                    , style "font-size" "12px"
+                    , style "cursor" "pointer"
+                    , style "padding" "0"
+                    , style "font-family" "inherit"
+                    ]
+                    [ text "remove" ]
+                ]
+
+        LocationSkipped ->
+            div
+                [ style "display" "flex"
+                , style "align-items" "center"
+                , style "gap" "12px"
+                , style "padding" "8px 0"
+                ]
+                [ span [ style "color" "#4a5a50", style "font-size" "13px" ] [ text "no location" ]
+                , button
+                    [ onClick OpenMapPicker
+                    , style "background" "none"
+                    , style "border" "none"
+                    , style "color" "#4a5a50"
+                    , style "font-size" "12px"
+                    , style "cursor" "pointer"
+                    , style "padding" "0"
+                    , style "font-family" "inherit"
+                    ]
+                    [ text "pin manually" ]
+                ]
+
+        LocationIdle ->
+            div
+                [ style "display" "flex"
+                , style "gap" "12px"
+                , style "align-items" "center"
+                ]
+                [ button
+                    [ onClick OpenMapPicker
+                    , style "background" "#1e2220"
+                    , style "border" "1px solid #3a4240"
+                    , style "color" "#c8d0c8"
+                    , style "border-radius" "8px"
+                    , style "padding" "12px 16px"
+                    , style "font-size" "14px"
+                    , style "cursor" "pointer"
+                    , style "flex" "1"
+                    , style "font-family" "inherit"
+                    ]
+                    [ text "📍 Pin manually" ]
+                , button
+                    [ onClick SkipLocation
+                    , style "background" "none"
+                    , style "border" "none"
+                    , style "color" "#4a5a50"
+                    , style "font-size" "13px"
+                    , style "cursor" "pointer"
+                    , style "padding" "8px"
+                    , style "font-family" "inherit"
+                    ]
+                    [ text "Skip location" ]
+                ]
 
 
 viewCategoryBtn : Category -> Category -> Html Msg
@@ -1728,6 +2007,18 @@ viewEntryRow entry =
             , style "flex-shrink" "0"
             ]
             [ text (formatAmount entry.amount) ]
+        , case entry.lat of
+            Just _ ->
+                span
+                    [ style "font-size" "14px"
+                    , style "color" "#4090e0"
+                    , style "flex-shrink" "0"
+                    , title "Has GPS coordinates"
+                    ]
+                    [ text "📍" ]
+
+            Nothing ->
+                text ""
         , button
             [ Html.Events.stopPropagationOn "click" (D.succeed ( DeleteEntry entry, True ))
             , style "background" "none"
@@ -2117,5 +2408,11 @@ main =
         { init = init
         , update = update
         , view = view
-        , subscriptions = \_ -> gotNewToken GotOAuthToken
+        , subscriptions =
+            \_ ->
+                Sub.batch
+                    [ gotNewToken GotOAuthToken
+                    , gotGpsCoords (\r -> if r.denied then GeolocationDenied else GotGpsCoords r.lat r.lon)
+                    , gotExifResult (\r -> if r.hasGps then GotExifCoords (Just r.lat) (Just r.lon) else GotExifCoords Nothing Nothing)
+                    ]
         }
