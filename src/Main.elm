@@ -47,7 +47,7 @@ port extractExifGps : { id : String, dataUrl : String } -> Cmd msg
 port gotGpsCoords : ({ lat : Float, lon : Float, denied : Bool } -> msg) -> Sub msg
 
 
-port gotExifResult : ({ id : String, lat : Float, lon : Float, hasGps : Bool } -> msg) -> Sub msg
+port gotExifResult : ({ id : String, lat : Float, lon : Float, hasGps : Bool, debug : String } -> msg) -> Sub msg
 
 
 
@@ -99,6 +99,7 @@ type alias ScanItem =
     , status : ScanStatus
     , ocrData : Maybe OcrData
     , locationState : LocationState
+    , exifDebug : String
     }
 
 
@@ -190,7 +191,7 @@ type Msg
     | MapPickerConfirmed Float Float
     | DismissMapPicker
     | SkipLocation
-    | GotExifCoords String (Maybe Float) (Maybe Float)
+    | GotExifCoords String (Maybe Float) (Maybe Float) String
 
 
 
@@ -296,6 +297,7 @@ freshScanItem id =
     , status = ScanQueued
     , ocrData = Nothing
     , locationState = LocationCheckingExif
+    , exifDebug = ""
     }
 
 
@@ -768,13 +770,13 @@ update msg model =
         ToastExpired ->
             ( { model | toast = Nothing }, Cmd.none )
 
-        GotExifCoords itemId (Just lat) (Just lon) ->
+        GotExifCoords itemId (Just lat) (Just lon) _ ->
             ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationGot lat lon ExifGps }) model.scanQueue }
             , Cmd.none
             )
 
-        GotExifCoords itemId _ _ ->
-            ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationNoExifGps }) model.scanQueue }
+        GotExifCoords itemId _ _ debug ->
+            ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationNoExifGps, exifDebug = debug }) model.scanQueue }
             , Cmd.none
             )
 
@@ -1706,12 +1708,34 @@ viewScanTab model =
                 , if List.any (\i -> i.status == ScanSubmitted) model.scanQueue then
                     button
                         [ onClick ClearDoneItems
-                        , class "w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit]"
+                        , class "w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit] mb-4"
                         ]
                         [ text "Clear submitted" ]
 
                   else
                     text ""
+                , let
+                    debugItems =
+                        List.filter (\i -> i.exifDebug /= "") model.scanQueue
+                  in
+                  if List.isEmpty debugItems then
+                    text ""
+
+                  else
+                    div [ class "mt-2" ]
+                        (List.indexedMap
+                            (\idx item ->
+                                div [ class "mb-3 rounded-lg bg-[#161918] p-3" ]
+                                    [ div [ class "text-[#4a5a50] text-xs mb-1" ]
+                                        [ text ("EXIF dump — photo " ++ String.fromInt (idx + 1)) ]
+                                    , div
+                                        [ class "font-mono text-[10px] text-[#7a8a80] break-all whitespace-pre-wrap max-h-40 overflow-y-auto"
+                                        ]
+                                        [ text item.exifDebug ]
+                                    ]
+                            )
+                            debugItems
+                        )
                 ]
         ]
 
@@ -2712,6 +2736,6 @@ main =
                 Sub.batch
                     [ gotNewToken GotOAuthToken
                     , gotGpsCoords (\r -> if r.denied then GeolocationDenied else GotGpsCoords r.lat r.lon)
-                    , gotExifResult (\r -> if r.hasGps then GotExifCoords r.id (Just r.lat) (Just r.lon) else GotExifCoords r.id Nothing Nothing)
+                    , gotExifResult (\r -> if r.hasGps then GotExifCoords r.id (Just r.lat) (Just r.lon) "" else GotExifCoords r.id Nothing Nothing r.debug)
                     ]
         }

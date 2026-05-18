@@ -126,7 +126,7 @@
       anthropicKey:   anthropicKey   || '',
       tripStart:      tripStart       || '2026-05-22',
       today:          new Date().toISOString().slice(0, 10),
-      version:        '7c3a756060c4b40f42ab051c9de3808a6ab7ebaf',
+      version:        '2808b2b042828611d5ebf080e965ed3338c97b63',
     };
 
     // ── <map-picker> custom element ────────────────────────────────────────
@@ -339,16 +339,18 @@
         const exif = await exifr.parse(buffer, { gps: true, tiff: true, ifd0: true, exif: true });
         console.log('[exifr] parsed tags:', exif);
 
+        const debug = JSON.stringify(exif ?? null, null, 2);
+
         if (exif && typeof exif.latitude === 'number' && typeof exif.longitude === 'number') {
           console.log('[exifr] GPS found:', exif.latitude, exif.longitude);
-          app.ports.gotExifResult.send({ id, lat: exif.latitude, lon: exif.longitude, hasGps: true });
+          app.ports.gotExifResult.send({ id, lat: exif.latitude, lon: exif.longitude, hasGps: true, debug: '' });
         } else {
           console.log('[exifr] no GPS in image');
-          app.ports.gotExifResult.send({ id, lat: 0, lon: 0, hasGps: false });
+          app.ports.gotExifResult.send({ id, lat: 0, lon: 0, hasGps: false, debug });
         }
       } catch (err) {
         console.error('[exifr] parse error:', err);
-        app.ports.gotExifResult.send({ id, lat: 0, lon: 0, hasGps: false });
+        app.ports.gotExifResult.send({ id, lat: 0, lon: 0, hasGps: false, debug: String(err) });
       }
     });
 
