@@ -15,7 +15,7 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -332,12 +332,18 @@
     // EXIF GPS extraction from image data URL
     app.ports.extractExifGps.subscribe(async ({ id, dataUrl }) => {
       try {
-        const gps = await exifr.gps(dataUrl);
-        if (gps && typeof gps.latitude === 'number') {
-          console.log('[exifr] GPS found:', gps.latitude, gps.longitude);
-          app.ports.gotExifResult.send({ id, lat: gps.latitude, lon: gps.longitude, hasGps: true });
+        // Convert data URL → ArrayBuffer so exifr gets raw bytes (required for HEIC)
+        const res = await fetch(dataUrl);
+        const buffer = await res.arrayBuffer();
+
+        const exif = await exifr.parse(buffer, { gps: true, tiff: true, ifd0: true, exif: true });
+        console.log('[exifr] parsed tags:', exif);
+
+        if (exif && typeof exif.latitude === 'number' && typeof exif.longitude === 'number') {
+          console.log('[exifr] GPS found:', exif.latitude, exif.longitude);
+          app.ports.gotExifResult.send({ id, lat: exif.latitude, lon: exif.longitude, hasGps: true });
         } else {
-          console.log('[exifr] no GPS tags in image');
+          console.log('[exifr] no GPS in image');
           app.ports.gotExifResult.send({ id, lat: 0, lon: 0, hasGps: false });
         }
       } catch (err) {
