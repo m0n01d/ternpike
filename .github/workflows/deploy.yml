@@ -23,8 +23,10 @@ jobs:
       - name: Build (optimized)
         run: elm make src/Main.elm --output=main.js --optimize
 
-      - name: Stamp build hash into service worker
-        run: sed -i "s/alaska-v1/alaska-${{ github.sha }}/g" sw.js
+      - name: Stamp build hash into service worker and app
+        run: |
+          sed -i "s/alaska-v1/alaska-${{ github.sha }}/g" sw.js
+          sed -i "s/BUILD_SHA_PLACEHOLDER/${{ github.sha }}/g" index.html
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
