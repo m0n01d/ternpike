@@ -7020,7 +7020,7 @@ var $author$project$Main$appendEntry = F4(
 				method: 'POST',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
-				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (tabName + '!A:J:append?valueInputOption=RAW')))
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (tabName + '!A2:J:append?valueInputOption=RAW')))
 			});
 	});
 var $author$project$Main$authPending = F2(
