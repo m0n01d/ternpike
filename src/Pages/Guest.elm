@@ -37,7 +37,10 @@ viewGuest gs =
                         Html.text ""
         , case gs.session.reason of
             AwaitingCode _ ->
-                Html.div [ Html.Attributes.class "w-full max-w-xs" ]
+                Html.form
+                    [ Html.Events.onSubmit SubmitCode
+                    , Html.Attributes.class "w-full max-w-xs"
+                    ]
                     [ Html.p [ Html.Attributes.class "text-muted text-sm mb-4" ]
                         [ Html.text ("A code was sent to " ++ gs.emailInput ++ ". Enter it below.") ]
                     , Html.input
@@ -49,14 +52,17 @@ viewGuest gs =
                         ]
                         []
                     , Html.button
-                        [ Html.Events.onClick SubmitCode
+                        [ Html.Attributes.type_ "submit"
                         , Html.Attributes.class "w-full bg-rust text-parchment border-none rounded-lg py-4 text-base font-bold cursor-pointer min-h-[52px] tracking-widest"
                         ]
                         [ Html.text "VERIFY CODE" ]
                     ]
 
             _ ->
-                Html.div [ Html.Attributes.class "w-full max-w-xs" ]
+                Html.form
+                    [ Html.Events.onSubmit SubmitEmail
+                    , Html.Attributes.class "w-full max-w-xs"
+                    ]
                     [ Html.input
                         [ Html.Attributes.type_ "text"
                         , Html.Attributes.value gs.emailInput
@@ -66,7 +72,7 @@ viewGuest gs =
                         ]
                         []
                     , Html.button
-                        [ Html.Events.onClick SubmitEmail
+                        [ Html.Attributes.type_ "submit"
                         , Html.Attributes.class "w-full bg-rust text-parchment border-none rounded-lg py-4 text-base font-bold cursor-pointer min-h-[52px] tracking-widest"
                         ]
                         [ Html.text "CONTINUE" ]
