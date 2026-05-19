@@ -80,9 +80,16 @@ routeParser =
         ]
 
 
-routeFromUrl : Url.Url -> Route
-routeFromUrl url =
-    Parser.parse routeParser url
+routeFromUrl : String -> Url.Url -> Route
+routeFromUrl basePath url =
+    let
+        stripped =
+            if String.startsWith basePath url.path then
+                "/" ++ String.dropLeft (String.length basePath) url.path
+            else
+                url.path
+    in
+    Parser.parse routeParser { url | path = stripped }
         |> Maybe.withDefault RouteLedger
 
 
@@ -97,15 +104,17 @@ routeToTab route =
         RouteTrips    -> TripsTab
 
 
-tabToPath : Tab -> String
-tabToPath tab =
-    case tab of
-        AddTab      -> "/add"
-        LedgerTab   -> "/ledger"
-        ScanTab     -> "/scan"
-        SettingsTab -> "/settings"
-        StatsTab    -> "/stats"
-        TripsTab    -> "/trips"
+tabToPath : String -> Tab -> String
+tabToPath basePath tab =
+    basePath
+        ++ (case tab of
+                AddTab      -> "add"
+                LedgerTab   -> "ledger"
+                ScanTab     -> "scan"
+                SettingsTab -> "settings"
+                StatsTab    -> "stats"
+                TripsTab    -> "trips"
+           )
 
 
 
@@ -121,6 +130,7 @@ toAuthState : Creds -> Zipper Trip.Trip -> Tab -> GuestState -> AuthState
 toAuthState creds tripsZipper initialTab gs =
     { activeScanItemId  = Nothing
     , amendments        = []
+    , basePath          = gs.basePath
     , config            = gs.session.config
     , confirmDeleteTrip = Nothing
     , creds             = creds
@@ -149,6 +159,7 @@ toAuthState creds tripsZipper initialTab gs =
 toGuestState : GuestReason -> AuthState -> GuestState
 toGuestState reason as_ =
     { authError    = Nothing
+    , basePath     = as_.basePath
     , codeInput    = ""
     , emailInput   = ""
     , key          = as_.key
@@ -591,8 +602,12 @@ init flagsJson url key =
             , backendUrl   = dec "backendUrl"
             }
 
+        basePath =
+            dec "basePath"
+
         gs =
             { authError    = Nothing
+            , basePath     = basePath
             , codeInput    = ""
             , emailInput   = ""
             , key          = key
@@ -619,7 +634,7 @@ init flagsJson url key =
                     }
 
                 as_ =
-                    toAuthState { userId = userId } (Zipper.fromCons defaultTrip []) (routeToTab (routeFromUrl url)) gs
+                    toAuthState { userId = userId } (Zipper.fromCons defaultTrip []) (routeToTab (routeFromUrl basePath url)) gs
             in
             ( AuthModel as_, sendPouch GetAllTrips )
 
@@ -681,7 +696,7 @@ updateGuest msg gs =
             , Cmd.batch
                 [ saveStorage { key = "session_token", value = userId }
                 , sendPouch GetAllTrips
-                , Nav.replaceUrl gs.key (tabToPath LedgerTab)
+                , Nav.replaceUrl gs.key (tabToPath gs.basePath LedgerTab)
                 ]
             )
 
@@ -786,6 +801,7 @@ updateAuth msg as_ =
         ResetSettingsClicked ->
             ( GuestModel
                 { authError    = Nothing
+                , basePath     = as_.basePath
                 , codeInput    = ""
                 , emailInput   = ""
                 , key          = as_.key
@@ -988,7 +1004,7 @@ updateAuth msg as_ =
                     , pendingEntry = expenseToPending expense
                     , tab          = AddTab
                 }
-            , Nav.pushUrl as_.key (tabToPath AddTab)
+            , Nav.pushUrl as_.key (tabToPath as_.basePath AddTab)
             )
 
         CancelEdit ->
@@ -1019,7 +1035,7 @@ updateAuth msg as_ =
                     , tab          = tab
                     , tripForm     = Nothing
                 }
-            , Cmd.batch [ geoCmd, Nav.pushUrl as_.key (tabToPath tab) ]
+            , Cmd.batch [ geoCmd, Nav.pushUrl as_.key (tabToPath as_.basePath tab) ]
             )
 
         RefreshClicked ->
@@ -1308,7 +1324,7 @@ updateAuth msg as_ =
         UrlChanged url ->
             let
                 tab =
-                    routeToTab (routeFromUrl url)
+                    routeToTab (routeFromUrl as_.basePath url)
 
                 geoCmd =
                     if tab == AddTab && not as_.geoBlocked then requestGeolocation () else Cmd.none

@@ -71,6 +71,7 @@ import './global.css'
     sessionToken: sessionToken  || null,
     anthropicKey: anthropicKey  || '',
     backendUrl:   '',
+    basePath:     import.meta.env.BASE_URL,
     today:        new Date().toISOString().slice(0, 10),
     version:      __BUILD_SHA__,
   }

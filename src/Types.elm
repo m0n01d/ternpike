@@ -141,6 +141,7 @@ type alias GuestSession =
 
 type alias GuestState =
     { authError    : Maybe String
+    , basePath     : String
     , codeInput    : String
     , emailInput   : String
     , key          : Nav.Key
@@ -154,6 +155,7 @@ type alias GuestState =
 type alias AuthState =
     { activeScanItemId  : Maybe String
     , amendments        : List Amendment
+    , basePath          : String
     , config            : AppConfig
     , confirmDeleteTrip : Maybe Trip
     , creds             : Creds
