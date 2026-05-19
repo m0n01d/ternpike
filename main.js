@@ -5687,8 +5687,8 @@ var $elm$core$Maybe$andThen = F2(
 		}
 	});
 var $elm$json$Json$Decode$decodeValue = _Json_run;
-var $author$project$Main$EntriesFetched = function (a) {
-	return {$: 'EntriesFetched', a: a};
+var $author$project$Main$GotSheetMeta = function (a) {
+	return {$: 'GotSheetMeta', a: a};
 };
 var $elm$http$Http$BadStatus_ = F2(
 	function (a, b) {
@@ -6233,159 +6233,6 @@ var $elm$core$Dict$update = F3(
 		}
 	});
 var $elm$http$Http$emptyBody = _Http_emptyBody;
-var $elm$json$Json$Decode$list = _Json_decodeList;
-var $elm$json$Json$Decode$oneOf = _Json_oneOf;
-var $author$project$Main$Activities = {$: 'Activities'};
-var $author$project$Main$Camp = {$: 'Camp'};
-var $author$project$Main$Ferry = {$: 'Ferry'};
-var $author$project$Main$Food = {$: 'Food'};
-var $author$project$Main$Fuel = {$: 'Fuel'};
-var $author$project$Main$Gear = {$: 'Gear'};
-var $author$project$Main$Lodging = {$: 'Lodging'};
-var $author$project$Main$Medical = {$: 'Medical'};
-var $author$project$Main$Misc = {$: 'Misc'};
-var $author$project$Main$Shopping = {$: 'Shopping'};
-var $author$project$Main$Transport = {$: 'Transport'};
-var $author$project$Main$categoryFromString = function (s) {
-	switch (s) {
-		case 'fuel':
-			return $author$project$Main$Fuel;
-		case 'food':
-			return $author$project$Main$Food;
-		case 'camp':
-			return $author$project$Main$Camp;
-		case 'ferry':
-			return $author$project$Main$Ferry;
-		case 'gear':
-			return $author$project$Main$Gear;
-		case 'lodging':
-			return $author$project$Main$Lodging;
-		case 'activities':
-			return $author$project$Main$Activities;
-		case 'shopping':
-			return $author$project$Main$Shopping;
-		case 'medical':
-			return $author$project$Main$Medical;
-		case 'transport':
-			return $author$project$Main$Transport;
-		default:
-			return $author$project$Main$Misc;
-	}
-};
-var $author$project$Json$Decode$Pipeline$custom = $elm$json$Json$Decode$map2($elm$core$Basics$apR);
-var $elm$json$Json$Decode$index = _Json_decodeIndex;
-var $author$project$Main$optIndex = F3(
-	function (i, decoder, fallback) {
-		return $elm$json$Json$Decode$oneOf(
-			_List_fromArray(
-				[
-					A2($elm$json$Json$Decode$index, i, decoder),
-					$elm$json$Json$Decode$succeed(fallback)
-				]));
-	});
-var $elm$core$String$toFloat = _String_toFloat;
-var $author$project$Main$optMaybeFloat = function (i) {
-	return $elm$json$Json$Decode$oneOf(
-		_List_fromArray(
-			[
-				A2(
-				$elm$json$Json$Decode$index,
-				i,
-				A2(
-					$elm$json$Json$Decode$andThen,
-					function (s) {
-						return (s === '') ? $elm$json$Json$Decode$succeed($elm$core$Maybe$Nothing) : $elm$json$Json$Decode$succeed(
-							$elm$core$String$toFloat(s));
-					},
-					$elm$json$Json$Decode$string)),
-				$elm$json$Json$Decode$succeed($elm$core$Maybe$Nothing)
-			]));
-};
-var $author$project$Main$parseAmountStr = function (s) {
-	var _v0 = $elm$core$String$toFloat(s);
-	if (_v0.$ === 'Just') {
-		var f = _v0.a;
-		return $elm$json$Json$Decode$succeed(f);
-	} else {
-		return $elm$json$Json$Decode$succeed(0.0);
-	}
-};
-var $author$project$Main$rowDecoder = A2(
-	$author$project$Json$Decode$Pipeline$custom,
-	A3($author$project$Main$optIndex, 9, $elm$json$Json$Decode$string, ''),
-	A2(
-		$author$project$Json$Decode$Pipeline$custom,
-		$author$project$Main$optMaybeFloat(8),
-		A2(
-			$author$project$Json$Decode$Pipeline$custom,
-			$author$project$Main$optMaybeFloat(7),
-			A2(
-				$author$project$Json$Decode$Pipeline$custom,
-				A3($author$project$Main$optIndex, 6, $elm$json$Json$Decode$string, ''),
-				A2(
-					$author$project$Json$Decode$Pipeline$custom,
-					A3($author$project$Main$optIndex, 5, $elm$json$Json$Decode$string, ''),
-					A2(
-						$author$project$Json$Decode$Pipeline$custom,
-						A3($author$project$Main$optIndex, 4, $elm$json$Json$Decode$string, ''),
-						A2(
-							$author$project$Json$Decode$Pipeline$custom,
-							A2(
-								$elm$json$Json$Decode$index,
-								3,
-								A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
-							A2(
-								$author$project$Json$Decode$Pipeline$custom,
-								A2(
-									$elm$json$Json$Decode$index,
-									2,
-									A2($elm$json$Json$Decode$andThen, $author$project$Main$parseAmountStr, $elm$json$Json$Decode$string)),
-								A2(
-									$author$project$Json$Decode$Pipeline$custom,
-									A2($elm$json$Json$Decode$index, 1, $elm$json$Json$Decode$string),
-									A2(
-										$author$project$Json$Decode$Pipeline$custom,
-										A2($elm$json$Json$Decode$index, 0, $elm$json$Json$Decode$string),
-										$elm$json$Json$Decode$succeed(
-											function (id) {
-												return function (date) {
-													return function (amount) {
-														return function (category) {
-															return function (note) {
-																return function (merchant) {
-																	return function (createdAt) {
-																		return function (lat) {
-																			return function (lon) {
-																				return function (longNote) {
-																					return {amount: amount, category: category, createdAt: createdAt, date: date, id: id, lat: lat, lon: lon, longNote: longNote, merchant: merchant, note: note, rowIndex: 0};
-																				};
-																			};
-																		};
-																	};
-																};
-															};
-														};
-													};
-												};
-											})))))))))));
-var $author$project$Main$entriesDecoder = $elm$json$Json$Decode$oneOf(
-	_List_fromArray(
-		[
-			A2(
-			$elm$json$Json$Decode$map,
-			$elm$core$List$indexedMap(
-				F2(
-					function (i, e) {
-						return _Utils_update(
-							e,
-							{rowIndex: i + 2});
-					})),
-			A2(
-				$elm$json$Json$Decode$field,
-				'values',
-				$elm$json$Json$Decode$list($author$project$Main$rowDecoder))),
-			$elm$json$Json$Decode$succeed(_List_Nil)
-		]));
 var $elm$http$Http$BadBody = function (a) {
 	return {$: 'BadBody', a: a};
 };
@@ -6621,12 +6468,28 @@ var $elm$http$Http$request = function (r) {
 		$elm$http$Http$Request(
 			{allowCookiesFromOtherDomains: false, body: r.body, expect: r.expect, headers: r.headers, method: r.method, timeout: r.timeout, tracker: r.tracker, url: r.url}));
 };
-var $author$project$Main$fetchEntries = F2(
+var $elm$json$Json$Decode$list = _Json_decodeList;
+var $author$project$Main$SheetProp = F2(
+	function (gid, title) {
+		return {gid: gid, title: title};
+	});
+var $elm$json$Json$Decode$int = _Json_decodeInt;
+var $author$project$Main$sheetPropDecoder = A3(
+	$elm$json$Json$Decode$map2,
+	$author$project$Main$SheetProp,
+	A2($elm$json$Json$Decode$field, 'sheetId', $elm$json$Json$Decode$int),
+	A2($elm$json$Json$Decode$field, 'title', $elm$json$Json$Decode$string));
+var $author$project$Main$sheetMetaDecoder = A2(
+	$elm$json$Json$Decode$field,
+	'sheets',
+	$elm$json$Json$Decode$list(
+		A2($elm$json$Json$Decode$field, 'properties', $author$project$Main$sheetPropDecoder)));
+var $author$project$Main$fetchSheetMeta = F2(
 	function (creds, sheetId) {
 		return $elm$http$Http$request(
 			{
 				body: $elm$http$Http$emptyBody,
-				expect: A2($author$project$Main$expectJsonBody, $author$project$Main$EntriesFetched, $author$project$Main$entriesDecoder),
+				expect: A2($author$project$Main$expectJsonBody, $author$project$Main$GotSheetMeta, $author$project$Main$sheetMetaDecoder),
 				headers: _List_fromArray(
 					[
 						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + creds.token)
@@ -6634,9 +6497,127 @@ var $author$project$Main$fetchEntries = F2(
 				method: 'GET',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
-				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A2:J')
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '?fields=sheets.properties')
 			});
 	});
+var $author$project$List$NonEmpty$Zipper$current = function (_v0) {
+	var f = _v0.b;
+	return f;
+};
+var $author$project$List$NonEmpty$Zipper$Zipper = F3(
+	function (a, b, c) {
+		return {$: 'Zipper', a: a, b: b, c: c};
+	});
+var $author$project$List$NonEmpty$Zipper$prev = function (_v0) {
+	var p = _v0.a;
+	var f = _v0.b;
+	var n = _v0.c;
+	if (!p.b) {
+		return $elm$core$Maybe$Nothing;
+	} else {
+		var h = p.a;
+		var t = p.b;
+		return $elm$core$Maybe$Just(
+			A3(
+				$author$project$List$NonEmpty$Zipper$Zipper,
+				t,
+				h,
+				A2($elm$core$List$cons, f, n)));
+	}
+};
+var $author$project$List$NonEmpty$Zipper$focusl = F2(
+	function (fc, zipper) {
+		focusl:
+		while (true) {
+			if (fc(
+				$author$project$List$NonEmpty$Zipper$current(zipper))) {
+				return $elm$core$Maybe$Just(zipper);
+			} else {
+				var _v0 = $author$project$List$NonEmpty$Zipper$prev(zipper);
+				if (_v0.$ === 'Just') {
+					var z = _v0.a;
+					var $temp$fc = fc,
+						$temp$zipper = z;
+					fc = $temp$fc;
+					zipper = $temp$zipper;
+					continue focusl;
+				} else {
+					return $elm$core$Maybe$Nothing;
+				}
+			}
+		}
+	});
+var $author$project$List$NonEmpty$Zipper$next = function (_v0) {
+	var p = _v0.a;
+	var f = _v0.b;
+	var n = _v0.c;
+	if (!n.b) {
+		return $elm$core$Maybe$Nothing;
+	} else {
+		var h = n.a;
+		var t = n.b;
+		return $elm$core$Maybe$Just(
+			A3(
+				$author$project$List$NonEmpty$Zipper$Zipper,
+				A2($elm$core$List$cons, f, p),
+				h,
+				t));
+	}
+};
+var $author$project$List$NonEmpty$Zipper$focusr = F2(
+	function (fc, zipper) {
+		focusr:
+		while (true) {
+			if (fc(
+				$author$project$List$NonEmpty$Zipper$current(zipper))) {
+				return $elm$core$Maybe$Just(zipper);
+			} else {
+				var _v0 = $author$project$List$NonEmpty$Zipper$next(zipper);
+				if (_v0.$ === 'Just') {
+					var z = _v0.a;
+					var $temp$fc = fc,
+						$temp$zipper = z;
+					fc = $temp$fc;
+					zipper = $temp$zipper;
+					continue focusr;
+				} else {
+					return $elm$core$Maybe$Nothing;
+				}
+			}
+		}
+	});
+var $author$project$List$NonEmpty$Zipper$focus = F2(
+	function (fc, zipper) {
+		var _v0 = A2($author$project$List$NonEmpty$Zipper$focusr, fc, zipper);
+		if (_v0.$ === 'Nothing') {
+			return A2($author$project$List$NonEmpty$Zipper$focusl, fc, zipper);
+		} else {
+			var res = _v0;
+			return res;
+		}
+	});
+var $elm$core$Basics$composeL = F3(
+	function (g, f, x) {
+		return g(
+			f(x));
+	});
+var $elm$core$Tuple$pair = F2(
+	function (a, b) {
+		return _Utils_Tuple2(a, b);
+	});
+var $author$project$List$NonEmpty$fromCons = $elm$core$Tuple$pair;
+var $author$project$List$NonEmpty$Zipper$fromNonEmpty = function (_v0) {
+	var h = _v0.a;
+	var t = _v0.b;
+	return A3($author$project$List$NonEmpty$Zipper$Zipper, _List_Nil, h, t);
+};
+var $author$project$List$NonEmpty$Zipper$fromCons = function (a) {
+	return A2(
+		$elm$core$Basics$composeL,
+		$author$project$List$NonEmpty$Zipper$fromNonEmpty,
+		$author$project$List$NonEmpty$fromCons(a));
+};
+var $elm$json$Json$Decode$oneOf = _Json_oneOf;
 var $elm$json$Json$Decode$maybe = function (decoder) {
 	return $elm$json$Json$Decode$oneOf(
 		_List_fromArray(
@@ -6649,12 +6630,13 @@ var $elm$core$Basics$neq = _Utils_notEqual;
 var $elm$core$Platform$Cmd$batch = _Platform_batch;
 var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
 var $author$project$Main$LedgerTab = {$: 'LedgerTab'};
+var $author$project$Main$Fuel = {$: 'Fuel'};
 var $author$project$Main$LocationIdle = {$: 'LocationIdle'};
 var $author$project$Main$defaultPendingEntry = function (today) {
 	return {amount: '', category: $author$project$Main$Fuel, date: today, locationState: $author$project$Main$LocationIdle, longNote: '', merchant: '', note: ''};
 };
-var $author$project$Main$toAuthState = F2(
-	function (creds, gs) {
+var $author$project$Main$toAuthState = F3(
+	function (creds, tripsZipper, gs) {
 		return {
 			activeScanItemId: $elm$core$Maybe$Nothing,
 			config: gs.session.config,
@@ -6672,9 +6654,56 @@ var $author$project$Main$toAuthState = F2(
 			tab: $author$project$Main$LedgerTab,
 			toast: $elm$core$Maybe$Nothing,
 			today: gs.today,
+			tripForm: $elm$core$Maybe$Nothing,
+			trips: tripsZipper,
 			version: gs.version
 		};
 	});
+var $author$project$Main$Trip = F8(
+	function (budget, coverPhotoUrl, description, endDate, name, sheetGid, startDate, tabName) {
+		return {budget: budget, coverPhotoUrl: coverPhotoUrl, description: description, endDate: endDate, name: name, sheetGid: sheetGid, startDate: startDate, tabName: tabName};
+	});
+var $author$project$Json$Decode$Pipeline$custom = $elm$json$Json$Decode$map2($elm$core$Basics$apR);
+var $author$project$Json$Decode$Pipeline$required = F3(
+	function (key, valDecoder, decoder) {
+		return A2(
+			$author$project$Json$Decode$Pipeline$custom,
+			A2($elm$json$Json$Decode$field, key, valDecoder),
+			decoder);
+	});
+var $author$project$Main$tripDecoder = A3(
+	$author$project$Json$Decode$Pipeline$required,
+	'tabName',
+	$elm$json$Json$Decode$string,
+	A3(
+		$author$project$Json$Decode$Pipeline$required,
+		'startDate',
+		$elm$json$Json$Decode$string,
+		A3(
+			$author$project$Json$Decode$Pipeline$required,
+			'sheetGid',
+			$elm$json$Json$Decode$int,
+			A3(
+				$author$project$Json$Decode$Pipeline$required,
+				'name',
+				$elm$json$Json$Decode$string,
+				A3(
+					$author$project$Json$Decode$Pipeline$required,
+					'endDate',
+					$elm$json$Json$Decode$string,
+					A3(
+						$author$project$Json$Decode$Pipeline$required,
+						'description',
+						$elm$json$Json$Decode$string,
+						A3(
+							$author$project$Json$Decode$Pipeline$required,
+							'coverPhotoUrl',
+							$elm$json$Json$Decode$string,
+							A3(
+								$author$project$Json$Decode$Pipeline$required,
+								'budget',
+								$elm$json$Json$Decode$float,
+								$elm$json$Json$Decode$succeed($author$project$Main$Trip)))))))));
 var $elm$core$Result$withDefault = F2(
 	function (def, result) {
 		if (result.$ === 'Ok') {
@@ -6682,6 +6711,24 @@ var $elm$core$Result$withDefault = F2(
 			return a;
 		} else {
 			return def;
+		}
+	});
+var $author$project$Main$tripsFromFlags = function (json) {
+	return A2(
+		$elm$core$Result$withDefault,
+		_List_Nil,
+		A2(
+			$elm$json$Json$Decode$decodeString,
+			$elm$json$Json$Decode$list($author$project$Main$tripDecoder),
+			json));
+};
+var $elm$core$Maybe$withDefault = F2(
+	function (_default, maybe) {
+		if (maybe.$ === 'Just') {
+			var value = maybe.a;
+			return value;
+		} else {
+			return _default;
 		}
 	});
 var $author$project$Main$init = function (flagsJson) {
@@ -6707,18 +6754,20 @@ var $author$project$Main$init = function (flagsJson) {
 				A2($elm$json$Json$Decode$field, field_, $elm$json$Json$Decode$string),
 				flagsJson));
 	};
+	var storedTrips = $author$project$Main$tripsFromFlags(
+		dec('trips'));
 	var cfg = {
 		anthropicKey: dec('anthropicKey'),
 		googleClientId: dec('googleClientId'),
-		sheetId: dec('sheetId'),
-		tripStart: function (s) {
-			return (s === '') ? '2026-05-22' : s;
-		}(
-			dec('tripStart'))
+		sheetId: dec('sheetId')
 	};
+	var activeTripTab = dec('activeTripTab');
 	var gs = {
+		activeTripTab: activeTripTab,
+		pendingToken: $elm$core$Maybe$Nothing,
 		session: {config: cfg, reason: $author$project$Main$FreshGuest},
 		showSettings: false,
+		storedTrips: storedTrips,
 		today: dec('today'),
 		version: dec('version')
 	};
@@ -6728,16 +6777,47 @@ var $author$project$Main$init = function (flagsJson) {
 			$elm$core$Platform$Cmd$none);
 	} else {
 		var t = token.a;
-		var as_ = A2(
-			$author$project$Main$toAuthState,
-			{token: t},
-			gs);
-		return _Utils_Tuple2(
-			$author$project$Main$AuthModel(as_),
-			(cfg.sheetId !== '') ? A2(
-				$author$project$Main$fetchEntries,
-				{token: t},
-				cfg.sheetId) : $elm$core$Platform$Cmd$none);
+		if (cfg.sheetId !== '') {
+			return _Utils_Tuple2(
+				$author$project$Main$GuestModel(
+					_Utils_update(
+						gs,
+						{
+							pendingToken: $elm$core$Maybe$Just(t)
+						})),
+				A2(
+					$author$project$Main$fetchSheetMeta,
+					{token: t},
+					cfg.sheetId));
+		} else {
+			var defaultTrip = {budget: 0, coverPhotoUrl: '', description: '', endDate: '', name: 'Trip 1', sheetGid: 0, startDate: '', tabName: 'Expenses'};
+			var tripsZipper = function () {
+				if (storedTrips.b) {
+					var h = storedTrips.a;
+					var rest = storedTrips.b;
+					var z = A2($author$project$List$NonEmpty$Zipper$fromCons, h, rest);
+					return (activeTripTab !== '') ? A2(
+						$elm$core$Maybe$withDefault,
+						z,
+						A2(
+							$author$project$List$NonEmpty$Zipper$focus,
+							function (t2) {
+								return _Utils_eq(t2.tabName, activeTripTab);
+							},
+							z)) : z;
+				} else {
+					return A2($author$project$List$NonEmpty$Zipper$fromCons, defaultTrip, _List_Nil);
+				}
+			}();
+			return _Utils_Tuple2(
+				$author$project$Main$AuthModel(
+					A3(
+						$author$project$Main$toAuthState,
+						{token: t},
+						tripsZipper,
+						gs)),
+				$elm$core$Platform$Cmd$none);
+		}
 	}
 };
 var $author$project$Main$AddTab = {$: 'AddTab'};
@@ -6763,6 +6843,7 @@ var $author$project$Main$ScanReady = {$: 'ScanReady'};
 var $author$project$Main$ScanSubmitted = {$: 'ScanSubmitted'};
 var $author$project$Main$ScanTab = {$: 'ScanTab'};
 var $author$project$Main$SessionExpired = {$: 'SessionExpired'};
+var $author$project$Main$TripsTab = {$: 'TripsTab'};
 var $elm$core$List$any = F2(
 	function (isOkay, list) {
 		any:
@@ -6880,17 +6961,8 @@ var $elm$json$Json$Encode$object = function (pairs) {
 			pairs));
 };
 var $elm$json$Json$Encode$string = _Json_wrap;
-var $elm$core$Maybe$withDefault = F2(
-	function (_default, maybe) {
-		if (maybe.$ === 'Just') {
-			var value = maybe.a;
-			return value;
-		} else {
-			return _default;
-		}
-	});
-var $author$project$Main$appendEntry = F3(
-	function (creds, sheetId, entry) {
+var $author$project$Main$appendEntry = F4(
+	function (creds, sheetId, tabName, entry) {
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -6949,7 +7021,7 @@ var $author$project$Main$appendEntry = F3(
 				method: 'POST',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
-				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A:J:append?valueInputOption=RAW')
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (tabName + '!A:J:append?valueInputOption=RAW')))
 			});
 	});
 var $author$project$Main$authPending = F2(
@@ -6963,6 +7035,7 @@ var $author$project$Main$authPending = F2(
 					})),
 			$elm$core$Platform$Cmd$none);
 	});
+var $elm$json$Json$Decode$index = _Json_decodeIndex;
 var $author$project$Main$claudeTextDecoder = A2(
 	$elm$json$Json$Decode$field,
 	'content',
@@ -6981,12 +7054,83 @@ var $author$project$Main$clearStorage = _Platform_outgoingPort(
 	function ($) {
 		return $elm$json$Json$Encode$null;
 	});
+var $author$project$List$NonEmpty$Zipper$consBefore = F2(
+	function (a, _v0) {
+		var b = _v0.a;
+		var f = _v0.b;
+		var n = _v0.c;
+		return A3(
+			$author$project$List$NonEmpty$Zipper$Zipper,
+			b,
+			a,
+			A2($elm$core$List$cons, f, n));
+	});
+var $author$project$Main$GotTripCreated = function (a) {
+	return {$: 'GotTripCreated', a: a};
+};
+var $author$project$Main$addSheetReplyDecoder = A2(
+	$elm$json$Json$Decode$field,
+	'replies',
+	A2(
+		$elm$json$Json$Decode$index,
+		0,
+		A2(
+			$elm$json$Json$Decode$field,
+			'addSheet',
+			A2($elm$json$Json$Decode$field, 'properties', $author$project$Main$sheetPropDecoder))));
+var $author$project$Main$createTripSheet = F3(
+	function (creds, sheetId, tabName) {
+		var body = $elm$json$Json$Encode$object(
+			_List_fromArray(
+				[
+					_Utils_Tuple2(
+					'requests',
+					A2(
+						$elm$json$Json$Encode$list,
+						$elm$core$Basics$identity,
+						_List_fromArray(
+							[
+								$elm$json$Json$Encode$object(
+								_List_fromArray(
+									[
+										_Utils_Tuple2(
+										'addSheet',
+										$elm$json$Json$Encode$object(
+											_List_fromArray(
+												[
+													_Utils_Tuple2(
+													'properties',
+													$elm$json$Json$Encode$object(
+														_List_fromArray(
+															[
+																_Utils_Tuple2(
+																'title',
+																$elm$json$Json$Encode$string(tabName))
+															])))
+												])))
+									]))
+							])))
+				]));
+		return $elm$http$Http$request(
+			{
+				body: $elm$http$Http$jsonBody(body),
+				expect: A2($author$project$Main$expectJsonBody, $author$project$Main$GotTripCreated, $author$project$Main$addSheetReplyDecoder),
+				headers: _List_fromArray(
+					[
+						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + creds.token)
+					]),
+				method: 'POST',
+				timeout: $elm$core$Maybe$Nothing,
+				tracker: $elm$core$Maybe$Nothing,
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ':batchUpdate')
+			});
+	});
 var $author$project$Main$EntryDeleted = function (a) {
 	return {$: 'EntryDeleted', a: a};
 };
 var $elm$json$Json$Encode$int = _Json_wrap;
-var $author$project$Main$deleteEntry = F3(
-	function (creds, sheetId, rowIndex) {
+var $author$project$Main$deleteEntry = F4(
+	function (creds, sheetId, sheetGid, rowIndex) {
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -7012,7 +7156,7 @@ var $author$project$Main$deleteEntry = F3(
 															[
 																_Utils_Tuple2(
 																'sheetId',
-																$elm$json$Json$Encode$int(0)),
+																$elm$json$Json$Encode$int(sheetGid)),
 																_Utils_Tuple2(
 																'dimension',
 																$elm$json$Json$Encode$string('ROWS')),
@@ -7041,6 +7185,36 @@ var $author$project$Main$deleteEntry = F3(
 				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ':batchUpdate')
 			});
 	});
+var $author$project$Main$encodeTrip = function (t) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'budget',
+				$elm$json$Json$Encode$float(t.budget)),
+				_Utils_Tuple2(
+				'coverPhotoUrl',
+				$elm$json$Json$Encode$string(t.coverPhotoUrl)),
+				_Utils_Tuple2(
+				'description',
+				$elm$json$Json$Encode$string(t.description)),
+				_Utils_Tuple2(
+				'endDate',
+				$elm$json$Json$Encode$string(t.endDate)),
+				_Utils_Tuple2(
+				'name',
+				$elm$json$Json$Encode$string(t.name)),
+				_Utils_Tuple2(
+				'sheetGid',
+				$elm$json$Json$Encode$int(t.sheetGid)),
+				_Utils_Tuple2(
+				'startDate',
+				$elm$json$Json$Encode$string(t.startDate)),
+				_Utils_Tuple2(
+				'tabName',
+				$elm$json$Json$Encode$string(t.tabName))
+			]));
+};
 var $author$project$Main$entryToPending = function (e) {
 	return {
 		amount: $elm$core$String$fromFloat(e.amount),
@@ -7084,6 +7258,173 @@ var $author$project$Main$extractExifGps = _Platform_outgoingPort(
 					'id',
 					$elm$json$Json$Encode$string($.id))
 				]));
+	});
+var $author$project$Main$EntriesFetched = function (a) {
+	return {$: 'EntriesFetched', a: a};
+};
+var $author$project$Main$Activities = {$: 'Activities'};
+var $author$project$Main$Camp = {$: 'Camp'};
+var $author$project$Main$Ferry = {$: 'Ferry'};
+var $author$project$Main$Food = {$: 'Food'};
+var $author$project$Main$Gear = {$: 'Gear'};
+var $author$project$Main$Lodging = {$: 'Lodging'};
+var $author$project$Main$Medical = {$: 'Medical'};
+var $author$project$Main$Misc = {$: 'Misc'};
+var $author$project$Main$Shopping = {$: 'Shopping'};
+var $author$project$Main$Transport = {$: 'Transport'};
+var $author$project$Main$categoryFromString = function (s) {
+	switch (s) {
+		case 'fuel':
+			return $author$project$Main$Fuel;
+		case 'food':
+			return $author$project$Main$Food;
+		case 'camp':
+			return $author$project$Main$Camp;
+		case 'ferry':
+			return $author$project$Main$Ferry;
+		case 'gear':
+			return $author$project$Main$Gear;
+		case 'lodging':
+			return $author$project$Main$Lodging;
+		case 'activities':
+			return $author$project$Main$Activities;
+		case 'shopping':
+			return $author$project$Main$Shopping;
+		case 'medical':
+			return $author$project$Main$Medical;
+		case 'transport':
+			return $author$project$Main$Transport;
+		default:
+			return $author$project$Main$Misc;
+	}
+};
+var $author$project$Main$optIndex = F3(
+	function (i, decoder, fallback) {
+		return $elm$json$Json$Decode$oneOf(
+			_List_fromArray(
+				[
+					A2($elm$json$Json$Decode$index, i, decoder),
+					$elm$json$Json$Decode$succeed(fallback)
+				]));
+	});
+var $elm$core$String$toFloat = _String_toFloat;
+var $author$project$Main$optMaybeFloat = function (i) {
+	return $elm$json$Json$Decode$oneOf(
+		_List_fromArray(
+			[
+				A2(
+				$elm$json$Json$Decode$index,
+				i,
+				A2(
+					$elm$json$Json$Decode$andThen,
+					function (s) {
+						return (s === '') ? $elm$json$Json$Decode$succeed($elm$core$Maybe$Nothing) : $elm$json$Json$Decode$succeed(
+							$elm$core$String$toFloat(s));
+					},
+					$elm$json$Json$Decode$string)),
+				$elm$json$Json$Decode$succeed($elm$core$Maybe$Nothing)
+			]));
+};
+var $author$project$Main$parseAmountStr = function (s) {
+	var _v0 = $elm$core$String$toFloat(s);
+	if (_v0.$ === 'Just') {
+		var f = _v0.a;
+		return $elm$json$Json$Decode$succeed(f);
+	} else {
+		return $elm$json$Json$Decode$succeed(0.0);
+	}
+};
+var $author$project$Main$rowDecoder = A2(
+	$author$project$Json$Decode$Pipeline$custom,
+	A3($author$project$Main$optIndex, 9, $elm$json$Json$Decode$string, ''),
+	A2(
+		$author$project$Json$Decode$Pipeline$custom,
+		$author$project$Main$optMaybeFloat(8),
+		A2(
+			$author$project$Json$Decode$Pipeline$custom,
+			$author$project$Main$optMaybeFloat(7),
+			A2(
+				$author$project$Json$Decode$Pipeline$custom,
+				A3($author$project$Main$optIndex, 6, $elm$json$Json$Decode$string, ''),
+				A2(
+					$author$project$Json$Decode$Pipeline$custom,
+					A3($author$project$Main$optIndex, 5, $elm$json$Json$Decode$string, ''),
+					A2(
+						$author$project$Json$Decode$Pipeline$custom,
+						A3($author$project$Main$optIndex, 4, $elm$json$Json$Decode$string, ''),
+						A2(
+							$author$project$Json$Decode$Pipeline$custom,
+							A2(
+								$elm$json$Json$Decode$index,
+								3,
+								A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
+							A2(
+								$author$project$Json$Decode$Pipeline$custom,
+								A2(
+									$elm$json$Json$Decode$index,
+									2,
+									A2($elm$json$Json$Decode$andThen, $author$project$Main$parseAmountStr, $elm$json$Json$Decode$string)),
+								A2(
+									$author$project$Json$Decode$Pipeline$custom,
+									A2($elm$json$Json$Decode$index, 1, $elm$json$Json$Decode$string),
+									A2(
+										$author$project$Json$Decode$Pipeline$custom,
+										A2($elm$json$Json$Decode$index, 0, $elm$json$Json$Decode$string),
+										$elm$json$Json$Decode$succeed(
+											function (id) {
+												return function (date) {
+													return function (amount) {
+														return function (category) {
+															return function (note) {
+																return function (merchant) {
+																	return function (createdAt) {
+																		return function (lat) {
+																			return function (lon) {
+																				return function (longNote) {
+																					return {amount: amount, category: category, createdAt: createdAt, date: date, id: id, lat: lat, lon: lon, longNote: longNote, merchant: merchant, note: note, rowIndex: 0};
+																				};
+																			};
+																		};
+																	};
+																};
+															};
+														};
+													};
+												};
+											})))))))))));
+var $author$project$Main$entriesDecoder = $elm$json$Json$Decode$oneOf(
+	_List_fromArray(
+		[
+			A2(
+			$elm$json$Json$Decode$map,
+			$elm$core$List$indexedMap(
+				F2(
+					function (i, e) {
+						return _Utils_update(
+							e,
+							{rowIndex: i + 2});
+					})),
+			A2(
+				$elm$json$Json$Decode$field,
+				'values',
+				$elm$json$Json$Decode$list($author$project$Main$rowDecoder))),
+			$elm$json$Json$Decode$succeed(_List_Nil)
+		]));
+var $author$project$Main$fetchEntries = F3(
+	function (creds, sheetId, tabName) {
+		return $elm$http$Http$request(
+			{
+				body: $elm$http$Http$emptyBody,
+				expect: A2($author$project$Main$expectJsonBody, $author$project$Main$EntriesFetched, $author$project$Main$entriesDecoder),
+				headers: _List_fromArray(
+					[
+						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + creds.token)
+					]),
+				method: 'GET',
+				timeout: $elm$core$Maybe$Nothing,
+				tracker: $elm$core$Maybe$Nothing,
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (tabName + '!A2:J')))
+			});
 	});
 var $elm$core$Dict$foldl = F3(
 	function (func, acc, dict) {
@@ -7309,6 +7650,17 @@ var $author$project$Main$makeOcrCall = F4(
 				tracker: $elm$core$Maybe$Nothing,
 				url: 'https://api.anthropic.com/v1/messages'
 			});
+	});
+var $author$project$List$NonEmpty$Zipper$map = F2(
+	function (fc, _v0) {
+		var p = _v0.a;
+		var f = _v0.b;
+		var n = _v0.c;
+		return A3(
+			$author$project$List$NonEmpty$Zipper$Zipper,
+			A2($elm$core$List$map, fc, p),
+			fc(f),
+			A2($elm$core$List$map, fc, n));
 	});
 var $elm$core$Basics$not = _Basics_not;
 var $elm$time$Time$Name = function (a) {
@@ -7696,6 +8048,25 @@ var $elm$core$Dict$sizeHelp = F2(
 var $elm$core$Dict$size = function (dict) {
 	return A2($elm$core$Dict$sizeHelp, 0, dict);
 };
+var $elm$core$String$map = _String_map;
+var $elm$core$String$toLower = _String_toLower;
+var $author$project$Main$slugify = function (s) {
+	return A2(
+		$elm$core$String$join,
+		'-',
+		A2(
+			$elm$core$List$filter,
+			$elm$core$Basics$neq(''),
+			A2(
+				$elm$core$String$split,
+				'-',
+				A2(
+					$elm$core$String$map,
+					function (c) {
+						return $elm$core$Char$isAlphaNum(c) ? c : _Utils_chr('-');
+					},
+					$elm$core$String$toLower(s)))));
+};
 var $elm$core$List$drop = F2(
 	function (n, list) {
 		drop:
@@ -7753,11 +8124,37 @@ var $author$project$Main$stripCodeFence = function (s) {
 					1,
 					$elm$core$String$lines(trimmed))))) : trimmed;
 };
+var $author$project$List$NonEmpty$toList = function (_v0) {
+	var h = _v0.a;
+	var t = _v0.b;
+	return A2($elm$core$List$cons, h, t);
+};
+var $author$project$List$NonEmpty$Zipper$toNonEmpty = function (_v0) {
+	var p = _v0.a;
+	var f = _v0.b;
+	var n = _v0.c;
+	var _v1 = $elm$core$List$reverse(p);
+	if (!_v1.b) {
+		return _Utils_Tuple2(f, n);
+	} else {
+		var h = _v1.a;
+		var t = _v1.b;
+		return _Utils_Tuple2(
+			h,
+			_Utils_ap(
+				t,
+				A2($elm$core$List$cons, f, n)));
+	}
+};
+var $author$project$List$NonEmpty$Zipper$toList = A2($elm$core$Basics$composeL, $author$project$List$NonEmpty$toList, $author$project$List$NonEmpty$Zipper$toNonEmpty);
 var $author$project$Main$toGuestState = F2(
 	function (reason, as_) {
 		return {
+			activeTripTab: $author$project$List$NonEmpty$Zipper$current(as_.trips).tabName,
+			pendingToken: $elm$core$Maybe$Nothing,
 			session: {config: as_.config, reason: reason},
 			showSettings: !_Utils_eq(reason, $author$project$Main$FreshGuest),
+			storedTrips: $author$project$List$NonEmpty$Zipper$toList(as_.trips),
 			today: as_.today,
 			version: as_.version
 		};
@@ -7773,9 +8170,98 @@ var $author$project$Main$toastFor = function (_v0) {
 		},
 		$elm$core$Process$sleep(4000));
 };
-var $author$project$Main$updateEntry = F3(
-	function (creds, sheetId, entry) {
-		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':J' + $elm$core$String$fromInt(entry.rowIndex)));
+var $author$project$Validate$Validator = function (a) {
+	return {$: 'Validator', a: a};
+};
+var $author$project$Validate$all = function (validators) {
+	var newGetErrors = function (subject) {
+		var accumulateErrors = F2(
+			function (_v0, totalErrors) {
+				var getErrors = _v0.a;
+				return _Utils_ap(
+					totalErrors,
+					getErrors(subject));
+			});
+		return A3($elm$core$List$foldl, accumulateErrors, _List_Nil, validators);
+	};
+	return $author$project$Validate$Validator(newGetErrors);
+};
+var $author$project$Validate$ifTrue = F2(
+	function (test, error) {
+		var getErrors = function (subject) {
+			return test(subject) ? _List_fromArray(
+				[error]) : _List_Nil;
+		};
+		return $author$project$Validate$Validator(getErrors);
+	});
+var $author$project$Validate$isWhitespaceChar = function (_char) {
+	return _Utils_eq(
+		_char,
+		_Utils_chr(' ')) || (_Utils_eq(
+		_char,
+		_Utils_chr('\n')) || (_Utils_eq(
+		_char,
+		_Utils_chr('\t')) || _Utils_eq(
+		_char,
+		_Utils_chr('\u000D'))));
+};
+var $author$project$Validate$isBlank = function (str) {
+	isBlank:
+	while (true) {
+		var _v0 = $elm$core$String$uncons(str);
+		if (_v0.$ === 'Just') {
+			var _v1 = _v0.a;
+			var _char = _v1.a;
+			var rest = _v1.b;
+			if ($author$project$Validate$isWhitespaceChar(_char)) {
+				var $temp$str = rest;
+				str = $temp$str;
+				continue isBlank;
+			} else {
+				return false;
+			}
+		} else {
+			return true;
+		}
+	}
+};
+var $author$project$Validate$ifBlank = F2(
+	function (subjectToString, error) {
+		return A2(
+			$author$project$Validate$ifTrue,
+			function (subject) {
+				return $author$project$Validate$isBlank(
+					subjectToString(subject));
+			},
+			error);
+	});
+var $author$project$Main$tripValidator = $author$project$Validate$all(
+	_List_fromArray(
+		[
+			A2(
+			$author$project$Validate$ifBlank,
+			function ($) {
+				return $.name;
+			},
+			'Trip name is required.'),
+			A2(
+			$author$project$Validate$ifTrue,
+			function (f) {
+				return (f.budget !== '') && _Utils_eq(
+					$elm$core$String$toFloat(f.budget),
+					$elm$core$Maybe$Nothing);
+			},
+			'Budget must be a number.'),
+			A2(
+			$author$project$Validate$ifTrue,
+			function (f) {
+				return (f.endDate !== '') && (_Utils_cmp(f.endDate, f.startDate) < 0);
+			},
+			'End date must be after start date.')
+		]));
+var $author$project$Main$updateEntry = F4(
+	function (creds, sheetId, tabName, entry) {
+		var range = tabName + ('!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':J' + $elm$core$String$fromInt(entry.rowIndex))));
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -7837,6 +8323,21 @@ var $author$project$Main$updateEntry = F3(
 				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (range + '?valueInputOption=RAW')))
 			});
 	});
+var $author$project$Validate$Valid = function (a) {
+	return {$: 'Valid', a: a};
+};
+var $author$project$Validate$validate = F2(
+	function (_v0, subject) {
+		var getErrors = _v0.a;
+		var _v1 = getErrors(subject);
+		if (!_v1.b) {
+			return $elm$core$Result$Ok(
+				$author$project$Validate$Valid(subject));
+		} else {
+			var errors = _v1;
+			return $elm$core$Result$Err(errors);
+		}
+	});
 var $elm$core$Dict$values = function (dict) {
 	return A3(
 		$elm$core$Dict$foldr,
@@ -7870,11 +8371,14 @@ var $author$project$Main$updateAuth = F2(
 				return _Utils_Tuple2(
 					$author$project$Main$GuestModel(
 						{
+							activeTripTab: '',
+							pendingToken: $elm$core$Maybe$Nothing,
 							session: {
-								config: {anthropicKey: '', googleClientId: '', sheetId: '', tripStart: ''},
+								config: {anthropicKey: '', googleClientId: '', sheetId: ''},
 								reason: $author$project$Main$FreshGuest
 							},
 							showSettings: false,
+							storedTrips: _List_Nil,
 							today: as_.today,
 							version: as_.version
 						}),
@@ -8118,7 +8622,12 @@ var $author$project$Main$updateAuth = F2(
 						});
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(as_),
-						A3($author$project$Main$updateEntry, as_.creds, as_.config.sheetId, updated));
+						A4(
+							$author$project$Main$updateEntry,
+							as_.creds,
+							as_.config.sheetId,
+							$author$project$List$NonEmpty$Zipper$current(as_.trips).tabName,
+							updated));
 				} else {
 					var _v10 = function () {
 						var _v11 = p.locationState;
@@ -8153,7 +8662,12 @@ var $author$project$Main$updateAuth = F2(
 					};
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(as_),
-						A3($author$project$Main$appendEntry, as_.creds, as_.config.sheetId, entry));
+						A4(
+							$author$project$Main$appendEntry,
+							as_.creds,
+							as_.config.sheetId,
+							$author$project$List$NonEmpty$Zipper$current(as_.trips).tabName,
+							entry));
 				}
 			case 'EntrySubmitted':
 				var result = msg.a;
@@ -8196,7 +8710,11 @@ var $author$project$Main$updateAuth = F2(
 									submitting: false,
 									tab: nextTab
 								})),
-						A2($author$project$Main$fetchEntries, as_.creds, as_.config.sheetId));
+						A3(
+							$author$project$Main$fetchEntries,
+							as_.creds,
+							as_.config.sheetId,
+							$author$project$List$NonEmpty$Zipper$current(as_.trips).tabName));
 				} else {
 					if ((result.a.$ === 'BadStatus') && (result.a.a === 401)) {
 						return _Utils_Tuple2(
@@ -8261,13 +8779,22 @@ var $author$project$Main$updateAuth = F2(
 									},
 									as_.entries)
 							})),
-					A3($author$project$Main$deleteEntry, as_.creds, as_.config.sheetId, entry.rowIndex));
+					A4(
+						$author$project$Main$deleteEntry,
+						as_.creds,
+						as_.config.sheetId,
+						$author$project$List$NonEmpty$Zipper$current(as_.trips).sheetGid,
+						entry.rowIndex));
 			case 'EntryDeleted':
 				var result = msg.a;
 				if (result.$ === 'Ok') {
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(as_),
-						A2($author$project$Main$fetchEntries, as_.creds, as_.config.sheetId));
+						A3(
+							$author$project$Main$fetchEntries,
+							as_.creds,
+							as_.config.sheetId,
+							$author$project$List$NonEmpty$Zipper$current(as_.trips).tabName));
 				} else {
 					if ((result.a.$ === 'BadStatus') && (result.a.a === 401)) {
 						return _Utils_Tuple2(
@@ -8324,12 +8851,17 @@ var $author$project$Main$updateAuth = F2(
 								editingEntry: (!_Utils_eq(tab, $author$project$Main$AddTab)) ? $elm$core$Maybe$Nothing : as_.editingEntry,
 								loadingEntries: shouldFetch,
 								pendingEntry: newPending,
-								tab: tab
+								tab: tab,
+								tripForm: (!_Utils_eq(tab, $author$project$Main$TripsTab)) ? $elm$core$Maybe$Nothing : as_.tripForm
 							})),
 					$elm$core$Platform$Cmd$batch(
 						_List_fromArray(
 							[
-								shouldFetch ? A2($author$project$Main$fetchEntries, as_.creds, as_.config.sheetId) : $elm$core$Platform$Cmd$none,
+								shouldFetch ? A3(
+								$author$project$Main$fetchEntries,
+								as_.creds,
+								as_.config.sheetId,
+								$author$project$List$NonEmpty$Zipper$current(as_.trips).tabName) : $elm$core$Platform$Cmd$none,
 								geoCmd
 							])));
 			case 'RefreshClicked':
@@ -8338,7 +8870,11 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{loadingEntries: true})),
-					A2($author$project$Main$fetchEntries, as_.creds, as_.config.sheetId));
+					A3(
+						$author$project$Main$fetchEntries,
+						as_.creds,
+						as_.config.sheetId,
+						$author$project$List$NonEmpty$Zipper$current(as_.trips).tabName));
 			case 'ApiKeyChanged':
 				var s = msg.a;
 				var cfg = as_.config;
@@ -8381,20 +8917,6 @@ var $author$project$Main$updateAuth = F2(
 							})),
 					$author$project$Main$saveStorage(
 						{key: 'google_client_id', value: s}));
-			case 'TripStartChanged':
-				var s = msg.a;
-				var cfg = as_.config;
-				return _Utils_Tuple2(
-					$author$project$Main$AuthModel(
-						_Utils_update(
-							as_,
-							{
-								config: _Utils_update(
-									cfg,
-									{tripStart: s})
-							})),
-					$author$project$Main$saveStorage(
-						{key: 'trip_start', value: s}));
 			case 'DismissError':
 				return _Utils_Tuple2(
 					$author$project$Main$AuthModel(
@@ -8591,13 +9113,380 @@ var $author$project$Main$updateAuth = F2(
 									as_.scanQueue)
 							})),
 					$elm$core$Platform$Cmd$none);
+			case 'SelectTrip':
+				var tabName = msg.a;
+				var trips_ = A2(
+					$elm$core$Maybe$withDefault,
+					as_.trips,
+					A2(
+						$author$project$List$NonEmpty$Zipper$focus,
+						function (t) {
+							return _Utils_eq(t.tabName, tabName);
+						},
+						as_.trips));
+				return _Utils_Tuple2(
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{loadingEntries: true, tab: $author$project$Main$LedgerTab, trips: trips_})),
+					$elm$core$Platform$Cmd$batch(
+						_List_fromArray(
+							[
+								$author$project$Main$saveStorage(
+								{key: 'active_trip', value: tabName}),
+								A3(
+								$author$project$Main$fetchEntries,
+								as_.creds,
+								as_.config.sheetId,
+								$author$project$List$NonEmpty$Zipper$current(trips_).tabName)
+							])));
+			case 'OpenNewTripForm':
+				return _Utils_Tuple2(
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								tripForm: $elm$core$Maybe$Just(
+									{budget: '', coverPhotoUrl: '', description: '', editing: $elm$core$Maybe$Nothing, endDate: '', errors: _List_Nil, name: '', startDate: as_.today})
+							})),
+					$elm$core$Platform$Cmd$none);
+			case 'OpenEditTripForm':
+				var trip = msg.a;
+				return _Utils_Tuple2(
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								tripForm: $elm$core$Maybe$Just(
+									{
+										budget: (trip.budget > 0) ? $elm$core$String$fromFloat(trip.budget) : '',
+										coverPhotoUrl: trip.coverPhotoUrl,
+										description: trip.description,
+										editing: $elm$core$Maybe$Just(trip),
+										endDate: trip.endDate,
+										errors: _List_Nil,
+										name: trip.name,
+										startDate: trip.startDate
+									})
+							})),
+					$elm$core$Platform$Cmd$none);
+			case 'TripFieldChanged':
+				var field = msg.a;
+				var value = msg.b;
+				var updateForm = function (f) {
+					switch (field.$) {
+						case 'TripBudget':
+							return _Utils_update(
+								f,
+								{budget: value});
+						case 'TripCoverPhoto':
+							return _Utils_update(
+								f,
+								{coverPhotoUrl: value});
+						case 'TripDescription':
+							return _Utils_update(
+								f,
+								{description: value});
+						case 'TripEndDate':
+							return _Utils_update(
+								f,
+								{endDate: value});
+						case 'TripName':
+							return _Utils_update(
+								f,
+								{name: value});
+						default:
+							return _Utils_update(
+								f,
+								{startDate: value});
+					}
+				};
+				return _Utils_Tuple2(
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								tripForm: A2($elm$core$Maybe$map, updateForm, as_.tripForm)
+							})),
+					$elm$core$Platform$Cmd$none);
+			case 'SaveTripForm':
+				var _v19 = as_.tripForm;
+				if (_v19.$ === 'Nothing') {
+					return _Utils_Tuple2(
+						$author$project$Main$AuthModel(as_),
+						$elm$core$Platform$Cmd$none);
+				} else {
+					var form = _v19.a;
+					var _v20 = A2($author$project$Validate$validate, $author$project$Main$tripValidator, form);
+					if (_v20.$ === 'Err') {
+						var errs = _v20.a;
+						return _Utils_Tuple2(
+							$author$project$Main$AuthModel(
+								_Utils_update(
+									as_,
+									{
+										tripForm: $elm$core$Maybe$Just(
+											_Utils_update(
+												form,
+												{errors: errs}))
+									})),
+							$elm$core$Platform$Cmd$none);
+					} else {
+						var _v21 = form.editing;
+						if (_v21.$ === 'Just') {
+							var existing = _v21.a;
+							var updated = _Utils_update(
+								existing,
+								{
+									budget: A2(
+										$elm$core$Maybe$withDefault,
+										0,
+										$elm$core$String$toFloat(form.budget)),
+									coverPhotoUrl: form.coverPhotoUrl,
+									description: form.description,
+									endDate: form.endDate,
+									name: form.name,
+									startDate: form.startDate
+								});
+							var trips_ = A2(
+								$author$project$List$NonEmpty$Zipper$map,
+								function (t) {
+									return _Utils_eq(t.tabName, existing.tabName) ? updated : t;
+								},
+								as_.trips);
+							return _Utils_Tuple2(
+								$author$project$Main$AuthModel(
+									_Utils_update(
+										as_,
+										{tripForm: $elm$core$Maybe$Nothing, trips: trips_})),
+								$author$project$Main$saveStorage(
+									{
+										key: 'trips',
+										value: A2(
+											$elm$json$Json$Encode$encode,
+											0,
+											A2(
+												$elm$json$Json$Encode$list,
+												$author$project$Main$encodeTrip,
+												$author$project$List$NonEmpty$Zipper$toList(trips_)))
+									}));
+						} else {
+							var tabName = $author$project$Main$slugify(form.name);
+							return _Utils_Tuple2(
+								$author$project$Main$AuthModel(as_),
+								A3($author$project$Main$createTripSheet, as_.creds, as_.config.sheetId, tabName));
+						}
+					}
+				}
+			case 'GotTripCreated':
+				var result = msg.a;
+				if (result.$ === 'Err') {
+					var e = result.a;
+					return _Utils_Tuple2(
+						$author$project$Main$AuthModel(
+							_Utils_update(
+								as_,
+								{
+									error: $elm$core$Maybe$Just(
+										'Failed to create trip: ' + $author$project$Main$httpErrString(e))
+								})),
+						$elm$core$Platform$Cmd$none);
+				} else {
+					var prop = result.a;
+					var _v23 = as_.tripForm;
+					if (_v23.$ === 'Nothing') {
+						return _Utils_Tuple2(
+							$author$project$Main$AuthModel(as_),
+							$elm$core$Platform$Cmd$none);
+					} else {
+						var form = _v23.a;
+						var newTrip = {
+							budget: A2(
+								$elm$core$Maybe$withDefault,
+								0,
+								$elm$core$String$toFloat(form.budget)),
+							coverPhotoUrl: form.coverPhotoUrl,
+							description: form.description,
+							endDate: form.endDate,
+							name: form.name,
+							sheetGid: prop.gid,
+							startDate: form.startDate,
+							tabName: prop.title
+						};
+						var trips_ = A2(
+							$elm$core$Maybe$withDefault,
+							as_.trips,
+							A2(
+								$author$project$List$NonEmpty$Zipper$focus,
+								function (t) {
+									return _Utils_eq(t.tabName, prop.title);
+								},
+								A2($author$project$List$NonEmpty$Zipper$consBefore, newTrip, as_.trips)));
+						return _Utils_Tuple2(
+							$author$project$Main$AuthModel(
+								_Utils_update(
+									as_,
+									{loadingEntries: true, tab: $author$project$Main$LedgerTab, tripForm: $elm$core$Maybe$Nothing, trips: trips_})),
+							$elm$core$Platform$Cmd$batch(
+								_List_fromArray(
+									[
+										$author$project$Main$saveStorage(
+										{
+											key: 'trips',
+											value: A2(
+												$elm$json$Json$Encode$encode,
+												0,
+												A2(
+													$elm$json$Json$Encode$list,
+													$author$project$Main$encodeTrip,
+													$author$project$List$NonEmpty$Zipper$toList(trips_)))
+										}),
+										$author$project$Main$saveStorage(
+										{key: 'active_trip', value: prop.title}),
+										A3($author$project$Main$fetchEntries, as_.creds, as_.config.sheetId, prop.title)
+									])));
+					}
+				}
+			case 'DeleteTrip':
+				var trip = msg.a;
+				var remaining = A2(
+					$elm$core$List$filter,
+					function (t) {
+						return !_Utils_eq(t.tabName, trip.tabName);
+					},
+					$author$project$List$NonEmpty$Zipper$toList(as_.trips));
+				if (!remaining.b) {
+					return _Utils_Tuple2(
+						$author$project$Main$AuthModel(as_),
+						$elm$core$Platform$Cmd$none);
+				} else {
+					var h = remaining.a;
+					var t = remaining.b;
+					var trips_ = A2(
+						$elm$core$Maybe$withDefault,
+						A2($author$project$List$NonEmpty$Zipper$fromCons, h, t),
+						A2(
+							$author$project$List$NonEmpty$Zipper$focus,
+							function (tr) {
+								return !_Utils_eq(tr.tabName, trip.tabName);
+							},
+							A2($author$project$List$NonEmpty$Zipper$fromCons, h, t)));
+					return _Utils_Tuple2(
+						$author$project$Main$AuthModel(
+							_Utils_update(
+								as_,
+								{trips: trips_})),
+						$author$project$Main$saveStorage(
+							{
+								key: 'trips',
+								value: A2(
+									$elm$json$Json$Encode$encode,
+									0,
+									A2(
+										$elm$json$Json$Encode$list,
+										$author$project$Main$encodeTrip,
+										$author$project$List$NonEmpty$Zipper$toList(trips_)))
+							}));
+				}
 			default:
 				return _Utils_Tuple2(
 					$author$project$Main$AuthModel(as_),
 					$elm$core$Platform$Cmd$none);
 		}
 	});
+var $author$project$Main$MetadataError = function (a) {
+	return {$: 'MetadataError', a: a};
+};
 var $author$project$Main$MissingConfig = {$: 'MissingConfig'};
+var $elm$core$List$isEmpty = function (xs) {
+	if (!xs.b) {
+		return true;
+	} else {
+		return false;
+	}
+};
+var $author$project$Main$buildTripsZipper = F5(
+	function (storedTrips, activeTripTab, props, migrationStartDate, activeTripTabFlag) {
+		var tripsWithGid = A2(
+			$elm$core$List$filterMap,
+			function (p) {
+				var existing = A2(
+					$elm$core$List$filter,
+					function (t) {
+						return _Utils_eq(t.tabName, p.title);
+					},
+					storedTrips);
+				if (existing.b) {
+					var t = existing.a;
+					return $elm$core$Maybe$Just(
+						_Utils_update(
+							t,
+							{sheetGid: p.gid}));
+				} else {
+					return $elm$core$Maybe$Nothing;
+				}
+			},
+			props);
+		var allTrips = function () {
+			if ($elm$core$List$isEmpty(tripsWithGid)) {
+				if (props.b) {
+					var firstProp = props.a;
+					return _List_fromArray(
+						[
+							{
+							budget: 0,
+							coverPhotoUrl: '',
+							description: '',
+							endDate: '',
+							name: 'Trip 1',
+							sheetGid: firstProp.gid,
+							startDate: A2($elm$core$Maybe$withDefault, '', migrationStartDate),
+							tabName: firstProp.title
+						}
+						]);
+				} else {
+					return _List_fromArray(
+						[
+							{
+							budget: 0,
+							coverPhotoUrl: '',
+							description: '',
+							endDate: '',
+							name: 'Trip 1',
+							sheetGid: 0,
+							startDate: A2($elm$core$Maybe$withDefault, '', migrationStartDate),
+							tabName: 'Expenses'
+						}
+						]);
+				}
+			} else {
+				return tripsWithGid;
+			}
+		}();
+		var zipper = function () {
+			if (allTrips.b) {
+				var h = allTrips.a;
+				var t = allTrips.b;
+				return A2($author$project$List$NonEmpty$Zipper$fromCons, h, t);
+			} else {
+				return A2(
+					$author$project$List$NonEmpty$Zipper$fromCons,
+					{budget: 0, coverPhotoUrl: '', description: '', endDate: '', name: 'Trip 1', sheetGid: 0, startDate: '', tabName: 'Expenses'},
+					_List_Nil);
+			}
+		}();
+		var activeTab = (activeTripTab !== '') ? activeTripTab : A2($elm$core$Maybe$withDefault, '', activeTripTabFlag);
+		var focused = (activeTab !== '') ? A2(
+			$elm$core$Maybe$withDefault,
+			zipper,
+			A2(
+				$author$project$List$NonEmpty$Zipper$focus,
+				function (tr) {
+					return _Utils_eq(tr.tabName, activeTab);
+				},
+				zipper)) : zipper;
+		return focused;
+	});
 var $author$project$Main$mapGuestConfig = F2(
 	function (f, gs) {
 		return _Utils_update(
@@ -8624,22 +9513,78 @@ var $author$project$Main$updateGuest = F2(
 					$author$project$Main$requestOAuthToken(true));
 			case 'GotOAuthToken':
 				var token = msg.a;
-				var as_ = A2(
-					$author$project$Main$toAuthState,
-					{token: token},
-					gs);
-				return _Utils_Tuple2(
-					$author$project$Main$AuthModel(as_),
-					$elm$core$Platform$Cmd$batch(
-						_List_fromArray(
-							[
-								$author$project$Main$saveStorage(
-								{key: 'oauth_token', value: token}),
-								as_.loadingEntries ? A2(
+				if (gs.session.config.sheetId !== '') {
+					return _Utils_Tuple2(
+						$author$project$Main$GuestModel(
+							_Utils_update(
+								gs,
+								{
+									pendingToken: $elm$core$Maybe$Just(token)
+								})),
+						$elm$core$Platform$Cmd$batch(
+							_List_fromArray(
+								[
+									$author$project$Main$saveStorage(
+									{key: 'oauth_token', value: token}),
+									A2(
+									$author$project$Main$fetchSheetMeta,
+									{token: token},
+									gs.session.config.sheetId)
+								])));
+				} else {
+					var defaultTrip = {budget: 0, coverPhotoUrl: '', description: '', endDate: '', name: 'Trip 1', sheetGid: 0, startDate: '', tabName: 'Expenses'};
+					var as_ = A3(
+						$author$project$Main$toAuthState,
+						{token: token},
+						A2($author$project$List$NonEmpty$Zipper$fromCons, defaultTrip, _List_Nil),
+						gs);
+					return _Utils_Tuple2(
+						$author$project$Main$AuthModel(as_),
+						$author$project$Main$saveStorage(
+							{key: 'oauth_token', value: token}));
+				}
+			case 'GotSheetMeta':
+				var result = msg.a;
+				var _v1 = gs.pendingToken;
+				if (_v1.$ === 'Nothing') {
+					return _Utils_Tuple2(
+						$author$project$Main$GuestModel(gs),
+						$elm$core$Platform$Cmd$none);
+				} else {
+					var token = _v1.a;
+					if (result.$ === 'Err') {
+						var e = result.a;
+						return _Utils_Tuple2(
+							$author$project$Main$GuestModel(
+								_Utils_update(
+									gs,
+									{
+										pendingToken: $elm$core$Maybe$Nothing,
+										session: {
+											config: gs.session.config,
+											reason: $author$project$Main$MetadataError(
+												$author$project$Main$httpErrString(e))
+										}
+									})),
+							$elm$core$Platform$Cmd$none);
+					} else {
+						var props = result.a;
+						var tripsZipper = A5($author$project$Main$buildTripsZipper, gs.storedTrips, gs.activeTripTab, props, $elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing);
+						var as_ = A3(
+							$author$project$Main$toAuthState,
+							{token: token},
+							tripsZipper,
+							gs);
+						var activeTrip = $author$project$List$NonEmpty$Zipper$current(tripsZipper);
+						return _Utils_Tuple2(
+							$author$project$Main$AuthModel(as_),
+							A3(
 								$author$project$Main$fetchEntries,
 								{token: token},
-								as_.config.sheetId) : $elm$core$Platform$Cmd$none
-							])));
+								gs.session.config.sheetId,
+								activeTrip.tabName));
+					}
+				}
 			case 'ToggleGuestSettings':
 				return _Utils_Tuple2(
 					$author$project$Main$GuestModel(
@@ -8701,33 +9646,17 @@ var $author$project$Main$updateGuest = F2(
 							})),
 					$author$project$Main$saveStorage(
 						{key: 'google_client_id', value: s}));
-			case 'TripStartChanged':
-				var s = msg.a;
-				return _Utils_Tuple2(
-					$author$project$Main$GuestModel(
-						_Utils_update(
-							gs,
-							{
-								session: A2(
-									$author$project$Main$mapGuestConfig,
-									function (c) {
-										return _Utils_update(
-											c,
-											{tripStart: s});
-									},
-									gs.session)
-							})),
-					$author$project$Main$saveStorage(
-						{key: 'trip_start', value: s}));
 			case 'ResetSettingsClicked':
-				var emptyCfg = {anthropicKey: '', googleClientId: '', sheetId: '', tripStart: ''};
+				var emptyCfg = {anthropicKey: '', googleClientId: '', sheetId: ''};
 				return _Utils_Tuple2(
 					$author$project$Main$GuestModel(
 						_Utils_update(
 							gs,
 							{
+								activeTripTab: '',
 								session: {config: emptyCfg, reason: $author$project$Main$FreshGuest},
-								showSettings: false
+								showSettings: false,
+								storedTrips: _List_Nil
 							})),
 					$author$project$Main$clearAllStorage(_Utils_Tuple0));
 			default:
@@ -9588,7 +10517,8 @@ var $author$project$Main$viewBottomNav = function (currentTab) {
 					_Utils_Tuple3($author$project$Main$ScanTab, '📷', 'Scan'),
 					_Utils_Tuple3($author$project$Main$AddTab, '+', 'Add'),
 					_Utils_Tuple3($author$project$Main$LedgerTab, '☰', 'Ledger'),
-					_Utils_Tuple3($author$project$Main$StatsTab, '▦', 'Stats')
+					_Utils_Tuple3($author$project$Main$StatsTab, '▦', 'Stats'),
+					_Utils_Tuple3($author$project$Main$TripsTab, '🗺', 'Trips')
 				])));
 };
 var $author$project$Main$DismissError = {$: 'DismissError'};
@@ -9653,17 +10583,36 @@ var $author$project$Main$viewHeader = function (as_) {
 		_List_fromArray(
 			[
 				A2(
-				$elm$html$Html$span,
+				$elm$html$Html$div,
+				_List_Nil,
 				_List_fromArray(
 					[
-						A2($elm$html$Html$Attributes$style, 'font-size', '18px'),
-						A2($elm$html$Html$Attributes$style, 'font-weight', '700'),
-						A2($elm$html$Html$Attributes$style, 'color', '#e8a020'),
-						A2($elm$html$Html$Attributes$style, 'letter-spacing', '0.08em')
-					]),
-				_List_fromArray(
-					[
-						$elm$html$Html$text('ALASKA')
+						A2(
+						$elm$html$Html$span,
+						_List_fromArray(
+							[
+								A2($elm$html$Html$Attributes$style, 'font-size', '18px'),
+								A2($elm$html$Html$Attributes$style, 'font-weight', '700'),
+								A2($elm$html$Html$Attributes$style, 'color', '#e8a020'),
+								A2($elm$html$Html$Attributes$style, 'letter-spacing', '0.08em')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('ALASKA')
+							])),
+						A2(
+						$elm$html$Html$span,
+						_List_fromArray(
+							[
+								A2($elm$html$Html$Attributes$style, 'font-size', '11px'),
+								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+								A2($elm$html$Html$Attributes$style, 'margin-left', '8px')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text(
+								$author$project$List$NonEmpty$Zipper$current(as_.trips).name)
+							]))
 					])),
 				A2(
 				$elm$html$Html$button,
@@ -9749,13 +10698,6 @@ var $author$project$Main$formatDateDisplay = function (iso) {
 		return mn + (' ' + (day + (', ' + y)));
 	} else {
 		return iso;
-	}
-};
-var $elm$core$List$isEmpty = function (xs) {
-	if (!xs.b) {
-		return true;
-	} else {
-		return false;
 	}
 };
 var $elm$virtual_dom$VirtualDom$keyedNode = function (tag) {
@@ -10350,7 +11292,6 @@ var $author$project$Main$FilesSelected = function (a) {
 };
 var $elm$html$Html$Attributes$accept = $elm$html$Html$Attributes$stringProperty('accept');
 var $elm$file$File$decoder = _File_decoder;
-var $elm$json$Json$Decode$int = _Json_decodeInt;
 var $author$project$Main$fileListDecoder = A2(
 	$elm$json$Json$Decode$andThen,
 	function (n) {
@@ -10720,9 +11661,6 @@ var $author$project$Main$SheetIdChanged = function (a) {
 	return {$: 'SheetIdChanged', a: a};
 };
 var $author$project$Main$SignOutClicked = {$: 'SignOutClicked'};
-var $author$project$Main$TripStartChanged = function (a) {
-	return {$: 'TripStartChanged', a: a};
-};
 var $author$project$Main$viewSettingsPanel = F3(
 	function (cfg, isSignedIn, version) {
 		return A2(
@@ -10780,19 +11718,6 @@ var $author$project$Main$viewSettingsPanel = F3(
 								$elm$html$Html$Attributes$value(cfg.anthropicKey),
 								$elm$html$Html$Events$onInput($author$project$Main$ApiKeyChanged),
 								$elm$html$Html$Attributes$placeholder('sk-ant-...'),
-								$author$project$Main$textInputStyle
-							]),
-						_List_Nil)),
-					A2(
-					$author$project$Main$formField,
-					'TRIP START DATE',
-					A2(
-						$elm$html$Html$input,
-						_List_fromArray(
-							[
-								$elm$html$Html$Attributes$type_('date'),
-								$elm$html$Html$Attributes$value(cfg.tripStart),
-								$elm$html$Html$Events$onInput($author$project$Main$TripStartChanged),
 								$author$project$Main$textInputStyle
 							]),
 						_List_Nil)),
@@ -10854,11 +11779,6 @@ var $author$project$Main$viewSettingsPanel = F3(
 							$elm$html$Html$text(version)
 						])) : $elm$html$Html$text('')
 				]));
-	});
-var $elm$core$Basics$composeL = F3(
-	function (g, f, x) {
-		return g(
-			f(x));
 	});
 var $elm$core$Tuple$second = function (_v0) {
 	var y = _v0.b;
@@ -11362,10 +12282,6 @@ var $elm$core$Dict$fromList = function (assocs) {
 		$elm$core$Dict$empty,
 		assocs);
 };
-var $elm$core$Tuple$pair = F2(
-	function (a, b) {
-		return _Utils_Tuple2(a, b);
-	});
 var $terezka$elm_charts$Internal$Helpers$toDefault = F3(
 	function (_default, items, index) {
 		var dict = $elm$core$Dict$fromList(
@@ -16135,6 +17051,7 @@ var $author$project$Main$viewDailyChart = function (entries) {
 			]));
 };
 var $author$project$Main$viewStatsTab = function (model) {
+	var tripStart = $author$project$List$NonEmpty$Zipper$current(model.trips).startDate;
 	var entries = model.entries;
 	var median = $author$project$Main$medianAmount(entries);
 	var numDays = $elm$core$List$length(
@@ -16157,7 +17074,7 @@ var $author$project$Main$viewStatsTab = function (model) {
 				return $.amount;
 			},
 			entries));
-	var daysIn = ((model.config.tripStart !== '') && (model.today !== '')) ? (($author$project$Main$isoToDayCount(model.today) - $author$project$Main$isoToDayCount(model.config.tripStart)) + 1) : 0;
+	var daysIn = ((tripStart !== '') && (model.today !== '')) ? (($author$project$Main$isoToDayCount(model.today) - $author$project$Main$isoToDayCount(tripStart)) + 1) : 0;
 	var bigDay = $author$project$Main$biggestDay(entries);
 	var avgPerEntry = (numEntries > 0) ? (total / numEntries) : 0;
 	var avgPerDay = (numDays > 0) ? (total / numDays) : 0;
@@ -16486,6 +17403,501 @@ var $author$project$Main$viewToast = function (toast) {
 				]));
 	}
 };
+var $author$project$Main$OpenEditTripForm = function (a) {
+	return {$: 'OpenEditTripForm', a: a};
+};
+var $author$project$Main$OpenNewTripForm = {$: 'OpenNewTripForm'};
+var $author$project$Main$SelectTrip = function (a) {
+	return {$: 'SelectTrip', a: a};
+};
+var $author$project$Main$SaveTripForm = {$: 'SaveTripForm'};
+var $author$project$Main$TripBudget = {$: 'TripBudget'};
+var $author$project$Main$TripCoverPhoto = {$: 'TripCoverPhoto'};
+var $author$project$Main$TripDescription = {$: 'TripDescription'};
+var $author$project$Main$TripEndDate = {$: 'TripEndDate'};
+var $author$project$Main$TripFieldChanged = F2(
+	function (a, b) {
+		return {$: 'TripFieldChanged', a: a, b: b};
+	});
+var $author$project$Main$TripName = {$: 'TripName'};
+var $author$project$Main$TripStartDate = {$: 'TripStartDate'};
+var $author$project$Main$viewTripForm = function (form) {
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'background', '#161918'),
+				A2($elm$html$Html$Attributes$style, 'border', '1px solid #2a3230'),
+				A2($elm$html$Html$Attributes$style, 'border-radius', '12px'),
+				A2($elm$html$Html$Attributes$style, 'padding', '16px')
+			]),
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$p,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'font-size', '15px'),
+						A2($elm$html$Html$Attributes$style, 'font-weight', '700'),
+						A2($elm$html$Html$Attributes$style, 'color', '#e8a020'),
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '16px')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text(
+						_Utils_eq(form.editing, $elm$core$Maybe$Nothing) ? 'New Trip' : 'Edit Trip')
+					])),
+				(!$elm$core$List$isEmpty(form.errors)) ? A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'background', '#2a1510'),
+						A2($elm$html$Html$Attributes$style, 'border', '1px solid #e85030'),
+						A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
+						A2($elm$html$Html$Attributes$style, 'padding', '10px'),
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '12px')
+					]),
+				A2(
+					$elm$core$List$map,
+					function (e) {
+						return A2(
+							$elm$html$Html$p,
+							_List_fromArray(
+								[
+									A2($elm$html$Html$Attributes$style, 'font-size', '13px'),
+									A2($elm$html$Html$Attributes$style, 'color', '#e8a020')
+								]),
+							_List_fromArray(
+								[
+									$elm$html$Html$text(e)
+								]));
+					},
+					form.errors)) : $elm$html$Html$text(''),
+				A2(
+				$author$project$Main$formField,
+				'TRIP NAME',
+				A2(
+					$elm$html$Html$input,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$type_('text'),
+							$elm$html$Html$Attributes$value(form.name),
+							$elm$html$Html$Events$onInput(
+							$author$project$Main$TripFieldChanged($author$project$Main$TripName)),
+							$elm$html$Html$Attributes$placeholder('Alaska 2026'),
+							$author$project$Main$textInputStyle
+						]),
+					_List_Nil)),
+				A2(
+				$author$project$Main$formField,
+				'DESCRIPTION',
+				A2(
+					$elm$html$Html$input,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$type_('text'),
+							$elm$html$Html$Attributes$value(form.description),
+							$elm$html$Html$Events$onInput(
+							$author$project$Main$TripFieldChanged($author$project$Main$TripDescription)),
+							$elm$html$Html$Attributes$placeholder('Optional'),
+							$author$project$Main$textInputStyle
+						]),
+					_List_Nil)),
+				A2(
+				$author$project$Main$formField,
+				'START DATE',
+				A2(
+					$elm$html$Html$input,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$type_('date'),
+							$elm$html$Html$Attributes$value(form.startDate),
+							$elm$html$Html$Events$onInput(
+							$author$project$Main$TripFieldChanged($author$project$Main$TripStartDate)),
+							$author$project$Main$textInputStyle
+						]),
+					_List_Nil)),
+				A2(
+				$author$project$Main$formField,
+				'END DATE',
+				A2(
+					$elm$html$Html$input,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$type_('date'),
+							$elm$html$Html$Attributes$value(form.endDate),
+							$elm$html$Html$Events$onInput(
+							$author$project$Main$TripFieldChanged($author$project$Main$TripEndDate)),
+							$author$project$Main$textInputStyle
+						]),
+					_List_Nil)),
+				A2(
+				$author$project$Main$formField,
+				'BUDGET ($)',
+				A2(
+					$elm$html$Html$input,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$type_('number'),
+							$elm$html$Html$Attributes$value(form.budget),
+							$elm$html$Html$Events$onInput(
+							$author$project$Main$TripFieldChanged($author$project$Main$TripBudget)),
+							$elm$html$Html$Attributes$placeholder('0 = no budget'),
+							$author$project$Main$textInputStyle
+						]),
+					_List_Nil)),
+				A2(
+				$author$project$Main$formField,
+				'COVER PHOTO URL',
+				A2(
+					$elm$html$Html$input,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$type_('url'),
+							$elm$html$Html$Attributes$value(form.coverPhotoUrl),
+							$elm$html$Html$Events$onInput(
+							$author$project$Main$TripFieldChanged($author$project$Main$TripCoverPhoto)),
+							$elm$html$Html$Attributes$placeholder('https://...'),
+							$author$project$Main$textInputStyle
+						]),
+					_List_Nil)),
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+						A2($elm$html$Html$Attributes$style, 'gap', '10px'),
+						A2($elm$html$Html$Attributes$style, 'margin-top', '16px')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$SaveTripForm),
+								A2($elm$html$Html$Attributes$style, 'flex', '1'),
+								A2($elm$html$Html$Attributes$style, 'background', '#e8a020'),
+								A2($elm$html$Html$Attributes$style, 'color', '#0d0f0e'),
+								A2($elm$html$Html$Attributes$style, 'border', 'none'),
+								A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
+								A2($elm$html$Html$Attributes$style, 'padding', '12px'),
+								A2($elm$html$Html$Attributes$style, 'font-size', '15px'),
+								A2($elm$html$Html$Attributes$style, 'font-weight', '700'),
+								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('Save')
+							])),
+						A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick(
+								$author$project$Main$TabChanged($author$project$Main$TripsTab)),
+								A2($elm$html$Html$Attributes$style, 'flex', '1'),
+								A2($elm$html$Html$Attributes$style, 'background', 'none'),
+								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+								A2($elm$html$Html$Attributes$style, 'border', '1px solid #2a3230'),
+								A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
+								A2($elm$html$Html$Attributes$style, 'padding', '12px'),
+								A2($elm$html$Html$Attributes$style, 'font-size', '15px'),
+								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('Cancel')
+							]))
+					]))
+			]));
+};
+var $author$project$Main$viewTripsTab = function (as_) {
+	var totalSpent = $elm$core$List$sum(
+		A2(
+			$elm$core$List$map,
+			function ($) {
+				return $.amount;
+			},
+			as_.entries));
+	var allTrips = $author$project$List$NonEmpty$Zipper$toList(as_.trips);
+	var activeTrip = $author$project$List$NonEmpty$Zipper$current(as_.trips);
+	var otherTrips = A2(
+		$elm$core$List$filter,
+		function (t) {
+			return !_Utils_eq(t.tabName, activeTrip.tabName);
+		},
+		allTrips);
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'padding', '20px')
+			]),
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$h2,
+				_List_fromArray(
+					[$author$project$Main$sectionHead]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('TRIPS')
+					])),
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'background', '#161918'),
+						A2($elm$html$Html$Attributes$style, 'border', '1px solid #2a3230'),
+						A2($elm$html$Html$Attributes$style, 'border-radius', '12px'),
+						A2($elm$html$Html$Attributes$style, 'padding', '16px'),
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '20px')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+								A2($elm$html$Html$Attributes$style, 'justify-content', 'space-between'),
+								A2($elm$html$Html$Attributes$style, 'align-items', 'flex-start')
+							]),
+						_List_fromArray(
+							[
+								A2(
+								$elm$html$Html$div,
+								_List_Nil,
+								_List_fromArray(
+									[
+										A2(
+										$elm$html$Html$p,
+										_List_fromArray(
+											[
+												A2($elm$html$Html$Attributes$style, 'font-size', '18px'),
+												A2($elm$html$Html$Attributes$style, 'font-weight', '700'),
+												A2($elm$html$Html$Attributes$style, 'color', '#e8a020'),
+												A2($elm$html$Html$Attributes$style, 'margin-bottom', '4px')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text(activeTrip.name)
+											])),
+										(activeTrip.description !== '') ? A2(
+										$elm$html$Html$p,
+										_List_fromArray(
+											[
+												A2($elm$html$Html$Attributes$style, 'font-size', '13px'),
+												A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+												A2($elm$html$Html$Attributes$style, 'margin-bottom', '8px')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text(activeTrip.description)
+											])) : $elm$html$Html$text(''),
+										(activeTrip.startDate !== '') ? A2(
+										$elm$html$Html$p,
+										_List_fromArray(
+											[
+												A2($elm$html$Html$Attributes$style, 'font-size', '12px'),
+												A2($elm$html$Html$Attributes$style, 'color', '#4a5a50')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text(
+												_Utils_ap(
+													activeTrip.startDate,
+													(activeTrip.endDate !== '') ? (' → ' + activeTrip.endDate) : ''))
+											])) : $elm$html$Html$text('')
+									])),
+								A2(
+								$elm$html$Html$button,
+								_List_fromArray(
+									[
+										$elm$html$Html$Events$onClick(
+										$author$project$Main$OpenEditTripForm(activeTrip)),
+										A2($elm$html$Html$Attributes$style, 'background', 'none'),
+										A2($elm$html$Html$Attributes$style, 'border', '1px solid #2a3230'),
+										A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+										A2($elm$html$Html$Attributes$style, 'border-radius', '6px'),
+										A2($elm$html$Html$Attributes$style, 'padding', '6px 10px'),
+										A2($elm$html$Html$Attributes$style, 'font-size', '12px'),
+										A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+									]),
+								_List_fromArray(
+									[
+										$elm$html$Html$text('Edit')
+									]))
+							])),
+						function () {
+						if (activeTrip.budget > 0) {
+							var pct = A2($elm$core$Basics$min, 1.0, totalSpent / activeTrip.budget);
+							return A2(
+								$elm$html$Html$div,
+								_List_fromArray(
+									[
+										A2($elm$html$Html$Attributes$style, 'margin-top', '12px')
+									]),
+								_List_fromArray(
+									[
+										A2(
+										$elm$html$Html$div,
+										_List_fromArray(
+											[
+												A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+												A2($elm$html$Html$Attributes$style, 'justify-content', 'space-between'),
+												A2($elm$html$Html$Attributes$style, 'font-size', '12px'),
+												A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+												A2($elm$html$Html$Attributes$style, 'margin-bottom', '4px')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text(
+												'$' + ($elm$core$String$fromInt(
+													$elm$core$Basics$round(totalSpent)) + ' spent')),
+												$elm$html$Html$text(
+												'Budget: $' + $elm$core$String$fromInt(
+													$elm$core$Basics$round(activeTrip.budget)))
+											])),
+										A2(
+										$elm$html$Html$div,
+										_List_fromArray(
+											[
+												A2($elm$html$Html$Attributes$style, 'background', '#2a3230'),
+												A2($elm$html$Html$Attributes$style, 'border-radius', '4px'),
+												A2($elm$html$Html$Attributes$style, 'height', '6px')
+											]),
+										_List_fromArray(
+											[
+												A2(
+												$elm$html$Html$div,
+												_List_fromArray(
+													[
+														A2(
+														$elm$html$Html$Attributes$style,
+														'background',
+														(pct >= 1.0) ? '#e85030' : '#e8a020'),
+														A2($elm$html$Html$Attributes$style, 'border-radius', '4px'),
+														A2($elm$html$Html$Attributes$style, 'height', '6px'),
+														A2(
+														$elm$html$Html$Attributes$style,
+														'width',
+														$elm$core$String$fromFloat(pct * 100) + '%')
+													]),
+												_List_Nil)
+											]))
+									]));
+						} else {
+							return $elm$html$Html$text('');
+						}
+					}()
+					])),
+				(!$elm$core$List$isEmpty(otherTrips)) ? A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '20px')
+					]),
+				A2(
+					$elm$core$List$map,
+					function (trip) {
+						return A2(
+							$elm$html$Html$button,
+							_List_fromArray(
+								[
+									$elm$html$Html$Events$onClick(
+									$author$project$Main$SelectTrip(trip.tabName)),
+									A2($elm$html$Html$Attributes$style, 'width', '100%'),
+									A2($elm$html$Html$Attributes$style, 'background', '#161918'),
+									A2($elm$html$Html$Attributes$style, 'border', '1px solid #2a3230'),
+									A2($elm$html$Html$Attributes$style, 'border-radius', '10px'),
+									A2($elm$html$Html$Attributes$style, 'padding', '14px 16px'),
+									A2($elm$html$Html$Attributes$style, 'margin-bottom', '8px'),
+									A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+									A2($elm$html$Html$Attributes$style, 'justify-content', 'space-between'),
+									A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
+									A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
+									A2($elm$html$Html$Attributes$style, 'color', '#c8d0c8'),
+									A2($elm$html$Html$Attributes$style, 'font-family', 'inherit')
+								]),
+							_List_fromArray(
+								[
+									A2(
+									$elm$html$Html$div,
+									_List_fromArray(
+										[
+											A2($elm$html$Html$Attributes$style, 'text-align', 'left')
+										]),
+									_List_fromArray(
+										[
+											A2(
+											$elm$html$Html$p,
+											_List_fromArray(
+												[
+													A2($elm$html$Html$Attributes$style, 'font-size', '15px'),
+													A2($elm$html$Html$Attributes$style, 'font-weight', '600'),
+													A2($elm$html$Html$Attributes$style, 'margin-bottom', '2px')
+												]),
+											_List_fromArray(
+												[
+													$elm$html$Html$text(trip.name)
+												])),
+											(trip.startDate !== '') ? A2(
+											$elm$html$Html$p,
+											_List_fromArray(
+												[
+													A2($elm$html$Html$Attributes$style, 'font-size', '11px'),
+													A2($elm$html$Html$Attributes$style, 'color', '#4a5a50')
+												]),
+											_List_fromArray(
+												[
+													$elm$html$Html$text(trip.startDate)
+												])) : $elm$html$Html$text('')
+										])),
+									A2(
+									$elm$html$Html$span,
+									_List_fromArray(
+										[
+											A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+											A2($elm$html$Html$Attributes$style, 'font-size', '16px')
+										]),
+									_List_fromArray(
+										[
+											$elm$html$Html$text('›')
+										]))
+								]));
+					},
+					otherTrips)) : $elm$html$Html$text(''),
+				function () {
+				var _v0 = as_.tripForm;
+				if (_v0.$ === 'Nothing') {
+					return A2(
+						$elm$html$Html$button,
+						_List_fromArray(
+							[
+								$elm$html$Html$Events$onClick($author$project$Main$OpenNewTripForm),
+								A2($elm$html$Html$Attributes$style, 'width', '100%'),
+								A2($elm$html$Html$Attributes$style, 'background', 'none'),
+								A2($elm$html$Html$Attributes$style, 'border', '1px dashed #3a4240'),
+								A2($elm$html$Html$Attributes$style, 'border-radius', '10px'),
+								A2($elm$html$Html$Attributes$style, 'padding', '14px'),
+								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+								A2($elm$html$Html$Attributes$style, 'font-size', '15px'),
+								A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
+								A2($elm$html$Html$Attributes$style, 'font-family', 'inherit')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('+ New Trip')
+							]));
+				} else {
+					var form = _v0.a;
+					return $author$project$Main$viewTripForm(form);
+				}
+			}()
+			]));
+};
 var $author$project$Main$viewAuth = function (as_) {
 	return A2(
 		$elm$html$Html$div,
@@ -16513,8 +17925,10 @@ var $author$project$Main$viewAuth = function (as_) {
 								return $author$project$Main$viewLedgerTab(as_);
 							case 'StatsTab':
 								return $author$project$Main$viewStatsTab(as_);
-							default:
+							case 'SettingsTab':
 								return A3($author$project$Main$viewSettingsPanel, as_.config, true, as_.version);
+							default:
+								return $author$project$Main$viewTripsTab(as_);
 						}
 					}()
 					])),
@@ -16528,10 +17942,13 @@ var $author$project$Main$guestMessage = function (reason) {
 	switch (reason.$) {
 		case 'FreshGuest':
 			return $elm$core$Maybe$Nothing;
-		case 'SessionExpired':
-			return $elm$core$Maybe$Just('Session expired — tap Sign In to continue.');
-		default:
+		case 'MetadataError':
+			var msg = reason.a;
+			return $elm$core$Maybe$Just('Could not load sheet: ' + msg);
+		case 'MissingConfig':
 			return $elm$core$Maybe$Just('Enter your Google Client ID in Settings first.');
+		default:
+			return $elm$core$Maybe$Just('Session expired — tap Sign In to continue.');
 	}
 };
 var $elm$html$Html$h1 = _VirtualDom_node('h1');

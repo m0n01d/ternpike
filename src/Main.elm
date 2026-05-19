@@ -1,21 +1,23 @@
 port module Main exposing (main)
 
 import Browser
+import Dict exposing (Dict)
 import File exposing (File)
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Keyed as Keyed
 import Html.Events exposing (..)
+import Html.Keyed as Keyed
 import Http
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 import Chart as C
 import Chart.Attributes as CA
-import Dict exposing (Dict)
+import List.NonEmpty.Zipper as Zipper exposing (Zipper)
 import Process
 import Task
 import Time
+import Validate exposing (Validator, ifBlank, ifTrue, validate)
 
 
 
@@ -70,11 +72,12 @@ type Category
 
 
 type Tab
-    = ScanTab
-    | AddTab
+    = AddTab
     | LedgerTab
-    | StatsTab
+    | ScanTab
     | SettingsTab
+    | StatsTab
+    | TripsTab
 
 
 type LocationSource
@@ -107,6 +110,45 @@ type alias ScanItem =
     , locationState : LocationState
     , exifDebug : String
     }
+
+
+type alias Trip =
+    { budget        : Float
+    , coverPhotoUrl : String
+    , description   : String
+    , endDate       : String
+    , name          : String
+    , sheetGid      : Int
+    , startDate     : String
+    , tabName       : String
+    }
+
+
+type alias SheetProp =
+    { gid   : Int
+    , title : String
+    }
+
+
+type alias TripForm =
+    { budget        : String
+    , coverPhotoUrl : String
+    , description   : String
+    , editing       : Maybe Trip
+    , endDate       : String
+    , errors        : List String
+    , name          : String
+    , startDate     : String
+    }
+
+
+type TripField
+    = TripBudget
+    | TripCoverPhoto
+    | TripDescription
+    | TripEndDate
+    | TripName
+    | TripStartDate
 
 
 type alias Entry =
@@ -142,17 +184,17 @@ type alias Creds =
 
 
 type alias AppConfig =
-    { sheetId        : String
+    { anthropicKey   : String
     , googleClientId : String
-    , anthropicKey   : String
-    , tripStart      : String
+    , sheetId        : String
     }
 
 
 type GuestReason
-    = FreshGuest      -- initial load or explicit sign-out
-    | SessionExpired  -- 401 auto sign-out
-    | MissingConfig   -- Sign In clicked but no Google client ID configured
+    = FreshGuest
+    | MetadataError String
+    | MissingConfig
+    | SessionExpired
 
 
 type alias GuestSession =
@@ -162,31 +204,36 @@ type alias GuestSession =
 
 
 type alias GuestState =
-    { session      : GuestSession
-    , showSettings : Bool
-    , today        : String
-    , version      : String
+    { activeTripTab : String
+    , pendingToken  : Maybe String
+    , session       : GuestSession
+    , showSettings  : Bool
+    , storedTrips   : List Trip
+    , today         : String
+    , version       : String
     }
 
 
 type alias AuthState =
-    { creds            : Creds
+    { activeScanItemId : Maybe String
     , config           : AppConfig
-    , tab              : Tab
+    , creds            : Creds
+    , editingEntry     : Maybe Entry
     , entries          : List Entry
+    , error            : Maybe String
+    , geoBlocked       : Bool
     , loadingEntries   : Bool
     , pendingEntry     : PendingEntry
-    , editingEntry     : Maybe Entry
     , scanQueue        : Dict String ScanItem
-    , activeScanItemId : Maybe String
-    , error            : Maybe String
-    , submitting       : Bool
-    , today            : String
-    , geoBlocked       : Bool
-    , showMapPicker    : Bool
     , showLedgerMap    : Bool
-    , version          : String
+    , showMapPicker    : Bool
+    , submitting       : Bool
+    , tab              : Tab
     , toast            : Maybe String
+    , today            : String
+    , tripForm         : Maybe TripForm
+    , trips            : Zipper Trip
+    , version          : String
     }
 
 
@@ -196,48 +243,55 @@ type Model
 
 
 type Msg
-    = GotOAuthToken String
-    | SignInClicked
-    | ToggleGuestSettings
-    | SignOutClicked
-    | ResetSettingsClicked
-    | ToggleLedgerMap
-    | ShowToast String
-    | ToastExpired
-    | FilesSelected (List File)
-    | GotFileUrl String String
-    | GotOcrResult String (Result Http.Error String)
-    | ReviewScanItem String
+    = AmountChanged String
+    | ApiKeyChanged String
     | BackToQueue
-    | ClearDoneItems
-    | AmountChanged String
+    | CancelEdit
     | CategorySelected Category
-    | NoteChanged String
-    | LongNoteChanged String
-    | MerchantChanged String
+    | ClearDoneItems
     | DateChanged String
+    | DeleteEntry Entry
+    | DeleteTrip Trip
+    | DismissError
+    | DismissMapPicker
+    | EditEntry Entry
+    | EntriesFetched (Result Http.Error (List Entry))
+    | EntryDeleted (Result Http.Error ())
+    | EntrySubmitted (Result Http.Error ())
+    | FilesSelected (List File)
+    | GeolocationDenied
+    | GoogleClientIdChanged String
+    | GotExifCoords String (Maybe Float) (Maybe Float) String
+    | GotFileUrl String String
+    | GotGpsCoords Float Float
+    | GotOAuthToken String
+    | GotOcrResult String (Result Http.Error String)
+    | GotSheetMeta (Result Http.Error (List SheetProp))
+    | GotTripCreated (Result Http.Error SheetProp)
+    | LongNoteChanged String
+    | MapPickerConfirmed Float Float
+    | MerchantChanged String
+    | NoteChanged String
+    | OpenEditTripForm Trip
+    | OpenMapPicker
+    | OpenNewTripForm
+    | RefreshClicked
+    | ResetSettingsClicked
+    | ReviewScanItem String
+    | SaveTripForm
+    | SelectTrip String
+    | SheetIdChanged String
+    | ShowToast String
+    | SignInClicked
+    | SignOutClicked
+    | SkipLocation
     | SubmitEntry
     | GotSubmitTime Time.Posix
-    | EntrySubmitted (Result Http.Error ())
-    | EntriesFetched (Result Http.Error (List Entry))
-    | DeleteEntry Entry
-    | EntryDeleted (Result Http.Error ())
-    | EditEntry Entry
-    | CancelEdit
     | TabChanged Tab
-    | ApiKeyChanged String
-    | SheetIdChanged String
-    | GoogleClientIdChanged String
-    | TripStartChanged String
-    | RefreshClicked
-    | DismissError
-    | GotGpsCoords Float Float
-    | GeolocationDenied
-    | OpenMapPicker
-    | MapPickerConfirmed Float Float
-    | DismissMapPicker
-    | SkipLocation
-    | GotExifCoords String (Maybe Float) (Maybe Float) String
+    | ToggleGuestSettings
+    | ToggleLedgerMap
+    | ToastExpired
+    | TripFieldChanged TripField String
 
 
 
@@ -319,9 +373,10 @@ allCategories =
 guestMessage : GuestReason -> Maybe String
 guestMessage reason =
     case reason of
-        FreshGuest     -> Nothing
-        SessionExpired -> Just "Session expired — tap Sign In to continue."
-        MissingConfig  -> Just "Enter your Google Client ID in Settings first."
+        FreshGuest          -> Nothing
+        MetadataError msg   -> Just ("Could not load sheet: " ++ msg)
+        MissingConfig       -> Just "Enter your Google Client ID in Settings first."
+        SessionExpired      -> Just "Session expired — tap Sign In to continue."
 
 
 mapGuestConfig : (AppConfig -> AppConfig) -> GuestSession -> GuestSession
@@ -329,35 +384,192 @@ mapGuestConfig f gs =
     { gs | config = f gs.config }
 
 
-toAuthState : Creds -> GuestState -> AuthState
-toAuthState creds gs =
-    { creds            = creds
+toAuthState : Creds -> Zipper Trip -> GuestState -> AuthState
+toAuthState creds tripsZipper gs =
+    { activeScanItemId = Nothing
     , config           = gs.session.config
-    , tab              = LedgerTab
+    , creds            = creds
+    , editingEntry     = Nothing
     , entries          = []
+    , error            = Nothing
+    , geoBlocked       = False
     , loadingEntries   = gs.session.config.sheetId /= ""
     , pendingEntry     = defaultPendingEntry gs.today
-    , editingEntry     = Nothing
     , scanQueue        = Dict.empty
-    , activeScanItemId = Nothing
-    , error            = Nothing
-    , submitting       = False
-    , today            = gs.today
-    , geoBlocked       = False
-    , showMapPicker    = False
     , showLedgerMap    = False
-    , version          = gs.version
+    , showMapPicker    = False
+    , submitting       = False
+    , tab              = LedgerTab
     , toast            = Nothing
+    , today            = gs.today
+    , tripForm         = Nothing
+    , trips            = tripsZipper
+    , version          = gs.version
     }
 
 
 toGuestState : GuestReason -> AuthState -> GuestState
 toGuestState reason as_ =
-    { session      = { config = as_.config, reason = reason }
-    , showSettings = reason /= FreshGuest
-    , today        = as_.today
-    , version      = as_.version
+    { activeTripTab = (Zipper.current as_.trips).tabName
+    , pendingToken  = Nothing
+    , session       = { config = as_.config, reason = reason }
+    , showSettings  = reason /= FreshGuest
+    , storedTrips   = Zipper.toList as_.trips
+    , today         = as_.today
+    , version       = as_.version
     }
+
+
+tripValidator : Validator String TripForm
+tripValidator =
+    Validate.all
+        [ ifBlank .name "Trip name is required."
+        , ifTrue (\f -> f.budget /= "" && String.toFloat f.budget == Nothing) "Budget must be a number."
+        , ifTrue (\f -> f.endDate /= "" && f.endDate < f.startDate) "End date must be after start date."
+        ]
+
+
+slugify : String -> String
+slugify s =
+    s
+        |> String.toLower
+        |> String.map (\c -> if Char.isAlphaNum c then c else '-')
+        |> String.split "-"
+        |> List.filter ((/=) "")
+        |> String.join "-"
+
+
+encodeTrip : Trip -> E.Value
+encodeTrip t =
+    E.object
+        [ ( "budget", E.float t.budget )
+        , ( "coverPhotoUrl", E.string t.coverPhotoUrl )
+        , ( "description", E.string t.description )
+        , ( "endDate", E.string t.endDate )
+        , ( "name", E.string t.name )
+        , ( "sheetGid", E.int t.sheetGid )
+        , ( "startDate", E.string t.startDate )
+        , ( "tabName", E.string t.tabName )
+        ]
+
+
+tripDecoder : D.Decoder Trip
+tripDecoder =
+    D.succeed Trip
+        |> Pipeline.required "budget" D.float
+        |> Pipeline.required "coverPhotoUrl" D.string
+        |> Pipeline.required "description" D.string
+        |> Pipeline.required "endDate" D.string
+        |> Pipeline.required "name" D.string
+        |> Pipeline.required "sheetGid" D.int
+        |> Pipeline.required "startDate" D.string
+        |> Pipeline.required "tabName" D.string
+
+
+tripsFromFlags : String -> List Trip
+tripsFromFlags json =
+    D.decodeString (D.list tripDecoder) json
+        |> Result.withDefault []
+
+
+sheetPropDecoder : D.Decoder SheetProp
+sheetPropDecoder =
+    D.map2 SheetProp
+        (D.field "sheetId" D.int)
+        (D.field "title" D.string)
+
+
+sheetMetaDecoder : D.Decoder (List SheetProp)
+sheetMetaDecoder =
+    D.field "sheets"
+        (D.list
+            (D.field "properties" sheetPropDecoder)
+        )
+
+
+addSheetReplyDecoder : D.Decoder SheetProp
+addSheetReplyDecoder =
+    D.field "replies"
+        (D.index 0
+            (D.field "addSheet"
+                (D.field "properties" sheetPropDecoder)
+            )
+        )
+
+
+buildTripsZipper : List Trip -> String -> List SheetProp -> Maybe String -> Maybe String -> Zipper Trip
+buildTripsZipper storedTrips activeTripTab props migrationStartDate activeTripTabFlag =
+    let
+        tripsWithGid =
+            List.filterMap
+                (\p ->
+                    let
+                        existing =
+                            List.filter (\t -> t.tabName == p.title) storedTrips
+                    in
+                    case existing of
+                        t :: _ ->
+                            Just { t | sheetGid = p.gid }
+
+                        [] ->
+                            Nothing
+                )
+                props
+
+        allTrips =
+            if List.isEmpty tripsWithGid then
+                case props of
+                    firstProp :: _ ->
+                        [ { budget        = 0
+                          , coverPhotoUrl = ""
+                          , description   = ""
+                          , endDate       = ""
+                          , name          = "Trip 1"
+                          , sheetGid      = firstProp.gid
+                          , startDate     = Maybe.withDefault "" migrationStartDate
+                          , tabName       = firstProp.title
+                          }
+                        ]
+
+                    [] ->
+                        [ { budget        = 0
+                          , coverPhotoUrl = ""
+                          , description   = ""
+                          , endDate       = ""
+                          , name          = "Trip 1"
+                          , sheetGid      = 0
+                          , startDate     = Maybe.withDefault "" migrationStartDate
+                          , tabName       = "Expenses"
+                          }
+                        ]
+
+            else
+                tripsWithGid
+
+        activeTab =
+            if activeTripTab /= "" then activeTripTab
+            else Maybe.withDefault "" activeTripTabFlag
+
+        zipper =
+            case allTrips of
+                h :: t ->
+                    Zipper.fromCons h t
+
+                [] ->
+                    Zipper.fromCons
+                        { budget = 0, coverPhotoUrl = "", description = "", endDate = ""
+                        , name = "Trip 1", sheetGid = 0, startDate = "", tabName = "Expenses"
+                        }
+                        []
+
+        focused =
+            if activeTab /= "" then
+                Zipper.focus (\tr -> tr.tabName == activeTab) zipper
+                    |> Maybe.withDefault zipper
+            else
+                zipper
+    in
+    focused
 
 
 ocrSystemPrompt : String
@@ -429,17 +641,25 @@ init flagsJson =
                 |> Maybe.andThen (\t -> if t == "" then Nothing else Just t)
 
         cfg =
-            { sheetId        = dec "sheetId"
+            { anthropicKey   = dec "anthropicKey"
             , googleClientId = dec "googleClientId"
-            , anthropicKey   = dec "anthropicKey"
-            , tripStart      = dec "tripStart" |> (\s -> if s == "" then "2026-05-22" else s)
+            , sheetId        = dec "sheetId"
             }
 
+        storedTrips =
+            tripsFromFlags (dec "trips")
+
+        activeTripTab =
+            dec "activeTripTab"
+
         gs =
-            { session      = { config = cfg, reason = FreshGuest }
-            , showSettings = False
-            , today        = dec "today"
-            , version      = dec "version"
+            { activeTripTab = activeTripTab
+            , pendingToken  = Nothing
+            , session       = { config = cfg, reason = FreshGuest }
+            , showSettings  = False
+            , storedTrips   = storedTrips
+            , today         = dec "today"
+            , version       = dec "version"
             }
     in
     case token of
@@ -447,12 +667,33 @@ init flagsJson =
             ( GuestModel gs, Cmd.none )
 
         Just t ->
-            let
-                as_ = toAuthState { token = t } gs
-            in
-            ( AuthModel as_
-            , if cfg.sheetId /= "" then fetchEntries { token = t } cfg.sheetId else Cmd.none
-            )
+            if cfg.sheetId /= "" then
+                ( GuestModel { gs | pendingToken = Just t }
+                , fetchSheetMeta { token = t } cfg.sheetId
+                )
+            else
+                let
+                    defaultTrip =
+                        { budget = 0, coverPhotoUrl = "", description = "", endDate = ""
+                        , name = "Trip 1", sheetGid = 0, startDate = "", tabName = "Expenses"
+                        }
+
+                    tripsZipper =
+                        case storedTrips of
+                            h :: rest ->
+                                let z = Zipper.fromCons h rest
+                                in if activeTripTab /= "" then
+                                    Zipper.focus (\t2 -> t2.tabName == activeTripTab) z
+                                        |> Maybe.withDefault z
+                                   else
+                                    z
+
+                            [] ->
+                                Zipper.fromCons defaultTrip []
+                in
+                ( AuthModel (toAuthState { token = t } tripsZipper gs)
+                , Cmd.none
+                )
 
 
 
@@ -481,15 +722,60 @@ updateGuest msg gs =
                 ( GuestModel gs, requestOAuthToken True )
 
         GotOAuthToken token ->
-            let
-                as_ = toAuthState { token = token } gs
-            in
-            ( AuthModel as_
-            , Cmd.batch
-                [ saveStorage { key = "oauth_token", value = token }
-                , if as_.loadingEntries then fetchEntries { token = token } as_.config.sheetId else Cmd.none
-                ]
-            )
+            if gs.session.config.sheetId /= "" then
+                ( GuestModel { gs | pendingToken = Just token }
+                , Cmd.batch
+                    [ saveStorage { key = "oauth_token", value = token }
+                    , fetchSheetMeta { token = token } gs.session.config.sheetId
+                    ]
+                )
+            else
+                let
+                    defaultTrip =
+                        { budget = 0, coverPhotoUrl = "", description = "", endDate = ""
+                        , name = "Trip 1", sheetGid = 0, startDate = "", tabName = "Expenses"
+                        }
+                    as_ = toAuthState { token = token } (Zipper.fromCons defaultTrip []) gs
+                in
+                ( AuthModel as_
+                , saveStorage { key = "oauth_token", value = token }
+                )
+
+        GotSheetMeta result ->
+            case gs.pendingToken of
+                Nothing ->
+                    ( GuestModel gs, Cmd.none )
+
+                Just token ->
+                    case result of
+                        Err e ->
+                            ( GuestModel
+                                { gs
+                                    | pendingToken = Nothing
+                                    , session = { config = gs.session.config, reason = MetadataError (httpErrString e) }
+                                }
+                            , Cmd.none
+                            )
+
+                        Ok props ->
+                            let
+                                tripsZipper =
+                                    buildTripsZipper
+                                        gs.storedTrips
+                                        gs.activeTripTab
+                                        props
+                                        Nothing
+                                        Nothing
+
+                                as_ =
+                                    toAuthState { token = token } tripsZipper gs
+
+                                activeTrip =
+                                    Zipper.current tripsZipper
+                            in
+                            ( AuthModel as_
+                            , fetchEntries { token = token } gs.session.config.sheetId activeTrip.tabName
+                            )
 
         ToggleGuestSettings ->
             ( GuestModel { gs | showSettings = not gs.showSettings }, Cmd.none )
@@ -509,16 +795,17 @@ updateGuest msg gs =
             , saveStorage { key = "google_client_id", value = s }
             )
 
-        TripStartChanged s ->
-            ( GuestModel { gs | session = mapGuestConfig (\c -> { c | tripStart = s }) gs.session }
-            , saveStorage { key = "trip_start", value = s }
-            )
-
         ResetSettingsClicked ->
             let
-                emptyCfg = { sheetId = "", googleClientId = "", anthropicKey = "", tripStart = "" }
+                emptyCfg = { anthropicKey = "", googleClientId = "", sheetId = "" }
             in
-            ( GuestModel { gs | session = { config = emptyCfg, reason = FreshGuest }, showSettings = False }
+            ( GuestModel
+                { gs
+                    | activeTripTab = ""
+                    , session       = { config = emptyCfg, reason = FreshGuest }
+                    , showSettings  = False
+                    , storedTrips   = []
+                }
             , clearAllStorage ()
             )
 
@@ -539,10 +826,13 @@ updateAuth msg as_ =
 
         ResetSettingsClicked ->
             ( GuestModel
-                { session      = { config = { sheetId = "", googleClientId = "", anthropicKey = "", tripStart = "" }, reason = FreshGuest }
-                , showSettings = False
-                , today        = as_.today
-                , version      = as_.version
+                { activeTripTab = ""
+                , pendingToken  = Nothing
+                , session       = { config = { anthropicKey = "", googleClientId = "", sheetId = "" }, reason = FreshGuest }
+                , showSettings  = False
+                , storedTrips   = []
+                , today         = as_.today
+                , version       = as_.version
                 }
             , clearAllStorage ()
             )
@@ -659,7 +949,7 @@ updateAuth msg as_ =
                                         _ -> original.lon
                             }
                     in
-                    ( AuthModel as_, updateEntry as_.creds as_.config.sheetId updated )
+                    ( AuthModel as_, updateEntry as_.creds as_.config.sheetId (Zipper.current as_.trips).tabName updated )
 
                 Nothing ->
                     let
@@ -682,7 +972,7 @@ updateAuth msg as_ =
                             , lon = eLon
                             }
                     in
-                    ( AuthModel as_, appendEntry as_.creds as_.config.sheetId entry )
+                    ( AuthModel as_, appendEntry as_.creds as_.config.sheetId (Zipper.current as_.trips).tabName entry )
 
         EntrySubmitted result ->
             case result of
@@ -714,7 +1004,7 @@ updateAuth msg as_ =
                             , tab = nextTab
                             , loadingEntries = True
                         }
-                    , fetchEntries as_.creds as_.config.sheetId
+                    , fetchEntries as_.creds as_.config.sheetId (Zipper.current as_.trips).tabName
                     )
 
                 Err (Http.BadStatus 401) ->
@@ -739,13 +1029,13 @@ updateAuth msg as_ =
 
         DeleteEntry entry ->
             ( AuthModel { as_ | entries = List.filter (\e -> e.id /= entry.id) as_.entries }
-            , deleteEntry as_.creds as_.config.sheetId entry.rowIndex
+            , deleteEntry as_.creds as_.config.sheetId (Zipper.current as_.trips).sheetGid entry.rowIndex
             )
 
         EntryDeleted result ->
             case result of
                 Ok () ->
-                    ( AuthModel as_, fetchEntries as_.creds as_.config.sheetId )
+                    ( AuthModel as_, fetchEntries as_.creds as_.config.sheetId (Zipper.current as_.trips).tabName )
 
                 Err (Http.BadStatus 401) ->
                     ( GuestModel (toGuestState SessionExpired as_), clearStorage () )
@@ -797,16 +1087,17 @@ updateAuth msg as_ =
                     , loadingEntries = shouldFetch
                     , pendingEntry = newPending
                     , editingEntry = if tab /= AddTab then Nothing else as_.editingEntry
+                    , tripForm = if tab /= TripsTab then Nothing else as_.tripForm
                 }
             , Cmd.batch
-                [ if shouldFetch then fetchEntries as_.creds as_.config.sheetId else Cmd.none
+                [ if shouldFetch then fetchEntries as_.creds as_.config.sheetId (Zipper.current as_.trips).tabName else Cmd.none
                 , geoCmd
                 ]
             )
 
         RefreshClicked ->
             ( AuthModel { as_ | loadingEntries = True }
-            , fetchEntries as_.creds as_.config.sheetId
+            , fetchEntries as_.creds as_.config.sheetId (Zipper.current as_.trips).tabName
             )
 
         ApiKeyChanged s ->
@@ -825,12 +1116,6 @@ updateAuth msg as_ =
             let cfg = as_.config
             in ( AuthModel { as_ | config = { cfg | googleClientId = s } }
                , saveStorage { key = "google_client_id", value = s }
-               )
-
-        TripStartChanged s ->
-            let cfg = as_.config
-            in ( AuthModel { as_ | config = { cfg | tripStart = s } }
-               , saveStorage { key = "trip_start", value = s }
                )
 
         DismissError ->
@@ -926,6 +1211,171 @@ updateAuth msg as_ =
             , Cmd.none
             )
 
+        SelectTrip tabName ->
+            let
+                trips_ =
+                    Zipper.focus (\t -> t.tabName == tabName) as_.trips
+                        |> Maybe.withDefault as_.trips
+            in
+            ( AuthModel { as_ | trips = trips_, loadingEntries = True, tab = LedgerTab }
+            , Cmd.batch
+                [ saveStorage { key = "active_trip", value = tabName }
+                , fetchEntries as_.creds as_.config.sheetId (Zipper.current trips_).tabName
+                ]
+            )
+
+        OpenNewTripForm ->
+            ( AuthModel
+                { as_
+                    | tripForm = Just
+                        { budget        = ""
+                        , coverPhotoUrl = ""
+                        , description   = ""
+                        , editing       = Nothing
+                        , endDate       = ""
+                        , errors        = []
+                        , name          = ""
+                        , startDate     = as_.today
+                        }
+                }
+            , Cmd.none
+            )
+
+        OpenEditTripForm trip ->
+            ( AuthModel
+                { as_
+                    | tripForm = Just
+                        { budget        = if trip.budget > 0 then String.fromFloat trip.budget else ""
+                        , coverPhotoUrl = trip.coverPhotoUrl
+                        , description   = trip.description
+                        , editing       = Just trip
+                        , endDate       = trip.endDate
+                        , errors        = []
+                        , name          = trip.name
+                        , startDate     = trip.startDate
+                        }
+                }
+            , Cmd.none
+            )
+
+        TripFieldChanged field value ->
+            let
+                updateForm f =
+                    case field of
+                        TripBudget      -> { f | budget = value }
+                        TripCoverPhoto  -> { f | coverPhotoUrl = value }
+                        TripDescription -> { f | description = value }
+                        TripEndDate     -> { f | endDate = value }
+                        TripName        -> { f | name = value }
+                        TripStartDate   -> { f | startDate = value }
+            in
+            ( AuthModel { as_ | tripForm = Maybe.map updateForm as_.tripForm }, Cmd.none )
+
+        SaveTripForm ->
+            case as_.tripForm of
+                Nothing ->
+                    ( AuthModel as_, Cmd.none )
+
+                Just form ->
+                    case validate tripValidator form of
+                        Err errs ->
+                            ( AuthModel { as_ | tripForm = Just { form | errors = errs } }, Cmd.none )
+
+                        Ok _ ->
+                            case form.editing of
+                                Just existing ->
+                                    let
+                                        updated =
+                                            { existing
+                                                | budget        = String.toFloat form.budget |> Maybe.withDefault 0
+                                                , coverPhotoUrl = form.coverPhotoUrl
+                                                , description   = form.description
+                                                , endDate       = form.endDate
+                                                , name          = form.name
+                                                , startDate     = form.startDate
+                                            }
+
+                                        trips_ =
+                                            Zipper.map
+                                                (\t -> if t.tabName == existing.tabName then updated else t)
+                                                as_.trips
+                                    in
+                                    ( AuthModel { as_ | trips = trips_, tripForm = Nothing }
+                                    , saveStorage { key = "trips", value = E.encode 0 (E.list encodeTrip (Zipper.toList trips_)) }
+                                    )
+
+                                Nothing ->
+                                    let
+                                        tabName =
+                                            slugify form.name
+                                    in
+                                    ( AuthModel as_
+                                    , createTripSheet as_.creds as_.config.sheetId tabName
+                                    )
+
+        GotTripCreated result ->
+            case result of
+                Err e ->
+                    ( AuthModel { as_ | error = Just ("Failed to create trip: " ++ httpErrString e) }, Cmd.none )
+
+                Ok prop ->
+                    case as_.tripForm of
+                        Nothing ->
+                            ( AuthModel as_, Cmd.none )
+
+                        Just form ->
+                            let
+                                newTrip =
+                                    { budget        = String.toFloat form.budget |> Maybe.withDefault 0
+                                    , coverPhotoUrl = form.coverPhotoUrl
+                                    , description   = form.description
+                                    , endDate       = form.endDate
+                                    , name          = form.name
+                                    , sheetGid      = prop.gid
+                                    , startDate     = form.startDate
+                                    , tabName       = prop.title
+                                    }
+
+                                trips_ =
+                                    Zipper.consBefore newTrip as_.trips
+                                        |> Zipper.focus (\t -> t.tabName == prop.title)
+                                        |> Maybe.withDefault as_.trips
+                            in
+                            ( AuthModel
+                                { as_
+                                    | trips = trips_
+                                    , tripForm = Nothing
+                                    , loadingEntries = True
+                                    , tab = LedgerTab
+                                }
+                            , Cmd.batch
+                                [ saveStorage { key = "trips", value = E.encode 0 (E.list encodeTrip (Zipper.toList trips_)) }
+                                , saveStorage { key = "active_trip", value = prop.title }
+                                , fetchEntries as_.creds as_.config.sheetId prop.title
+                                ]
+                            )
+
+        DeleteTrip trip ->
+            let
+                remaining =
+                    Zipper.toList as_.trips
+                        |> List.filter (\t -> t.tabName /= trip.tabName)
+            in
+            case remaining of
+                [] ->
+                    ( AuthModel as_, Cmd.none )
+
+                h :: t ->
+                    let
+                        trips_ =
+                            Zipper.fromCons h t
+                                |> Zipper.focus (\tr -> tr.tabName /= trip.tabName)
+                                |> Maybe.withDefault (Zipper.fromCons h t)
+                    in
+                    ( AuthModel { as_ | trips = trips_ }
+                    , saveStorage { key = "trips", value = E.encode 0 (E.list encodeTrip (Zipper.toList trips_)) }
+                    )
+
         _ ->
             ( AuthModel as_, Cmd.none )
 
@@ -939,12 +1389,12 @@ authPending f as_ =
 -- HTTP
 
 
-fetchEntries : Creds -> String -> Cmd Msg
-fetchEntries creds sheetId =
+fetchEntries : Creds -> String -> String -> Cmd Msg
+fetchEntries creds sheetId tabName =
     Http.request
         { method = "GET"
         , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
-        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A2:J"
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/" ++ tabName ++ "!A2:J"
         , body = Http.emptyBody
         , expect = expectJsonBody EntriesFetched entriesDecoder
         , timeout = Nothing
@@ -952,8 +1402,8 @@ fetchEntries creds sheetId =
         }
 
 
-appendEntry : Creds -> String -> Entry -> Cmd Msg
-appendEntry creds sheetId entry =
+appendEntry : Creds -> String -> String -> Entry -> Cmd Msg
+appendEntry creds sheetId tabName entry =
     let
         body =
             E.object
@@ -978,7 +1428,7 @@ appendEntry creds sheetId entry =
     Http.request
         { method = "POST"
         , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
-        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A:J:append?valueInputOption=RAW"
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/" ++ tabName ++ "!A:J:append?valueInputOption=RAW"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntrySubmitted
         , timeout = Nothing
@@ -986,8 +1436,8 @@ appendEntry creds sheetId entry =
         }
 
 
-deleteEntry : Creds -> String -> Int -> Cmd Msg
-deleteEntry creds sheetId rowIndex =
+deleteEntry : Creds -> String -> Int -> Int -> Cmd Msg
+deleteEntry creds sheetId sheetGid rowIndex =
     let
         body =
             E.object
@@ -998,7 +1448,7 @@ deleteEntry creds sheetId rowIndex =
                               , E.object
                                     [ ( "range"
                                       , E.object
-                                            [ ( "sheetId", E.int 0 )
+                                            [ ( "sheetId", E.int sheetGid )
                                             , ( "dimension", E.string "ROWS" )
                                             , ( "startIndex", E.int (rowIndex - 1) )
                                             , ( "endIndex", E.int rowIndex )
@@ -1022,11 +1472,11 @@ deleteEntry creds sheetId rowIndex =
         }
 
 
-updateEntry : Creds -> String -> Entry -> Cmd Msg
-updateEntry creds sheetId entry =
+updateEntry : Creds -> String -> String -> Entry -> Cmd Msg
+updateEntry creds sheetId tabName entry =
     let
         range =
-            "Expenses!A" ++ String.fromInt entry.rowIndex ++ ":J" ++ String.fromInt entry.rowIndex
+            tabName ++ "!A" ++ String.fromInt entry.rowIndex ++ ":J" ++ String.fromInt entry.rowIndex
 
         body =
             E.object
@@ -1054,6 +1504,50 @@ updateEntry creds sheetId entry =
         , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/" ++ range ++ "?valueInputOption=RAW"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntrySubmitted
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+fetchSheetMeta : Creds -> String -> Cmd Msg
+fetchSheetMeta creds sheetId =
+    Http.request
+        { method = "GET"
+        , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "?fields=sheets.properties"
+        , body = Http.emptyBody
+        , expect = expectJsonBody GotSheetMeta sheetMetaDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+createTripSheet : Creds -> String -> String -> Cmd Msg
+createTripSheet creds sheetId tabName =
+    let
+        body =
+            E.object
+                [ ( "requests"
+                  , E.list identity
+                        [ E.object
+                            [ ( "addSheet"
+                              , E.object
+                                    [ ( "properties"
+                                      , E.object [ ( "title", E.string tabName ) ]
+                                      )
+                                    ]
+                              )
+                            ]
+                        ]
+                  )
+                ]
+    in
+    Http.request
+        { method = "POST"
+        , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ ":batchUpdate"
+        , body = Http.jsonBody body
+        , expect = expectJsonBody GotTripCreated addSheetReplyDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -1695,6 +2189,9 @@ viewAuth as_ =
 
                 SettingsTab ->
                     viewSettingsPanel as_.config True as_.version
+
+                TripsTab ->
+                    viewTripsTab as_
             ]
         , viewBottomNav as_.tab
         , viewToast as_.toast
@@ -1731,13 +2228,21 @@ viewHeader as_ =
         , style "top" "0"
         , style "z-index" "10"
         ]
-        [ span
-            [ style "font-size" "18px"
-            , style "font-weight" "700"
-            , style "color" "#e8a020"
-            , style "letter-spacing" "0.08em"
+        [ div []
+            [ span
+                [ style "font-size" "18px"
+                , style "font-weight" "700"
+                , style "color" "#e8a020"
+                , style "letter-spacing" "0.08em"
+                ]
+                [ text "ALASKA" ]
+            , span
+                [ style "font-size" "11px"
+                , style "color" "#7a8a80"
+                , style "margin-left" "8px"
+                ]
+                [ text (Zipper.current as_.trips).name ]
             ]
-            [ text "ALASKA" ]
         , button
             [ onClick
                 (if as_.tab == SettingsTab then
@@ -1775,6 +2280,7 @@ viewBottomNav currentTab =
             , ( AddTab, "+", "Add" )
             , ( LedgerTab, "☰", "Ledger" )
             , ( StatsTab, "▦", "Stats" )
+            , ( TripsTab, "🗺", "Trips" )
             ]
         )
 
@@ -2579,9 +3085,12 @@ viewStatsTab model =
                 |> List.sortBy (\e -> negate e.amount)
                 |> List.take 5
 
+        tripStart =
+            (Zipper.current model.trips).startDate
+
         daysIn =
-            if model.config.tripStart /= "" && model.today /= "" then
-                isoToDayCount model.today - isoToDayCount model.config.tripStart + 1
+            if tripStart /= "" && model.today /= "" then
+                isoToDayCount model.today - isoToDayCount tripStart + 1
 
             else
                 0
@@ -2800,6 +3309,246 @@ viewCumulativeChart entries =
 
 
 
+-- TRIPS TAB
+
+
+viewTripsTab : AuthState -> Html Msg
+viewTripsTab as_ =
+    let
+        activeTrip =
+            Zipper.current as_.trips
+
+        allTrips =
+            Zipper.toList as_.trips
+
+        otherTrips =
+            List.filter (\t -> t.tabName /= activeTrip.tabName) allTrips
+
+        totalSpent =
+            List.sum (List.map .amount as_.entries)
+    in
+    div [ style "padding" "20px" ]
+        [ h2 [ sectionHead ] [ text "TRIPS" ]
+        , div
+            [ style "background" "#161918"
+            , style "border" "1px solid #2a3230"
+            , style "border-radius" "12px"
+            , style "padding" "16px"
+            , style "margin-bottom" "20px"
+            ]
+            [ div [ style "display" "flex", style "justify-content" "space-between", style "align-items" "flex-start" ]
+                [ div []
+                    [ p
+                        [ style "font-size" "18px"
+                        , style "font-weight" "700"
+                        , style "color" "#e8a020"
+                        , style "margin-bottom" "4px"
+                        ]
+                        [ text activeTrip.name ]
+                    , if activeTrip.description /= "" then
+                        p [ style "font-size" "13px", style "color" "#7a8a80", style "margin-bottom" "8px" ]
+                            [ text activeTrip.description ]
+                      else
+                        text ""
+                    , if activeTrip.startDate /= "" then
+                        p [ style "font-size" "12px", style "color" "#4a5a50" ]
+                            [ text (activeTrip.startDate ++ (if activeTrip.endDate /= "" then " → " ++ activeTrip.endDate else "")) ]
+                      else
+                        text ""
+                    ]
+                , button
+                    [ onClick (OpenEditTripForm activeTrip)
+                    , style "background" "none"
+                    , style "border" "1px solid #2a3230"
+                    , style "color" "#7a8a80"
+                    , style "border-radius" "6px"
+                    , style "padding" "6px 10px"
+                    , style "font-size" "12px"
+                    , style "cursor" "pointer"
+                    ]
+                    [ text "Edit" ]
+                ]
+            , if activeTrip.budget > 0 then
+                let
+                    pct =
+                        Basics.min 1.0 (totalSpent / activeTrip.budget)
+                in
+                div [ style "margin-top" "12px" ]
+                    [ div [ style "display" "flex", style "justify-content" "space-between", style "font-size" "12px", style "color" "#7a8a80", style "margin-bottom" "4px" ]
+                        [ text ("$" ++ String.fromInt (round totalSpent) ++ " spent")
+                        , text ("Budget: $" ++ String.fromInt (round activeTrip.budget))
+                        ]
+                    , div [ style "background" "#2a3230", style "border-radius" "4px", style "height" "6px" ]
+                        [ div
+                            [ style "background" (if pct >= 1.0 then "#e85030" else "#e8a020")
+                            , style "border-radius" "4px"
+                            , style "height" "6px"
+                            , style "width" (String.fromFloat (pct * 100) ++ "%")
+                            ]
+                            []
+                        ]
+                    ]
+              else
+                text ""
+            ]
+        , if not (List.isEmpty otherTrips) then
+            div [ style "margin-bottom" "20px" ]
+                (List.map
+                    (\trip ->
+                        button
+                            [ onClick (SelectTrip trip.tabName)
+                            , style "width" "100%"
+                            , style "background" "#161918"
+                            , style "border" "1px solid #2a3230"
+                            , style "border-radius" "10px"
+                            , style "padding" "14px 16px"
+                            , style "margin-bottom" "8px"
+                            , style "display" "flex"
+                            , style "justify-content" "space-between"
+                            , style "align-items" "center"
+                            , style "cursor" "pointer"
+                            , style "color" "#c8d0c8"
+                            , style "font-family" "inherit"
+                            ]
+                            [ div [ style "text-align" "left" ]
+                                [ p [ style "font-size" "15px", style "font-weight" "600", style "margin-bottom" "2px" ] [ text trip.name ]
+                                , if trip.startDate /= "" then
+                                    p [ style "font-size" "11px", style "color" "#4a5a50" ] [ text trip.startDate ]
+                                  else
+                                    text ""
+                                ]
+                            , span [ style "color" "#7a8a80", style "font-size" "16px" ] [ text "›" ]
+                            ]
+                    )
+                    otherTrips
+                )
+          else
+            text ""
+        , case as_.tripForm of
+            Nothing ->
+                button
+                    [ onClick OpenNewTripForm
+                    , style "width" "100%"
+                    , style "background" "none"
+                    , style "border" "1px dashed #3a4240"
+                    , style "border-radius" "10px"
+                    , style "padding" "14px"
+                    , style "color" "#7a8a80"
+                    , style "font-size" "15px"
+                    , style "cursor" "pointer"
+                    , style "font-family" "inherit"
+                    ]
+                    [ text "+ New Trip" ]
+
+            Just form ->
+                viewTripForm form
+        ]
+
+
+viewTripForm : TripForm -> Html Msg
+viewTripForm form =
+    div
+        [ style "background" "#161918"
+        , style "border" "1px solid #2a3230"
+        , style "border-radius" "12px"
+        , style "padding" "16px"
+        ]
+        [ p [ style "font-size" "15px", style "font-weight" "700", style "color" "#e8a020", style "margin-bottom" "16px" ]
+            [ text (if form.editing == Nothing then "New Trip" else "Edit Trip") ]
+        , if not (List.isEmpty form.errors) then
+            div [ style "background" "#2a1510", style "border" "1px solid #e85030", style "border-radius" "8px", style "padding" "10px", style "margin-bottom" "12px" ]
+                (List.map (\e -> p [ style "font-size" "13px", style "color" "#e8a020" ] [ text e ]) form.errors)
+          else
+            text ""
+        , formField "TRIP NAME"
+            (input
+                [ type_ "text"
+                , value form.name
+                , onInput (TripFieldChanged TripName)
+                , placeholder "Alaska 2026"
+                , textInputStyle
+                ]
+                []
+            )
+        , formField "DESCRIPTION"
+            (input
+                [ type_ "text"
+                , value form.description
+                , onInput (TripFieldChanged TripDescription)
+                , placeholder "Optional"
+                , textInputStyle
+                ]
+                []
+            )
+        , formField "START DATE"
+            (input
+                [ type_ "date"
+                , value form.startDate
+                , onInput (TripFieldChanged TripStartDate)
+                , textInputStyle
+                ]
+                []
+            )
+        , formField "END DATE"
+            (input
+                [ type_ "date"
+                , value form.endDate
+                , onInput (TripFieldChanged TripEndDate)
+                , textInputStyle
+                ]
+                []
+            )
+        , formField "BUDGET ($)"
+            (input
+                [ type_ "number"
+                , value form.budget
+                , onInput (TripFieldChanged TripBudget)
+                , placeholder "0 = no budget"
+                , textInputStyle
+                ]
+                []
+            )
+        , formField "COVER PHOTO URL"
+            (input
+                [ type_ "url"
+                , value form.coverPhotoUrl
+                , onInput (TripFieldChanged TripCoverPhoto)
+                , placeholder "https://..."
+                , textInputStyle
+                ]
+                []
+            )
+        , div [ style "display" "flex", style "gap" "10px", style "margin-top" "16px" ]
+            [ button
+                [ onClick SaveTripForm
+                , style "flex" "1"
+                , style "background" "#e8a020"
+                , style "color" "#0d0f0e"
+                , style "border" "none"
+                , style "border-radius" "8px"
+                , style "padding" "12px"
+                , style "font-size" "15px"
+                , style "font-weight" "700"
+                , style "cursor" "pointer"
+                ]
+                [ text "Save" ]
+            , button
+                [ onClick (TabChanged TripsTab)
+                , style "flex" "1"
+                , style "background" "none"
+                , style "color" "#7a8a80"
+                , style "border" "1px solid #2a3230"
+                , style "border-radius" "8px"
+                , style "padding" "12px"
+                , style "font-size" "15px"
+                , style "cursor" "pointer"
+                ]
+                [ text "Cancel" ]
+            ]
+        ]
+
+
+
 -- SETTINGS TAB
 
 
@@ -2833,15 +3582,6 @@ viewSettingsPanel cfg isSignedIn version =
                 , value cfg.anthropicKey
                 , onInput ApiKeyChanged
                 , placeholder "sk-ant-..."
-                , textInputStyle
-                ]
-                []
-            )
-        , formField "TRIP START DATE"
-            (input
-                [ type_ "date"
-                , value cfg.tripStart
-                , onInput TripStartChanged
                 , textInputStyle
                 ]
                 []

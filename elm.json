@@ -2,6 +2,7 @@
     "type": "application",
     "source-directories": [
         "src",
+        "/root/.elm/0.19.1/packages/rtfeldman/elm-validate/4.0.2/src",
         "/root/.elm/0.19.1/packages/turboMaCk/non-empty-list-alias/1.4.0/src"
     ],
     "elm-version": "0.19.1",

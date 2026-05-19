@@ -104,7 +104,7 @@
 
     // ── One-time migration: localStorage → IndexedDB ──────────────────────
     // Runs once if IDB is empty but localStorage still has values from the old build.
-    const APP_KEYS = ['oauth_token','sheet_id','google_client_id','anthropic_key','trip_start'];
+    const APP_KEYS = ['oauth_token','sheet_id','google_client_id','anthropic_key','trip_start','trips','active_trip'];
     const hasMigrated = await idbGet('_migrated');
     if (!hasMigrated) {
       for (const k of APP_KEYS) {
@@ -117,14 +117,15 @@
     // ── Load all persisted settings before starting Elm ───────────────────
 
     const stored   = await Promise.all(APP_KEYS.map(idbGet));
-    const [token, sheetId, googleClientId, anthropicKey, tripStart] = stored;
+    const [token, sheetId, googleClientId, anthropicKey, tripStart, tripsJson, activeTripTab] = stored;
 
     const flags = {
       token:          token || null,
       sheetId:        sheetId        || '',
       googleClientId: googleClientId || '',
       anthropicKey:   anthropicKey   || '',
-      tripStart:      tripStart       || '2026-05-22',
+      trips:          tripsJson      || '',
+      activeTripTab:  activeTripTab  || '',
       today:          new Date().toISOString().slice(0, 10),
       version:        'BUILD_SHA_PLACEHOLDER',
     };
