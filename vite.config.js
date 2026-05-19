@@ -3,8 +3,10 @@ import elm from 'vite-plugin-elm'
 import path from 'path'
 
 const sha = (process.env.GITHUB_SHA || 'dev').slice(0, 8)
+const base = process.env.GITHUB_ACTIONS ? '/ternpike/' : '/'
 
 export default defineConfig({
+  base,
   plugins: [elm()],
   resolve: {
     alias: {
