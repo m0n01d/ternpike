@@ -134,33 +134,70 @@ type alias PendingEntry =
     }
 
 
-type alias Model =
-    { tab : Tab
-    , oauthToken : Maybe String
-    , sheetId : String
+-- SESSION / AUTH TYPES
+
+type alias Creds =
+    { token : String }
+
+
+type alias AppConfig =
+    { sheetId        : String
     , googleClientId : String
-    , anthropicKey : String
-    , tripStart : String
-    , entries : List Entry
-    , loadingEntries : Bool
-    , pendingEntry : PendingEntry
-    , editingEntry : Maybe Entry
-    , scanQueue : List ScanItem
-    , activeScanItemId : Maybe String
-    , error : Maybe String
-    , submitting : Bool
-    , today : String
-    , geoBlocked : Bool
-    , showMapPicker : Bool
-    , showLedgerMap : Bool
-    , version : String
-    , toast : Maybe String
+    , anthropicKey   : String
+    , tripStart      : String
     }
+
+
+type GuestReason
+    = FreshGuest      -- initial load or explicit sign-out
+    | SessionExpired  -- 401 auto sign-out
+    | MissingConfig   -- Sign In clicked but no Google client ID configured
+
+
+type alias GuestSession =
+    { config : AppConfig
+    , reason : GuestReason
+    }
+
+
+type alias GuestState =
+    { session      : GuestSession
+    , showSettings : Bool
+    , today        : String
+    , version      : String
+    }
+
+
+type alias AuthState =
+    { creds            : Creds
+    , config           : AppConfig
+    , tab              : Tab
+    , entries          : List Entry
+    , loadingEntries   : Bool
+    , pendingEntry     : PendingEntry
+    , editingEntry     : Maybe Entry
+    , scanQueue        : List ScanItem
+    , activeScanItemId : Maybe String
+    , error            : Maybe String
+    , submitting       : Bool
+    , today            : String
+    , geoBlocked       : Bool
+    , showMapPicker    : Bool
+    , showLedgerMap    : Bool
+    , version          : String
+    , toast            : Maybe String
+    }
+
+
+type Model
+    = GuestModel GuestState
+    | AuthModel AuthState
 
 
 type Msg
     = GotOAuthToken String
     | SignInClicked
+    | ToggleGuestSettings
     | SignOutClicked
     | ResetSettingsClicked
     | ToggleLedgerMap
@@ -275,6 +312,53 @@ allCategories =
     [ Fuel, Food, Camp, Lodging, Ferry, Activities, Shopping, Gear, Transport, Medical, Misc ]
 
 
+-- SESSION HELPERS
+
+
+guestMessage : GuestReason -> Maybe String
+guestMessage reason =
+    case reason of
+        FreshGuest     -> Nothing
+        SessionExpired -> Just "Session expired — tap Sign In to continue."
+        MissingConfig  -> Just "Enter your Google Client ID in Settings first."
+
+
+mapGuestConfig : (AppConfig -> AppConfig) -> GuestSession -> GuestSession
+mapGuestConfig f gs =
+    { gs | config = f gs.config }
+
+
+toAuthState : Creds -> GuestState -> AuthState
+toAuthState creds gs =
+    { creds            = creds
+    , config           = gs.session.config
+    , tab              = LedgerTab
+    , entries          = []
+    , loadingEntries   = gs.session.config.sheetId /= ""
+    , pendingEntry     = defaultPendingEntry gs.today
+    , editingEntry     = Nothing
+    , scanQueue        = []
+    , activeScanItemId = Nothing
+    , error            = Nothing
+    , submitting       = False
+    , today            = gs.today
+    , geoBlocked       = False
+    , showMapPicker    = False
+    , showLedgerMap    = False
+    , version          = gs.version
+    , toast            = Nothing
+    }
+
+
+toGuestState : GuestReason -> AuthState -> GuestState
+toGuestState reason as_ =
+    { session      = { config = as_.config, reason = reason }
+    , showSettings = reason /= FreshGuest
+    , today        = as_.today
+    , version      = as_.version
+    }
+
+
 ocrSystemPrompt : String
 ocrSystemPrompt =
     "You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<fuel|food|camp|ferry|gear|lodging|activities|shopping|medical|transport|misc>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 280 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\"}. Choose the best matching category."
@@ -345,59 +429,33 @@ init flagsJson =
         token =
             D.decodeValue (D.maybe (D.field "token" D.string)) flagsJson
                 |> Result.withDefault Nothing
-                |> Maybe.andThen
-                    (\t ->
-                        if t == "" then
-                            Nothing
+                |> Maybe.andThen (\t -> if t == "" then Nothing else Just t)
 
-                        else
-                            Just t
-                    )
-
-        sheetId =
-            dec "sheetId"
-
-        today =
-            dec "today"
-
-        model =
-            { tab = LedgerTab
-            , oauthToken = token
-            , sheetId = sheetId
+        cfg =
+            { sheetId        = dec "sheetId"
             , googleClientId = dec "googleClientId"
-            , anthropicKey = dec "anthropicKey"
-            , tripStart = dec "tripStart" |> (\s -> if s == "" then "2026-05-22" else s)
-            , entries = []
-            , loadingEntries = False
-            , pendingEntry = defaultPendingEntry today
-            , editingEntry = Nothing
-            , scanQueue = []
-            , activeScanItemId = Nothing
-            , error = Nothing
-            , submitting = False
-            , today = today
-            , geoBlocked = False
-            , showMapPicker = False
-            , showLedgerMap = False
-            , version = dec "version"
-            , toast = Nothing
+            , anthropicKey   = dec "anthropicKey"
+            , tripStart      = dec "tripStart" |> (\s -> if s == "" then "2026-05-22" else s)
             }
 
-        fetchCmd =
-            case token of
-                Just t ->
-                    if sheetId /= "" then
-                        fetchEntries t sheetId
-
-                    else
-                        Cmd.none
-
-                Nothing ->
-                    Cmd.none
+        gs =
+            { session      = { config = cfg, reason = FreshGuest }
+            , showSettings = False
+            , today        = dec "today"
+            , version      = dec "version"
+            }
     in
-    ( { model | loadingEntries = fetchCmd /= Cmd.none }
-    , fetchCmd
-    )
+    case token of
+        Nothing ->
+            ( GuestModel gs, Cmd.none )
+
+        Just t ->
+            let
+                as_ = toAuthState { token = t } gs
+            in
+            ( AuthModel as_
+            , if cfg.sheetId /= "" then fetchEntries { token = t } cfg.sheetId else Cmd.none
+            )
 
 
 
@@ -406,55 +464,96 @@ init flagsJson =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    case model of
+        GuestModel gs ->
+            updateGuest msg gs
+
+        AuthModel as_ ->
+            updateAuth msg as_
+
+
+updateGuest : Msg -> GuestState -> ( Model, Cmd Msg )
+updateGuest msg gs =
     case msg of
         SignInClicked ->
-            if model.googleClientId == "" then
-                ( { model | error = Just "Enter your Google Client ID in Settings first." }
+            if gs.session.config.googleClientId == "" then
+                ( GuestModel { gs | session = { config = gs.session.config, reason = MissingConfig } }
                 , Cmd.none
                 )
-
             else
-                ( model, requestOAuthToken True )
+                ( GuestModel gs, requestOAuthToken True )
 
         GotOAuthToken token ->
             let
-                shouldFetch =
-                    model.sheetId /= ""
+                as_ = toAuthState { token = token } gs
             in
-            ( { model | oauthToken = Just token, loadingEntries = shouldFetch }
+            ( AuthModel as_
             , Cmd.batch
                 [ saveStorage { key = "oauth_token", value = token }
-                , if shouldFetch then fetchEntries token model.sheetId else Cmd.none
+                , if as_.loadingEntries then fetchEntries { token = token } as_.config.sheetId else Cmd.none
                 ]
             )
 
-        SignOutClicked ->
-            ( { model
-                | oauthToken = Nothing
-                , entries = []
-                , editingEntry = Nothing
-                , tab = LedgerTab
-              }
-            , clearStorage ()
+        ToggleGuestSettings ->
+            ( GuestModel { gs | showSettings = not gs.showSettings }, Cmd.none )
+
+        ApiKeyChanged s ->
+            ( GuestModel { gs | session = mapGuestConfig (\c -> { c | anthropicKey = s }) gs.session }
+            , saveStorage { key = "anthropic_key", value = s }
+            )
+
+        SheetIdChanged s ->
+            ( GuestModel { gs | session = mapGuestConfig (\c -> { c | sheetId = s }) gs.session }
+            , saveStorage { key = "sheet_id", value = s }
+            )
+
+        GoogleClientIdChanged s ->
+            ( GuestModel { gs | session = mapGuestConfig (\c -> { c | googleClientId = s }) gs.session }
+            , saveStorage { key = "google_client_id", value = s }
+            )
+
+        TripStartChanged s ->
+            ( GuestModel { gs | session = mapGuestConfig (\c -> { c | tripStart = s }) gs.session }
+            , saveStorage { key = "trip_start", value = s }
             )
 
         ResetSettingsClicked ->
-            ( { model
-                | anthropicKey = ""
-                , sheetId = ""
-                , googleClientId = ""
-                , oauthToken = Nothing
-                , entries = []
-                , editingEntry = Nothing
-                , tab = LedgerTab
-              }
+            let
+                emptyCfg = { sheetId = "", googleClientId = "", anthropicKey = "", tripStart = "" }
+            in
+            ( GuestModel { gs | session = { config = emptyCfg, reason = FreshGuest }, showSettings = False }
+            , clearAllStorage ()
+            )
+
+        _ ->
+            ( GuestModel gs, Cmd.none )
+
+
+updateAuth : Msg -> AuthState -> ( Model, Cmd Msg )
+updateAuth msg as_ =
+    case msg of
+        GotOAuthToken token ->
+            ( AuthModel { as_ | creds = { token = token } }
+            , saveStorage { key = "oauth_token", value = token }
+            )
+
+        SignOutClicked ->
+            ( GuestModel (toGuestState FreshGuest as_), clearStorage () )
+
+        ResetSettingsClicked ->
+            ( GuestModel
+                { session      = { config = { sheetId = "", googleClientId = "", anthropicKey = "", tripStart = "" }, reason = FreshGuest }
+                , showSettings = False
+                , today        = as_.today
+                , version      = as_.version
+                }
             , clearAllStorage ()
             )
 
         FilesSelected files ->
             let
                 startIdx =
-                    List.length model.scanQueue
+                    List.length as_.scanQueue
 
                 indexed =
                     List.indexedMap (\i f -> ( "scan-" ++ String.fromInt (startIdx + i), f )) files
@@ -465,25 +564,25 @@ update msg model =
                 urlCmds =
                     List.map (\( id, f ) -> Task.perform (GotFileUrl id) (File.toUrl f)) indexed
             in
-            ( { model | scanQueue = model.scanQueue ++ newItems }
+            ( AuthModel { as_ | scanQueue = as_.scanQueue ++ newItems }
             , Cmd.batch urlCmds
             )
 
         GotFileUrl itemId dataUrl ->
             let
                 newStatus =
-                    if model.anthropicKey /= "" then
+                    if as_.config.anthropicKey /= "" then
                         ScanProcessing
                     else
                         ScanReady
 
                 updatedQueue =
-                    updateScanItem itemId (\i -> { i | imageUrl = dataUrl, status = newStatus }) model.scanQueue
+                    updateScanItem itemId (\i -> { i | imageUrl = dataUrl, status = newStatus }) as_.scanQueue
             in
-            ( { model | scanQueue = updatedQueue }
+            ( AuthModel { as_ | scanQueue = updatedQueue }
             , Cmd.batch
-                [ if model.anthropicKey /= "" then
-                    makeOcrCall itemId model.anthropicKey (extractBase64 dataUrl) (getMimeType dataUrl)
+                [ if as_.config.anthropicKey /= "" then
+                    makeOcrCall itemId as_.config.anthropicKey (extractBase64 dataUrl) (getMimeType dataUrl)
                   else
                     Cmd.none
                 , extractExifGps { id = itemId, dataUrl = dataUrl }
@@ -498,63 +597,49 @@ update msg model =
                             case D.decodeString claudeTextDecoder responseBody of
                                 Ok innerJson ->
                                     case D.decodeString ocrDataDecoder (stripCodeFence innerJson) of
-                                        Ok data ->
-                                            Just data
-
-                                        Err _ ->
-                                            Nothing
-
-                                Err _ ->
-                                    Nothing
-
-                        Err _ ->
-                            Nothing
+                                        Ok data -> Just data
+                                        Err _ -> Nothing
+                                Err _ -> Nothing
+                        Err _ -> Nothing
 
                 updatedQueue =
-                    updateScanItem itemId (\i -> { i | status = ScanReady, ocrData = ocrData }) model.scanQueue
+                    updateScanItem itemId (\i -> { i | status = ScanReady, ocrData = ocrData }) as_.scanQueue
             in
-            ( { model | scanQueue = updatedQueue }, Cmd.none )
+            ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
 
         AmountChanged s ->
-            updatePending (\p -> { p | amount = s }) model
+            authPending (\p -> { p | amount = s }) as_
 
         CategorySelected cat ->
-            updatePending (\p -> { p | category = cat }) model
+            authPending (\p -> { p | category = cat }) as_
 
         NoteChanged s ->
-            updatePending (\p -> { p | note = s }) model
+            authPending (\p -> { p | note = s }) as_
 
         LongNoteChanged s ->
-            updatePending (\p -> { p | longNote = s }) model
+            authPending (\p -> { p | longNote = s }) as_
 
         MerchantChanged s ->
-            updatePending (\p -> { p | merchant = s }) model
+            authPending (\p -> { p | merchant = s }) as_
 
         DateChanged s ->
-            updatePending (\p -> { p | date = s }) model
+            authPending (\p -> { p | date = s }) as_
 
         SubmitEntry ->
-            case ( model.oauthToken, String.toFloat model.pendingEntry.amount ) of
-                ( Just _, Just _ ) ->
-                    ( { model | submitting = True, error = Nothing }
+            case String.toFloat as_.pendingEntry.amount of
+                Just _ ->
+                    ( AuthModel { as_ | submitting = True, error = Nothing }
                     , Task.perform GotSubmitTime Time.now
                     )
 
-                ( Nothing, _ ) ->
-                    ( { model | error = Just "Not signed in." }, Cmd.none )
-
-                ( _, Nothing ) ->
-                    ( { model | error = Just "Enter a valid amount." }, Cmd.none )
+                Nothing ->
+                    ( AuthModel { as_ | error = Just "Enter a valid amount." }, Cmd.none )
 
         GotSubmitTime posix ->
             let
-                p =
-                    model.pendingEntry
-
-                token =
-                    Maybe.withDefault "" model.oauthToken
+                p = as_.pendingEntry
             in
-            case model.editingEntry of
+            case as_.editingEntry of
                 Just original ->
                     let
                         updated =
@@ -577,17 +662,14 @@ update msg model =
                                         _ -> original.lon
                             }
                     in
-                    ( model, updateEntry token model.sheetId updated )
+                    ( AuthModel as_, updateEntry as_.creds as_.config.sheetId updated )
 
                 Nothing ->
                     let
                         ( eLat, eLon ) =
                             case p.locationState of
-                                LocationGot la lo _ ->
-                                    ( Just la, Just lo )
-
-                                _ ->
-                                    ( Nothing, Nothing )
+                                LocationGot la lo _ -> ( Just la, Just lo )
+                                _ -> ( Nothing, Nothing )
 
                         entry =
                             { id = "e-" ++ String.fromInt (Time.posixToMillis posix)
@@ -603,221 +685,207 @@ update msg model =
                             , lon = eLon
                             }
                     in
-                    ( model, appendEntry token model.sheetId entry )
+                    ( AuthModel as_, appendEntry as_.creds as_.config.sheetId entry )
 
         EntrySubmitted result ->
             case result of
                 Ok () ->
                     let
                         updatedQueue =
-                            case model.activeScanItemId of
+                            case as_.activeScanItemId of
                                 Just id ->
-                                    updateScanItem id (\i -> { i | status = ScanSubmitted }) model.scanQueue
-
+                                    updateScanItem id (\i -> { i | status = ScanSubmitted }) as_.scanQueue
                                 Nothing ->
-                                    model.scanQueue
+                                    as_.scanQueue
 
                         hasRemaining =
                             List.any (\i -> i.status /= ScanSubmitted) updatedQueue
 
                         nextTab =
-                            if model.activeScanItemId /= Nothing && hasRemaining then
+                            if as_.activeScanItemId /= Nothing && hasRemaining then
                                 ScanTab
-
                             else
                                 LedgerTab
                     in
-                    ( { model
-                        | submitting = False
-                        , pendingEntry = defaultPendingEntry model.today
-                        , editingEntry = Nothing
-                        , activeScanItemId = Nothing
-                        , scanQueue = updatedQueue
-                        , tab = nextTab
-                        , loadingEntries = True
-                      }
-                    , fetchEntries (Maybe.withDefault "" model.oauthToken) model.sheetId
+                    ( AuthModel
+                        { as_
+                            | submitting = False
+                            , pendingEntry = defaultPendingEntry as_.today
+                            , editingEntry = Nothing
+                            , activeScanItemId = Nothing
+                            , scanQueue = updatedQueue
+                            , tab = nextTab
+                            , loadingEntries = True
+                        }
+                    , fetchEntries as_.creds as_.config.sheetId
                     )
 
                 Err (Http.BadStatus 401) ->
-                    let
-                        toastMsg =
-                            "Session expired — please try saving again"
-                    in
-                    ( { model | submitting = False, toast = Just toastMsg }
-                    , Cmd.batch [ requestOAuthToken False, toastFor toastMsg ]
-                    )
+                    ( GuestModel (toGuestState SessionExpired as_), clearStorage () )
 
                 Err e ->
-                    let
-                        toastMsg =
-                            "Save failed: " ++ httpErrString e
-                    in
-                    ( { model | submitting = False, toast = Just toastMsg }
-                    , toastFor toastMsg
-                    )
+                    let toastMsg = "Save failed: " ++ httpErrString e
+                    in ( AuthModel { as_ | submitting = False, toast = Just toastMsg }, toastFor toastMsg )
 
         EntriesFetched result ->
             case result of
                 Ok entries ->
-                    ( { model | entries = entries, loadingEntries = False }
-                    , Cmd.none
-                    )
+                    ( AuthModel { as_ | entries = entries, loadingEntries = False }, Cmd.none )
 
                 Err (Http.BadStatus 401) ->
-                    ( { model | loadingEntries = False }, requestOAuthToken False )
+                    ( GuestModel (toGuestState SessionExpired as_), clearStorage () )
 
                 Err e ->
-                    ( { model | loadingEntries = False, error = Just ("Load failed: " ++ httpErrString e) }
+                    ( AuthModel { as_ | loadingEntries = False, error = Just ("Load failed: " ++ httpErrString e) }
                     , Cmd.none
                     )
 
         DeleteEntry entry ->
-            ( { model | entries = List.filter (\e -> e.id /= entry.id) model.entries }
-            , deleteEntry (Maybe.withDefault "" model.oauthToken) model.sheetId entry.rowIndex
+            ( AuthModel { as_ | entries = List.filter (\e -> e.id /= entry.id) as_.entries }
+            , deleteEntry as_.creds as_.config.sheetId entry.rowIndex
             )
 
         EntryDeleted result ->
             case result of
                 Ok () ->
-                    ( model, fetchEntries (Maybe.withDefault "" model.oauthToken) model.sheetId )
+                    ( AuthModel as_, fetchEntries as_.creds as_.config.sheetId )
 
                 Err (Http.BadStatus 401) ->
-                    ( model, requestOAuthToken False )
+                    ( GuestModel (toGuestState SessionExpired as_), clearStorage () )
 
                 Err e ->
-                    ( { model | error = Just ("Delete failed: " ++ httpErrString e) }
-                    , Cmd.none
-                    )
+                    ( AuthModel { as_ | error = Just ("Delete failed: " ++ httpErrString e) }, Cmd.none )
 
         EditEntry entry ->
-            ( { model
-                | editingEntry = Just entry
-                , pendingEntry = entryToPending entry
-                , tab = AddTab
-                , error = Nothing
-              }
+            ( AuthModel
+                { as_
+                    | editingEntry = Just entry
+                    , pendingEntry = entryToPending entry
+                    , tab = AddTab
+                    , error = Nothing
+                }
             , Cmd.none
             )
 
         CancelEdit ->
-            ( { model
-                | editingEntry = Nothing
-                , pendingEntry = defaultPendingEntry model.today
-                , tab = LedgerTab
-              }
+            ( AuthModel
+                { as_
+                    | editingEntry = Nothing
+                    , pendingEntry = defaultPendingEntry as_.today
+                    , tab = LedgerTab
+                }
             , Cmd.none
             )
 
         TabChanged tab ->
             let
                 shouldFetch =
-                    tab == LedgerTab && model.oauthToken /= Nothing && model.sheetId /= ""
+                    tab == LedgerTab && as_.config.sheetId /= ""
 
                 geoCmd =
-                    if tab == AddTab && not model.geoBlocked then
+                    if tab == AddTab && not as_.geoBlocked then
                         requestGeolocation ()
-
                     else
                         Cmd.none
 
                 newPending =
-                    if tab == AddTab && not model.geoBlocked then
-                        setLocation LocationFetching model.pendingEntry
-
+                    if tab == AddTab && not as_.geoBlocked then
+                        setLocation LocationFetching as_.pendingEntry
                     else
-                        model.pendingEntry
+                        as_.pendingEntry
             in
-            ( { model
-                | tab = tab
-                , loadingEntries = shouldFetch
-                , pendingEntry = newPending
-                , editingEntry =
-                    if tab /= AddTab then
-                        Nothing
-
-                    else
-                        model.editingEntry
-              }
+            ( AuthModel
+                { as_
+                    | tab = tab
+                    , loadingEntries = shouldFetch
+                    , pendingEntry = newPending
+                    , editingEntry = if tab /= AddTab then Nothing else as_.editingEntry
+                }
             , Cmd.batch
-                [ if shouldFetch then
-                    fetchEntries (Maybe.withDefault "" model.oauthToken) model.sheetId
-
-                  else
-                    Cmd.none
+                [ if shouldFetch then fetchEntries as_.creds as_.config.sheetId else Cmd.none
                 , geoCmd
                 ]
             )
 
         RefreshClicked ->
-            ( { model | loadingEntries = True }
-            , fetchEntries (Maybe.withDefault "" model.oauthToken) model.sheetId
+            ( AuthModel { as_ | loadingEntries = True }
+            , fetchEntries as_.creds as_.config.sheetId
             )
 
         ApiKeyChanged s ->
-            ( { model | anthropicKey = s }
-            , saveStorage { key = "anthropic_key", value = s }
-            )
+            let cfg = as_.config
+            in ( AuthModel { as_ | config = { cfg | anthropicKey = s } }
+               , saveStorage { key = "anthropic_key", value = s }
+               )
 
         SheetIdChanged s ->
-            ( { model | sheetId = s }
-            , saveStorage { key = "sheet_id", value = s }
-            )
+            let cfg = as_.config
+            in ( AuthModel { as_ | config = { cfg | sheetId = s } }
+               , saveStorage { key = "sheet_id", value = s }
+               )
 
         GoogleClientIdChanged s ->
-            ( { model | googleClientId = s }
-            , saveStorage { key = "google_client_id", value = s }
-            )
+            let cfg = as_.config
+            in ( AuthModel { as_ | config = { cfg | googleClientId = s } }
+               , saveStorage { key = "google_client_id", value = s }
+               )
 
         TripStartChanged s ->
-            ( { model | tripStart = s }
-            , saveStorage { key = "trip_start", value = s }
-            )
+            let cfg = as_.config
+            in ( AuthModel { as_ | config = { cfg | tripStart = s } }
+               , saveStorage { key = "trip_start", value = s }
+               )
 
         DismissError ->
-            ( { model | error = Nothing }, Cmd.none )
+            ( AuthModel { as_ | error = Nothing }, Cmd.none )
 
         GotGpsCoords lat lon ->
-            ( { model | pendingEntry = setLocation (LocationGot lat lon BrowserGeo) model.pendingEntry }, Cmd.none )
+            authPending (setLocation (LocationGot lat lon BrowserGeo)) as_
 
         GeolocationDenied ->
-            ( { model | geoBlocked = True, pendingEntry = setLocation LocationIdle model.pendingEntry }, Cmd.none )
+            ( AuthModel { as_ | geoBlocked = True, pendingEntry = setLocation LocationIdle as_.pendingEntry }
+            , Cmd.none
+            )
 
         OpenMapPicker ->
-            ( { model | showMapPicker = True }, Cmd.none )
+            ( AuthModel { as_ | showMapPicker = True }, Cmd.none )
 
         MapPickerConfirmed lat lon ->
-            ( { model | showMapPicker = False, pendingEntry = setLocation (LocationGot lat lon ManualPin) model.pendingEntry }, Cmd.none )
+            ( AuthModel { as_ | showMapPicker = False, pendingEntry = setLocation (LocationGot lat lon ManualPin) as_.pendingEntry }
+            , Cmd.none
+            )
 
         DismissMapPicker ->
-            ( { model | showMapPicker = False }, Cmd.none )
+            ( AuthModel { as_ | showMapPicker = False }, Cmd.none )
 
         SkipLocation ->
-            ( { model | showMapPicker = False, pendingEntry = setLocation LocationSkipped model.pendingEntry }, Cmd.none )
+            ( AuthModel { as_ | showMapPicker = False, pendingEntry = setLocation LocationSkipped as_.pendingEntry }
+            , Cmd.none
+            )
 
         ToggleLedgerMap ->
-            ( { model | showLedgerMap = not model.showLedgerMap }, Cmd.none )
+            ( AuthModel { as_ | showLedgerMap = not as_.showLedgerMap }, Cmd.none )
 
         ShowToast message ->
-            ( { model | toast = Just message }, toastFor message )
+            ( AuthModel { as_ | toast = Just message }, toastFor message )
 
         ToastExpired ->
-            ( { model | toast = Nothing }, Cmd.none )
+            ( AuthModel { as_ | toast = Nothing }, Cmd.none )
 
         GotExifCoords itemId (Just lat) (Just lon) _ ->
-            ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationGot lat lon ExifGps }) model.scanQueue }
+            ( AuthModel { as_ | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationGot lat lon ExifGps }) as_.scanQueue }
             , Cmd.none
             )
 
         GotExifCoords itemId _ _ debug ->
-            ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationNoExifGps, exifDebug = debug }) model.scanQueue }
+            ( AuthModel { as_ | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationNoExifGps, exifDebug = debug }) as_.scanQueue }
             , Cmd.none
             )
 
         ReviewScanItem itemId ->
-            case List.head (List.filter (\i -> i.id == itemId) model.scanQueue) of
+            case List.head (List.filter (\i -> i.id == itemId) as_.scanQueue) of
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( AuthModel as_, Cmd.none )
 
                 Just item ->
                     let
@@ -832,48 +900,53 @@ update msg model =
                             , note = Maybe.withDefault "" ocr.note
                             , longNote = Maybe.withDefault "" ocr.longNote
                             , merchant = Maybe.withDefault "" ocr.merchant
-                            , date = Maybe.withDefault model.today ocr.date
+                            , date = Maybe.withDefault as_.today ocr.date
                             , locationState = item.locationState
                             }
                     in
-                    ( { model
-                        | activeScanItemId = Just itemId
-                        , pendingEntry = newPending
-                        , tab = AddTab
-                        , error = Nothing
-                      }
+                    ( AuthModel
+                        { as_
+                            | activeScanItemId = Just itemId
+                            , pendingEntry = newPending
+                            , tab = AddTab
+                            , error = Nothing
+                        }
                     , Cmd.none
                     )
 
         BackToQueue ->
-            ( { model
-                | activeScanItemId = Nothing
-                , pendingEntry = defaultPendingEntry model.today
-                , tab = ScanTab
-              }
+            ( AuthModel
+                { as_
+                    | activeScanItemId = Nothing
+                    , pendingEntry = defaultPendingEntry as_.today
+                    , tab = ScanTab
+                }
             , Cmd.none
             )
 
         ClearDoneItems ->
-            ( { model | scanQueue = List.filter (\i -> i.status /= ScanSubmitted) model.scanQueue }
+            ( AuthModel { as_ | scanQueue = List.filter (\i -> i.status /= ScanSubmitted) as_.scanQueue }
             , Cmd.none
             )
 
+        _ ->
+            ( AuthModel as_, Cmd.none )
 
-updatePending : (PendingEntry -> PendingEntry) -> Model -> ( Model, Cmd Msg )
-updatePending f model =
-    ( { model | pendingEntry = f model.pendingEntry }, Cmd.none )
+
+authPending : (PendingEntry -> PendingEntry) -> AuthState -> ( Model, Cmd Msg )
+authPending f as_ =
+    ( AuthModel { as_ | pendingEntry = f as_.pendingEntry }, Cmd.none )
 
 
 
 -- HTTP
 
 
-fetchEntries : String -> String -> Cmd Msg
-fetchEntries token sheetId =
+fetchEntries : Creds -> String -> Cmd Msg
+fetchEntries creds sheetId =
     Http.request
         { method = "GET"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
         , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A2:J"
         , body = Http.emptyBody
         , expect = expectJsonBody EntriesFetched entriesDecoder
@@ -882,8 +955,8 @@ fetchEntries token sheetId =
         }
 
 
-appendEntry : String -> String -> Entry -> Cmd Msg
-appendEntry token sheetId entry =
+appendEntry : Creds -> String -> Entry -> Cmd Msg
+appendEntry creds sheetId entry =
     let
         body =
             E.object
@@ -907,7 +980,7 @@ appendEntry token sheetId entry =
     in
     Http.request
         { method = "POST"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
         , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A:J:append?valueInputOption=RAW"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntrySubmitted
@@ -916,8 +989,8 @@ appendEntry token sheetId entry =
         }
 
 
-deleteEntry : String -> String -> Int -> Cmd Msg
-deleteEntry token sheetId rowIndex =
+deleteEntry : Creds -> String -> Int -> Cmd Msg
+deleteEntry creds sheetId rowIndex =
     let
         body =
             E.object
@@ -943,7 +1016,7 @@ deleteEntry token sheetId rowIndex =
     in
     Http.request
         { method = "POST"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
         , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ ":batchUpdate"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntryDeleted
@@ -952,8 +1025,8 @@ deleteEntry token sheetId rowIndex =
         }
 
 
-updateEntry : String -> String -> Entry -> Cmd Msg
-updateEntry token sheetId entry =
+updateEntry : Creds -> String -> Entry -> Cmd Msg
+updateEntry creds sheetId entry =
     let
         range =
             "Expenses!A" ++ String.fromInt entry.rowIndex ++ ":J" ++ String.fromInt entry.rowIndex
@@ -980,7 +1053,7 @@ updateEntry token sheetId entry =
     in
     Http.request
         { method = "PUT"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
         , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/" ++ range ++ "?valueInputOption=RAW"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntrySubmitted
@@ -1533,17 +1606,14 @@ view model =
         , style "margin" "0 auto"
         , style "position" "relative"
         ]
-        [ case model.oauthToken of
-            Nothing ->
-                viewSignIn model
-
-            Just _ ->
-                viewApp model
+        [ case model of
+            GuestModel gs -> viewGuest gs
+            AuthModel as_ -> viewAuth as_
         ]
 
 
-viewSignIn : Model -> Html Msg
-viewSignIn model =
+viewGuest : GuestState -> Html Msg
+viewGuest gs =
     div
         [ style "display" "flex"
         , style "flex-direction" "column"
@@ -1562,9 +1632,15 @@ viewSignIn model =
             , style "margin-bottom" "8px"
             ]
             [ text "ALASKA TRACKER" ]
-        , p [ style "color" "#7a8a80", style "margin-bottom" "48px", style "font-size" "16px" ]
+        , p [ style "color" "#7a8a80", style "margin-bottom" "24px", style "font-size" "16px" ]
             [ text "Road log for the long way north" ]
-        , viewErrorBanner model
+        , case guestMessage gs.session.reason of
+            Just msg ->
+                div
+                    [ class "w-full mb-4 px-4 py-3 rounded-lg bg-[#2a1510] border border-[#e85030] text-[#e8a020] text-sm text-left" ]
+                    [ text msg ]
+            Nothing ->
+                text ""
         , button
             [ onClick SignInClicked
             , style "background" "#e8a020"
@@ -1583,7 +1659,7 @@ viewSignIn model =
             [ text "Need a Google Client ID? Enter it in Settings below." ]
         , div [ style "margin-top" "48px", style "width" "100%" ]
             [ button
-                [ onClick (TabChanged SettingsTab)
+                [ onClick ToggleGuestSettings
                 , style "background" "none"
                 , style "border" "1px solid #3a4240"
                 , style "color" "#7a8a80"
@@ -1593,45 +1669,44 @@ viewSignIn model =
                 , style "cursor" "pointer"
                 ]
                 [ text "⚙ Settings" ]
-            , if model.tab == SettingsTab then
-                viewSettingsTab model
-
+            , if gs.showSettings then
+                viewSettingsPanel gs.session.config False gs.version
               else
                 text ""
             ]
         ]
 
 
-viewApp : Model -> Html Msg
-viewApp model =
+viewAuth : AuthState -> Html Msg
+viewAuth as_ =
     div []
-        [ viewHeader model
-        , viewErrorBanner model
+        [ viewHeader as_
+        , viewErrorBanner as_.error
         , div [ style "padding-bottom" "80px" ]
-            [ case model.tab of
+            [ case as_.tab of
                 ScanTab ->
-                    viewScanTab model
+                    viewScanTab as_
 
                 AddTab ->
-                    viewAddTab model
+                    viewAddTab as_
 
                 LedgerTab ->
-                    viewLedgerTab model
+                    viewLedgerTab as_
 
                 StatsTab ->
-                    viewStatsTab model
+                    viewStatsTab as_
 
                 SettingsTab ->
-                    viewSettingsTab model
+                    viewSettingsPanel as_.config True as_.version
             ]
-        , viewBottomNav model.tab
-        , viewToast model
+        , viewBottomNav as_.tab
+        , viewToast as_.toast
         ]
 
 
-viewToast : Model -> Html Msg
-viewToast model =
-    case model.toast of
+viewToast : Maybe String -> Html Msg
+viewToast toast =
+    case toast of
         Nothing ->
             text ""
 
@@ -1646,8 +1721,8 @@ viewToast model =
                 ]
 
 
-viewHeader : Model -> Html Msg
-viewHeader model =
+viewHeader : AuthState -> Html Msg
+viewHeader as_ =
     div
         [ style "background" "#161918"
         , style "border-bottom" "1px solid #2a3230"
@@ -1668,9 +1743,8 @@ viewHeader model =
             [ text "ALASKA" ]
         , button
             [ onClick
-                (if model.tab == SettingsTab then
+                (if as_.tab == SettingsTab then
                     TabChanged LedgerTab
-
                  else
                     TabChanged SettingsTab
                 )
@@ -1679,7 +1753,7 @@ viewHeader model =
             , style "font-size" "22px"
             , style "cursor" "pointer"
             , style "padding" "4px 8px"
-            , style "color" (if model.tab == SettingsTab then "#e8a020" else "#7a8a80")
+            , style "color" (if as_.tab == SettingsTab then "#e8a020" else "#7a8a80")
             ]
             [ text "⚙" ]
         ]
@@ -1737,7 +1811,7 @@ viewNavTab currentTab ( tab, icon, label_ ) =
 -- SCAN TAB
 
 
-viewScanTab : Model -> Html Msg
+viewScanTab : AuthState -> Html Msg
 viewScanTab model =
     div [ class "px-5 pt-6 pb-4" ]
         [ h2 [ sectionHead ] [ text "SCAN RECEIPTS" ]
@@ -1856,7 +1930,7 @@ viewScanCardStatus item =
 -- ADD TAB
 
 
-viewAddTab : Model -> Html Msg
+viewAddTab : AuthState -> Html Msg
 viewAddTab model =
     let
         p =
@@ -2011,7 +2085,7 @@ viewAddTab model =
         ]
 
 
-viewLocationWidget : Model -> Html Msg
+viewLocationWidget : AuthState -> Html Msg
 viewLocationWidget model =
     div [ style "margin-bottom" "16px" ]
         [ viewLocationStatus model.pendingEntry.locationState
@@ -2178,7 +2252,7 @@ viewCategoryBtn selected cat =
 -- LEDGER TAB
 
 
-viewLedgerMap : Model -> Html Msg
+viewLedgerMap : AuthState -> Html Msg
 viewLedgerMap model =
     if model.showLedgerMap then
         Html.node "waypoint-map"
@@ -2254,7 +2328,7 @@ viewLedgerSummary entries =
         ]
 
 
-viewLedgerTab : Model -> Html Msg
+viewLedgerTab : AuthState -> Html Msg
 viewLedgerTab model =
     div [ style "padding" "20px" ]
         [ div [ class "flex items-center justify-between mb-5" ]
@@ -2284,7 +2358,7 @@ viewLedgerTab model =
           else
             text ""
         , viewLedgerMap model
-        , if model.sheetId == "" then
+        , if model.config.sheetId == "" then
             p [ style "color" "#7a8a80", style "text-align" "center", style "padding" "32px 0" ]
                 [ text "Enter your Sheet ID in Settings to get started." ]
 
@@ -2448,7 +2522,7 @@ viewSkeleton =
 -- STATS TAB
 
 
-viewStatsTab : Model -> Html Msg
+viewStatsTab : AuthState -> Html Msg
 viewStatsTab model =
     let
         entries =
@@ -2492,8 +2566,8 @@ viewStatsTab model =
                 |> List.take 5
 
         daysIn =
-            if model.tripStart /= "" && model.today /= "" then
-                isoToDayCount model.today - isoToDayCount model.tripStart + 1
+            if model.config.tripStart /= "" && model.today /= "" then
+                isoToDayCount model.today - isoToDayCount model.config.tripStart + 1
 
             else
                 0
@@ -2715,14 +2789,14 @@ viewCumulativeChart entries =
 -- SETTINGS TAB
 
 
-viewSettingsTab : Model -> Html Msg
-viewSettingsTab model =
+viewSettingsPanel : AppConfig -> Bool -> String -> Html Msg
+viewSettingsPanel cfg isSignedIn version =
     div [ style "padding" "24px 20px" ]
         [ h2 [ sectionHead ] [ text "SETTINGS" ]
         , formField "GOOGLE CLIENT ID"
             (input
                 [ type_ "text"
-                , value model.googleClientId
+                , value cfg.googleClientId
                 , onInput GoogleClientIdChanged
                 , placeholder "123456789-abc...apps.googleusercontent.com"
                 , textInputStyle
@@ -2732,7 +2806,7 @@ viewSettingsTab model =
         , formField "GOOGLE SHEET ID"
             (input
                 [ type_ "text"
-                , value model.sheetId
+                , value cfg.sheetId
                 , onInput SheetIdChanged
                 , placeholder "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
                 , textInputStyle
@@ -2742,7 +2816,7 @@ viewSettingsTab model =
         , formField "ANTHROPIC API KEY"
             (input
                 [ type_ "password"
-                , value model.anthropicKey
+                , value cfg.anthropicKey
                 , onInput ApiKeyChanged
                 , placeholder "sk-ant-..."
                 , textInputStyle
@@ -2752,31 +2826,29 @@ viewSettingsTab model =
         , formField "TRIP START DATE"
             (input
                 [ type_ "date"
-                , value model.tripStart
+                , value cfg.tripStart
                 , onInput TripStartChanged
                 , textInputStyle
                 ]
                 []
             )
-        , case model.oauthToken of
-            Just _ ->
-                div [ style "margin-top" "32px" ]
-                    [ button
-                        [ onClick SignOutClicked
-                        , style "width" "100%"
-                        , style "background" "none"
-                        , style "border" "1px solid #e85030"
-                        , style "color" "#e85030"
-                        , style "border-radius" "8px"
-                        , style "padding" "14px"
-                        , style "font-size" "15px"
-                        , style "cursor" "pointer"
-                        ]
-                        [ text "SIGN OUT" ]
+        , if isSignedIn then
+            div [ style "margin-top" "32px" ]
+                [ button
+                    [ onClick SignOutClicked
+                    , style "width" "100%"
+                    , style "background" "none"
+                    , style "border" "1px solid #e85030"
+                    , style "color" "#e85030"
+                    , style "border-radius" "8px"
+                    , style "padding" "14px"
+                    , style "font-size" "15px"
+                    , style "cursor" "pointer"
                     ]
-
-            Nothing ->
-                text ""
+                    [ text "SIGN OUT" ]
+                ]
+          else
+            text ""
         , div [ style "margin-top" "8px" ]
             [ button
                 [ onClick ResetSettingsClicked
@@ -2784,10 +2856,9 @@ viewSettingsTab model =
                 ]
                 [ text "Reset all settings" ]
             ]
-        , if model.version /= "" then
+        , if version /= "" then
             p [ Html.Attributes.class "text-[#3a4a40] text-xs text-center mt-6 font-mono" ]
-                [ text model.version ]
-
+                [ text version ]
           else
             text ""
         ]
@@ -2797,9 +2868,9 @@ viewSettingsTab model =
 -- SHARED VIEW HELPERS
 
 
-viewErrorBanner : Model -> Html Msg
-viewErrorBanner model =
-    case model.error of
+viewErrorBanner : Maybe String -> Html Msg
+viewErrorBanner maybeErr =
+    case maybeErr of
         Nothing ->
             text ""
 

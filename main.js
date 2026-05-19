@@ -5670,7 +5670,13 @@ var $author$project$Main$gotGpsCoords = _Platform_incomingPort(
 		},
 		A2($elm$json$Json$Decode$field, 'lon', $elm$json$Json$Decode$float)));
 var $author$project$Main$gotNewToken = _Platform_incomingPort('gotNewToken', $elm$json$Json$Decode$string);
-var $author$project$Main$LedgerTab = {$: 'LedgerTab'};
+var $author$project$Main$AuthModel = function (a) {
+	return {$: 'AuthModel', a: a};
+};
+var $author$project$Main$FreshGuest = {$: 'FreshGuest'};
+var $author$project$Main$GuestModel = function (a) {
+	return {$: 'GuestModel', a: a};
+};
 var $elm$core$Maybe$andThen = F2(
 	function (callback, maybeValue) {
 		if (maybeValue.$ === 'Just') {
@@ -5681,11 +5687,6 @@ var $elm$core$Maybe$andThen = F2(
 		}
 	});
 var $elm$json$Json$Decode$decodeValue = _Json_run;
-var $author$project$Main$Fuel = {$: 'Fuel'};
-var $author$project$Main$LocationIdle = {$: 'LocationIdle'};
-var $author$project$Main$defaultPendingEntry = function (today) {
-	return {amount: '', category: $author$project$Main$Fuel, date: today, locationState: $author$project$Main$LocationIdle, longNote: '', merchant: '', note: ''};
-};
 var $author$project$Main$EntriesFetched = function (a) {
 	return {$: 'EntriesFetched', a: a};
 };
@@ -6238,6 +6239,7 @@ var $author$project$Main$Activities = {$: 'Activities'};
 var $author$project$Main$Camp = {$: 'Camp'};
 var $author$project$Main$Ferry = {$: 'Ferry'};
 var $author$project$Main$Food = {$: 'Food'};
+var $author$project$Main$Fuel = {$: 'Fuel'};
 var $author$project$Main$Gear = {$: 'Gear'};
 var $author$project$Main$Lodging = {$: 'Lodging'};
 var $author$project$Main$Medical = {$: 'Medical'};
@@ -6620,14 +6622,14 @@ var $elm$http$Http$request = function (r) {
 			{allowCookiesFromOtherDomains: false, body: r.body, expect: r.expect, headers: r.headers, method: r.method, timeout: r.timeout, tracker: r.tracker, url: r.url}));
 };
 var $author$project$Main$fetchEntries = F2(
-	function (token, sheetId) {
+	function (creds, sheetId) {
 		return $elm$http$Http$request(
 			{
 				body: $elm$http$Http$emptyBody,
 				expect: A2($author$project$Main$expectJsonBody, $author$project$Main$EntriesFetched, $author$project$Main$entriesDecoder),
 				headers: _List_fromArray(
 					[
-						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + token)
+						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + creds.token)
 					]),
 				method: 'GET',
 				timeout: $elm$core$Maybe$Nothing,
@@ -6646,6 +6648,33 @@ var $elm$json$Json$Decode$maybe = function (decoder) {
 var $elm$core$Basics$neq = _Utils_notEqual;
 var $elm$core$Platform$Cmd$batch = _Platform_batch;
 var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
+var $author$project$Main$LedgerTab = {$: 'LedgerTab'};
+var $author$project$Main$LocationIdle = {$: 'LocationIdle'};
+var $author$project$Main$defaultPendingEntry = function (today) {
+	return {amount: '', category: $author$project$Main$Fuel, date: today, locationState: $author$project$Main$LocationIdle, longNote: '', merchant: '', note: ''};
+};
+var $author$project$Main$toAuthState = F2(
+	function (creds, gs) {
+		return {
+			activeScanItemId: $elm$core$Maybe$Nothing,
+			config: gs.session.config,
+			creds: creds,
+			editingEntry: $elm$core$Maybe$Nothing,
+			entries: _List_Nil,
+			error: $elm$core$Maybe$Nothing,
+			geoBlocked: false,
+			loadingEntries: gs.session.config.sheetId !== '',
+			pendingEntry: $author$project$Main$defaultPendingEntry(gs.today),
+			scanQueue: _List_Nil,
+			showLedgerMap: false,
+			showMapPicker: false,
+			submitting: false,
+			tab: $author$project$Main$LedgerTab,
+			toast: $elm$core$Maybe$Nothing,
+			today: gs.today,
+			version: gs.version
+		};
+	});
 var $elm$core$Result$withDefault = F2(
 	function (def, result) {
 		if (result.$ === 'Ok') {
@@ -6678,48 +6707,38 @@ var $author$project$Main$init = function (flagsJson) {
 				A2($elm$json$Json$Decode$field, field_, $elm$json$Json$Decode$string),
 				flagsJson));
 	};
-	var sheetId = dec('sheetId');
-	var fetchCmd = function () {
-		if (token.$ === 'Just') {
-			var t = token.a;
-			return (sheetId !== '') ? A2($author$project$Main$fetchEntries, t, sheetId) : $elm$core$Platform$Cmd$none;
-		} else {
-			return $elm$core$Platform$Cmd$none;
-		}
-	}();
-	var today = dec('today');
-	var model = {
-		activeScanItemId: $elm$core$Maybe$Nothing,
+	var cfg = {
 		anthropicKey: dec('anthropicKey'),
-		editingEntry: $elm$core$Maybe$Nothing,
-		entries: _List_Nil,
-		error: $elm$core$Maybe$Nothing,
-		geoBlocked: false,
 		googleClientId: dec('googleClientId'),
-		loadingEntries: false,
-		oauthToken: token,
-		pendingEntry: $author$project$Main$defaultPendingEntry(today),
-		scanQueue: _List_Nil,
-		sheetId: sheetId,
-		showLedgerMap: false,
-		showMapPicker: false,
-		submitting: false,
-		tab: $author$project$Main$LedgerTab,
-		toast: $elm$core$Maybe$Nothing,
-		today: today,
+		sheetId: dec('sheetId'),
 		tripStart: function (s) {
 			return (s === '') ? '2026-05-22' : s;
 		}(
-			dec('tripStart')),
+			dec('tripStart'))
+	};
+	var gs = {
+		session: {config: cfg, reason: $author$project$Main$FreshGuest},
+		showSettings: false,
+		today: dec('today'),
 		version: dec('version')
 	};
-	return _Utils_Tuple2(
-		_Utils_update(
-			model,
-			{
-				loadingEntries: !_Utils_eq(fetchCmd, $elm$core$Platform$Cmd$none)
-			}),
-		fetchCmd);
+	if (token.$ === 'Nothing') {
+		return _Utils_Tuple2(
+			$author$project$Main$GuestModel(gs),
+			$elm$core$Platform$Cmd$none);
+	} else {
+		var t = token.a;
+		var as_ = A2(
+			$author$project$Main$toAuthState,
+			{token: t},
+			gs);
+		return _Utils_Tuple2(
+			$author$project$Main$AuthModel(as_),
+			(cfg.sheetId !== '') ? A2(
+				$author$project$Main$fetchEntries,
+				{token: t},
+				cfg.sheetId) : $elm$core$Platform$Cmd$none);
+	}
 };
 var $author$project$Main$AddTab = {$: 'AddTab'};
 var $author$project$Main$BrowserGeo = {$: 'BrowserGeo'};
@@ -6743,6 +6762,7 @@ var $author$project$Main$ScanProcessing = {$: 'ScanProcessing'};
 var $author$project$Main$ScanReady = {$: 'ScanReady'};
 var $author$project$Main$ScanSubmitted = {$: 'ScanSubmitted'};
 var $author$project$Main$ScanTab = {$: 'ScanTab'};
+var $author$project$Main$SessionExpired = {$: 'SessionExpired'};
 var $elm$core$List$any = F2(
 	function (isOkay, list) {
 		any:
@@ -6870,7 +6890,7 @@ var $elm$core$Maybe$withDefault = F2(
 		}
 	});
 var $author$project$Main$appendEntry = F3(
-	function (token, sheetId, entry) {
+	function (creds, sheetId, entry) {
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -6924,13 +6944,24 @@ var $author$project$Main$appendEntry = F3(
 				expect: $author$project$Main$expectWhateverBody($author$project$Main$EntrySubmitted),
 				headers: _List_fromArray(
 					[
-						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + token)
+						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + creds.token)
 					]),
 				method: 'POST',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
 				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A:J:append?valueInputOption=RAW')
 			});
+	});
+var $author$project$Main$authPending = F2(
+	function (f, as_) {
+		return _Utils_Tuple2(
+			$author$project$Main$AuthModel(
+				_Utils_update(
+					as_,
+					{
+						pendingEntry: f(as_.pendingEntry)
+					})),
+			$elm$core$Platform$Cmd$none);
 	});
 var $author$project$Main$claudeTextDecoder = A2(
 	$elm$json$Json$Decode$field,
@@ -6955,7 +6986,7 @@ var $author$project$Main$EntryDeleted = function (a) {
 };
 var $elm$json$Json$Encode$int = _Json_wrap;
 var $author$project$Main$deleteEntry = F3(
-	function (token, sheetId, rowIndex) {
+	function (creds, sheetId, rowIndex) {
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -7002,7 +7033,7 @@ var $author$project$Main$deleteEntry = F3(
 				expect: $author$project$Main$expectWhateverBody($author$project$Main$EntryDeleted),
 				headers: _List_fromArray(
 					[
-						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + token)
+						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + creds.token)
 					]),
 				method: 'POST',
 				timeout: $elm$core$Maybe$Nothing,
@@ -7598,8 +7629,6 @@ var $author$project$Main$requestGeolocation = _Platform_outgoingPort(
 	function ($) {
 		return $elm$json$Json$Encode$null;
 	});
-var $elm$json$Json$Encode$bool = _Json_wrap;
-var $author$project$Main$requestOAuthToken = _Platform_outgoingPort('requestOAuthToken', $elm$json$Json$Encode$bool);
 var $author$project$Main$saveStorage = _Platform_outgoingPort(
 	'saveStorage',
 	function ($) {
@@ -7668,6 +7697,15 @@ var $author$project$Main$stripCodeFence = function (s) {
 					1,
 					$elm$core$String$lines(trimmed))))) : trimmed;
 };
+var $author$project$Main$toGuestState = F2(
+	function (reason, as_) {
+		return {
+			session: {config: as_.config, reason: reason},
+			showSettings: !_Utils_eq(reason, $author$project$Main$FreshGuest),
+			today: as_.today,
+			version: as_.version
+		};
+	});
 var $elm$file$File$toUrl = _File_toUrl;
 var $author$project$Main$ToastExpired = {$: 'ToastExpired'};
 var $elm$core$Process$sleep = _Process_sleep;
@@ -7680,7 +7718,7 @@ var $author$project$Main$toastFor = function (_v0) {
 		$elm$core$Process$sleep(4000));
 };
 var $author$project$Main$updateEntry = F3(
-	function (token, sheetId, entry) {
+	function (creds, sheetId, entry) {
 		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':J' + $elm$core$String$fromInt(entry.rowIndex)));
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
@@ -7735,23 +7773,13 @@ var $author$project$Main$updateEntry = F3(
 				expect: $author$project$Main$expectWhateverBody($author$project$Main$EntrySubmitted),
 				headers: _List_fromArray(
 					[
-						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + token)
+						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + creds.token)
 					]),
 				method: 'PUT',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
 				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (range + '?valueInputOption=RAW')))
 			});
-	});
-var $author$project$Main$updatePending = F2(
-	function (f, model) {
-		return _Utils_Tuple2(
-			_Utils_update(
-				model,
-				{
-					pendingEntry: f(model.pendingEntry)
-				}),
-			$elm$core$Platform$Cmd$none);
 	});
 var $author$project$Main$updateScanItem = F2(
 	function (id, f) {
@@ -7760,51 +7788,41 @@ var $author$project$Main$updateScanItem = F2(
 				return _Utils_eq(item.id, id) ? f(item) : item;
 			});
 	});
-var $author$project$Main$update = F2(
-	function (msg, model) {
+var $author$project$Main$updateAuth = F2(
+	function (msg, as_) {
 		switch (msg.$) {
-			case 'SignInClicked':
-				return (model.googleClientId === '') ? _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							error: $elm$core$Maybe$Just('Enter your Google Client ID in Settings first.')
-						}),
-					$elm$core$Platform$Cmd$none) : _Utils_Tuple2(
-					model,
-					$author$project$Main$requestOAuthToken(true));
 			case 'GotOAuthToken':
 				var token = msg.a;
-				var shouldFetch = model.sheetId !== '';
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							loadingEntries: shouldFetch,
-							oauthToken: $elm$core$Maybe$Just(token)
-						}),
-					$elm$core$Platform$Cmd$batch(
-						_List_fromArray(
-							[
-								$author$project$Main$saveStorage(
-								{key: 'oauth_token', value: token}),
-								shouldFetch ? A2($author$project$Main$fetchEntries, token, model.sheetId) : $elm$core$Platform$Cmd$none
-							])));
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								creds: {token: token}
+							})),
+					$author$project$Main$saveStorage(
+						{key: 'oauth_token', value: token}));
 			case 'SignOutClicked':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{editingEntry: $elm$core$Maybe$Nothing, entries: _List_Nil, oauthToken: $elm$core$Maybe$Nothing, tab: $author$project$Main$LedgerTab}),
+					$author$project$Main$GuestModel(
+						A2($author$project$Main$toGuestState, $author$project$Main$FreshGuest, as_)),
 					$author$project$Main$clearStorage(_Utils_Tuple0));
 			case 'ResetSettingsClicked':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{anthropicKey: '', editingEntry: $elm$core$Maybe$Nothing, entries: _List_Nil, googleClientId: '', oauthToken: $elm$core$Maybe$Nothing, sheetId: '', tab: $author$project$Main$LedgerTab}),
+					$author$project$Main$GuestModel(
+						{
+							session: {
+								config: {anthropicKey: '', googleClientId: '', sheetId: '', tripStart: ''},
+								reason: $author$project$Main$FreshGuest
+							},
+							showSettings: false,
+							today: as_.today,
+							version: as_.version
+						}),
 					$author$project$Main$clearAllStorage(_Utils_Tuple0));
 			case 'FilesSelected':
 				var files = msg.a;
-				var startIdx = $elm$core$List$length(model.scanQueue);
+				var startIdx = $elm$core$List$length(as_.scanQueue);
 				var indexed = A2(
 					$elm$core$List$indexedMap,
 					F2(
@@ -7833,16 +7851,17 @@ var $author$project$Main$update = F2(
 					},
 					indexed);
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							scanQueue: _Utils_ap(model.scanQueue, newItems)
-						}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								scanQueue: _Utils_ap(as_.scanQueue, newItems)
+							})),
 					$elm$core$Platform$Cmd$batch(urlCmds));
 			case 'GotFileUrl':
 				var itemId = msg.a;
 				var dataUrl = msg.b;
-				var newStatus = (model.anthropicKey !== '') ? $author$project$Main$ScanProcessing : $author$project$Main$ScanReady;
+				var newStatus = (as_.config.anthropicKey !== '') ? $author$project$Main$ScanProcessing : $author$project$Main$ScanReady;
 				var updatedQueue = A3(
 					$author$project$Main$updateScanItem,
 					itemId,
@@ -7851,18 +7870,19 @@ var $author$project$Main$update = F2(
 							i,
 							{imageUrl: dataUrl, status: newStatus});
 					},
-					model.scanQueue);
+					as_.scanQueue);
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{scanQueue: updatedQueue}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{scanQueue: updatedQueue})),
 					$elm$core$Platform$Cmd$batch(
 						_List_fromArray(
 							[
-								(model.anthropicKey !== '') ? A4(
+								(as_.config.anthropicKey !== '') ? A4(
 								$author$project$Main$makeOcrCall,
 								itemId,
-								model.anthropicKey,
+								as_.config.anthropicKey,
 								$author$project$Main$extractBase64(dataUrl),
 								$author$project$Main$getMimeType(dataUrl)) : $elm$core$Platform$Cmd$none,
 								$author$project$Main$extractExifGps(
@@ -7902,110 +7922,98 @@ var $author$project$Main$update = F2(
 							i,
 							{ocrData: ocrData, status: $author$project$Main$ScanReady});
 					},
-					model.scanQueue);
+					as_.scanQueue);
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{scanQueue: updatedQueue}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{scanQueue: updatedQueue})),
 					$elm$core$Platform$Cmd$none);
 			case 'AmountChanged':
 				var s = msg.a;
 				return A2(
-					$author$project$Main$updatePending,
+					$author$project$Main$authPending,
 					function (p) {
 						return _Utils_update(
 							p,
 							{amount: s});
 					},
-					model);
+					as_);
 			case 'CategorySelected':
 				var cat = msg.a;
 				return A2(
-					$author$project$Main$updatePending,
+					$author$project$Main$authPending,
 					function (p) {
 						return _Utils_update(
 							p,
 							{category: cat});
 					},
-					model);
+					as_);
 			case 'NoteChanged':
 				var s = msg.a;
 				return A2(
-					$author$project$Main$updatePending,
+					$author$project$Main$authPending,
 					function (p) {
 						return _Utils_update(
 							p,
 							{note: s});
 					},
-					model);
+					as_);
 			case 'LongNoteChanged':
 				var s = msg.a;
 				return A2(
-					$author$project$Main$updatePending,
+					$author$project$Main$authPending,
 					function (p) {
 						return _Utils_update(
 							p,
 							{longNote: s});
 					},
-					model);
+					as_);
 			case 'MerchantChanged':
 				var s = msg.a;
 				return A2(
-					$author$project$Main$updatePending,
+					$author$project$Main$authPending,
 					function (p) {
 						return _Utils_update(
 							p,
 							{merchant: s});
 					},
-					model);
+					as_);
 			case 'DateChanged':
 				var s = msg.a;
 				return A2(
-					$author$project$Main$updatePending,
+					$author$project$Main$authPending,
 					function (p) {
 						return _Utils_update(
 							p,
 							{date: s});
 					},
-					model);
+					as_);
 			case 'SubmitEntry':
-				var _v6 = _Utils_Tuple2(
-					model.oauthToken,
-					$elm$core$String$toFloat(model.pendingEntry.amount));
-				if (_v6.a.$ === 'Just') {
-					if (_v6.b.$ === 'Just') {
-						return _Utils_Tuple2(
+				var _v6 = $elm$core$String$toFloat(as_.pendingEntry.amount);
+				if (_v6.$ === 'Just') {
+					return _Utils_Tuple2(
+						$author$project$Main$AuthModel(
 							_Utils_update(
-								model,
-								{error: $elm$core$Maybe$Nothing, submitting: true}),
-							A2($elm$core$Task$perform, $author$project$Main$GotSubmitTime, $elm$time$Time$now));
-					} else {
-						var _v8 = _v6.b;
-						return _Utils_Tuple2(
+								as_,
+								{error: $elm$core$Maybe$Nothing, submitting: true})),
+						A2($elm$core$Task$perform, $author$project$Main$GotSubmitTime, $elm$time$Time$now));
+				} else {
+					return _Utils_Tuple2(
+						$author$project$Main$AuthModel(
 							_Utils_update(
-								model,
+								as_,
 								{
 									error: $elm$core$Maybe$Just('Enter a valid amount.')
-								}),
-							$elm$core$Platform$Cmd$none);
-					}
-				} else {
-					var _v7 = _v6.a;
-					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{
-								error: $elm$core$Maybe$Just('Not signed in.')
-							}),
+								})),
 						$elm$core$Platform$Cmd$none);
 				}
 			case 'GotSubmitTime':
 				var posix = msg.a;
-				var token = A2($elm$core$Maybe$withDefault, '', model.oauthToken);
-				var p = model.pendingEntry;
-				var _v9 = model.editingEntry;
-				if (_v9.$ === 'Just') {
-					var original = _v9.a;
+				var p = as_.pendingEntry;
+				var _v7 = as_.editingEntry;
+				if (_v7.$ === 'Just') {
+					var original = _v7.a;
 					var updated = _Utils_update(
 						original,
 						{
@@ -8016,10 +8024,10 @@ var $author$project$Main$update = F2(
 							category: p.category,
 							date: p.date,
 							lat: function () {
-								var _v10 = p.locationState;
-								switch (_v10.$) {
+								var _v8 = p.locationState;
+								switch (_v8.$) {
 									case 'LocationGot':
-										var la = _v10.a;
+										var la = _v8.a;
 										return $elm$core$Maybe$Just(la);
 									case 'LocationSkipped':
 										return $elm$core$Maybe$Nothing;
@@ -8028,10 +8036,10 @@ var $author$project$Main$update = F2(
 								}
 							}(),
 							lon: function () {
-								var _v11 = p.locationState;
-								switch (_v11.$) {
+								var _v9 = p.locationState;
+								switch (_v9.$) {
 									case 'LocationGot':
-										var lo = _v11.b;
+										var lo = _v9.b;
 										return $elm$core$Maybe$Just(lo);
 									case 'LocationSkipped':
 										return $elm$core$Maybe$Nothing;
@@ -8044,14 +8052,14 @@ var $author$project$Main$update = F2(
 							note: p.note
 						});
 					return _Utils_Tuple2(
-						model,
-						A3($author$project$Main$updateEntry, token, model.sheetId, updated));
+						$author$project$Main$AuthModel(as_),
+						A3($author$project$Main$updateEntry, as_.creds, as_.config.sheetId, updated));
 				} else {
-					var _v12 = function () {
-						var _v13 = p.locationState;
-						if (_v13.$ === 'LocationGot') {
-							var la = _v13.a;
-							var lo = _v13.b;
+					var _v10 = function () {
+						var _v11 = p.locationState;
+						if (_v11.$ === 'LocationGot') {
+							var la = _v11.a;
+							var lo = _v11.b;
 							return _Utils_Tuple2(
 								$elm$core$Maybe$Just(la),
 								$elm$core$Maybe$Just(lo));
@@ -8059,8 +8067,8 @@ var $author$project$Main$update = F2(
 							return _Utils_Tuple2($elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing);
 						}
 					}();
-					var eLat = _v12.a;
-					var eLon = _v12.b;
+					var eLat = _v10.a;
+					var eLon = _v10.b;
 					var entry = {
 						amount: A2(
 							$elm$core$Maybe$withDefault,
@@ -8079,16 +8087,16 @@ var $author$project$Main$update = F2(
 						rowIndex: 0
 					};
 					return _Utils_Tuple2(
-						model,
-						A3($author$project$Main$appendEntry, token, model.sheetId, entry));
+						$author$project$Main$AuthModel(as_),
+						A3($author$project$Main$appendEntry, as_.creds, as_.config.sheetId, entry));
 				}
 			case 'EntrySubmitted':
 				var result = msg.a;
 				if (result.$ === 'Ok') {
 					var updatedQueue = function () {
-						var _v15 = model.activeScanItemId;
-						if (_v15.$ === 'Just') {
-							var id = _v15.a;
+						var _v13 = as_.activeScanItemId;
+						if (_v13.$ === 'Just') {
+							var id = _v13.a;
 							return A3(
 								$author$project$Main$updateScanItem,
 								id,
@@ -8097,9 +8105,9 @@ var $author$project$Main$update = F2(
 										i,
 										{status: $author$project$Main$ScanSubmitted});
 								},
-								model.scanQueue);
+								as_.scanQueue);
 						} else {
-							return model.scanQueue;
+							return as_.scanQueue;
 						}
 					}();
 					var hasRemaining = A2(
@@ -8108,49 +8116,38 @@ var $author$project$Main$update = F2(
 							return !_Utils_eq(i.status, $author$project$Main$ScanSubmitted);
 						},
 						updatedQueue);
-					var nextTab = ((!_Utils_eq(model.activeScanItemId, $elm$core$Maybe$Nothing)) && hasRemaining) ? $author$project$Main$ScanTab : $author$project$Main$LedgerTab;
+					var nextTab = ((!_Utils_eq(as_.activeScanItemId, $elm$core$Maybe$Nothing)) && hasRemaining) ? $author$project$Main$ScanTab : $author$project$Main$LedgerTab;
 					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{
-								activeScanItemId: $elm$core$Maybe$Nothing,
-								editingEntry: $elm$core$Maybe$Nothing,
-								loadingEntries: true,
-								pendingEntry: $author$project$Main$defaultPendingEntry(model.today),
-								scanQueue: updatedQueue,
-								submitting: false,
-								tab: nextTab
-							}),
-						A2(
-							$author$project$Main$fetchEntries,
-							A2($elm$core$Maybe$withDefault, '', model.oauthToken),
-							model.sheetId));
+						$author$project$Main$AuthModel(
+							_Utils_update(
+								as_,
+								{
+									activeScanItemId: $elm$core$Maybe$Nothing,
+									editingEntry: $elm$core$Maybe$Nothing,
+									loadingEntries: true,
+									pendingEntry: $author$project$Main$defaultPendingEntry(as_.today),
+									scanQueue: updatedQueue,
+									submitting: false,
+									tab: nextTab
+								})),
+						A2($author$project$Main$fetchEntries, as_.creds, as_.config.sheetId));
 				} else {
 					if ((result.a.$ === 'BadStatus') && (result.a.a === 401)) {
-						var toastMsg = 'Session expired — please try saving again';
 						return _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{
-									submitting: false,
-									toast: $elm$core$Maybe$Just(toastMsg)
-								}),
-							$elm$core$Platform$Cmd$batch(
-								_List_fromArray(
-									[
-										$author$project$Main$requestOAuthToken(false),
-										$author$project$Main$toastFor(toastMsg)
-									])));
+							$author$project$Main$GuestModel(
+								A2($author$project$Main$toGuestState, $author$project$Main$SessionExpired, as_)),
+							$author$project$Main$clearStorage(_Utils_Tuple0));
 					} else {
 						var e = result.a;
 						var toastMsg = 'Save failed: ' + $author$project$Main$httpErrString(e);
 						return _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{
-									submitting: false,
-									toast: $elm$core$Maybe$Just(toastMsg)
-								}),
+							$author$project$Main$AuthModel(
+								_Utils_update(
+									as_,
+									{
+										submitting: false,
+										toast: $elm$core$Maybe$Just(toastMsg)
+									})),
 							$author$project$Main$toastFor(toastMsg));
 					}
 				}
@@ -8159,243 +8156,266 @@ var $author$project$Main$update = F2(
 				if (result.$ === 'Ok') {
 					var entries = result.a;
 					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{entries: entries, loadingEntries: false}),
+						$author$project$Main$AuthModel(
+							_Utils_update(
+								as_,
+								{entries: entries, loadingEntries: false})),
 						$elm$core$Platform$Cmd$none);
 				} else {
 					if ((result.a.$ === 'BadStatus') && (result.a.a === 401)) {
 						return _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{loadingEntries: false}),
-							$author$project$Main$requestOAuthToken(false));
+							$author$project$Main$GuestModel(
+								A2($author$project$Main$toGuestState, $author$project$Main$SessionExpired, as_)),
+							$author$project$Main$clearStorage(_Utils_Tuple0));
 					} else {
 						var e = result.a;
 						return _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{
-									error: $elm$core$Maybe$Just(
-										'Load failed: ' + $author$project$Main$httpErrString(e)),
-									loadingEntries: false
-								}),
+							$author$project$Main$AuthModel(
+								_Utils_update(
+									as_,
+									{
+										error: $elm$core$Maybe$Just(
+											'Load failed: ' + $author$project$Main$httpErrString(e)),
+										loadingEntries: false
+									})),
 							$elm$core$Platform$Cmd$none);
 					}
 				}
 			case 'DeleteEntry':
 				var entry = msg.a;
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							entries: A2(
-								$elm$core$List$filter,
-								function (e) {
-									return !_Utils_eq(e.id, entry.id);
-								},
-								model.entries)
-						}),
-					A3(
-						$author$project$Main$deleteEntry,
-						A2($elm$core$Maybe$withDefault, '', model.oauthToken),
-						model.sheetId,
-						entry.rowIndex));
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								entries: A2(
+									$elm$core$List$filter,
+									function (e) {
+										return !_Utils_eq(e.id, entry.id);
+									},
+									as_.entries)
+							})),
+					A3($author$project$Main$deleteEntry, as_.creds, as_.config.sheetId, entry.rowIndex));
 			case 'EntryDeleted':
 				var result = msg.a;
 				if (result.$ === 'Ok') {
 					return _Utils_Tuple2(
-						model,
-						A2(
-							$author$project$Main$fetchEntries,
-							A2($elm$core$Maybe$withDefault, '', model.oauthToken),
-							model.sheetId));
+						$author$project$Main$AuthModel(as_),
+						A2($author$project$Main$fetchEntries, as_.creds, as_.config.sheetId));
 				} else {
 					if ((result.a.$ === 'BadStatus') && (result.a.a === 401)) {
 						return _Utils_Tuple2(
-							model,
-							$author$project$Main$requestOAuthToken(false));
+							$author$project$Main$GuestModel(
+								A2($author$project$Main$toGuestState, $author$project$Main$SessionExpired, as_)),
+							$author$project$Main$clearStorage(_Utils_Tuple0));
 					} else {
 						var e = result.a;
 						return _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{
-									error: $elm$core$Maybe$Just(
-										'Delete failed: ' + $author$project$Main$httpErrString(e))
-								}),
+							$author$project$Main$AuthModel(
+								_Utils_update(
+									as_,
+									{
+										error: $elm$core$Maybe$Just(
+											'Delete failed: ' + $author$project$Main$httpErrString(e))
+									})),
 							$elm$core$Platform$Cmd$none);
 					}
 				}
 			case 'EditEntry':
 				var entry = msg.a;
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							editingEntry: $elm$core$Maybe$Just(entry),
-							error: $elm$core$Maybe$Nothing,
-							pendingEntry: $author$project$Main$entryToPending(entry),
-							tab: $author$project$Main$AddTab
-						}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								editingEntry: $elm$core$Maybe$Just(entry),
+								error: $elm$core$Maybe$Nothing,
+								pendingEntry: $author$project$Main$entryToPending(entry),
+								tab: $author$project$Main$AddTab
+							})),
 					$elm$core$Platform$Cmd$none);
 			case 'CancelEdit':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							editingEntry: $elm$core$Maybe$Nothing,
-							pendingEntry: $author$project$Main$defaultPendingEntry(model.today),
-							tab: $author$project$Main$LedgerTab
-						}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								editingEntry: $elm$core$Maybe$Nothing,
+								pendingEntry: $author$project$Main$defaultPendingEntry(as_.today),
+								tab: $author$project$Main$LedgerTab
+							})),
 					$elm$core$Platform$Cmd$none);
 			case 'TabChanged':
 				var tab = msg.a;
-				var shouldFetch = _Utils_eq(tab, $author$project$Main$LedgerTab) && ((!_Utils_eq(model.oauthToken, $elm$core$Maybe$Nothing)) && (model.sheetId !== ''));
-				var newPending = (_Utils_eq(tab, $author$project$Main$AddTab) && (!model.geoBlocked)) ? A2($author$project$Main$setLocation, $author$project$Main$LocationFetching, model.pendingEntry) : model.pendingEntry;
-				var geoCmd = (_Utils_eq(tab, $author$project$Main$AddTab) && (!model.geoBlocked)) ? $author$project$Main$requestGeolocation(_Utils_Tuple0) : $elm$core$Platform$Cmd$none;
+				var shouldFetch = _Utils_eq(tab, $author$project$Main$LedgerTab) && (as_.config.sheetId !== '');
+				var newPending = (_Utils_eq(tab, $author$project$Main$AddTab) && (!as_.geoBlocked)) ? A2($author$project$Main$setLocation, $author$project$Main$LocationFetching, as_.pendingEntry) : as_.pendingEntry;
+				var geoCmd = (_Utils_eq(tab, $author$project$Main$AddTab) && (!as_.geoBlocked)) ? $author$project$Main$requestGeolocation(_Utils_Tuple0) : $elm$core$Platform$Cmd$none;
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							editingEntry: (!_Utils_eq(tab, $author$project$Main$AddTab)) ? $elm$core$Maybe$Nothing : model.editingEntry,
-							loadingEntries: shouldFetch,
-							pendingEntry: newPending,
-							tab: tab
-						}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								editingEntry: (!_Utils_eq(tab, $author$project$Main$AddTab)) ? $elm$core$Maybe$Nothing : as_.editingEntry,
+								loadingEntries: shouldFetch,
+								pendingEntry: newPending,
+								tab: tab
+							})),
 					$elm$core$Platform$Cmd$batch(
 						_List_fromArray(
 							[
-								shouldFetch ? A2(
-								$author$project$Main$fetchEntries,
-								A2($elm$core$Maybe$withDefault, '', model.oauthToken),
-								model.sheetId) : $elm$core$Platform$Cmd$none,
+								shouldFetch ? A2($author$project$Main$fetchEntries, as_.creds, as_.config.sheetId) : $elm$core$Platform$Cmd$none,
 								geoCmd
 							])));
 			case 'RefreshClicked':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{loadingEntries: true}),
-					A2(
-						$author$project$Main$fetchEntries,
-						A2($elm$core$Maybe$withDefault, '', model.oauthToken),
-						model.sheetId));
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{loadingEntries: true})),
+					A2($author$project$Main$fetchEntries, as_.creds, as_.config.sheetId));
 			case 'ApiKeyChanged':
 				var s = msg.a;
+				var cfg = as_.config;
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{anthropicKey: s}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								config: _Utils_update(
+									cfg,
+									{anthropicKey: s})
+							})),
 					$author$project$Main$saveStorage(
 						{key: 'anthropic_key', value: s}));
 			case 'SheetIdChanged':
 				var s = msg.a;
+				var cfg = as_.config;
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{sheetId: s}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								config: _Utils_update(
+									cfg,
+									{sheetId: s})
+							})),
 					$author$project$Main$saveStorage(
 						{key: 'sheet_id', value: s}));
 			case 'GoogleClientIdChanged':
 				var s = msg.a;
+				var cfg = as_.config;
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{googleClientId: s}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								config: _Utils_update(
+									cfg,
+									{googleClientId: s})
+							})),
 					$author$project$Main$saveStorage(
 						{key: 'google_client_id', value: s}));
 			case 'TripStartChanged':
 				var s = msg.a;
+				var cfg = as_.config;
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{tripStart: s}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								config: _Utils_update(
+									cfg,
+									{tripStart: s})
+							})),
 					$author$project$Main$saveStorage(
 						{key: 'trip_start', value: s}));
 			case 'DismissError':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{error: $elm$core$Maybe$Nothing}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{error: $elm$core$Maybe$Nothing})),
 					$elm$core$Platform$Cmd$none);
 			case 'GotGpsCoords':
 				var lat = msg.a;
 				var lon = msg.b;
-				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							pendingEntry: A2(
-								$author$project$Main$setLocation,
-								A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$BrowserGeo),
-								model.pendingEntry)
-						}),
-					$elm$core$Platform$Cmd$none);
+				return A2(
+					$author$project$Main$authPending,
+					$author$project$Main$setLocation(
+						A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$BrowserGeo)),
+					as_);
 			case 'GeolocationDenied':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							geoBlocked: true,
-							pendingEntry: A2($author$project$Main$setLocation, $author$project$Main$LocationIdle, model.pendingEntry)
-						}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								geoBlocked: true,
+								pendingEntry: A2($author$project$Main$setLocation, $author$project$Main$LocationIdle, as_.pendingEntry)
+							})),
 					$elm$core$Platform$Cmd$none);
 			case 'OpenMapPicker':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{showMapPicker: true}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{showMapPicker: true})),
 					$elm$core$Platform$Cmd$none);
 			case 'MapPickerConfirmed':
 				var lat = msg.a;
 				var lon = msg.b;
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							pendingEntry: A2(
-								$author$project$Main$setLocation,
-								A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$ManualPin),
-								model.pendingEntry),
-							showMapPicker: false
-						}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								pendingEntry: A2(
+									$author$project$Main$setLocation,
+									A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$ManualPin),
+									as_.pendingEntry),
+								showMapPicker: false
+							})),
 					$elm$core$Platform$Cmd$none);
 			case 'DismissMapPicker':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{showMapPicker: false}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{showMapPicker: false})),
 					$elm$core$Platform$Cmd$none);
 			case 'SkipLocation':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							pendingEntry: A2($author$project$Main$setLocation, $author$project$Main$LocationSkipped, model.pendingEntry),
-							showMapPicker: false
-						}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								pendingEntry: A2($author$project$Main$setLocation, $author$project$Main$LocationSkipped, as_.pendingEntry),
+								showMapPicker: false
+							})),
 					$elm$core$Platform$Cmd$none);
 			case 'ToggleLedgerMap':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{showLedgerMap: !model.showLedgerMap}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{showLedgerMap: !as_.showLedgerMap})),
 					$elm$core$Platform$Cmd$none);
 			case 'ShowToast':
 				var message = msg.a;
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							toast: $elm$core$Maybe$Just(message)
-						}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								toast: $elm$core$Maybe$Just(message)
+							})),
 					$author$project$Main$toastFor(message));
 			case 'ToastExpired':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{toast: $elm$core$Maybe$Nothing}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{toast: $elm$core$Maybe$Nothing})),
 					$elm$core$Platform$Cmd$none);
 			case 'GotExifCoords':
 				if ((msg.b.$ === 'Just') && (msg.c.$ === 'Just')) {
@@ -8403,54 +8423,58 @@ var $author$project$Main$update = F2(
 					var lat = msg.b.a;
 					var lon = msg.c.a;
 					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{
-								scanQueue: A3(
-									$author$project$Main$updateScanItem,
-									itemId,
-									function (i) {
-										return _Utils_update(
-											i,
-											{
-												locationState: A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$ExifGps)
-											});
-									},
-									model.scanQueue)
-							}),
+						$author$project$Main$AuthModel(
+							_Utils_update(
+								as_,
+								{
+									scanQueue: A3(
+										$author$project$Main$updateScanItem,
+										itemId,
+										function (i) {
+											return _Utils_update(
+												i,
+												{
+													locationState: A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$ExifGps)
+												});
+										},
+										as_.scanQueue)
+								})),
 						$elm$core$Platform$Cmd$none);
 				} else {
 					var itemId = msg.a;
 					var debug = msg.d;
 					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{
-								scanQueue: A3(
-									$author$project$Main$updateScanItem,
-									itemId,
-									function (i) {
-										return _Utils_update(
-											i,
-											{exifDebug: debug, locationState: $author$project$Main$LocationNoExifGps});
-									},
-									model.scanQueue)
-							}),
+						$author$project$Main$AuthModel(
+							_Utils_update(
+								as_,
+								{
+									scanQueue: A3(
+										$author$project$Main$updateScanItem,
+										itemId,
+										function (i) {
+											return _Utils_update(
+												i,
+												{exifDebug: debug, locationState: $author$project$Main$LocationNoExifGps});
+										},
+										as_.scanQueue)
+								})),
 						$elm$core$Platform$Cmd$none);
 				}
 			case 'ReviewScanItem':
 				var itemId = msg.a;
-				var _v18 = $elm$core$List$head(
+				var _v16 = $elm$core$List$head(
 					A2(
 						$elm$core$List$filter,
 						function (i) {
 							return _Utils_eq(i.id, itemId);
 						},
-						model.scanQueue));
-				if (_v18.$ === 'Nothing') {
-					return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
+						as_.scanQueue));
+				if (_v16.$ === 'Nothing') {
+					return _Utils_Tuple2(
+						$author$project$Main$AuthModel(as_),
+						$elm$core$Platform$Cmd$none);
 				} else {
-					var item = _v18.a;
+					var item = _v16.a;
 					var ocr = A2(
 						$elm$core$Maybe$withDefault,
 						{amount: $elm$core$Maybe$Nothing, category: $elm$core$Maybe$Nothing, date: $elm$core$Maybe$Nothing, longNote: $elm$core$Maybe$Nothing, merchant: $elm$core$Maybe$Nothing, note: $elm$core$Maybe$Nothing},
@@ -8461,46 +8485,202 @@ var $author$project$Main$update = F2(
 							'',
 							A2($elm$core$Maybe$map, $elm$core$String$fromFloat, ocr.amount)),
 						category: A2($elm$core$Maybe$withDefault, $author$project$Main$Fuel, ocr.category),
-						date: A2($elm$core$Maybe$withDefault, model.today, ocr.date),
+						date: A2($elm$core$Maybe$withDefault, as_.today, ocr.date),
 						locationState: item.locationState,
 						longNote: A2($elm$core$Maybe$withDefault, '', ocr.longNote),
 						merchant: A2($elm$core$Maybe$withDefault, '', ocr.merchant),
 						note: A2($elm$core$Maybe$withDefault, '', ocr.note)
 					};
 					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{
-								activeScanItemId: $elm$core$Maybe$Just(itemId),
-								error: $elm$core$Maybe$Nothing,
-								pendingEntry: newPending,
-								tab: $author$project$Main$AddTab
-							}),
+						$author$project$Main$AuthModel(
+							_Utils_update(
+								as_,
+								{
+									activeScanItemId: $elm$core$Maybe$Just(itemId),
+									error: $elm$core$Maybe$Nothing,
+									pendingEntry: newPending,
+									tab: $author$project$Main$AddTab
+								})),
 						$elm$core$Platform$Cmd$none);
 				}
 			case 'BackToQueue':
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							activeScanItemId: $elm$core$Maybe$Nothing,
-							pendingEntry: $author$project$Main$defaultPendingEntry(model.today),
-							tab: $author$project$Main$ScanTab
-						}),
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								activeScanItemId: $elm$core$Maybe$Nothing,
+								pendingEntry: $author$project$Main$defaultPendingEntry(as_.today),
+								tab: $author$project$Main$ScanTab
+							})),
+					$elm$core$Platform$Cmd$none);
+			case 'ClearDoneItems':
+				return _Utils_Tuple2(
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								scanQueue: A2(
+									$elm$core$List$filter,
+									function (i) {
+										return !_Utils_eq(i.status, $author$project$Main$ScanSubmitted);
+									},
+									as_.scanQueue)
+							})),
 					$elm$core$Platform$Cmd$none);
 			default:
 				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							scanQueue: A2(
-								$elm$core$List$filter,
-								function (i) {
-									return !_Utils_eq(i.status, $author$project$Main$ScanSubmitted);
-								},
-								model.scanQueue)
-						}),
+					$author$project$Main$AuthModel(as_),
 					$elm$core$Platform$Cmd$none);
+		}
+	});
+var $author$project$Main$MissingConfig = {$: 'MissingConfig'};
+var $author$project$Main$mapGuestConfig = F2(
+	function (f, gs) {
+		return _Utils_update(
+			gs,
+			{
+				config: f(gs.config)
+			});
+	});
+var $elm$json$Json$Encode$bool = _Json_wrap;
+var $author$project$Main$requestOAuthToken = _Platform_outgoingPort('requestOAuthToken', $elm$json$Json$Encode$bool);
+var $author$project$Main$updateGuest = F2(
+	function (msg, gs) {
+		switch (msg.$) {
+			case 'SignInClicked':
+				return (gs.session.config.googleClientId === '') ? _Utils_Tuple2(
+					$author$project$Main$GuestModel(
+						_Utils_update(
+							gs,
+							{
+								session: {config: gs.session.config, reason: $author$project$Main$MissingConfig}
+							})),
+					$elm$core$Platform$Cmd$none) : _Utils_Tuple2(
+					$author$project$Main$GuestModel(gs),
+					$author$project$Main$requestOAuthToken(true));
+			case 'GotOAuthToken':
+				var token = msg.a;
+				var as_ = A2(
+					$author$project$Main$toAuthState,
+					{token: token},
+					gs);
+				return _Utils_Tuple2(
+					$author$project$Main$AuthModel(as_),
+					$elm$core$Platform$Cmd$batch(
+						_List_fromArray(
+							[
+								$author$project$Main$saveStorage(
+								{key: 'oauth_token', value: token}),
+								as_.loadingEntries ? A2(
+								$author$project$Main$fetchEntries,
+								{token: token},
+								as_.config.sheetId) : $elm$core$Platform$Cmd$none
+							])));
+			case 'ToggleGuestSettings':
+				return _Utils_Tuple2(
+					$author$project$Main$GuestModel(
+						_Utils_update(
+							gs,
+							{showSettings: !gs.showSettings})),
+					$elm$core$Platform$Cmd$none);
+			case 'ApiKeyChanged':
+				var s = msg.a;
+				return _Utils_Tuple2(
+					$author$project$Main$GuestModel(
+						_Utils_update(
+							gs,
+							{
+								session: A2(
+									$author$project$Main$mapGuestConfig,
+									function (c) {
+										return _Utils_update(
+											c,
+											{anthropicKey: s});
+									},
+									gs.session)
+							})),
+					$author$project$Main$saveStorage(
+						{key: 'anthropic_key', value: s}));
+			case 'SheetIdChanged':
+				var s = msg.a;
+				return _Utils_Tuple2(
+					$author$project$Main$GuestModel(
+						_Utils_update(
+							gs,
+							{
+								session: A2(
+									$author$project$Main$mapGuestConfig,
+									function (c) {
+										return _Utils_update(
+											c,
+											{sheetId: s});
+									},
+									gs.session)
+							})),
+					$author$project$Main$saveStorage(
+						{key: 'sheet_id', value: s}));
+			case 'GoogleClientIdChanged':
+				var s = msg.a;
+				return _Utils_Tuple2(
+					$author$project$Main$GuestModel(
+						_Utils_update(
+							gs,
+							{
+								session: A2(
+									$author$project$Main$mapGuestConfig,
+									function (c) {
+										return _Utils_update(
+											c,
+											{googleClientId: s});
+									},
+									gs.session)
+							})),
+					$author$project$Main$saveStorage(
+						{key: 'google_client_id', value: s}));
+			case 'TripStartChanged':
+				var s = msg.a;
+				return _Utils_Tuple2(
+					$author$project$Main$GuestModel(
+						_Utils_update(
+							gs,
+							{
+								session: A2(
+									$author$project$Main$mapGuestConfig,
+									function (c) {
+										return _Utils_update(
+											c,
+											{tripStart: s});
+									},
+									gs.session)
+							})),
+					$author$project$Main$saveStorage(
+						{key: 'trip_start', value: s}));
+			case 'ResetSettingsClicked':
+				var emptyCfg = {anthropicKey: '', googleClientId: '', sheetId: '', tripStart: ''};
+				return _Utils_Tuple2(
+					$author$project$Main$GuestModel(
+						_Utils_update(
+							gs,
+							{
+								session: {config: emptyCfg, reason: $author$project$Main$FreshGuest},
+								showSettings: false
+							})),
+					$author$project$Main$clearAllStorage(_Utils_Tuple0));
+			default:
+				return _Utils_Tuple2(
+					$author$project$Main$GuestModel(gs),
+					$elm$core$Platform$Cmd$none);
+		}
+	});
+var $author$project$Main$update = F2(
+	function (msg, model) {
+		if (model.$ === 'GuestModel') {
+			var gs = model.a;
+			return A2($author$project$Main$updateGuest, msg, gs);
+		} else {
+			var as_ = model.a;
+			return A2($author$project$Main$updateAuth, msg, as_);
 		}
 	});
 var $elm$html$Html$div = _VirtualDom_node('div');
@@ -9318,12 +9498,11 @@ var $author$project$Main$viewBottomNav = function (currentTab) {
 				])));
 };
 var $author$project$Main$DismissError = {$: 'DismissError'};
-var $author$project$Main$viewErrorBanner = function (model) {
-	var _v0 = model.error;
-	if (_v0.$ === 'Nothing') {
+var $author$project$Main$viewErrorBanner = function (maybeErr) {
+	if (maybeErr.$ === 'Nothing') {
 		return $elm$html$Html$text('');
 	} else {
-		var err = _v0.a;
+		var err = maybeErr.a;
 		return A2(
 			$elm$html$Html$div,
 			_List_fromArray(
@@ -9362,7 +9541,7 @@ var $author$project$Main$viewErrorBanner = function (model) {
 	}
 };
 var $author$project$Main$SettingsTab = {$: 'SettingsTab'};
-var $author$project$Main$viewHeader = function (model) {
+var $author$project$Main$viewHeader = function (as_) {
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
@@ -9397,7 +9576,7 @@ var $author$project$Main$viewHeader = function (model) {
 				_List_fromArray(
 					[
 						$elm$html$Html$Events$onClick(
-						_Utils_eq(model.tab, $author$project$Main$SettingsTab) ? $author$project$Main$TabChanged($author$project$Main$LedgerTab) : $author$project$Main$TabChanged($author$project$Main$SettingsTab)),
+						_Utils_eq(as_.tab, $author$project$Main$SettingsTab) ? $author$project$Main$TabChanged($author$project$Main$LedgerTab) : $author$project$Main$TabChanged($author$project$Main$SettingsTab)),
 						A2($elm$html$Html$Attributes$style, 'background', 'none'),
 						A2($elm$html$Html$Attributes$style, 'border', 'none'),
 						A2($elm$html$Html$Attributes$style, 'font-size', '22px'),
@@ -9406,7 +9585,7 @@ var $author$project$Main$viewHeader = function (model) {
 						A2(
 						$elm$html$Html$Attributes$style,
 						'color',
-						_Utils_eq(model.tab, $author$project$Main$SettingsTab) ? '#e8a020' : '#7a8a80')
+						_Utils_eq(as_.tab, $author$project$Main$SettingsTab) ? '#e8a020' : '#7a8a80')
 					]),
 				_List_fromArray(
 					[
@@ -9969,7 +10148,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 					])),
 				(!$elm$core$List$isEmpty(model.entries)) ? $author$project$Main$viewLedgerSummary(model.entries) : $elm$html$Html$text(''),
 				$author$project$Main$viewLedgerMap(model),
-				(model.sheetId === '') ? A2(
+				(model.config.sheetId === '') ? A2(
 				$elm$html$Html$p,
 				_List_fromArray(
 					[
@@ -10447,144 +10626,138 @@ var $author$project$Main$SignOutClicked = {$: 'SignOutClicked'};
 var $author$project$Main$TripStartChanged = function (a) {
 	return {$: 'TripStartChanged', a: a};
 };
-var $author$project$Main$viewSettingsTab = function (model) {
-	return A2(
-		$elm$html$Html$div,
-		_List_fromArray(
-			[
-				A2($elm$html$Html$Attributes$style, 'padding', '24px 20px')
-			]),
-		_List_fromArray(
-			[
-				A2(
-				$elm$html$Html$h2,
-				_List_fromArray(
-					[$author$project$Main$sectionHead]),
-				_List_fromArray(
-					[
-						$elm$html$Html$text('SETTINGS')
-					])),
-				A2(
-				$author$project$Main$formField,
-				'GOOGLE CLIENT ID',
-				A2(
-					$elm$html$Html$input,
+var $author$project$Main$viewSettingsPanel = F3(
+	function (cfg, isSignedIn, version) {
+		return A2(
+			$elm$html$Html$div,
+			_List_fromArray(
+				[
+					A2($elm$html$Html$Attributes$style, 'padding', '24px 20px')
+				]),
+			_List_fromArray(
+				[
+					A2(
+					$elm$html$Html$h2,
+					_List_fromArray(
+						[$author$project$Main$sectionHead]),
 					_List_fromArray(
 						[
-							$elm$html$Html$Attributes$type_('text'),
-							$elm$html$Html$Attributes$value(model.googleClientId),
-							$elm$html$Html$Events$onInput($author$project$Main$GoogleClientIdChanged),
-							$elm$html$Html$Attributes$placeholder('123456789-abc...apps.googleusercontent.com'),
-							$author$project$Main$textInputStyle
-						]),
-					_List_Nil)),
-				A2(
-				$author$project$Main$formField,
-				'GOOGLE SHEET ID',
-				A2(
-					$elm$html$Html$input,
-					_List_fromArray(
-						[
-							$elm$html$Html$Attributes$type_('text'),
-							$elm$html$Html$Attributes$value(model.sheetId),
-							$elm$html$Html$Events$onInput($author$project$Main$SheetIdChanged),
-							$elm$html$Html$Attributes$placeholder('1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms'),
-							$author$project$Main$textInputStyle
-						]),
-					_List_Nil)),
-				A2(
-				$author$project$Main$formField,
-				'ANTHROPIC API KEY',
-				A2(
-					$elm$html$Html$input,
-					_List_fromArray(
-						[
-							$elm$html$Html$Attributes$type_('password'),
-							$elm$html$Html$Attributes$value(model.anthropicKey),
-							$elm$html$Html$Events$onInput($author$project$Main$ApiKeyChanged),
-							$elm$html$Html$Attributes$placeholder('sk-ant-...'),
-							$author$project$Main$textInputStyle
-						]),
-					_List_Nil)),
-				A2(
-				$author$project$Main$formField,
-				'TRIP START DATE',
-				A2(
-					$elm$html$Html$input,
-					_List_fromArray(
-						[
-							$elm$html$Html$Attributes$type_('date'),
-							$elm$html$Html$Attributes$value(model.tripStart),
-							$elm$html$Html$Events$onInput($author$project$Main$TripStartChanged),
-							$author$project$Main$textInputStyle
-						]),
-					_List_Nil)),
-				function () {
-				var _v0 = model.oauthToken;
-				if (_v0.$ === 'Just') {
-					return A2(
-						$elm$html$Html$div,
+							$elm$html$Html$text('SETTINGS')
+						])),
+					A2(
+					$author$project$Main$formField,
+					'GOOGLE CLIENT ID',
+					A2(
+						$elm$html$Html$input,
 						_List_fromArray(
 							[
-								A2($elm$html$Html$Attributes$style, 'margin-top', '32px')
+								$elm$html$Html$Attributes$type_('text'),
+								$elm$html$Html$Attributes$value(cfg.googleClientId),
+								$elm$html$Html$Events$onInput($author$project$Main$GoogleClientIdChanged),
+								$elm$html$Html$Attributes$placeholder('123456789-abc...apps.googleusercontent.com'),
+								$author$project$Main$textInputStyle
 							]),
+						_List_Nil)),
+					A2(
+					$author$project$Main$formField,
+					'GOOGLE SHEET ID',
+					A2(
+						$elm$html$Html$input,
 						_List_fromArray(
 							[
-								A2(
-								$elm$html$Html$button,
-								_List_fromArray(
-									[
-										$elm$html$Html$Events$onClick($author$project$Main$SignOutClicked),
-										A2($elm$html$Html$Attributes$style, 'width', '100%'),
-										A2($elm$html$Html$Attributes$style, 'background', 'none'),
-										A2($elm$html$Html$Attributes$style, 'border', '1px solid #e85030'),
-										A2($elm$html$Html$Attributes$style, 'color', '#e85030'),
-										A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
-										A2($elm$html$Html$Attributes$style, 'padding', '14px'),
-										A2($elm$html$Html$Attributes$style, 'font-size', '15px'),
-										A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
-									]),
-								_List_fromArray(
-									[
-										$elm$html$Html$text('SIGN OUT')
-									]))
-							]));
-				} else {
-					return $elm$html$Html$text('');
-				}
-			}(),
-				A2(
-				$elm$html$Html$div,
-				_List_fromArray(
-					[
-						A2($elm$html$Html$Attributes$style, 'margin-top', '8px')
-					]),
-				_List_fromArray(
-					[
-						A2(
-						$elm$html$Html$button,
-						_List_fromArray(
-							[
-								$elm$html$Html$Events$onClick($author$project$Main$ResetSettingsClicked),
-								$elm$html$Html$Attributes$class('w-full py-3.5 rounded-lg border border-red-900/60 text-red-400/80 text-sm cursor-pointer bg-transparent font-[inherit] hover:border-red-700 hover:text-red-300 transition-colors')
+								$elm$html$Html$Attributes$type_('text'),
+								$elm$html$Html$Attributes$value(cfg.sheetId),
+								$elm$html$Html$Events$onInput($author$project$Main$SheetIdChanged),
+								$elm$html$Html$Attributes$placeholder('1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms'),
+								$author$project$Main$textInputStyle
 							]),
+						_List_Nil)),
+					A2(
+					$author$project$Main$formField,
+					'ANTHROPIC API KEY',
+					A2(
+						$elm$html$Html$input,
 						_List_fromArray(
 							[
-								$elm$html$Html$text('Reset all settings')
-							]))
-					])),
-				(model.version !== '') ? A2(
-				$elm$html$Html$p,
-				_List_fromArray(
-					[
-						$elm$html$Html$Attributes$class('text-[#3a4a40] text-xs text-center mt-6 font-mono')
-					]),
-				_List_fromArray(
-					[
-						$elm$html$Html$text(model.version)
-					])) : $elm$html$Html$text('')
-			]));
-};
+								$elm$html$Html$Attributes$type_('password'),
+								$elm$html$Html$Attributes$value(cfg.anthropicKey),
+								$elm$html$Html$Events$onInput($author$project$Main$ApiKeyChanged),
+								$elm$html$Html$Attributes$placeholder('sk-ant-...'),
+								$author$project$Main$textInputStyle
+							]),
+						_List_Nil)),
+					A2(
+					$author$project$Main$formField,
+					'TRIP START DATE',
+					A2(
+						$elm$html$Html$input,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$type_('date'),
+								$elm$html$Html$Attributes$value(cfg.tripStart),
+								$elm$html$Html$Events$onInput($author$project$Main$TripStartChanged),
+								$author$project$Main$textInputStyle
+							]),
+						_List_Nil)),
+					isSignedIn ? A2(
+					$elm$html$Html$div,
+					_List_fromArray(
+						[
+							A2($elm$html$Html$Attributes$style, 'margin-top', '32px')
+						]),
+					_List_fromArray(
+						[
+							A2(
+							$elm$html$Html$button,
+							_List_fromArray(
+								[
+									$elm$html$Html$Events$onClick($author$project$Main$SignOutClicked),
+									A2($elm$html$Html$Attributes$style, 'width', '100%'),
+									A2($elm$html$Html$Attributes$style, 'background', 'none'),
+									A2($elm$html$Html$Attributes$style, 'border', '1px solid #e85030'),
+									A2($elm$html$Html$Attributes$style, 'color', '#e85030'),
+									A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
+									A2($elm$html$Html$Attributes$style, 'padding', '14px'),
+									A2($elm$html$Html$Attributes$style, 'font-size', '15px'),
+									A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+								]),
+							_List_fromArray(
+								[
+									$elm$html$Html$text('SIGN OUT')
+								]))
+						])) : $elm$html$Html$text(''),
+					A2(
+					$elm$html$Html$div,
+					_List_fromArray(
+						[
+							A2($elm$html$Html$Attributes$style, 'margin-top', '8px')
+						]),
+					_List_fromArray(
+						[
+							A2(
+							$elm$html$Html$button,
+							_List_fromArray(
+								[
+									$elm$html$Html$Events$onClick($author$project$Main$ResetSettingsClicked),
+									$elm$html$Html$Attributes$class('w-full py-3.5 rounded-lg border border-red-900/60 text-red-400/80 text-sm cursor-pointer bg-transparent font-[inherit] hover:border-red-700 hover:text-red-300 transition-colors')
+								]),
+							_List_fromArray(
+								[
+									$elm$html$Html$text('Reset all settings')
+								]))
+						])),
+					(version !== '') ? A2(
+					$elm$html$Html$p,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$class('text-[#3a4a40] text-xs text-center mt-6 font-mono')
+						]),
+					_List_fromArray(
+						[
+							$elm$html$Html$text(version)
+						])) : $elm$html$Html$text('')
+				]));
+	});
 var $elm$core$Basics$composeL = F3(
 	function (g, f, x) {
 		return g(
@@ -15907,7 +16080,7 @@ var $author$project$Main$viewStatsTab = function (model) {
 				return $.amount;
 			},
 			entries));
-	var daysIn = ((model.tripStart !== '') && (model.today !== '')) ? (($author$project$Main$isoToDayCount(model.today) - $author$project$Main$isoToDayCount(model.tripStart)) + 1) : 0;
+	var daysIn = ((model.config.tripStart !== '') && (model.today !== '')) ? (($author$project$Main$isoToDayCount(model.today) - $author$project$Main$isoToDayCount(model.config.tripStart)) + 1) : 0;
 	var bigDay = $author$project$Main$biggestDay(entries);
 	var avgPerEntry = (numEntries > 0) ? (total / numEntries) : 0;
 	var avgPerDay = (numDays > 0) ? (total / numDays) : 0;
@@ -16199,12 +16372,11 @@ var $author$project$Main$viewStatsTab = function (model) {
 					]))
 			]));
 };
-var $author$project$Main$viewToast = function (model) {
-	var _v0 = model.toast;
-	if (_v0.$ === 'Nothing') {
+var $author$project$Main$viewToast = function (toast) {
+	if (toast.$ === 'Nothing') {
 		return $elm$html$Html$text('');
 	} else {
-		var message = _v0.a;
+		var message = toast.a;
 		return A2(
 			$elm$html$Html$div,
 			_List_fromArray(
@@ -16237,14 +16409,14 @@ var $author$project$Main$viewToast = function (model) {
 				]));
 	}
 };
-var $author$project$Main$viewApp = function (model) {
+var $author$project$Main$viewAuth = function (as_) {
 	return A2(
 		$elm$html$Html$div,
 		_List_Nil,
 		_List_fromArray(
 			[
-				$author$project$Main$viewHeader(model),
-				$author$project$Main$viewErrorBanner(model),
+				$author$project$Main$viewHeader(as_),
+				$author$project$Main$viewErrorBanner(as_.error),
 				A2(
 				$elm$html$Html$div,
 				_List_fromArray(
@@ -16254,28 +16426,39 @@ var $author$project$Main$viewApp = function (model) {
 				_List_fromArray(
 					[
 						function () {
-						var _v0 = model.tab;
+						var _v0 = as_.tab;
 						switch (_v0.$) {
 							case 'ScanTab':
-								return $author$project$Main$viewScanTab(model);
+								return $author$project$Main$viewScanTab(as_);
 							case 'AddTab':
-								return $author$project$Main$viewAddTab(model);
+								return $author$project$Main$viewAddTab(as_);
 							case 'LedgerTab':
-								return $author$project$Main$viewLedgerTab(model);
+								return $author$project$Main$viewLedgerTab(as_);
 							case 'StatsTab':
-								return $author$project$Main$viewStatsTab(model);
+								return $author$project$Main$viewStatsTab(as_);
 							default:
-								return $author$project$Main$viewSettingsTab(model);
+								return A3($author$project$Main$viewSettingsPanel, as_.config, true, as_.version);
 						}
 					}()
 					])),
-				$author$project$Main$viewBottomNav(model.tab),
-				$author$project$Main$viewToast(model)
+				$author$project$Main$viewBottomNav(as_.tab),
+				$author$project$Main$viewToast(as_.toast)
 			]));
 };
 var $author$project$Main$SignInClicked = {$: 'SignInClicked'};
+var $author$project$Main$ToggleGuestSettings = {$: 'ToggleGuestSettings'};
+var $author$project$Main$guestMessage = function (reason) {
+	switch (reason.$) {
+		case 'FreshGuest':
+			return $elm$core$Maybe$Nothing;
+		case 'SessionExpired':
+			return $elm$core$Maybe$Just('Session expired — tap Sign In to continue.');
+		default:
+			return $elm$core$Maybe$Just('Enter your Google Client ID in Settings first.');
+	}
+};
 var $elm$html$Html$h1 = _VirtualDom_node('h1');
-var $author$project$Main$viewSignIn = function (model) {
+var $author$project$Main$viewGuest = function (gs) {
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
@@ -16320,14 +16503,31 @@ var $author$project$Main$viewSignIn = function (model) {
 				_List_fromArray(
 					[
 						A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
-						A2($elm$html$Html$Attributes$style, 'margin-bottom', '48px'),
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '24px'),
 						A2($elm$html$Html$Attributes$style, 'font-size', '16px')
 					]),
 				_List_fromArray(
 					[
 						$elm$html$Html$text('Road log for the long way north')
 					])),
-				$author$project$Main$viewErrorBanner(model),
+				function () {
+				var _v0 = $author$project$Main$guestMessage(gs.session.reason);
+				if (_v0.$ === 'Just') {
+					var msg = _v0.a;
+					return A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('w-full mb-4 px-4 py-3 rounded-lg bg-[#2a1510] border border-[#e85030] text-[#e8a020] text-sm text-left')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text(msg)
+							]));
+				} else {
+					return $elm$html$Html$text('');
+				}
+			}(),
 				A2(
 				$elm$html$Html$button,
 				_List_fromArray(
@@ -16373,8 +16573,7 @@ var $author$project$Main$viewSignIn = function (model) {
 						$elm$html$Html$button,
 						_List_fromArray(
 							[
-								$elm$html$Html$Events$onClick(
-								$author$project$Main$TabChanged($author$project$Main$SettingsTab)),
+								$elm$html$Html$Events$onClick($author$project$Main$ToggleGuestSettings),
 								A2($elm$html$Html$Attributes$style, 'background', 'none'),
 								A2($elm$html$Html$Attributes$style, 'border', '1px solid #3a4240'),
 								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
@@ -16387,7 +16586,7 @@ var $author$project$Main$viewSignIn = function (model) {
 							[
 								$elm$html$Html$text('⚙ Settings')
 							])),
-						_Utils_eq(model.tab, $author$project$Main$SettingsTab) ? $author$project$Main$viewSettingsTab(model) : $elm$html$Html$text('')
+						gs.showSettings ? A3($author$project$Main$viewSettingsPanel, gs.session.config, false, gs.version) : $elm$html$Html$text('')
 					]))
 			]));
 };
@@ -16407,11 +16606,12 @@ var $author$project$Main$view = function (model) {
 		_List_fromArray(
 			[
 				function () {
-				var _v0 = model.oauthToken;
-				if (_v0.$ === 'Nothing') {
-					return $author$project$Main$viewSignIn(model);
+				if (model.$ === 'GuestModel') {
+					var gs = model.a;
+					return $author$project$Main$viewGuest(gs);
 				} else {
-					return $author$project$Main$viewApp(model);
+					var as_ = model.a;
+					return $author$project$Main$viewAuth(as_);
 				}
 			}()
 			]));
