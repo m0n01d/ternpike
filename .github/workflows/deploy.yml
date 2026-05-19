@@ -28,6 +28,9 @@ jobs:
         env:
           GITHUB_SHA: ${{ github.sha }}
 
+      - name: Create SPA 404 fallback
+        run: cp dist/index.html dist/404.html
+
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
