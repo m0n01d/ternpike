@@ -1,7 +1,8 @@
 {
     "type": "application",
     "source-directories": [
-        "src"
+        "src",
+        "/root/.elm/0.19.1/packages/turboMaCk/non-empty-list-alias/1.4.0/src"
     ],
     "elm-version": "0.19.1",
     "dependencies": {
