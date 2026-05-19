@@ -6640,6 +6640,7 @@ var $author$project$Main$toAuthState = F3(
 		return {
 			activeScanItemId: $elm$core$Maybe$Nothing,
 			config: gs.session.config,
+			confirmDeleteTrip: $elm$core$Maybe$Nothing,
 			creds: creds,
 			editingEntry: $elm$core$Maybe$Nothing,
 			entries: _List_Nil,
@@ -9361,6 +9362,23 @@ var $author$project$Main$updateAuth = F2(
 									])));
 					}
 				}
+			case 'ConfirmDeleteTrip':
+				var trip = msg.a;
+				return _Utils_Tuple2(
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{
+								confirmDeleteTrip: $elm$core$Maybe$Just(trip)
+							})),
+					$elm$core$Platform$Cmd$none);
+			case 'CancelDeleteTrip':
+				return _Utils_Tuple2(
+					$author$project$Main$AuthModel(
+						_Utils_update(
+							as_,
+							{confirmDeleteTrip: $elm$core$Maybe$Nothing})),
+					$elm$core$Platform$Cmd$none);
 			case 'DeleteTrip':
 				var trip = msg.a;
 				var remaining = A2(
@@ -9371,7 +9389,10 @@ var $author$project$Main$updateAuth = F2(
 					$author$project$List$NonEmpty$Zipper$toList(as_.trips));
 				if (!remaining.b) {
 					return _Utils_Tuple2(
-						$author$project$Main$AuthModel(as_),
+						$author$project$Main$AuthModel(
+							_Utils_update(
+								as_,
+								{confirmDeleteTrip: $elm$core$Maybe$Nothing})),
 						$elm$core$Platform$Cmd$none);
 				} else {
 					var h = remaining.a;
@@ -9389,7 +9410,7 @@ var $author$project$Main$updateAuth = F2(
 						$author$project$Main$AuthModel(
 							_Utils_update(
 								as_,
-								{trips: trips_})),
+								{confirmDeleteTrip: $elm$core$Maybe$Nothing, trips: trips_})),
 						$author$project$Main$saveStorage(
 							{
 								key: 'trips',
@@ -9704,6 +9725,8 @@ var $author$project$Main$update = F2(
 var $elm$html$Html$div = _VirtualDom_node('div');
 var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
 var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
+var $elm$virtual_dom$VirtualDom$text = _VirtualDom_text;
+var $elm$html$Html$text = $elm$virtual_dom$VirtualDom$text;
 var $author$project$Main$AmountChanged = function (a) {
 	return {$: 'AmountChanged', a: a};
 };
@@ -9749,8 +9772,6 @@ var $elm$html$Html$Attributes$boolProperty = F2(
 			$elm$json$Json$Encode$bool(bool));
 	});
 var $elm$html$Html$Attributes$disabled = $elm$html$Html$Attributes$boolProperty('disabled');
-var $elm$virtual_dom$VirtualDom$text = _VirtualDom_text;
-var $elm$html$Html$text = $elm$virtual_dom$VirtualDom$text;
 var $author$project$Main$formField = F2(
 	function (label_, input_) {
 		return A2(
@@ -10548,6 +10569,118 @@ var $author$project$Main$viewBottomNav = function (currentTab) {
 					_Utils_Tuple3($author$project$Main$TripsTab, '🗺', 'Trips')
 				])));
 };
+var $author$project$Main$CancelDeleteTrip = {$: 'CancelDeleteTrip'};
+var $author$project$Main$DeleteTrip = function (a) {
+	return {$: 'DeleteTrip', a: a};
+};
+var $elm$html$Html$p = _VirtualDom_node('p');
+var $author$project$Main$viewDeleteConfirmModal = function (trip) {
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'position', 'fixed'),
+				A2($elm$html$Html$Attributes$style, 'inset', '0'),
+				A2($elm$html$Html$Attributes$style, 'background', 'rgba(0,0,0,0.75)'),
+				A2($elm$html$Html$Attributes$style, 'z-index', '9998'),
+				A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+				A2($elm$html$Html$Attributes$style, 'align-items', 'center'),
+				A2($elm$html$Html$Attributes$style, 'justify-content', 'center'),
+				A2($elm$html$Html$Attributes$style, 'padding', '24px')
+			]),
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'background', '#1e2220'),
+						A2($elm$html$Html$Attributes$style, 'border', '1px solid #3a4240'),
+						A2($elm$html$Html$Attributes$style, 'border-radius', '12px'),
+						A2($elm$html$Html$Attributes$style, 'padding', '24px'),
+						A2($elm$html$Html$Attributes$style, 'width', '100%'),
+						A2($elm$html$Html$Attributes$style, 'max-width', '360px')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$p,
+						_List_fromArray(
+							[
+								A2($elm$html$Html$Attributes$style, 'font-size', '18px'),
+								A2($elm$html$Html$Attributes$style, 'font-weight', '700'),
+								A2($elm$html$Html$Attributes$style, 'margin-bottom', '8px')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('Delete \u201C' + (trip.name + '\u201D?'))
+							])),
+						A2(
+						$elm$html$Html$p,
+						_List_fromArray(
+							[
+								A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+								A2($elm$html$Html$Attributes$style, 'margin-bottom', '24px'),
+								A2($elm$html$Html$Attributes$style, 'line-height', '1.5')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('This removes the trip from your app. Your expense data in Google Sheets will not be deleted.')
+							])),
+						A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+								A2($elm$html$Html$Attributes$style, 'gap', '12px')
+							]),
+						_List_fromArray(
+							[
+								A2(
+								$elm$html$Html$button,
+								_List_fromArray(
+									[
+										$elm$html$Html$Events$onClick($author$project$Main$CancelDeleteTrip),
+										A2($elm$html$Html$Attributes$style, 'flex', '1'),
+										A2($elm$html$Html$Attributes$style, 'padding', '12px'),
+										A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
+										A2($elm$html$Html$Attributes$style, 'border', '1px solid #3a4240'),
+										A2($elm$html$Html$Attributes$style, 'background', 'none'),
+										A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+										A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+										A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
+										A2($elm$html$Html$Attributes$style, 'font-family', 'inherit')
+									]),
+								_List_fromArray(
+									[
+										$elm$html$Html$text('Cancel')
+									])),
+								A2(
+								$elm$html$Html$button,
+								_List_fromArray(
+									[
+										$elm$html$Html$Events$onClick(
+										$author$project$Main$DeleteTrip(trip)),
+										A2($elm$html$Html$Attributes$style, 'flex', '1'),
+										A2($elm$html$Html$Attributes$style, 'padding', '12px'),
+										A2($elm$html$Html$Attributes$style, 'border-radius', '8px'),
+										A2($elm$html$Html$Attributes$style, 'border', 'none'),
+										A2($elm$html$Html$Attributes$style, 'background', '#b82020'),
+										A2($elm$html$Html$Attributes$style, 'color', '#ffffff'),
+										A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+										A2($elm$html$Html$Attributes$style, 'font-weight', '700'),
+										A2($elm$html$Html$Attributes$style, 'cursor', 'pointer'),
+										A2($elm$html$Html$Attributes$style, 'font-family', 'inherit')
+									]),
+								_List_fromArray(
+									[
+										$elm$html$Html$text('Delete trip')
+									]))
+							]))
+					]))
+			]));
+};
 var $author$project$Main$DismissError = {$: 'DismissError'};
 var $author$project$Main$viewErrorBanner = function (maybeErr) {
 	if (maybeErr.$ === 'Nothing') {
@@ -10732,7 +10865,6 @@ var $elm$virtual_dom$VirtualDom$keyedNode = function (tag) {
 		_VirtualDom_noScript(tag));
 };
 var $elm$html$Html$Keyed$node = $elm$virtual_dom$VirtualDom$keyedNode;
-var $elm$html$Html$p = _VirtualDom_node('p');
 var $elm$core$List$sum = function (numbers) {
 	return A3($elm$core$List$foldl, $elm$core$Basics$add, 0, numbers);
 };
@@ -17430,6 +17562,9 @@ var $author$project$Main$viewToast = function (toast) {
 				]));
 	}
 };
+var $author$project$Main$ConfirmDeleteTrip = function (a) {
+	return {$: 'ConfirmDeleteTrip', a: a};
+};
 var $author$project$Main$OpenEditTripForm = function (a) {
 	return {$: 'OpenEditTripForm', a: a};
 };
@@ -17739,22 +17874,51 @@ var $author$project$Main$viewTripsTab = function (as_) {
 											])) : $elm$html$Html$text('')
 									])),
 								A2(
-								$elm$html$Html$button,
+								$elm$html$Html$div,
 								_List_fromArray(
 									[
-										$elm$html$Html$Events$onClick(
-										$author$project$Main$OpenEditTripForm(activeTrip)),
-										A2($elm$html$Html$Attributes$style, 'background', 'none'),
-										A2($elm$html$Html$Attributes$style, 'border', '1px solid #2a3230'),
-										A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
-										A2($elm$html$Html$Attributes$style, 'border-radius', '6px'),
-										A2($elm$html$Html$Attributes$style, 'padding', '6px 10px'),
-										A2($elm$html$Html$Attributes$style, 'font-size', '12px'),
-										A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+										A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+										A2($elm$html$Html$Attributes$style, 'gap', '8px')
 									]),
 								_List_fromArray(
 									[
-										$elm$html$Html$text('Edit')
+										A2(
+										$elm$html$Html$button,
+										_List_fromArray(
+											[
+												$elm$html$Html$Events$onClick(
+												$author$project$Main$OpenEditTripForm(activeTrip)),
+												A2($elm$html$Html$Attributes$style, 'background', 'none'),
+												A2($elm$html$Html$Attributes$style, 'border', '1px solid #2a3230'),
+												A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+												A2($elm$html$Html$Attributes$style, 'border-radius', '6px'),
+												A2($elm$html$Html$Attributes$style, 'padding', '6px 10px'),
+												A2($elm$html$Html$Attributes$style, 'font-size', '12px'),
+												A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text('Edit')
+											])),
+										($elm$core$List$length(
+										$author$project$List$NonEmpty$Zipper$toList(as_.trips)) > 1) ? A2(
+										$elm$html$Html$button,
+										_List_fromArray(
+											[
+												$elm$html$Html$Events$onClick(
+												$author$project$Main$ConfirmDeleteTrip(activeTrip)),
+												A2($elm$html$Html$Attributes$style, 'background', 'none'),
+												A2($elm$html$Html$Attributes$style, 'border', '1px solid #5a2020'),
+												A2($elm$html$Html$Attributes$style, 'color', '#e05050'),
+												A2($elm$html$Html$Attributes$style, 'border-radius', '6px'),
+												A2($elm$html$Html$Attributes$style, 'padding', '6px 10px'),
+												A2($elm$html$Html$Attributes$style, 'font-size', '12px'),
+												A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+											]),
+										_List_fromArray(
+											[
+												$elm$html$Html$text('Delete')
+											])) : $elm$html$Html$text('')
 									]))
 							])),
 						function () {
@@ -17960,6 +18124,15 @@ var $author$project$Main$viewAuth = function (as_) {
 					}()
 					])),
 				$author$project$Main$viewBottomNav(as_.tab),
+				function () {
+				var _v1 = as_.confirmDeleteTrip;
+				if (_v1.$ === 'Just') {
+					var trip = _v1.a;
+					return $author$project$Main$viewDeleteConfirmModal(trip);
+				} else {
+					return $elm$html$Html$text('');
+				}
+			}(),
 				$author$project$Main$viewToast(as_.toast)
 			]));
 };

@@ -215,9 +215,10 @@ type alias GuestState =
 
 
 type alias AuthState =
-    { activeScanItemId : Maybe String
-    , config           : AppConfig
-    , creds            : Creds
+    { activeScanItemId  : Maybe String
+    , config            : AppConfig
+    , confirmDeleteTrip : Maybe Trip
+    , creds             : Creds
     , editingEntry     : Maybe Entry
     , entries          : List Entry
     , error            : Maybe String
@@ -246,11 +247,13 @@ type Msg
     = AmountChanged String
     | ApiKeyChanged String
     | BackToQueue
+    | CancelDeleteTrip
     | CancelEdit
     | CategorySelected Category
     | ClearDoneItems
     | DateChanged String
     | DeleteEntry Entry
+    | ConfirmDeleteTrip Trip
     | DeleteTrip Trip
     | DismissError
     | DismissMapPicker
@@ -386,9 +389,10 @@ mapGuestConfig f gs =
 
 toAuthState : Creds -> Zipper Trip -> GuestState -> AuthState
 toAuthState creds tripsZipper gs =
-    { activeScanItemId = Nothing
-    , config           = gs.session.config
-    , creds            = creds
+    { activeScanItemId  = Nothing
+    , config            = gs.session.config
+    , confirmDeleteTrip = Nothing
+    , creds             = creds
     , editingEntry     = Nothing
     , entries          = []
     , error            = Nothing
@@ -1375,6 +1379,12 @@ updateAuth msg as_ =
                                 ]
                             )
 
+        ConfirmDeleteTrip trip ->
+            ( AuthModel { as_ | confirmDeleteTrip = Just trip }, Cmd.none )
+
+        CancelDeleteTrip ->
+            ( AuthModel { as_ | confirmDeleteTrip = Nothing }, Cmd.none )
+
         DeleteTrip trip ->
             let
                 remaining =
@@ -1383,7 +1393,7 @@ updateAuth msg as_ =
             in
             case remaining of
                 [] ->
-                    ( AuthModel as_, Cmd.none )
+                    ( AuthModel { as_ | confirmDeleteTrip = Nothing }, Cmd.none )
 
                 h :: t ->
                     let
@@ -1392,7 +1402,7 @@ updateAuth msg as_ =
                                 |> Zipper.focus (\tr -> tr.tabName /= trip.tabName)
                                 |> Maybe.withDefault (Zipper.fromCons h t)
                     in
-                    ( AuthModel { as_ | trips = trips_ }
+                    ( AuthModel { as_ | trips = trips_, confirmDeleteTrip = Nothing }
                     , saveStorage { key = "trips", value = E.encode 0 (E.list encodeTrip (Zipper.toList trips_)) }
                     )
 
@@ -2218,7 +2228,67 @@ viewAuth as_ =
                     viewTripsTab as_
             ]
         , viewBottomNav as_.tab
+        , case as_.confirmDeleteTrip of
+            Just trip -> viewDeleteConfirmModal trip
+            Nothing   -> text ""
         , viewToast as_.toast
+        ]
+
+
+viewDeleteConfirmModal : Trip -> Html Msg
+viewDeleteConfirmModal trip =
+    div
+        [ style "position" "fixed"
+        , style "inset" "0"
+        , style "background" "rgba(0,0,0,0.75)"
+        , style "z-index" "9998"
+        , style "display" "flex"
+        , style "align-items" "center"
+        , style "justify-content" "center"
+        , style "padding" "24px"
+        ]
+        [ div
+            [ style "background" "#1e2220"
+            , style "border" "1px solid #3a4240"
+            , style "border-radius" "12px"
+            , style "padding" "24px"
+            , style "width" "100%"
+            , style "max-width" "360px"
+            ]
+            [ p [ style "font-size" "18px", style "font-weight" "700", style "margin-bottom" "8px" ]
+                [ text ("Delete \u{201C}" ++ trip.name ++ "\u{201D}?") ]
+            , p [ style "font-size" "14px", style "color" "#7a8a80", style "margin-bottom" "24px", style "line-height" "1.5" ]
+                [ text "This removes the trip from your app. Your expense data in Google Sheets will not be deleted." ]
+            , div [ style "display" "flex", style "gap" "12px" ]
+                [ button
+                    [ onClick CancelDeleteTrip
+                    , style "flex" "1"
+                    , style "padding" "12px"
+                    , style "border-radius" "8px"
+                    , style "border" "1px solid #3a4240"
+                    , style "background" "none"
+                    , style "color" "#7a8a80"
+                    , style "font-size" "14px"
+                    , style "cursor" "pointer"
+                    , style "font-family" "inherit"
+                    ]
+                    [ text "Cancel" ]
+                , button
+                    [ onClick (DeleteTrip trip)
+                    , style "flex" "1"
+                    , style "padding" "12px"
+                    , style "border-radius" "8px"
+                    , style "border" "none"
+                    , style "background" "#b82020"
+                    , style "color" "#ffffff"
+                    , style "font-size" "14px"
+                    , style "font-weight" "700"
+                    , style "cursor" "pointer"
+                    , style "font-family" "inherit"
+                    ]
+                    [ text "Delete trip" ]
+                ]
+            ]
         ]
 
 
@@ -3380,17 +3450,33 @@ viewTripsTab as_ =
                       else
                         text ""
                     ]
-                , button
-                    [ onClick (OpenEditTripForm activeTrip)
-                    , style "background" "none"
-                    , style "border" "1px solid #2a3230"
-                    , style "color" "#7a8a80"
-                    , style "border-radius" "6px"
-                    , style "padding" "6px 10px"
-                    , style "font-size" "12px"
-                    , style "cursor" "pointer"
+                , div [ style "display" "flex", style "gap" "8px" ]
+                    [ button
+                        [ onClick (OpenEditTripForm activeTrip)
+                        , style "background" "none"
+                        , style "border" "1px solid #2a3230"
+                        , style "color" "#7a8a80"
+                        , style "border-radius" "6px"
+                        , style "padding" "6px 10px"
+                        , style "font-size" "12px"
+                        , style "cursor" "pointer"
+                        ]
+                        [ text "Edit" ]
+                    , if List.length (Zipper.toList as_.trips) > 1 then
+                        button
+                            [ onClick (ConfirmDeleteTrip activeTrip)
+                            , style "background" "none"
+                            , style "border" "1px solid #5a2020"
+                            , style "color" "#e05050"
+                            , style "border-radius" "6px"
+                            , style "padding" "6px 10px"
+                            , style "font-size" "12px"
+                            , style "cursor" "pointer"
+                            ]
+                            [ text "Delete" ]
+                      else
+                        text ""
                     ]
-                    [ text "Edit" ]
                 ]
             , if activeTrip.budget > 0 then
                 let
