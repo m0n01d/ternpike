@@ -2727,7 +2727,7 @@ var _VirtualDom_mapEventTuple = F2(function(func, tuple)
 var _VirtualDom_mapEventRecord = F2(function(func, record)
 {
 	return {
-		aJ: func(record.aJ),
+		aL: func(record.aL),
 		ci: record.ci,
 		b5: record.b5
 	}
@@ -2997,7 +2997,7 @@ function _VirtualDom_makeCallback(eventNode, initialHandler)
 		// 3 = Custom
 
 		var value = result.a;
-		var message = !tag ? value : tag < 3 ? value.a : value.aJ;
+		var message = !tag ? value : tag < 3 ? value.a : value.aL;
 		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.ci;
 		var currentEventNode = (
 			stopPropagation && event.stopPropagation(),
@@ -5633,7 +5633,7 @@ var $author$project$Main$gotExifResult = _Platform_incomingPort(
 										$elm$json$Json$Decode$andThen,
 										function (debug) {
 											return $elm$json$Json$Decode$succeed(
-												{cx: debug, cF: hasGps, Q: id, W: lat, ad: lon});
+												{cx: debug, cF: hasGps, Q: id, W: lat, ac: lon});
 										},
 										A2($elm$json$Json$Decode$field, 'debug', $elm$json$Json$Decode$string));
 								},
@@ -5656,7 +5656,7 @@ var $author$project$Main$gotGpsCoords = _Platform_incomingPort(
 						$elm$json$Json$Decode$andThen,
 						function (denied) {
 							return $elm$json$Json$Decode$succeed(
-								{cy: denied, W: lat, ad: lon});
+								{cy: denied, W: lat, ac: lon});
 						},
 						A2($elm$json$Json$Decode$field, 'denied', $elm$json$Json$Decode$bool));
 				},
@@ -6627,35 +6627,35 @@ var $author$project$Main$LedgerTab = 1;
 var $author$project$Main$Fuel = 0;
 var $author$project$Main$LocationIdle = {$: 0};
 var $author$project$Main$defaultPendingEntry = function (today) {
-	return {d: '', i: 0, j: today, S: $author$project$Main$LocationIdle, z: '', l: '', r: ''};
+	return {d: '', i: 0, j: today, S: $author$project$Main$LocationIdle, z: '', l: '', s: ''};
 };
 var $author$project$Main$toAuthState = F3(
 	function (creds, tripsZipper, gs) {
 		return {
 			aq: $elm$core$Maybe$Nothing,
-			b: gs.s.b,
-			aa: creds,
-			aD: $elm$core$Maybe$Nothing,
-			ab: _List_Nil,
+			b: gs.m.b,
+			_: creds,
+			aE: $elm$core$Maybe$Nothing,
+			aa: _List_Nil,
 			al: $elm$core$Maybe$Nothing,
 			bo: false,
-			aw: gs.s.b.m !== '',
-			o: $author$project$Main$defaultPendingEntry(gs.P),
-			p: $elm$core$Dict$empty,
+			aw: gs.m.b.n !== '',
+			p: $author$project$Main$defaultPendingEntry(gs.P),
+			q: $elm$core$Dict$empty,
 			bb: false,
 			aZ: false,
-			aG: false,
+			aI: false,
 			X: 1,
 			bf: $elm$core$Maybe$Nothing,
 			P: gs.P,
-			Z: $elm$core$Maybe$Nothing,
-			n: tripsZipper,
+			af: $elm$core$Maybe$Nothing,
+			o: tripsZipper,
 			ao: gs.ao
 		};
 	});
 var $author$project$Main$Trip = F8(
 	function (budget, coverPhotoUrl, description, endDate, name, sheetGid, startDate, tabName) {
-		return {q: budget, N: coverPhotoUrl, B: description, v: endDate, u: name, aB: sheetGid, t: startDate, e: tabName};
+		return {r: budget, N: coverPhotoUrl, B: description, v: endDate, u: name, aC: sheetGid, t: startDate, e: tabName};
 	});
 var $author$project$Json$Decode$Pipeline$custom = $elm$json$Json$Decode$map2($elm$core$Basics$apR);
 var $author$project$Json$Decode$Pipeline$required = F3(
@@ -6752,14 +6752,14 @@ var $author$project$Main$init = function (flagsJson) {
 		dec('trips'));
 	var cfg = {
 		ar: dec('anthropicKey'),
-		aI: dec('googleClientId'),
-		m: dec('sheetId')
+		aK: dec('googleClientId'),
+		n: dec('sheetId')
 	};
 	var activeTripTab = dec('activeTripTab');
 	var gs = {
 		a5: activeTripTab,
-		aK: $elm$core$Maybe$Nothing,
-		s: {b: cfg, aM: $author$project$Main$FreshGuest},
+		aA: $elm$core$Maybe$Nothing,
+		m: {b: cfg, aG: $author$project$Main$FreshGuest},
 		aN: false,
 		bd: storedTrips,
 		P: dec('today'),
@@ -6771,20 +6771,20 @@ var $author$project$Main$init = function (flagsJson) {
 			$elm$core$Platform$Cmd$none);
 	} else {
 		var t = token.a;
-		if (cfg.m !== '') {
+		if (cfg.n !== '') {
 			return _Utils_Tuple2(
 				$author$project$Main$GuestModel(
 					_Utils_update(
 						gs,
 						{
-							aK: $elm$core$Maybe$Just(t)
+							aA: $elm$core$Maybe$Just(t)
 						})),
 				A2(
 					$author$project$Main$fetchSheetMeta,
 					{Y: t},
-					cfg.m));
+					cfg.n));
 		} else {
-			var defaultTrip = {q: 0, N: '', B: '', v: '', u: 'Trip 1', aB: 0, t: '', e: 'Expenses'};
+			var defaultTrip = {r: 0, N: '', B: '', v: '', u: 'Trip 1', aC: 0, t: '', e: 'Expenses'};
 			var tripsZipper = function () {
 				if (storedTrips.b) {
 					var h = storedTrips.a;
@@ -6837,7 +6837,6 @@ var $author$project$Main$ScanReady = 2;
 var $author$project$Main$ScanSubmitted = 3;
 var $author$project$Main$ScanTab = 2;
 var $author$project$Main$SessionExpired = {$: 3};
-var $author$project$Main$TripsTab = 5;
 var $elm$core$List$any = F2(
 	function (isOkay, list) {
 		any:
@@ -6977,7 +6976,7 @@ var $author$project$Main$appendEntry = F4(
 										$elm$json$Json$Encode$float(entry.d),
 										$elm$json$Json$Encode$string(
 										$author$project$Main$categoryLabel(entry.i)),
-										$elm$json$Json$Encode$string(entry.r),
+										$elm$json$Json$Encode$string(entry.s),
 										$elm$json$Json$Encode$string(entry.l),
 										$elm$json$Json$Encode$string(entry.bj),
 										A2(
@@ -6999,7 +6998,7 @@ var $author$project$Main$appendEntry = F4(
 												return $elm$json$Json$Encode$string(
 													$elm$core$String$fromFloat(v));
 											},
-											entry.ad)),
+											entry.ac)),
 										$elm$json$Json$Encode$string(entry.z)
 									]))
 							])))
@@ -7025,7 +7024,7 @@ var $author$project$Main$authPending = F2(
 				_Utils_update(
 					as_,
 					{
-						o: f(as_.o)
+						p: f(as_.p)
 					})),
 			$elm$core$Platform$Cmd$none);
 	});
@@ -7185,7 +7184,7 @@ var $author$project$Main$encodeTrip = function (t) {
 			[
 				_Utils_Tuple2(
 				'budget',
-				$elm$json$Json$Encode$float(t.q)),
+				$elm$json$Json$Encode$float(t.r)),
 				_Utils_Tuple2(
 				'coverPhotoUrl',
 				$elm$json$Json$Encode$string(t.N)),
@@ -7200,7 +7199,7 @@ var $author$project$Main$encodeTrip = function (t) {
 				$elm$json$Json$Encode$string(t.u)),
 				_Utils_Tuple2(
 				'sheetGid',
-				$elm$json$Json$Encode$int(t.aB)),
+				$elm$json$Json$Encode$int(t.aC)),
 				_Utils_Tuple2(
 				'startDate',
 				$elm$json$Json$Encode$string(t.t)),
@@ -7215,7 +7214,7 @@ var $author$project$Main$entryToPending = function (e) {
 		i: e.i,
 		j: e.j,
 		S: function () {
-			var _v0 = _Utils_Tuple2(e.W, e.ad);
+			var _v0 = _Utils_Tuple2(e.W, e.ac);
 			if ((!_v0.a.$) && (!_v0.b.$)) {
 				var la = _v0.a.a;
 				var lo = _v0.b.a;
@@ -7226,7 +7225,7 @@ var $author$project$Main$entryToPending = function (e) {
 		}(),
 		z: e.z,
 		l: e.l,
-		r: e.r
+		s: e.s
 	};
 };
 var $author$project$Main$extractBase64 = function (dataUrl) {
@@ -7375,7 +7374,7 @@ var $author$project$Main$rowDecoder = A2(
 																		return function (lat) {
 																			return function (lon) {
 																				return function (longNote) {
-																					return {d: amount, i: category, bj: createdAt, j: date, Q: id, W: lat, ad: lon, z: longNote, l: merchant, r: note, aY: 0};
+																					return {d: amount, i: category, bj: createdAt, j: date, Q: id, W: lat, ac: lon, z: longNote, l: merchant, s: note, aY: 0};
 																				};
 																			};
 																		};
@@ -7470,7 +7469,7 @@ var $elm$core$List$filter = F2(
 var $author$project$Main$LocationCheckingExif = {$: 2};
 var $author$project$Main$ScanQueued = 0;
 var $author$project$Main$freshScanItem = function (id) {
-	return {bn: '', Q: id, a9: '', S: $author$project$Main$LocationCheckingExif, bq: $elm$core$Maybe$Nothing, aF: 0};
+	return {bn: '', Q: id, a9: '', S: $author$project$Main$LocationCheckingExif, bq: $elm$core$Maybe$Nothing, aH: 0};
 };
 var $author$project$Main$getMimeType = function (dataUrl) {
 	return A2($elm$core$String$contains, 'image/png', dataUrl) ? 'image/png' : (A2($elm$core$String$contains, 'image/gif', dataUrl) ? 'image/gif' : (A2($elm$core$String$contains, 'image/webp', dataUrl) ? 'image/webp' : 'image/jpeg'));
@@ -7673,7 +7672,7 @@ var $elm$time$Time$millisToPosix = $elm$core$Basics$identity;
 var $elm$time$Time$now = _Time_now($elm$time$Time$millisToPosix);
 var $author$project$Main$OcrData = F6(
 	function (amount, category, note, merchant, date, longNote) {
-		return {d: amount, i: category, j: date, z: longNote, l: merchant, r: note};
+		return {d: amount, i: category, j: date, z: longNote, l: merchant, s: note};
 	});
 var $elm$json$Json$Decode$null = _Json_decodeNull;
 var $elm$json$Json$Decode$value = _Json_decodeValue;
@@ -8142,11 +8141,11 @@ var $author$project$List$NonEmpty$Zipper$toList = A2($elm$core$Basics$composeL, 
 var $author$project$Main$toGuestState = F2(
 	function (reason, as_) {
 		return {
-			a5: $author$project$List$NonEmpty$Zipper$current(as_.n).e,
-			aK: $elm$core$Maybe$Nothing,
-			s: {b: as_.b, aM: reason},
+			a5: $author$project$List$NonEmpty$Zipper$current(as_.o).e,
+			aA: $elm$core$Maybe$Nothing,
+			m: {b: as_.b, aG: reason},
 			aN: !_Utils_eq(reason, $author$project$Main$FreshGuest),
-			bd: $author$project$List$NonEmpty$Zipper$toList(as_.n),
+			bd: $author$project$List$NonEmpty$Zipper$toList(as_.o),
 			P: as_.P,
 			ao: as_.ao
 		};
@@ -8229,8 +8228,8 @@ var $author$project$Main$tripValidator = $author$project$Validate$all(
 			A2(
 			$author$project$Validate$ifTrue,
 			function (f) {
-				return (f.q !== '') && _Utils_eq(
-					$elm$core$String$toFloat(f.q),
+				return (f.r !== '') && _Utils_eq(
+					$elm$core$String$toFloat(f.r),
 					$elm$core$Maybe$Nothing);
 			},
 			'Budget must be a number.'),
@@ -8264,7 +8263,7 @@ var $author$project$Main$updateEntry = F4(
 										$elm$json$Json$Encode$float(entry.d),
 										$elm$json$Json$Encode$string(
 										$author$project$Main$categoryLabel(entry.i)),
-										$elm$json$Json$Encode$string(entry.r),
+										$elm$json$Json$Encode$string(entry.s),
 										$elm$json$Json$Encode$string(entry.l),
 										$elm$json$Json$Encode$string(entry.bj),
 										A2(
@@ -8286,7 +8285,7 @@ var $author$project$Main$updateEntry = F4(
 												return $elm$json$Json$Encode$string(
 													$elm$core$String$fromFloat(v));
 											},
-											entry.ad)),
+											entry.ac)),
 										$elm$json$Json$Encode$string(entry.z)
 									]))
 							])))
@@ -8337,7 +8336,7 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								aa: {Y: token}
+								_: {Y: token}
 							})),
 					$author$project$Main$saveStorage(
 						{T: 'oauth_token', V: token}));
@@ -8351,10 +8350,10 @@ var $author$project$Main$updateAuth = F2(
 					$author$project$Main$GuestModel(
 						{
 							a5: '',
-							aK: $elm$core$Maybe$Nothing,
-							s: {
-								b: {ar: '', aI: '', m: ''},
-								aM: $author$project$Main$FreshGuest
+							aA: $elm$core$Maybe$Nothing,
+							m: {
+								b: {ar: '', aK: '', n: ''},
+								aG: $author$project$Main$FreshGuest
 							},
 							aN: false,
 							bd: _List_Nil,
@@ -8364,7 +8363,7 @@ var $author$project$Main$updateAuth = F2(
 					$author$project$Main$clearAllStorage(0));
 			case 15:
 				var files = msg.a;
-				var startIdx = $elm$core$Dict$size(as_.p);
+				var startIdx = $elm$core$Dict$size(as_.q);
 				var indexed = A2(
 					$elm$core$List$indexedMap,
 					F2(
@@ -8385,7 +8384,7 @@ var $author$project$Main$updateAuth = F2(
 								$author$project$Main$freshScanItem(id),
 								d);
 						}),
-					as_.p,
+					as_.q,
 					indexed);
 				var urlCmds = A2(
 					$elm$core$List$map,
@@ -8402,7 +8401,7 @@ var $author$project$Main$updateAuth = F2(
 					$author$project$Main$AuthModel(
 						_Utils_update(
 							as_,
-							{p: newQueue})),
+							{q: newQueue})),
 					$elm$core$Platform$Cmd$batch(urlCmds));
 			case 19:
 				var itemId = msg.a;
@@ -8415,14 +8414,14 @@ var $author$project$Main$updateAuth = F2(
 						function (i) {
 							return _Utils_update(
 								i,
-								{a9: dataUrl, aF: newStatus});
+								{a9: dataUrl, aH: newStatus});
 						}),
-					as_.p);
+					as_.q);
 				return _Utils_Tuple2(
 					$author$project$Main$AuthModel(
 						_Utils_update(
 							as_,
-							{p: updatedQueue})),
+							{q: updatedQueue})),
 					$elm$core$Platform$Cmd$batch(
 						_List_fromArray(
 							[
@@ -8468,14 +8467,14 @@ var $author$project$Main$updateAuth = F2(
 						function (i) {
 							return _Utils_update(
 								i,
-								{bq: ocrData, aF: 2});
+								{bq: ocrData, aH: 2});
 						}),
-					as_.p);
+					as_.q);
 				return _Utils_Tuple2(
 					$author$project$Main$AuthModel(
 						_Utils_update(
 							as_,
-							{p: updatedQueue})),
+							{q: updatedQueue})),
 					$elm$core$Platform$Cmd$none);
 			case 0:
 				var s = msg.a;
@@ -8504,7 +8503,7 @@ var $author$project$Main$updateAuth = F2(
 					function (p) {
 						return _Utils_update(
 							p,
-							{r: s});
+							{s: s});
 					},
 					as_);
 			case 25:
@@ -8538,13 +8537,13 @@ var $author$project$Main$updateAuth = F2(
 					},
 					as_);
 			case 42:
-				var _v6 = $elm$core$String$toFloat(as_.o.d);
+				var _v6 = $elm$core$String$toFloat(as_.p.d);
 				if (!_v6.$) {
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(
 							_Utils_update(
 								as_,
-								{al: $elm$core$Maybe$Nothing, aG: true})),
+								{al: $elm$core$Maybe$Nothing, aI: true})),
 						A2($elm$core$Task$perform, $author$project$Main$GotSubmitTime, $elm$time$Time$now));
 				} else {
 					return _Utils_Tuple2(
@@ -8558,8 +8557,8 @@ var $author$project$Main$updateAuth = F2(
 				}
 			case 43:
 				var posix = msg.a;
-				var p = as_.o;
-				var _v7 = as_.aD;
+				var p = as_.p;
+				var _v7 = as_.aE;
 				if (!_v7.$) {
 					var original = _v7.a;
 					var updated = _Utils_update(
@@ -8583,7 +8582,7 @@ var $author$project$Main$updateAuth = F2(
 										return original.W;
 								}
 							}(),
-							ad: function () {
+							ac: function () {
 								var _v9 = p.S;
 								switch (_v9.$) {
 									case 4:
@@ -8592,20 +8591,20 @@ var $author$project$Main$updateAuth = F2(
 									case 5:
 										return $elm$core$Maybe$Nothing;
 									default:
-										return original.ad;
+										return original.ac;
 								}
 							}(),
 							z: p.z,
 							l: p.l,
-							r: p.r
+							s: p.s
 						});
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(as_),
 						A4(
 							$author$project$Main$updateEntry,
-							as_.aa,
-							as_.b.m,
-							$author$project$List$NonEmpty$Zipper$current(as_.n).e,
+							as_._,
+							as_.b.n,
+							$author$project$List$NonEmpty$Zipper$current(as_.o).e,
 							updated));
 				} else {
 					var _v10 = function () {
@@ -8633,19 +8632,19 @@ var $author$project$Main$updateAuth = F2(
 						Q: 'e-' + $elm$core$String$fromInt(
 							$elm$time$Time$posixToMillis(posix)),
 						W: eLat,
-						ad: eLon,
+						ac: eLon,
 						z: p.z,
 						l: p.l,
-						r: p.r,
+						s: p.s,
 						aY: 0
 					};
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(as_),
 						A4(
 							$author$project$Main$appendEntry,
-							as_.aa,
-							as_.b.m,
-							$author$project$List$NonEmpty$Zipper$current(as_.n).e,
+							as_._,
+							as_.b.n,
+							$author$project$List$NonEmpty$Zipper$current(as_.o).e,
 							entry));
 				}
 			case 14:
@@ -8662,17 +8661,17 @@ var $author$project$Main$updateAuth = F2(
 									function (i) {
 										return _Utils_update(
 											i,
-											{aF: 3});
+											{aH: 3});
 									}),
-								as_.p);
+								as_.q);
 						} else {
-							return as_.p;
+							return as_.q;
 						}
 					}();
 					var hasRemaining = A2(
 						$elm$core$List$any,
 						function (i) {
-							return i.aF !== 3;
+							return i.aH !== 3;
 						},
 						$elm$core$Dict$values(updatedQueue));
 					var nextTab = ((!_Utils_eq(as_.aq, $elm$core$Maybe$Nothing)) && hasRemaining) ? 2 : 1;
@@ -8682,18 +8681,18 @@ var $author$project$Main$updateAuth = F2(
 								as_,
 								{
 									aq: $elm$core$Maybe$Nothing,
-									aD: $elm$core$Maybe$Nothing,
+									aE: $elm$core$Maybe$Nothing,
 									aw: true,
-									o: $author$project$Main$defaultPendingEntry(as_.P),
-									p: updatedQueue,
-									aG: false,
+									p: $author$project$Main$defaultPendingEntry(as_.P),
+									q: updatedQueue,
+									aI: false,
 									X: nextTab
 								})),
 						A3(
 							$author$project$Main$fetchEntries,
-							as_.aa,
-							as_.b.m,
-							$author$project$List$NonEmpty$Zipper$current(as_.n).e));
+							as_._,
+							as_.b.n,
+							$author$project$List$NonEmpty$Zipper$current(as_.o).e));
 				} else {
 					if ((result.a.$ === 3) && (result.a.a === 401)) {
 						return _Utils_Tuple2(
@@ -8708,7 +8707,7 @@ var $author$project$Main$updateAuth = F2(
 								_Utils_update(
 									as_,
 									{
-										aG: false,
+										aI: false,
 										bf: $elm$core$Maybe$Just(toastMsg)
 									})),
 							$author$project$Main$toastFor(toastMsg));
@@ -8722,7 +8721,7 @@ var $author$project$Main$updateAuth = F2(
 						$author$project$Main$AuthModel(
 							_Utils_update(
 								as_,
-								{ab: entries, aw: false})),
+								{aa: entries, aw: false})),
 						$elm$core$Platform$Cmd$none);
 				} else {
 					if ((result.a.$ === 3) && (result.a.a === 401)) {
@@ -8751,18 +8750,18 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								ab: A2(
+								aa: A2(
 									$elm$core$List$filter,
 									function (e) {
 										return !_Utils_eq(e.Q, entry.Q);
 									},
-									as_.ab)
+									as_.aa)
 							})),
 					A4(
 						$author$project$Main$deleteEntry,
-						as_.aa,
-						as_.b.m,
-						$author$project$List$NonEmpty$Zipper$current(as_.n).aB,
+						as_._,
+						as_.b.n,
+						$author$project$List$NonEmpty$Zipper$current(as_.o).aC,
 						entry.aY));
 			case 13:
 				var result = msg.a;
@@ -8771,9 +8770,9 @@ var $author$project$Main$updateAuth = F2(
 						$author$project$Main$AuthModel(as_),
 						A3(
 							$author$project$Main$fetchEntries,
-							as_.aa,
-							as_.b.m,
-							$author$project$List$NonEmpty$Zipper$current(as_.n).e));
+							as_._,
+							as_.b.n,
+							$author$project$List$NonEmpty$Zipper$current(as_.o).e));
 				} else {
 					if ((result.a.$ === 3) && (result.a.a === 401)) {
 						return _Utils_Tuple2(
@@ -8800,9 +8799,9 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								aD: $elm$core$Maybe$Just(entry),
+								aE: $elm$core$Maybe$Just(entry),
 								al: $elm$core$Maybe$Nothing,
-								o: $author$project$Main$entryToPending(entry),
+								p: $author$project$Main$entryToPending(entry),
 								X: 0
 							})),
 					$elm$core$Platform$Cmd$none);
@@ -8812,35 +8811,35 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								aD: $elm$core$Maybe$Nothing,
-								o: $author$project$Main$defaultPendingEntry(as_.P),
+								aE: $elm$core$Maybe$Nothing,
+								p: $author$project$Main$defaultPendingEntry(as_.P),
 								X: 1
 							})),
 					$elm$core$Platform$Cmd$none);
 			case 44:
 				var tab = msg.a;
-				var shouldFetch = (tab === 1) && (as_.b.m !== '');
-				var newPending = ((!tab) && (!as_.bo)) ? A2($author$project$Main$setLocation, $author$project$Main$LocationFetching, as_.o) : as_.o;
+				var shouldFetch = (tab === 1) && (as_.b.n !== '');
+				var newPending = ((!tab) && (!as_.bo)) ? A2($author$project$Main$setLocation, $author$project$Main$LocationFetching, as_.p) : as_.p;
 				var geoCmd = ((!tab) && (!as_.bo)) ? $author$project$Main$requestGeolocation(0) : $elm$core$Platform$Cmd$none;
 				return _Utils_Tuple2(
 					$author$project$Main$AuthModel(
 						_Utils_update(
 							as_,
 							{
-								aD: (!(!tab)) ? $elm$core$Maybe$Nothing : as_.aD,
+								aE: (!(!tab)) ? $elm$core$Maybe$Nothing : as_.aE,
 								aw: shouldFetch,
-								o: newPending,
+								p: newPending,
 								X: tab,
-								Z: (tab !== 5) ? $elm$core$Maybe$Nothing : as_.Z
+								af: $elm$core$Maybe$Nothing
 							})),
 					$elm$core$Platform$Cmd$batch(
 						_List_fromArray(
 							[
 								shouldFetch ? A3(
 								$author$project$Main$fetchEntries,
-								as_.aa,
-								as_.b.m,
-								$author$project$List$NonEmpty$Zipper$current(as_.n).e) : $elm$core$Platform$Cmd$none,
+								as_._,
+								as_.b.n,
+								$author$project$List$NonEmpty$Zipper$current(as_.o).e) : $elm$core$Platform$Cmd$none,
 								geoCmd
 							])));
 			case 32:
@@ -8851,9 +8850,9 @@ var $author$project$Main$updateAuth = F2(
 							{aw: true})),
 					A3(
 						$author$project$Main$fetchEntries,
-						as_.aa,
-						as_.b.m,
-						$author$project$List$NonEmpty$Zipper$current(as_.n).e));
+						as_._,
+						as_.b.n,
+						$author$project$List$NonEmpty$Zipper$current(as_.o).e));
 			case 1:
 				var s = msg.a;
 				var cfg = as_.b;
@@ -8878,7 +8877,7 @@ var $author$project$Main$updateAuth = F2(
 							{
 								b: _Utils_update(
 									cfg,
-									{m: s})
+									{n: s})
 							})),
 					$author$project$Main$saveStorage(
 						{T: 'sheet_id', V: s}));
@@ -8892,7 +8891,7 @@ var $author$project$Main$updateAuth = F2(
 							{
 								b: _Utils_update(
 									cfg,
-									{aI: s})
+									{aK: s})
 							})),
 					$author$project$Main$saveStorage(
 						{T: 'google_client_id', V: s}));
@@ -8918,7 +8917,7 @@ var $author$project$Main$updateAuth = F2(
 							as_,
 							{
 								bo: true,
-								o: A2($author$project$Main$setLocation, $author$project$Main$LocationIdle, as_.o)
+								p: A2($author$project$Main$setLocation, $author$project$Main$LocationIdle, as_.p)
 							})),
 					$elm$core$Platform$Cmd$none);
 			case 30:
@@ -8936,10 +8935,10 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								o: A2(
+								p: A2(
 									$author$project$Main$setLocation,
 									A3($author$project$Main$LocationGot, lat, lon, 2),
-									as_.o),
+									as_.p),
 								aZ: false
 							})),
 					$elm$core$Platform$Cmd$none);
@@ -8956,7 +8955,7 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								o: A2($author$project$Main$setLocation, $author$project$Main$LocationSkipped, as_.o),
+								p: A2($author$project$Main$setLocation, $author$project$Main$LocationSkipped, as_.p),
 								aZ: false
 							})),
 					$elm$core$Platform$Cmd$none);
@@ -8994,7 +8993,7 @@ var $author$project$Main$updateAuth = F2(
 							_Utils_update(
 								as_,
 								{
-									p: A3(
+									q: A3(
 										$elm$core$Dict$update,
 										itemId,
 										$elm$core$Maybe$map(
@@ -9005,7 +9004,7 @@ var $author$project$Main$updateAuth = F2(
 														S: A3($author$project$Main$LocationGot, lat, lon, 0)
 													});
 											}),
-										as_.p)
+										as_.q)
 								})),
 						$elm$core$Platform$Cmd$none);
 				} else {
@@ -9016,7 +9015,7 @@ var $author$project$Main$updateAuth = F2(
 							_Utils_update(
 								as_,
 								{
-									p: A3(
+									q: A3(
 										$elm$core$Dict$update,
 										itemId,
 										$elm$core$Maybe$map(
@@ -9025,13 +9024,13 @@ var $author$project$Main$updateAuth = F2(
 													i,
 													{bn: debug, S: $author$project$Main$LocationNoExifGps});
 											}),
-										as_.p)
+										as_.q)
 								})),
 						$elm$core$Platform$Cmd$none);
 				}
 			case 34:
 				var itemId = msg.a;
-				var _v16 = A2($elm$core$Dict$get, itemId, as_.p);
+				var _v16 = A2($elm$core$Dict$get, itemId, as_.q);
 				if (_v16.$ === 1) {
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(as_),
@@ -9040,7 +9039,7 @@ var $author$project$Main$updateAuth = F2(
 					var item = _v16.a;
 					var ocr = A2(
 						$elm$core$Maybe$withDefault,
-						{d: $elm$core$Maybe$Nothing, i: $elm$core$Maybe$Nothing, j: $elm$core$Maybe$Nothing, z: $elm$core$Maybe$Nothing, l: $elm$core$Maybe$Nothing, r: $elm$core$Maybe$Nothing},
+						{d: $elm$core$Maybe$Nothing, i: $elm$core$Maybe$Nothing, j: $elm$core$Maybe$Nothing, z: $elm$core$Maybe$Nothing, l: $elm$core$Maybe$Nothing, s: $elm$core$Maybe$Nothing},
 						item.bq);
 					var newPending = {
 						d: A2(
@@ -9052,7 +9051,7 @@ var $author$project$Main$updateAuth = F2(
 						S: item.S,
 						z: A2($elm$core$Maybe$withDefault, '', ocr.z),
 						l: A2($elm$core$Maybe$withDefault, '', ocr.l),
-						r: A2($elm$core$Maybe$withDefault, '', ocr.r)
+						s: A2($elm$core$Maybe$withDefault, '', ocr.s)
 					};
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(
@@ -9061,7 +9060,7 @@ var $author$project$Main$updateAuth = F2(
 								{
 									aq: $elm$core$Maybe$Just(itemId),
 									al: $elm$core$Maybe$Nothing,
-									o: newPending,
+									p: newPending,
 									X: 0
 								})),
 						$elm$core$Platform$Cmd$none);
@@ -9073,7 +9072,7 @@ var $author$project$Main$updateAuth = F2(
 							as_,
 							{
 								aq: $elm$core$Maybe$Nothing,
-								o: $author$project$Main$defaultPendingEntry(as_.P),
+								p: $author$project$Main$defaultPendingEntry(as_.P),
 								X: 2
 							})),
 					$elm$core$Platform$Cmd$none);
@@ -9083,31 +9082,31 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								p: A2(
+								q: A2(
 									$elm$core$Dict$filter,
 									F2(
 										function (_v17, i) {
-											return i.aF !== 3;
+											return i.aH !== 3;
 										}),
-									as_.p)
+									as_.q)
 							})),
 					$elm$core$Platform$Cmd$none);
 			case 36:
 				var tabName = msg.a;
 				var trips_ = A2(
 					$elm$core$Maybe$withDefault,
-					as_.n,
+					as_.o,
 					A2(
 						$author$project$List$NonEmpty$Zipper$focus,
 						function (t) {
 							return _Utils_eq(t.e, tabName);
 						},
-						as_.n));
+						as_.o));
 				return _Utils_Tuple2(
 					$author$project$Main$AuthModel(
 						_Utils_update(
 							as_,
-							{aw: true, X: 1, n: trips_})),
+							{aw: true, X: 1, o: trips_})),
 					$elm$core$Platform$Cmd$batch(
 						_List_fromArray(
 							[
@@ -9115,8 +9114,8 @@ var $author$project$Main$updateAuth = F2(
 								{T: 'active_trip', V: tabName}),
 								A3(
 								$author$project$Main$fetchEntries,
-								as_.aa,
-								as_.b.m,
+								as_._,
+								as_.b.n,
 								$author$project$List$NonEmpty$Zipper$current(trips_).e)
 							])));
 			case 31:
@@ -9125,8 +9124,8 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								Z: $elm$core$Maybe$Just(
-									{q: '', N: '', B: '', bl: $elm$core$Maybe$Nothing, v: '', a8: _List_Nil, u: '', t: as_.P})
+								af: $elm$core$Maybe$Just(
+									{r: '', N: '', B: '', bl: $elm$core$Maybe$Nothing, v: '', a8: _List_Nil, u: '', t: as_.P})
 							})),
 					$elm$core$Platform$Cmd$none);
 			case 29:
@@ -9136,9 +9135,9 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								Z: $elm$core$Maybe$Just(
+								af: $elm$core$Maybe$Just(
 									{
-										q: (trip.q > 0) ? $elm$core$String$fromFloat(trip.q) : '',
+										r: (trip.r > 0) ? $elm$core$String$fromFloat(trip.r) : '',
 										N: trip.N,
 										B: trip.B,
 										bl: $elm$core$Maybe$Just(trip),
@@ -9157,7 +9156,7 @@ var $author$project$Main$updateAuth = F2(
 						case 0:
 							return _Utils_update(
 								f,
-								{q: value});
+								{r: value});
 						case 1:
 							return _Utils_update(
 								f,
@@ -9185,11 +9184,11 @@ var $author$project$Main$updateAuth = F2(
 						_Utils_update(
 							as_,
 							{
-								Z: A2($elm$core$Maybe$map, updateForm, as_.Z)
+								af: A2($elm$core$Maybe$map, updateForm, as_.af)
 							})),
 					$elm$core$Platform$Cmd$none);
 			case 35:
-				var _v19 = as_.Z;
+				var _v19 = as_.af;
 				if (_v19.$ === 1) {
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(as_),
@@ -9204,7 +9203,7 @@ var $author$project$Main$updateAuth = F2(
 								_Utils_update(
 									as_,
 									{
-										Z: $elm$core$Maybe$Just(
+										af: $elm$core$Maybe$Just(
 											_Utils_update(
 												form,
 												{a8: errs}))
@@ -9217,10 +9216,10 @@ var $author$project$Main$updateAuth = F2(
 							var updated = _Utils_update(
 								existing,
 								{
-									q: A2(
+									r: A2(
 										$elm$core$Maybe$withDefault,
 										0,
-										$elm$core$String$toFloat(form.q)),
+										$elm$core$String$toFloat(form.r)),
 									N: form.N,
 									B: form.B,
 									v: form.v,
@@ -9232,12 +9231,12 @@ var $author$project$Main$updateAuth = F2(
 								function (t) {
 									return _Utils_eq(t.e, existing.e) ? updated : t;
 								},
-								as_.n);
+								as_.o);
 							return _Utils_Tuple2(
 								$author$project$Main$AuthModel(
 									_Utils_update(
 										as_,
-										{Z: $elm$core$Maybe$Nothing, n: trips_})),
+										{af: $elm$core$Maybe$Nothing, o: trips_})),
 								$author$project$Main$saveStorage(
 									{
 										T: 'trips',
@@ -9253,7 +9252,7 @@ var $author$project$Main$updateAuth = F2(
 							var tabName = $author$project$Main$slugify(form.u);
 							return _Utils_Tuple2(
 								$author$project$Main$AuthModel(as_),
-								A3($author$project$Main$createTripSheet, as_.aa, as_.b.m, tabName));
+								A3($author$project$Main$createTripSheet, as_._, as_.b.n, tabName));
 						}
 					}
 				}
@@ -9272,7 +9271,7 @@ var $author$project$Main$updateAuth = F2(
 						$elm$core$Platform$Cmd$none);
 				} else {
 					var prop = result.a;
-					var _v23 = as_.Z;
+					var _v23 = as_.af;
 					if (_v23.$ === 1) {
 						return _Utils_Tuple2(
 							$author$project$Main$AuthModel(as_),
@@ -9280,32 +9279,32 @@ var $author$project$Main$updateAuth = F2(
 					} else {
 						var form = _v23.a;
 						var newTrip = {
-							q: A2(
+							r: A2(
 								$elm$core$Maybe$withDefault,
 								0,
-								$elm$core$String$toFloat(form.q)),
+								$elm$core$String$toFloat(form.r)),
 							N: form.N,
 							B: form.B,
 							v: form.v,
 							u: form.u,
-							aB: prop.bF,
+							aC: prop.bF,
 							t: form.t,
 							e: prop.a$
 						};
 						var trips_ = A2(
 							$elm$core$Maybe$withDefault,
-							as_.n,
+							as_.o,
 							A2(
 								$author$project$List$NonEmpty$Zipper$focus,
 								function (t) {
 									return _Utils_eq(t.e, prop.a$);
 								},
-								A2($author$project$List$NonEmpty$Zipper$consBefore, newTrip, as_.n)));
+								A2($author$project$List$NonEmpty$Zipper$consBefore, newTrip, as_.o)));
 						return _Utils_Tuple2(
 							$author$project$Main$AuthModel(
 								_Utils_update(
 									as_,
-									{aw: true, X: 1, Z: $elm$core$Maybe$Nothing, n: trips_})),
+									{aw: true, X: 1, af: $elm$core$Maybe$Nothing, o: trips_})),
 							$elm$core$Platform$Cmd$batch(
 								_List_fromArray(
 									[
@@ -9322,7 +9321,7 @@ var $author$project$Main$updateAuth = F2(
 										}),
 										$author$project$Main$saveStorage(
 										{T: 'active_trip', V: prop.a$}),
-										A3($author$project$Main$fetchEntries, as_.aa, as_.b.m, prop.a$)
+										A3($author$project$Main$fetchEntries, as_._, as_.b.n, prop.a$)
 									])));
 					}
 				}
@@ -9333,7 +9332,7 @@ var $author$project$Main$updateAuth = F2(
 					function (t) {
 						return !_Utils_eq(t.e, trip.e);
 					},
-					$author$project$List$NonEmpty$Zipper$toList(as_.n));
+					$author$project$List$NonEmpty$Zipper$toList(as_.o));
 				if (!remaining.b) {
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(as_),
@@ -9354,7 +9353,7 @@ var $author$project$Main$updateAuth = F2(
 						$author$project$Main$AuthModel(
 							_Utils_update(
 								as_,
-								{n: trips_})),
+								{o: trips_})),
 						$author$project$Main$saveStorage(
 							{
 								T: 'trips',
@@ -9400,7 +9399,7 @@ var $author$project$Main$buildTripsZipper = F5(
 					return $elm$core$Maybe$Just(
 						_Utils_update(
 							t,
-							{aB: p.bF}));
+							{aC: p.bF}));
 				} else {
 					return $elm$core$Maybe$Nothing;
 				}
@@ -9413,12 +9412,12 @@ var $author$project$Main$buildTripsZipper = F5(
 					return _List_fromArray(
 						[
 							{
-							q: 0,
+							r: 0,
 							N: '',
 							B: '',
 							v: '',
 							u: 'Trip 1',
-							aB: firstProp.bF,
+							aC: firstProp.bF,
 							t: A2($elm$core$Maybe$withDefault, '', migrationStartDate),
 							e: firstProp.a$
 						}
@@ -9427,12 +9426,12 @@ var $author$project$Main$buildTripsZipper = F5(
 					return _List_fromArray(
 						[
 							{
-							q: 0,
+							r: 0,
 							N: '',
 							B: '',
 							v: '',
 							u: 'Trip 1',
-							aB: 0,
+							aC: 0,
 							t: A2($elm$core$Maybe$withDefault, '', migrationStartDate),
 							e: 'Expenses'
 						}
@@ -9450,7 +9449,7 @@ var $author$project$Main$buildTripsZipper = F5(
 			} else {
 				return A2(
 					$author$project$List$NonEmpty$Zipper$fromCons,
-					{q: 0, N: '', B: '', v: '', u: 'Trip 1', aB: 0, t: '', e: 'Expenses'},
+					{r: 0, N: '', B: '', v: '', u: 'Trip 1', aC: 0, t: '', e: 'Expenses'},
 					_List_Nil);
 			}
 		}();
@@ -9480,25 +9479,25 @@ var $author$project$Main$updateGuest = F2(
 	function (msg, gs) {
 		switch (msg.$) {
 			case 39:
-				return (gs.s.b.aI === '') ? _Utils_Tuple2(
+				return (gs.m.b.aK === '') ? _Utils_Tuple2(
 					$author$project$Main$GuestModel(
 						_Utils_update(
 							gs,
 							{
-								s: {b: gs.s.b, aM: $author$project$Main$MissingConfig}
+								m: {b: gs.m.b, aG: $author$project$Main$MissingConfig}
 							})),
 					$elm$core$Platform$Cmd$none) : _Utils_Tuple2(
 					$author$project$Main$GuestModel(gs),
 					$author$project$Main$requestOAuthToken(true));
 			case 21:
 				var token = msg.a;
-				if (gs.s.b.m !== '') {
+				if (gs.m.b.n !== '') {
 					return _Utils_Tuple2(
 						$author$project$Main$GuestModel(
 							_Utils_update(
 								gs,
 								{
-									aK: $elm$core$Maybe$Just(token)
+									aA: $elm$core$Maybe$Just(token)
 								})),
 						$elm$core$Platform$Cmd$batch(
 							_List_fromArray(
@@ -9508,10 +9507,10 @@ var $author$project$Main$updateGuest = F2(
 									A2(
 									$author$project$Main$fetchSheetMeta,
 									{Y: token},
-									gs.s.b.m)
+									gs.m.b.n)
 								])));
 				} else {
-					var defaultTrip = {q: 0, N: '', B: '', v: '', u: 'Trip 1', aB: 0, t: '', e: 'Expenses'};
+					var defaultTrip = {r: 0, N: '', B: '', v: '', u: 'Trip 1', aC: 0, t: '', e: 'Expenses'};
 					var as_ = A3(
 						$author$project$Main$toAuthState,
 						{Y: token},
@@ -9524,7 +9523,7 @@ var $author$project$Main$updateGuest = F2(
 				}
 			case 23:
 				var result = msg.a;
-				var _v1 = gs.aK;
+				var _v1 = gs.aA;
 				if (_v1.$ === 1) {
 					return _Utils_Tuple2(
 						$author$project$Main$GuestModel(gs),
@@ -9532,20 +9531,32 @@ var $author$project$Main$updateGuest = F2(
 				} else {
 					var token = _v1.a;
 					if (result.$ === 1) {
-						var e = result.a;
-						return _Utils_Tuple2(
-							$author$project$Main$GuestModel(
-								_Utils_update(
-									gs,
-									{
-										aK: $elm$core$Maybe$Nothing,
-										s: {
-											b: gs.s.b,
-											aM: $author$project$Main$MetadataError(
-												$author$project$Main$httpErrString(e))
-										}
-									})),
-							$elm$core$Platform$Cmd$none);
+						if ((result.a.$ === 3) && (result.a.a === 401)) {
+							return _Utils_Tuple2(
+								$author$project$Main$GuestModel(
+									_Utils_update(
+										gs,
+										{
+											aA: $elm$core$Maybe$Nothing,
+											m: {b: gs.m.b, aG: $author$project$Main$SessionExpired}
+										})),
+								$elm$core$Platform$Cmd$none);
+						} else {
+							var e = result.a;
+							return _Utils_Tuple2(
+								$author$project$Main$GuestModel(
+									_Utils_update(
+										gs,
+										{
+											aA: $elm$core$Maybe$Nothing,
+											m: {
+												b: gs.m.b,
+												aG: $author$project$Main$MetadataError(
+													$author$project$Main$httpErrString(e))
+											}
+										})),
+								$elm$core$Platform$Cmd$none);
+						}
 					} else {
 						var props = result.a;
 						var tripsZipper = A5($author$project$Main$buildTripsZipper, gs.bd, gs.a5, props, $elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing);
@@ -9560,7 +9571,7 @@ var $author$project$Main$updateGuest = F2(
 							A3(
 								$author$project$Main$fetchEntries,
 								{Y: token},
-								gs.s.b.m,
+								gs.m.b.n,
 								activeTrip.e));
 					}
 				}
@@ -9578,14 +9589,14 @@ var $author$project$Main$updateGuest = F2(
 						_Utils_update(
 							gs,
 							{
-								s: A2(
+								m: A2(
 									$author$project$Main$mapGuestConfig,
 									function (c) {
 										return _Utils_update(
 											c,
 											{ar: s});
 									},
-									gs.s)
+									gs.m)
 							})),
 					$author$project$Main$saveStorage(
 						{T: 'anthropic_key', V: s}));
@@ -9596,14 +9607,14 @@ var $author$project$Main$updateGuest = F2(
 						_Utils_update(
 							gs,
 							{
-								s: A2(
+								m: A2(
 									$author$project$Main$mapGuestConfig,
 									function (c) {
 										return _Utils_update(
 											c,
-											{m: s});
+											{n: s});
 									},
-									gs.s)
+									gs.m)
 							})),
 					$author$project$Main$saveStorage(
 						{T: 'sheet_id', V: s}));
@@ -9614,26 +9625,26 @@ var $author$project$Main$updateGuest = F2(
 						_Utils_update(
 							gs,
 							{
-								s: A2(
+								m: A2(
 									$author$project$Main$mapGuestConfig,
 									function (c) {
 										return _Utils_update(
 											c,
-											{aI: s});
+											{aK: s});
 									},
-									gs.s)
+									gs.m)
 							})),
 					$author$project$Main$saveStorage(
 						{T: 'google_client_id', V: s}));
 			case 33:
-				var emptyCfg = {ar: '', aI: '', m: ''};
+				var emptyCfg = {ar: '', aK: '', n: ''};
 				return _Utils_Tuple2(
 					$author$project$Main$GuestModel(
 						_Utils_update(
 							gs,
 							{
 								a5: '',
-								s: {b: emptyCfg, aM: $author$project$Main$FreshGuest},
+								m: {b: emptyCfg, aG: $author$project$Main$FreshGuest},
 								aN: false,
 								bd: _List_Nil
 							})),
@@ -10132,7 +10143,7 @@ var $author$project$Main$viewLocationWidget = function (model) {
 			]),
 		_List_fromArray(
 			[
-				$author$project$Main$viewLocationStatus(model.o.S),
+				$author$project$Main$viewLocationStatus(model.p.S),
 				model.aZ ? A3(
 				$elm$html$Html$node,
 				'map-picker',
@@ -10142,7 +10153,7 @@ var $author$project$Main$viewLocationWidget = function (model) {
 						$elm$html$Html$Attributes$attribute,
 						'lat',
 						function () {
-							var _v0 = model.o.S;
+							var _v0 = model.p.S;
 							if (_v0.$ === 4) {
 								var la = _v0.a;
 								return $elm$core$String$fromFloat(la);
@@ -10154,7 +10165,7 @@ var $author$project$Main$viewLocationWidget = function (model) {
 						$elm$html$Html$Attributes$attribute,
 						'lon',
 						function () {
-							var _v1 = model.o.S;
+							var _v1 = model.p.S;
 							if (_v1.$ === 4) {
 								var lo = _v1.b;
 								return $elm$core$String$fromFloat(lo);
@@ -10187,8 +10198,8 @@ var $author$project$Main$viewLocationWidget = function (model) {
 			]));
 };
 var $author$project$Main$viewAddTab = function (model) {
-	var p = model.o;
-	var isEditing = !_Utils_eq(model.aD, $elm$core$Maybe$Nothing);
+	var p = model.p;
+	var isEditing = !_Utils_eq(model.aE, $elm$core$Maybe$Nothing);
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
@@ -10245,7 +10256,7 @@ var $author$project$Main$viewAddTab = function (model) {
 					return $elm$html$Html$text('');
 				} else {
 					var id = _v0.a;
-					var _v1 = A2($elm$core$Dict$get, id, model.p);
+					var _v1 = A2($elm$core$Dict$get, id, model.q);
 					if (!_v1.$) {
 						var item = _v1.a;
 						return A2(
@@ -10331,7 +10342,7 @@ var $author$project$Main$viewAddTab = function (model) {
 					_List_fromArray(
 						[
 							$elm$html$Html$Attributes$type_('text'),
-							$elm$html$Html$Attributes$value(p.r),
+							$elm$html$Html$Attributes$value(p.s),
 							$elm$html$Html$Events$onInput($author$project$Main$NoteChanged),
 							$elm$html$Html$Attributes$placeholder('brief (50 chars)'),
 							A2($elm$html$Html$Attributes$attribute, 'maxlength', '50'),
@@ -10387,7 +10398,7 @@ var $author$project$Main$viewAddTab = function (model) {
 				_List_fromArray(
 					[
 						$elm$html$Html$Events$onClick($author$project$Main$SubmitEntry),
-						$elm$html$Html$Attributes$disabled(model.aG),
+						$elm$html$Html$Attributes$disabled(model.aI),
 						A2($elm$html$Html$Attributes$style, 'width', '100%'),
 						A2($elm$html$Html$Attributes$style, 'background', '#e8a020'),
 						A2($elm$html$Html$Attributes$style, 'color', '#0d0f0e'),
@@ -10400,22 +10411,23 @@ var $author$project$Main$viewAddTab = function (model) {
 						A2(
 						$elm$html$Html$Attributes$style,
 						'cursor',
-						model.aG ? 'not-allowed' : 'pointer'),
+						model.aI ? 'not-allowed' : 'pointer'),
 						A2($elm$html$Html$Attributes$style, 'margin-top', '8px'),
 						A2($elm$html$Html$Attributes$style, 'min-height', '56px'),
 						A2(
 						$elm$html$Html$Attributes$style,
 						'opacity',
-						model.aG ? '0.6' : '1')
+						model.aI ? '0.6' : '1')
 					]),
 				_List_fromArray(
 					[
 						$elm$html$Html$text(
-						model.aG ? 'SAVING...' : (isEditing ? 'UPDATE EXPENSE' : 'SAVE EXPENSE'))
+						model.aI ? 'SAVING...' : (isEditing ? 'UPDATE EXPENSE' : 'SAVE EXPENSE'))
 					]))
 			]));
 };
 var $author$project$Main$StatsTab = 4;
+var $author$project$Main$TripsTab = 5;
 var $elm$html$Html$nav = _VirtualDom_node('nav');
 var $author$project$Main$TabChanged = function (a) {
 	return {$: 44, a: a};
@@ -10590,7 +10602,7 @@ var $author$project$Main$viewHeader = function (as_) {
 						_List_fromArray(
 							[
 								$elm$html$Html$text(
-								$author$project$List$NonEmpty$Zipper$current(as_.n).u)
+								$author$project$List$NonEmpty$Zipper$current(as_.o).u)
 							]))
 					])),
 				A2(
@@ -10792,9 +10804,9 @@ var $author$project$Main$viewEntryRow = function (entry) {
 						_List_fromArray(
 							[
 								$elm$html$Html$text(
-								(entry.r !== '') ? entry.r : ((entry.l !== '') ? entry.l : $author$project$Main$categoryLabel(entry.i)))
+								(entry.s !== '') ? entry.s : ((entry.l !== '') ? entry.l : $author$project$Main$categoryLabel(entry.i)))
 							])),
-						((entry.l !== '') && (entry.r !== '')) ? A2(
+						((entry.l !== '') && (entry.s !== '')) ? A2(
 						$elm$html$Html$div,
 						_List_fromArray(
 							[
@@ -10884,7 +10896,7 @@ var $author$project$Main$encodeWaypoints = function (entries) {
 	var withCoords = A2(
 		$elm$core$List$filterMap,
 		function (e) {
-			var _v0 = _Utils_Tuple2(e.W, e.ad);
+			var _v0 = _Utils_Tuple2(e.W, e.ac);
 			if ((!_v0.a.$) && (!_v0.b.$)) {
 				var la = _v0.a.a;
 				var lo = _v0.b.a;
@@ -10922,7 +10934,7 @@ var $author$project$Main$viewLedgerMap = function (model) {
 				A2(
 				$elm$html$Html$Attributes$attribute,
 				'points',
-				$author$project$Main$encodeWaypoints(model.ab)),
+				$author$project$Main$encodeWaypoints(model.aa)),
 				$elm$html$Html$Attributes$class('block w-full rounded-xl overflow-hidden mb-5'),
 				A2($elm$html$Html$Attributes$style, 'height', '260px')
 			]),
@@ -11161,9 +11173,9 @@ var $author$project$Main$viewLedgerTab = function (model) {
 									]))
 							]))
 					])),
-				(!$elm$core$List$isEmpty(model.ab)) ? $author$project$Main$viewLedgerSummary(model.ab) : $elm$html$Html$text(''),
+				(!$elm$core$List$isEmpty(model.aa)) ? $author$project$Main$viewLedgerSummary(model.aa) : $elm$html$Html$text(''),
 				$author$project$Main$viewLedgerMap(model),
-				(model.b.m === '') ? A2(
+				(model.b.n === '') ? A2(
 				$elm$html$Html$p,
 				_List_fromArray(
 					[
@@ -11174,7 +11186,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 				_List_fromArray(
 					[
 						$elm$html$Html$text('Enter your Sheet ID in Settings to get started.')
-					])) : (model.aw ? $author$project$Main$viewSkeleton : ($elm$core$List$isEmpty(model.ab) ? A2(
+					])) : (model.aw ? $author$project$Main$viewSkeleton : ($elm$core$List$isEmpty(model.aa) ? A2(
 				$elm$html$Html$p,
 				_List_fromArray(
 					[
@@ -11197,7 +11209,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 							function (e) {
 								return _Utils_eq(e.j, date);
 							},
-							model.ab);
+							model.aa);
 						return _Utils_Tuple2(
 							date,
 							A2(
@@ -11262,7 +11274,7 @@ var $author$project$Main$viewLedgerTab = function (model) {
 											dayEntries))
 									])));
 					},
-					$author$project$Main$uniqueDates(model.ab)))))
+					$author$project$Main$uniqueDates(model.aa)))))
 			]));
 };
 var $author$project$Main$ClearDoneItems = {$: 5};
@@ -11301,7 +11313,7 @@ var $author$project$Main$ReviewScanItem = function (a) {
 	return {$: 34, a: a};
 };
 var $author$project$Main$viewScanCardStatus = function (item) {
-	var _v0 = item.aF;
+	var _v0 = item.aH;
 	switch (_v0) {
 		case 0:
 			return A2(
@@ -11534,7 +11546,7 @@ var $author$project$Main$viewScanTab = function (model) {
 							]),
 						_List_Nil)
 					])),
-				$elm$core$Dict$isEmpty(model.p) ? A2(
+				$elm$core$Dict$isEmpty(model.q) ? A2(
 				$elm$html$Html$button,
 				_List_fromArray(
 					[
@@ -11559,13 +11571,13 @@ var $author$project$Main$viewScanTab = function (model) {
 						A2(
 							$elm$core$List$map,
 							$author$project$Main$viewScanCard,
-							$elm$core$Dict$values(model.p))),
+							$elm$core$Dict$values(model.q))),
 						A2(
 						$elm$core$List$any,
 						function (i) {
-							return i.aF === 3;
+							return i.aH === 3;
 						},
-						$elm$core$Dict$values(model.p)) ? A2(
+						$elm$core$Dict$values(model.q)) ? A2(
 						$elm$html$Html$button,
 						_List_fromArray(
 							[
@@ -11582,7 +11594,7 @@ var $author$project$Main$viewScanTab = function (model) {
 							function (i) {
 								return i.bn !== '';
 							},
-							$elm$core$Dict$values(model.p));
+							$elm$core$Dict$values(model.q));
 						return $elm$core$List$isEmpty(debugItems) ? $elm$html$Html$text('') : A2(
 							$elm$html$Html$div,
 							_List_fromArray(
@@ -11666,7 +11678,7 @@ var $author$project$Main$viewSettingsPanel = F3(
 						_List_fromArray(
 							[
 								$elm$html$Html$Attributes$type_('text'),
-								$elm$html$Html$Attributes$value(cfg.aI),
+								$elm$html$Html$Attributes$value(cfg.aK),
 								$elm$html$Html$Events$onInput($author$project$Main$GoogleClientIdChanged),
 								$elm$html$Html$Attributes$placeholder('123456789-abc...apps.googleusercontent.com'),
 								$author$project$Main$textInputStyle
@@ -11680,7 +11692,7 @@ var $author$project$Main$viewSettingsPanel = F3(
 						_List_fromArray(
 							[
 								$elm$html$Html$Attributes$type_('text'),
-								$elm$html$Html$Attributes$value(cfg.m),
+								$elm$html$Html$Attributes$value(cfg.n),
 								$elm$html$Html$Events$onInput($author$project$Main$SheetIdChanged),
 								$elm$html$Html$Attributes$placeholder('1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms'),
 								$author$project$Main$textInputStyle
@@ -12200,7 +12212,7 @@ var $terezka$elm_charts$Chart$Attributes$border = function (v) {
 	return function (config) {
 		return _Utils_update(
 			config,
-			{_: v});
+			{Z: v});
 	};
 };
 var $terezka$elm_charts$Chart$Attributes$color = function (v) {
@@ -12211,7 +12223,7 @@ var $terezka$elm_charts$Chart$Attributes$color = function (v) {
 	};
 };
 var $terezka$elm_charts$Internal$Helpers$pink = '#ea60df';
-var $terezka$elm_charts$Internal$Svg$defaultBar = {h: _List_Nil, _: 'white', ah: 0, cs: $terezka$elm_charts$Internal$Helpers$pink, bP: $elm$core$Maybe$Nothing, dJ: 0, dK: '', dL: 10, ay: 1, d3: 0, d4: 0};
+var $terezka$elm_charts$Internal$Svg$defaultBar = {h: _List_Nil, Z: 'white', ah: 0, cs: $terezka$elm_charts$Internal$Helpers$pink, bP: $elm$core$Maybe$Nothing, dJ: 0, dK: '', dL: 10, ay: 1, d3: 0, d4: 0};
 var $terezka$elm_charts$Chart$Attributes$roundBottom = function (v) {
 	return function (config) {
 		return _Utils_update(
@@ -12293,7 +12305,7 @@ var $terezka$elm_charts$Internal$Legend$toBarLegends = F3(
 					]);
 				var attrsOrg = _Utils_ap(defaultAttrs, prop.d0);
 				var productOrg = toBarConfig(attrsOrg);
-				var attrs = _Utils_eq(productOrg._, defaultColor) ? _Utils_ap(
+				var attrs = _Utils_eq(productOrg.Z, defaultColor) ? _Utils_ap(
 					attrsOrg,
 					_List_fromArray(
 						[
@@ -12448,7 +12460,7 @@ var $terezka$elm_charts$Internal$Coordinates$innerWidth = function (plane) {
 	return $terezka$elm_charts$Internal$Coordinates$innerLength(plane.dj);
 };
 var $terezka$elm_charts$Internal$Coordinates$range = function (axis) {
-	var diff = axis.ae - axis.an;
+	var diff = axis.ad - axis.an;
 	return (diff > 0) ? diff : 1;
 };
 var $terezka$elm_charts$Internal$Coordinates$scaleSVGX = F2(
@@ -12470,7 +12482,7 @@ var $terezka$elm_charts$Internal$Coordinates$scaleSVGY = F2(
 	});
 var $terezka$elm_charts$Internal$Coordinates$toSVGY = F2(
 	function (plane, value) {
-		return A2($terezka$elm_charts$Internal$Coordinates$scaleSVGY, plane, plane.dk.ae - value) + plane.dk.dV;
+		return A2($terezka$elm_charts$Internal$Coordinates$scaleSVGY, plane, plane.dk.ad - value) + plane.dk.dV;
 	});
 var $terezka$elm_charts$Internal$Commands$translate = F2(
 	function (plane, command) {
@@ -12818,12 +12830,12 @@ var $terezka$elm_charts$Internal$Coordinates$toId = function (plane) {
 				'elm-charts__id',
 				numToStr(plane.dj.av),
 				numToStr(plane.dj.an),
-				numToStr(plane.dj.ae),
+				numToStr(plane.dj.ad),
 				numToStr(plane.dj.dV),
 				numToStr(plane.dj.dU),
 				numToStr(plane.dk.av),
 				numToStr(plane.dk.an),
-				numToStr(plane.dk.ae),
+				numToStr(plane.dk.ad),
 				numToStr(plane.dk.dV),
 				numToStr(plane.dk.dU)
 			]));
@@ -13005,7 +13017,7 @@ var $terezka$elm_charts$Internal$Svg$bar = F3(
 		var commands = _v1.a;
 		var highlightCommands = _v1.b;
 		var viewAuraBar = function (fill) {
-			return (!config.dJ) ? A6(viewBar, fill, config.ay, config._, config.ah, 1, commands) : A2(
+			return (!config.dJ) ? A6(viewBar, fill, config.ay, config.Z, config.ah, 1, commands) : A2(
 				$elm$svg$Svg$g,
 				_List_fromArray(
 					[
@@ -13014,7 +13026,7 @@ var $terezka$elm_charts$Internal$Svg$bar = F3(
 				_List_fromArray(
 					[
 						A6(viewBar, highlightColor, config.dJ, 'transparent', 0, 0, highlightCommands),
-						A6(viewBar, fill, config.ay, config._, config.ah, 1, commands)
+						A6(viewBar, fill, config.ay, config.Z, config.ah, 1, commands)
 					]));
 		};
 		var _v3 = config.bP;
@@ -13209,9 +13221,9 @@ var $elm$core$List$unzip = function (pairs) {
 };
 var $terezka$elm_charts$Internal$Produce$updateBorder = F2(
 	function (defaultColor, product) {
-		return _Utils_eq(product._, defaultColor) ? _Utils_update(
+		return _Utils_eq(product.Z, defaultColor) ? _Utils_update(
 			product,
-			{_: product.cs}) : product;
+			{Z: product.cs}) : product;
 	});
 var $terezka$elm_charts$Internal$Produce$updateColorIfGradientIsSet = F2(
 	function (defaultColor, product) {
@@ -13794,7 +13806,7 @@ var $terezka$elm_charts$Internal$Many$bins = A2(
 			}
 		}));
 var $terezka$elm_charts$Chart$Item$bins = $terezka$elm_charts$Internal$Many$bins;
-var $terezka$elm_charts$Internal$Svg$defaultLabel = {A: $elm$core$Maybe$Nothing, h: _List_Nil, _: 'white', ah: 0, cs: '#808BAB', C: $elm$core$Maybe$Nothing, D: $elm$core$Maybe$Nothing, E: false, I: 0, K: false, x: 0, y: 0};
+var $terezka$elm_charts$Internal$Svg$defaultLabel = {A: $elm$core$Maybe$Nothing, h: _List_Nil, Z: 'white', ah: 0, cs: '#808BAB', C: $elm$core$Maybe$Nothing, D: $elm$core$Maybe$Nothing, E: false, I: 0, K: false, x: 0, y: 0};
 var $terezka$elm_charts$Internal$Coordinates$bottom = function (pos) {
 	return {dj: pos.bh + ((pos.bx - pos.bh) / 2), dk: pos.es};
 };
@@ -13809,7 +13821,7 @@ var $terezka$elm_charts$Chart$Item$getBottom = function (p) {
 		$terezka$elm_charts$Internal$Item$getPositionIn(p),
 		$terezka$elm_charts$Internal$Coordinates$bottom);
 };
-var $terezka$elm_charts$Chart$defaultLabel = {A: $terezka$elm_charts$Internal$Svg$defaultLabel.A, h: $terezka$elm_charts$Internal$Svg$defaultLabel.h, _: $terezka$elm_charts$Internal$Svg$defaultLabel._, ah: $terezka$elm_charts$Internal$Svg$defaultLabel.ah, cs: $terezka$elm_charts$Internal$Svg$defaultLabel.cs, C: $terezka$elm_charts$Internal$Svg$defaultLabel.C, D: $terezka$elm_charts$Internal$Svg$defaultLabel.D, ac: $elm$core$Maybe$Nothing, E: $terezka$elm_charts$Internal$Svg$defaultLabel.E, L: $terezka$elm_charts$Chart$Item$getBottom, I: $terezka$elm_charts$Internal$Svg$defaultLabel.I, K: $terezka$elm_charts$Internal$Svg$defaultLabel.K, x: $terezka$elm_charts$Internal$Svg$defaultLabel.x, y: $terezka$elm_charts$Internal$Svg$defaultLabel.y};
+var $terezka$elm_charts$Chart$defaultLabel = {A: $terezka$elm_charts$Internal$Svg$defaultLabel.A, h: $terezka$elm_charts$Internal$Svg$defaultLabel.h, Z: $terezka$elm_charts$Internal$Svg$defaultLabel.Z, ah: $terezka$elm_charts$Internal$Svg$defaultLabel.ah, cs: $terezka$elm_charts$Internal$Svg$defaultLabel.cs, C: $terezka$elm_charts$Internal$Svg$defaultLabel.C, D: $terezka$elm_charts$Internal$Svg$defaultLabel.D, ab: $elm$core$Maybe$Nothing, E: $terezka$elm_charts$Internal$Svg$defaultLabel.E, L: $terezka$elm_charts$Chart$Item$getBottom, I: $terezka$elm_charts$Internal$Svg$defaultLabel.I, K: $terezka$elm_charts$Internal$Svg$defaultLabel.K, x: $terezka$elm_charts$Internal$Svg$defaultLabel.x, y: $terezka$elm_charts$Internal$Svg$defaultLabel.y};
 var $terezka$elm_charts$Chart$SubElements = function (a) {
 	return {$: 10, a: a};
 };
@@ -13904,7 +13916,7 @@ var $terezka$elm_charts$Internal$Svg$label = F4(
 					_List_fromArray(
 						[
 							$elm$svg$Svg$Attributes$class('elm-charts__label'),
-							$elm$svg$Svg$Attributes$stroke(config._),
+							$elm$svg$Svg$Attributes$stroke(config.Z),
 							$elm$svg$Svg$Attributes$strokeWidth(
 							$elm$core$String$fromFloat(config.ah)),
 							$elm$svg$Svg$Attributes$fill(config.cs),
@@ -14028,7 +14040,7 @@ var $terezka$elm_charts$Chart$svg = function (func) {
 };
 var $elm$svg$Svg$text = $elm$virtual_dom$VirtualDom$text;
 var $terezka$elm_charts$Chart$toLabelFromItemLabel = function (config) {
-	return {A: config.A, h: config.h, _: config._, ah: config.ah, cs: config.cs, C: config.C, D: config.D, E: config.E, I: config.I, K: config.K, x: config.x, y: config.y};
+	return {A: config.A, h: config.h, Z: config.Z, ah: config.ah, cs: config.cs, C: config.C, D: config.D, E: config.E, I: config.I, K: config.K, x: config.x, y: config.y};
 };
 var $terezka$elm_charts$Chart$binLabels = F2(
 	function (toLabel, edits) {
@@ -14039,7 +14051,7 @@ var $terezka$elm_charts$Chart$binLabels = F2(
 				function (p, item) {
 					var config = A2($terezka$elm_charts$Internal$Helpers$apply, edits, $terezka$elm_charts$Chart$defaultLabel);
 					var text = function () {
-						var _v1 = config.ac;
+						var _v1 = config.ab;
 						if (!_v1.$) {
 							var formatting = _v1.a;
 							return formatting(item);
@@ -14088,13 +14100,13 @@ var $terezka$elm_charts$Chart$Attributes$dashed = function (value) {
 			{bA: value});
 	};
 };
-var $terezka$elm_charts$Internal$Svg$defaultDot = {_: '', dt: 1, ah: 0, cs: $terezka$elm_charts$Internal$Helpers$pink, E: false, dJ: 0, dK: '', dL: 5, ay: 1, ba: $elm$core$Maybe$Nothing, c8: 6};
+var $terezka$elm_charts$Internal$Svg$defaultDot = {Z: '', dt: 1, ah: 0, cs: $terezka$elm_charts$Internal$Helpers$pink, E: false, dJ: 0, dK: '', dL: 5, ay: 1, ba: $elm$core$Maybe$Nothing, c8: 6};
 var $terezka$elm_charts$Internal$Svg$isWithinPlane = F3(
 	function (plane, x, y) {
 		return _Utils_eq(
-			A3($elm$core$Basics$clamp, plane.dj.an, plane.dj.ae, x),
+			A3($elm$core$Basics$clamp, plane.dj.an, plane.dj.ad, x),
 			x) && _Utils_eq(
-			A3($elm$core$Basics$clamp, plane.dk.an, plane.dk.ae, y),
+			A3($elm$core$Basics$clamp, plane.dk.an, plane.dk.ad, y),
 			y);
 	});
 var $elm$core$Basics$pi = _Basics_pi;
@@ -14158,7 +14170,7 @@ var $terezka$elm_charts$Internal$Svg$dot = F5(
 		var styleAttrs = _List_fromArray(
 			[
 				$elm$svg$Svg$Attributes$stroke(
-				(config._ === '') ? config.cs : config._),
+				(config.Z === '') ? config.cs : config.Z),
 				$elm$svg$Svg$Attributes$strokeWidth(
 				$elm$core$String$fromFloat(config.ah)),
 				$elm$svg$Svg$Attributes$strokeOpacity(
@@ -14389,10 +14401,10 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 							return _Utils_Tuple2(
 								_Utils_Tuple2(
 									A2($elm$core$Maybe$withDefault, plane.dj.an, config.bh),
-									A2($elm$core$Maybe$withDefault, plane.dj.ae, config.bx)),
+									A2($elm$core$Maybe$withDefault, plane.dj.ad, config.bx)),
 								_Utils_Tuple2(
 									A2($elm$core$Maybe$withDefault, plane.dk.an, config.es),
-									A2($elm$core$Maybe$withDefault, plane.dk.ae, config.cl)));
+									A2($elm$core$Maybe$withDefault, plane.dk.ad, config.cl)));
 						}
 					}
 				} else {
@@ -14406,7 +14418,7 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 							var _v12 = _v10.b;
 							return _Utils_Tuple2(
 								_Utils_Tuple2(a, a),
-								_Utils_Tuple2(plane.dk.an, plane.dk.ae));
+								_Utils_Tuple2(plane.dk.an, plane.dk.ad));
 						} else {
 							if (!_v3.c.a.$) {
 								if (!_v3.c.b.$) {
@@ -14454,7 +14466,7 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 									var _v49 = _v48.a;
 									var _v50 = _v48.b;
 									return _Utils_Tuple2(
-										_Utils_Tuple2(a, plane.dj.ae),
+										_Utils_Tuple2(a, plane.dj.ad),
 										_Utils_Tuple2(b, b));
 								} else {
 									var _v62 = _v3.a;
@@ -14532,7 +14544,7 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 									var _v73 = _v72.a;
 									var _v74 = _v72.b;
 									return _Utils_Tuple2(
-										_Utils_Tuple2(a, plane.dj.ae),
+										_Utils_Tuple2(a, plane.dj.ad),
 										_Utils_Tuple2(b, b));
 								} else {
 									var _v86 = _v3.a;
@@ -14566,7 +14578,7 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 							var _v17 = _v15.b;
 							return _Utils_Tuple2(
 								_Utils_Tuple2(b, b),
-								_Utils_Tuple2(plane.dk.an, plane.dk.ae));
+								_Utils_Tuple2(plane.dk.an, plane.dk.ad));
 						} else {
 							if (!_v3.c.a.$) {
 								if (!_v3.c.b.$) {
@@ -14614,7 +14626,7 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 									var _v97 = _v96.a;
 									var _v98 = _v96.b;
 									return _Utils_Tuple2(
-										_Utils_Tuple2(a, plane.dj.ae),
+										_Utils_Tuple2(a, plane.dj.ad),
 										_Utils_Tuple2(b, b));
 								} else {
 									var _v110 = _v3.a;
@@ -14692,7 +14704,7 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 									var _v121 = _v120.a;
 									var _v122 = _v120.b;
 									return _Utils_Tuple2(
-										_Utils_Tuple2(a, plane.dj.ae),
+										_Utils_Tuple2(a, plane.dj.ad),
 										_Utils_Tuple2(b, b));
 								} else {
 									var _v134 = _v3.a;
@@ -14733,7 +14745,7 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 							var a = _v25.a.a;
 							var _v26 = _v25.b;
 							return _Utils_Tuple2(
-								_Utils_Tuple2(plane.dj.an, plane.dj.ae),
+								_Utils_Tuple2(plane.dj.an, plane.dj.ad),
 								_Utils_Tuple2(a, a));
 						}
 					} else {
@@ -14745,7 +14757,7 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 							var _v31 = _v30.a;
 							var b = _v30.b.a;
 							return _Utils_Tuple2(
-								_Utils_Tuple2(plane.dj.an, plane.dj.ae),
+								_Utils_Tuple2(plane.dj.an, plane.dj.ad),
 								_Utils_Tuple2(b, b));
 						} else {
 							var _v140 = _v3.a;
@@ -14755,8 +14767,8 @@ var $terezka$elm_charts$Internal$Svg$line = F2(
 							var _v144 = _v143.a;
 							var _v145 = _v143.b;
 							return _Utils_Tuple2(
-								_Utils_Tuple2(plane.dj.an, plane.dj.ae),
-								_Utils_Tuple2(plane.dk.an, plane.dk.ae));
+								_Utils_Tuple2(plane.dj.an, plane.dj.ad),
+								_Utils_Tuple2(plane.dk.an, plane.dk.ad));
 						}
 					}
 				}
@@ -15295,13 +15307,13 @@ var $terezka$elm_charts$Chart$definePlane = F2(
 		var width = A2($elm$core$Basics$max, 1, (config.di - config.G.bZ) - config.G.b7);
 		var toLimit = F5(
 			function (length, marginMin, marginMax, min, max) {
-				return {dx: max, dy: min, g: false, av: length, dU: marginMax, dV: marginMin, ae: max, an: min};
+				return {dx: max, dy: min, g: false, av: length, dU: marginMax, dV: marginMin, ad: max, an: min};
 			});
 		var height = A2($elm$core$Basics$max, 1, (config.cG - config.G.bN) - config.G.cj);
 		var fixSingles = function (bs) {
-			return _Utils_eq(bs.an, bs.ae) ? _Utils_update(
+			return _Utils_eq(bs.an, bs.ad) ? _Utils_update(
 				bs,
-				{ae: bs.an + 10}) : bs;
+				{ad: bs.an + 10}) : bs;
 		};
 		var collectLimits = F2(
 			function (el, acc) {
@@ -15370,7 +15382,7 @@ var $terezka$elm_charts$Chart$definePlane = F2(
 				$elm$core$Basics$identity,
 				A3($elm$core$List$foldl, collectLimits, _List_Nil, elements)));
 		var calcRange = function () {
-			var _v4 = config.aA;
+			var _v4 = config.aB;
 			if (!_v4.b) {
 				return limits_.dj;
 			} else {
@@ -15395,12 +15407,12 @@ var $terezka$elm_charts$Chart$definePlane = F2(
 		}();
 		var unpadded = {dj: calcRange, dk: calcDomain};
 		var scalePadX = $terezka$elm_charts$Internal$Coordinates$scaleCartesianX(unpadded);
-		var xMax = calcRange.ae + scalePadX(
+		var xMax = calcRange.ad + scalePadX(
 			calcRange.g ? config.G.bZ : config.G.b7);
 		var xMin = calcRange.an - scalePadX(
 			calcRange.g ? config.G.b7 : config.G.bZ);
 		var scalePadY = $terezka$elm_charts$Internal$Coordinates$scaleCartesianY(unpadded);
-		var yMax = calcDomain.ae + scalePadY(
+		var yMax = calcDomain.ad + scalePadY(
 			calcDomain.g ? config.G.bN : config.G.cj);
 		var yMin = calcDomain.an - scalePadY(
 			calcDomain.g ? config.G.cj : config.G.bN);
@@ -15420,14 +15432,14 @@ var $terezka$elm_charts$Chart$definePlane = F2(
 				calcRange,
 				{
 					av: config.di * ratioX,
-					ae: A2($elm$core$Basics$max, xMin, xMax),
+					ad: A2($elm$core$Basics$max, xMin, xMax),
 					an: A2($elm$core$Basics$min, xMin, xMax)
 				}),
 			dk: _Utils_update(
 				calcDomain,
 				{
 					av: config.cG * ratioY,
-					ae: A2($elm$core$Basics$max, yMin, yMax),
+					ad: A2($elm$core$Basics$max, yMin, yMax),
 					an: A2($elm$core$Basics$min, yMin, yMax)
 				})
 		};
@@ -15778,11 +15790,11 @@ var $terezka$elm_charts$Chart$chartAndPlane = F2(
 				bG: _List_Nil,
 				ak: {bN: 0, bZ: 0, b7: 0, cj: 0},
 				G: {bN: 0, bZ: 0, b7: 0, cj: 0},
-				aA: _List_Nil,
+				aB: _List_Nil,
 				df: $elm$core$Maybe$Nothing,
 				di: 300
 			});
-		var planeConfig = {at: config.at, cG: config.cG, ak: config.ak, G: config.G, aA: config.aA, df: config.df, di: config.di};
+		var planeConfig = {at: config.at, cG: config.cG, ak: config.ak, G: config.G, aB: config.aB, df: config.df, di: config.di};
 		var _v0 = A3($terezka$elm_charts$Chart$addIndexes, planeConfig, 0, unindexedElements);
 		var indexedElements = _v0.a;
 		var elements = $terezka$elm_charts$Chart$addGridIfNone(indexedElements);
@@ -16604,7 +16616,7 @@ var $terezka$elm_charts$Internal$Produce$toDotSeries = F4(
 						$elm$core$Maybe$map,
 						$terezka$elm_charts$Internal$Svg$toRadius(dotConfig.c8),
 						dotConfig.ba));
-				var tooltipTextColor = (dotConfig.cs === 'white') ? ((dotConfig._ === 'white') ? interpolationConfig.cs : dotConfig._) : dotConfig.cs;
+				var tooltipTextColor = (dotConfig.cs === 'white') ? ((dotConfig.Z === 'white') ? interpolationConfig.cs : dotConfig.Z) : dotConfig.cs;
 				return _Utils_Tuple2(
 					limits,
 					F2(
@@ -17008,8 +17020,8 @@ var $author$project$Main$viewDailyChart = function (entries) {
 			]));
 };
 var $author$project$Main$viewStatsTab = function (model) {
-	var tripStart = $author$project$List$NonEmpty$Zipper$current(model.n).t;
-	var entries = model.ab;
+	var tripStart = $author$project$List$NonEmpty$Zipper$current(model.o).t;
+	var entries = model.aa;
 	var median = $author$project$Main$medianAmount(entries);
 	var numDays = $elm$core$List$length(
 		$author$project$Main$uniqueDates(entries));
@@ -17290,7 +17302,7 @@ var $author$project$Main$viewStatsTab = function (model) {
 														_List_fromArray(
 															[
 																$elm$html$Html$text(
-																(entry.r !== '') ? entry.r : $author$project$Main$categoryLabel(entry.i))
+																(entry.s !== '') ? entry.s : $author$project$Main$categoryLabel(entry.i))
 															])),
 														A2(
 														$elm$html$Html$div,
@@ -17496,7 +17508,7 @@ var $author$project$Main$viewTripForm = function (form) {
 					_List_fromArray(
 						[
 							$elm$html$Html$Attributes$type_('number'),
-							$elm$html$Html$Attributes$value(form.q),
+							$elm$html$Html$Attributes$value(form.r),
 							$elm$html$Html$Events$onInput(
 							$author$project$Main$TripFieldChanged(0)),
 							$elm$html$Html$Attributes$placeholder('0 = no budget'),
@@ -17576,9 +17588,9 @@ var $author$project$Main$viewTripsTab = function (as_) {
 			function ($) {
 				return $.d;
 			},
-			as_.ab));
-	var allTrips = $author$project$List$NonEmpty$Zipper$toList(as_.n);
-	var activeTrip = $author$project$List$NonEmpty$Zipper$current(as_.n);
+			as_.aa));
+	var allTrips = $author$project$List$NonEmpty$Zipper$toList(as_.o);
+	var activeTrip = $author$project$List$NonEmpty$Zipper$current(as_.o);
 	var otherTrips = A2(
 		$elm$core$List$filter,
 		function (t) {
@@ -17688,8 +17700,8 @@ var $author$project$Main$viewTripsTab = function (as_) {
 									]))
 							])),
 						function () {
-						if (activeTrip.q > 0) {
-							var pct = A2($elm$core$Basics$min, 1.0, totalSpent / activeTrip.q);
+						if (activeTrip.r > 0) {
+							var pct = A2($elm$core$Basics$min, 1.0, totalSpent / activeTrip.r);
 							return A2(
 								$elm$html$Html$div,
 								_List_fromArray(
@@ -17715,7 +17727,7 @@ var $author$project$Main$viewTripsTab = function (as_) {
 													$elm$core$Basics$round(totalSpent)) + ' spent')),
 												$elm$html$Html$text(
 												'Budget: $' + $elm$core$String$fromInt(
-													$elm$core$Basics$round(activeTrip.q)))
+													$elm$core$Basics$round(activeTrip.r)))
 											])),
 										A2(
 										$elm$html$Html$div,
@@ -17827,7 +17839,7 @@ var $author$project$Main$viewTripsTab = function (as_) {
 					},
 					otherTrips)) : $elm$html$Html$text(''),
 				function () {
-				var _v0 = as_.Z;
+				var _v0 = as_.af;
 				if (_v0.$ === 1) {
 					return A2(
 						$elm$html$Html$button,
@@ -17962,7 +17974,7 @@ var $author$project$Main$viewGuest = function (gs) {
 						$elm$html$Html$text('Road log for the long way north')
 					])),
 				function () {
-				var _v0 = $author$project$Main$guestMessage(gs.s.aM);
+				var _v0 = $author$project$Main$guestMessage(gs.m.aG);
 				if (!_v0.$) {
 					var msg = _v0.a;
 					return A2(
@@ -17979,7 +17991,18 @@ var $author$project$Main$viewGuest = function (gs) {
 					return $elm$html$Html$text('');
 				}
 			}(),
-				A2(
+				(!_Utils_eq(gs.aA, $elm$core$Maybe$Nothing)) ? A2(
+				$elm$html$Html$p,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+						A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+						A2($elm$html$Html$Attributes$style, 'padding', '16px')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('Loading…')
+					])) : A2(
 				$elm$html$Html$button,
 				_List_fromArray(
 					[
@@ -18037,7 +18060,7 @@ var $author$project$Main$viewGuest = function (gs) {
 							[
 								$elm$html$Html$text('⚙ Settings')
 							])),
-						gs.aN ? A3($author$project$Main$viewSettingsPanel, gs.s.b, false, gs.ao) : $elm$html$Html$text('')
+						gs.aN ? A3($author$project$Main$viewSettingsPanel, gs.m.b, false, gs.ao) : $elm$html$Html$text('')
 					]))
 			]));
 };
@@ -18077,7 +18100,7 @@ var $author$project$Main$main = $elm$browser$Browser$element(
 						$author$project$Main$gotNewToken($author$project$Main$GotOAuthToken),
 						$author$project$Main$gotGpsCoords(
 						function (r) {
-							return r.cy ? $author$project$Main$GeolocationDenied : A2($author$project$Main$GotGpsCoords, r.W, r.ad);
+							return r.cy ? $author$project$Main$GeolocationDenied : A2($author$project$Main$GotGpsCoords, r.W, r.ac);
 						}),
 						$author$project$Main$gotExifResult(
 						function (r) {
@@ -18085,7 +18108,7 @@ var $author$project$Main$main = $elm$browser$Browser$element(
 								$author$project$Main$GotExifCoords,
 								r.Q,
 								$elm$core$Maybe$Just(r.W),
-								$elm$core$Maybe$Just(r.ad),
+								$elm$core$Maybe$Just(r.ac),
 								'') : A4($author$project$Main$GotExifCoords, r.Q, $elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing, r.cx);
 						})
 					]));
