@@ -34,6 +34,10 @@ all stash changes. The correct sequence when a stash pop conflicts:
 - Auth error messages live in `GuestReason` (FreshGuest | SessionExpired | MissingConfig),
   NOT in `model.error`.
 
+## Elm style guide
+- **Alphabetize** all record fields and all type constructor lists.
+  Apply to every new type and every edit of an existing type.
+
 ## Sheet columns
 A=id, B=date, C=amount, D=category, E=note, F=merchant, G=createdAt, H=lat, I=lon, J=longNote
 Range: A:J
