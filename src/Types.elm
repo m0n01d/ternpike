@@ -6,7 +6,9 @@ import Data.Amendment exposing (Amendment)
 import Data.Category exposing (Category(..))
 import Data.Entry exposing (EffectiveEntry)
 import Data.Expense exposing (Expense)
+import Data.ExpenseId exposing (ExpenseId)
 import Data.Trip exposing (Trip, TripField, TripForm)
+import Data.TripId exposing (TripId)
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import File exposing (File)
@@ -31,6 +33,7 @@ type Tab
 
 type Route
     = RouteAdd
+    | RouteEditEntry TripId ExpenseId
     | RouteLedger
     | RouteScan
     | RouteSettings
@@ -164,6 +167,7 @@ type alias AuthState =
     , expensesState     : ExpensesState
     , geoBlocked        : Bool
     , key               : Nav.Key
+    , pendingEditEntry  : Maybe { entryId : ExpenseId, tripId : TripId }
     , pendingEntry      : PendingEntry
     , rawExpenses       : List Expense
     , scanQueue         : Dict String ScanItem
@@ -226,7 +230,7 @@ type Msg
     | ResetSettingsClicked
     | ReviewScanItem String
     | SaveTripForm
-    | SelectTrip String
+    | SelectTrip TripId
     | ShowToast String
     | SignOutClicked
     | SkipLocation

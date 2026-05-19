@@ -10,6 +10,8 @@ module Data.Entry exposing
 import Data.Amendment as Amendment exposing (Amendment)
 import Data.Category as Category exposing (Category)
 import Data.Expense as Expense exposing (Expense)
+import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.TripId as TripId exposing (TripId)
 import Data.Void as Void exposing (Void)
 import Dict
 import Set
@@ -20,18 +22,18 @@ type alias EffectiveEntry =
     , category  : Category
     , createdAt : String
     , date      : String
-    , id        : String
+    , id        : ExpenseId
     , isAmended : Bool
     , lat       : Maybe Float
     , lon       : Maybe Float
     , longNote  : String
     , merchant  : String
     , note      : String
-    , tripId    : String
+    , tripId    : TripId
     }
 
 
-resolve : List Expense -> List Amendment -> List Void -> String -> List EffectiveEntry
+resolve : List Expense -> List Amendment -> List Void -> TripId -> List EffectiveEntry
 resolve expenses amendments voids activeTripId =
     let
         voidedIds =
@@ -41,7 +43,7 @@ resolve expenses amendments voids activeTripId =
         amendsByTarget =
             List.foldr
                 (\a acc ->
-                    Dict.update a.targetId
+                    Dict.update (ExpenseId.toString a.targetId)
                         (Just << Maybe.withDefault [ a ] << Maybe.map (\xs -> a :: xs))
                         acc
                 )
@@ -49,7 +51,7 @@ resolve expenses amendments voids activeTripId =
                 amendments
 
         applyAmends expense =
-            case Dict.get expense.id amendsByTarget of
+            case Dict.get (ExpenseId.toString expense.id) amendsByTarget of
                 Nothing ->
                     toEffectiveEntry False expense
 
@@ -64,7 +66,7 @@ resolve expenses amendments voids activeTripId =
                         |> Maybe.withDefault (toEffectiveEntry False expense)
     in
     expenses
-        |> List.filter (\e -> e.tripId == activeTripId && not (Set.member e.id voidedIds))
+        |> List.filter (\e -> e.tripId == activeTripId && not (Set.member (ExpenseId.toString e.id) voidedIds))
         |> List.map applyAmends
         |> List.sortBy .date
 

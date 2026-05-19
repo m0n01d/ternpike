@@ -20,7 +20,7 @@ viewAddTab model =
         isEditing =
             model.editingEntry /= Nothing
     in
-    Html.div [ Html.Attributes.class "px-5 py-6" ]
+    Html.div [ Html.Attributes.class "p-5" ]
         [ Html.div [ Html.Attributes.class "flex items-center justify-between mb-5" ]
             [ Html.h2 [ sectionHead ]
                 [ Html.text

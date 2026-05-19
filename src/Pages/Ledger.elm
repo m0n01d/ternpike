@@ -2,6 +2,7 @@ module Pages.Ledger exposing (viewLedgerTab)
 
 import Data.Category as Category
 import Data.Entry as Entry
+import Data.ExpenseId as ExpenseId
 import Helpers exposing (effectiveEntryToExpense, encodeWaypoints, formatAmount, formatDateDisplay)
 import Html exposing (Html)
 import Html.Attributes
@@ -45,7 +46,7 @@ viewLedgerTab model =
                                             , Html.span [ Html.Attributes.class "font-mono text-rust tracking-normal" ]
                                                 [ Html.text (formatAmount (List.sum (List.map .amount dayEntries))) ]
                                             ]
-                                        , Keyed.node "div" [] (List.map (\e -> ( e.id, viewEntryRow e )) dayEntries)
+                                        , Keyed.node "div" [] (List.map (\e -> ( ExpenseId.toString e.id, viewEntryRow e )) dayEntries)
                                         ]
                                     )
                                 )

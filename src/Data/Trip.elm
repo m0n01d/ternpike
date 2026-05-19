@@ -7,6 +7,7 @@ module Data.Trip exposing
     , validator
     )
 
+import Data.TripId as TripId exposing (TripId)
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
@@ -18,7 +19,7 @@ type alias Trip =
     , coverPhotoUrl : String
     , description   : String
     , endDate       : String
-    , id            : String
+    , id            : TripId
     , name          : String
     , startDate     : String
     }
@@ -57,7 +58,7 @@ validator =
 encoder : Trip -> E.Value
 encoder t =
     E.object
-        [ ( "_id",           E.string t.id )
+        [ ( "_id",           TripId.encode t.id )
         , ( "budget",        E.float t.budget )
         , ( "coverPhotoUrl", E.string t.coverPhotoUrl )
         , ( "description",   E.string t.description )
@@ -75,6 +76,6 @@ decoder =
         |> Pipeline.required "coverPhotoUrl" D.string
         |> Pipeline.required "description"   D.string
         |> Pipeline.required "endDate"       D.string
-        |> Pipeline.required "_id"           D.string
+        |> Pipeline.required "_id"           TripId.decode
         |> Pipeline.required "name"          D.string
         |> Pipeline.required "startDate"     D.string

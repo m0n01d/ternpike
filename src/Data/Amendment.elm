@@ -1,6 +1,7 @@
 module Data.Amendment exposing (Amendment, decoder, encoder)
 
 import Data.Category as Category exposing (Category)
+import Data.ExpenseId as ExpenseId exposing (ExpenseId)
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
@@ -15,7 +16,7 @@ type alias Amendment =
     , longNote  : Maybe String
     , merchant  : Maybe String
     , note      : Maybe String
-    , targetId  : String
+    , targetId  : ExpenseId
     }
 
 
@@ -23,7 +24,7 @@ encoder : Amendment -> E.Value
 encoder a =
     E.object
         ([ ( "_id",      E.string a.id )
-         , ( "targetId", E.string a.targetId )
+         , ( "targetId", ExpenseId.encode a.targetId )
          , ( "createdAt", E.string a.createdAt )
          , ( "type",     E.string "amend" )
          ]
@@ -78,4 +79,4 @@ decoder =
         |> Pipeline.optional "longNote"  (D.nullable D.string) Nothing
         |> Pipeline.optional "merchant"  (D.nullable D.string) Nothing
         |> Pipeline.optional "note"      (D.nullable D.string) Nothing
-        |> Pipeline.required "targetId"  D.string
+        |> Pipeline.required "targetId"  ExpenseId.decode

@@ -13,7 +13,7 @@ import UI.Layout exposing (sectionHead)
 
 viewScanTab : AuthState -> Html Msg
 viewScanTab model =
-    Html.div [ Html.Attributes.class "px-5 pt-6 pb-4" ]
+    Html.div [ Html.Attributes.class "p-5" ]
         [ Html.h2 [ sectionHead ] [ Html.text "SCAN RECEIPTS" ]
         , Html.label
             [ Html.Attributes.class "flex flex-col items-center justify-center bg-cream border-2 border-dashed border-tan rounded-xl py-10 px-6 cursor-pointer mb-5" ]

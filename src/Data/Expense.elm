@@ -1,6 +1,8 @@
 module Data.Expense exposing (Expense, decoder, encoder)
 
 import Data.Category as Category exposing (Category)
+import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.TripId as TripId exposing (TripId)
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
@@ -11,20 +13,20 @@ type alias Expense =
     , category  : Category
     , createdAt : String
     , date      : String
-    , id        : String
+    , id        : ExpenseId
     , lat       : Maybe Float
     , lon       : Maybe Float
     , longNote  : String
     , merchant  : String
     , note      : String
-    , tripId    : String
+    , tripId    : TripId
     }
 
 
 encoder : Expense -> E.Value
 encoder e =
     E.object
-        ([ ( "_id",       E.string e.id )
+        ([ ( "_id",       ExpenseId.encode e.id )
          , ( "amount",    E.float e.amount )
          , ( "category",  E.string (Category.label e.category) )
          , ( "createdAt", E.string e.createdAt )
@@ -32,7 +34,7 @@ encoder e =
          , ( "longNote",  E.string e.longNote )
          , ( "merchant",  E.string e.merchant )
          , ( "note",      E.string e.note )
-         , ( "tripId",    E.string e.tripId )
+         , ( "tripId",    TripId.encode e.tripId )
          , ( "type",      E.string "expense" )
          ]
          ++ (case e.lat of
@@ -61,10 +63,10 @@ decoder =
             )
         |> Pipeline.required "createdAt" D.string
         |> Pipeline.required "date"      D.string
-        |> Pipeline.required "_id"       D.string
+        |> Pipeline.required "_id"       ExpenseId.decode
         |> Pipeline.optional "lat"       (D.nullable D.float) Nothing
         |> Pipeline.optional "lon"       (D.nullable D.float) Nothing
         |> Pipeline.optional "longNote"  D.string ""
         |> Pipeline.required "merchant"  D.string
         |> Pipeline.required "note"      D.string
-        |> Pipeline.required "tripId"    D.string
+        |> Pipeline.required "tripId"    TripId.decode
