@@ -1448,7 +1448,7 @@ appendEntry creds sheetId tabName entry =
     Http.request
         { method = "POST"
         , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
-        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/" ++ tabName ++ "!A:J:append?valueInputOption=RAW"
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/" ++ tabName ++ "!A2:J:append?valueInputOption=RAW"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntrySubmitted
         , timeout = Nothing

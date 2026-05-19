@@ -7014,7 +7014,7 @@ var $author$project$Main$appendEntry = F4(
 				aV: 'POST',
 				a_: $elm$core$Maybe$Nothing,
 				a0: $elm$core$Maybe$Nothing,
-				a2: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (tabName + '!A:J:append?valueInputOption=RAW')))
+				a2: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (tabName + '!A2:J:append?valueInputOption=RAW')))
 			});
 	});
 var $author$project$Main$authPending = F2(
