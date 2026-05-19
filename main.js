@@ -4895,9 +4895,9 @@ var $elm$core$Basics$EQ = {$: 'EQ'};
 var $elm$core$Basics$GT = {$: 'GT'};
 var $elm$core$Basics$LT = {$: 'LT'};
 var $author$project$Main$GeolocationDenied = {$: 'GeolocationDenied'};
-var $author$project$Main$GotExifCoords = F3(
-	function (a, b, c) {
-		return {$: 'GotExifCoords', a: a, b: b, c: c};
+var $author$project$Main$GotExifCoords = F4(
+	function (a, b, c, d) {
+		return {$: 'GotExifCoords', a: a, b: b, c: c, d: d};
 	});
 var $author$project$Main$GotGpsCoords = F2(
 	function (a, b) {
@@ -5635,8 +5635,13 @@ var $author$project$Main$gotExifResult = _Platform_incomingPort(
 							return A2(
 								$elm$json$Json$Decode$andThen,
 								function (hasGps) {
-									return $elm$json$Json$Decode$succeed(
-										{hasGps: hasGps, id: id, lat: lat, lon: lon});
+									return A2(
+										$elm$json$Json$Decode$andThen,
+										function (debug) {
+											return $elm$json$Json$Decode$succeed(
+												{debug: debug, hasGps: hasGps, id: id, lat: lat, lon: lon});
+										},
+										A2($elm$json$Json$Decode$field, 'debug', $elm$json$Json$Decode$string));
 								},
 								A2($elm$json$Json$Decode$field, 'hasGps', $elm$json$Json$Decode$bool));
 						},
@@ -5679,7 +5684,7 @@ var $elm$json$Json$Decode$decodeValue = _Json_run;
 var $author$project$Main$Fuel = {$: 'Fuel'};
 var $author$project$Main$LocationIdle = {$: 'LocationIdle'};
 var $author$project$Main$defaultPendingEntry = function (today) {
-	return {amount: '', category: $author$project$Main$Fuel, date: today, locationState: $author$project$Main$LocationIdle, merchant: '', note: ''};
+	return {amount: '', category: $author$project$Main$Fuel, date: today, locationState: $author$project$Main$LocationIdle, longNote: '', merchant: '', note: ''};
 };
 var $author$project$Main$EntriesFetched = function (a) {
 	return {$: 'EntriesFetched', a: a};
@@ -6229,11 +6234,16 @@ var $elm$core$Dict$update = F3(
 var $elm$http$Http$emptyBody = _Http_emptyBody;
 var $elm$json$Json$Decode$list = _Json_decodeList;
 var $elm$json$Json$Decode$oneOf = _Json_oneOf;
+var $author$project$Main$Activities = {$: 'Activities'};
 var $author$project$Main$Camp = {$: 'Camp'};
 var $author$project$Main$Ferry = {$: 'Ferry'};
 var $author$project$Main$Food = {$: 'Food'};
 var $author$project$Main$Gear = {$: 'Gear'};
+var $author$project$Main$Lodging = {$: 'Lodging'};
+var $author$project$Main$Medical = {$: 'Medical'};
 var $author$project$Main$Misc = {$: 'Misc'};
+var $author$project$Main$Shopping = {$: 'Shopping'};
+var $author$project$Main$Transport = {$: 'Transport'};
 var $author$project$Main$categoryFromString = function (s) {
 	switch (s) {
 		case 'fuel':
@@ -6246,6 +6256,16 @@ var $author$project$Main$categoryFromString = function (s) {
 			return $author$project$Main$Ferry;
 		case 'gear':
 			return $author$project$Main$Gear;
+		case 'lodging':
+			return $author$project$Main$Lodging;
+		case 'activities':
+			return $author$project$Main$Activities;
+		case 'shopping':
+			return $author$project$Main$Shopping;
+		case 'medical':
+			return $author$project$Main$Medical;
+		case 'transport':
+			return $author$project$Main$Transport;
 		default:
 			return $author$project$Main$Misc;
 	}
@@ -6290,41 +6310,61 @@ var $author$project$Main$parseAmountStr = function (s) {
 };
 var $author$project$Main$rowDecoder = A2(
 	$author$project$Json$Decode$Pipeline$custom,
-	$author$project$Main$optMaybeFloat(8),
+	A3($author$project$Main$optIndex, 9, $elm$json$Json$Decode$string, ''),
 	A2(
 		$author$project$Json$Decode$Pipeline$custom,
-		$author$project$Main$optMaybeFloat(7),
+		$author$project$Main$optMaybeFloat(8),
 		A2(
 			$author$project$Json$Decode$Pipeline$custom,
-			A3($author$project$Main$optIndex, 6, $elm$json$Json$Decode$string, ''),
+			$author$project$Main$optMaybeFloat(7),
 			A2(
 				$author$project$Json$Decode$Pipeline$custom,
-				A3($author$project$Main$optIndex, 5, $elm$json$Json$Decode$string, ''),
+				A3($author$project$Main$optIndex, 6, $elm$json$Json$Decode$string, ''),
 				A2(
 					$author$project$Json$Decode$Pipeline$custom,
-					A3($author$project$Main$optIndex, 4, $elm$json$Json$Decode$string, ''),
+					A3($author$project$Main$optIndex, 5, $elm$json$Json$Decode$string, ''),
 					A2(
 						$author$project$Json$Decode$Pipeline$custom,
-						A2(
-							$elm$json$Json$Decode$index,
-							3,
-							A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
+						A3($author$project$Main$optIndex, 4, $elm$json$Json$Decode$string, ''),
 						A2(
 							$author$project$Json$Decode$Pipeline$custom,
 							A2(
 								$elm$json$Json$Decode$index,
-								2,
-								A2($elm$json$Json$Decode$andThen, $author$project$Main$parseAmountStr, $elm$json$Json$Decode$string)),
+								3,
+								A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
 							A2(
 								$author$project$Json$Decode$Pipeline$custom,
-								A2($elm$json$Json$Decode$index, 1, $elm$json$Json$Decode$string),
+								A2(
+									$elm$json$Json$Decode$index,
+									2,
+									A2($elm$json$Json$Decode$andThen, $author$project$Main$parseAmountStr, $elm$json$Json$Decode$string)),
 								A2(
 									$author$project$Json$Decode$Pipeline$custom,
-									A2($elm$json$Json$Decode$index, 0, $elm$json$Json$Decode$string),
-									$elm$json$Json$Decode$succeed(
-										F9(
-											function (id, date, amount, category, note, merchant, createdAt, lat, lon) {
-												return {amount: amount, category: category, createdAt: createdAt, date: date, id: id, lat: lat, lon: lon, merchant: merchant, note: note, rowIndex: 0};
+									A2($elm$json$Json$Decode$index, 1, $elm$json$Json$Decode$string),
+									A2(
+										$author$project$Json$Decode$Pipeline$custom,
+										A2($elm$json$Json$Decode$index, 0, $elm$json$Json$Decode$string),
+										$elm$json$Json$Decode$succeed(
+											function (id) {
+												return function (date) {
+													return function (amount) {
+														return function (category) {
+															return function (note) {
+																return function (merchant) {
+																	return function (createdAt) {
+																		return function (lat) {
+																			return function (lon) {
+																				return function (longNote) {
+																					return {amount: amount, category: category, createdAt: createdAt, date: date, id: id, lat: lat, lon: lon, longNote: longNote, merchant: merchant, note: note, rowIndex: 0};
+																				};
+																			};
+																		};
+																	};
+																};
+															};
+														};
+													};
+												};
 											})))))))))));
 var $author$project$Main$entriesDecoder = $elm$json$Json$Decode$oneOf(
 	_List_fromArray(
@@ -6592,7 +6632,7 @@ var $author$project$Main$fetchEntries = F2(
 				method: 'GET',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
-				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A2:I')
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A2:J')
 			});
 	});
 var $elm$json$Json$Decode$maybe = function (decoder) {
@@ -6739,6 +6779,16 @@ var $author$project$Main$categoryLabel = function (cat) {
 			return 'ferry';
 		case 'Gear':
 			return 'gear';
+		case 'Lodging':
+			return 'lodging';
+		case 'Activities':
+			return 'activities';
+		case 'Shopping':
+			return 'shopping';
+		case 'Medical':
+			return 'medical';
+		case 'Transport':
+			return 'transport';
 		default:
 			return 'misc';
 	}
@@ -6863,7 +6913,8 @@ var $author$project$Main$appendEntry = F3(
 												return $elm$json$Json$Encode$string(
 													$elm$core$String$fromFloat(v));
 											},
-											entry.lon))
+											entry.lon)),
+										$elm$json$Json$Encode$string(entry.longNote)
 									]))
 							])))
 				]));
@@ -6878,7 +6929,7 @@ var $author$project$Main$appendEntry = F3(
 				method: 'POST',
 				timeout: $elm$core$Maybe$Nothing,
 				tracker: $elm$core$Maybe$Nothing,
-				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A:I:append?valueInputOption=RAW')
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + '/values/Expenses!A:J:append?valueInputOption=RAW')
 			});
 	});
 var $author$project$Main$claudeTextDecoder = A2(
@@ -6974,6 +7025,7 @@ var $author$project$Main$entryToPending = function (e) {
 				return $author$project$Main$LocationIdle;
 			}
 		}(),
+		longNote: e.longNote,
 		merchant: e.merchant,
 		note: e.note
 	};
@@ -7016,7 +7068,7 @@ var $elm$core$List$filter = F2(
 var $author$project$Main$LocationCheckingExif = {$: 'LocationCheckingExif'};
 var $author$project$Main$ScanQueued = {$: 'ScanQueued'};
 var $author$project$Main$freshScanItem = function (id) {
-	return {id: id, imageUrl: '', locationState: $author$project$Main$LocationCheckingExif, ocrData: $elm$core$Maybe$Nothing, status: $author$project$Main$ScanQueued};
+	return {exifDebug: '', id: id, imageUrl: '', locationState: $author$project$Main$LocationCheckingExif, ocrData: $elm$core$Maybe$Nothing, status: $author$project$Main$ScanQueued};
 };
 var $author$project$Main$getMimeType = function (dataUrl) {
 	return A2($elm$core$String$contains, 'image/png', dataUrl) ? 'image/png' : (A2($elm$core$String$contains, 'image/gif', dataUrl) ? 'image/gif' : (A2($elm$core$String$contains, 'image/webp', dataUrl) ? 'image/webp' : 'image/jpeg'));
@@ -7112,7 +7164,7 @@ var $elm$http$Http$expectString = function (toMsg) {
 		toMsg,
 		$elm$http$Http$resolve($elm$core$Result$Ok));
 };
-var $author$project$Main$ocrSystemPrompt = 'You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<fuel|food|camp|ferry|gear|misc>\", \"note\": \"<brief description max 50 chars>\", \"merchant\": \"<store name>\"}. Choose the best matching category.';
+var $author$project$Main$ocrSystemPrompt = 'You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<fuel|food|camp|ferry|gear|lodging|activities|shopping|medical|transport|misc>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 280 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\"}. Choose the best matching category.';
 var $author$project$Main$makeOcrCall = F4(
 	function (itemId, apiKey, base64Data, mimeType) {
 		var body = $elm$json$Json$Encode$object(
@@ -7217,9 +7269,9 @@ var $elm$time$Time$Posix = function (a) {
 };
 var $elm$time$Time$millisToPosix = $elm$time$Time$Posix;
 var $elm$time$Time$now = _Time_now($elm$time$Time$millisToPosix);
-var $author$project$Main$OcrData = F4(
-	function (amount, category, note, merchant) {
-		return {amount: amount, category: category, merchant: merchant, note: note};
+var $author$project$Main$OcrData = F6(
+	function (amount, category, note, merchant, date, longNote) {
+		return {amount: amount, category: category, date: date, longNote: longNote, merchant: merchant, note: note};
 	});
 var $elm$json$Json$Decode$null = _Json_decodeNull;
 var $elm$json$Json$Decode$value = _Json_decodeValue;
@@ -7273,28 +7325,38 @@ var $author$project$Json$Decode$Pipeline$optional = F4(
 	});
 var $author$project$Main$ocrDataDecoder = A4(
 	$author$project$Json$Decode$Pipeline$optional,
-	'merchant',
+	'longNote',
 	A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
 	$elm$core$Maybe$Nothing,
 	A4(
 		$author$project$Json$Decode$Pipeline$optional,
-		'note',
+		'date',
 		A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
 		$elm$core$Maybe$Nothing,
 		A4(
 			$author$project$Json$Decode$Pipeline$optional,
-			'category',
-			A2(
-				$elm$json$Json$Decode$map,
-				$elm$core$Maybe$Just,
-				A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
+			'merchant',
+			A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
 			$elm$core$Maybe$Nothing,
 			A4(
 				$author$project$Json$Decode$Pipeline$optional,
-				'amount',
-				A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$float),
+				'note',
+				A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$string),
 				$elm$core$Maybe$Nothing,
-				$elm$json$Json$Decode$succeed($author$project$Main$OcrData)))));
+				A4(
+					$author$project$Json$Decode$Pipeline$optional,
+					'category',
+					A2(
+						$elm$json$Json$Decode$map,
+						$elm$core$Maybe$Just,
+						A2($elm$json$Json$Decode$map, $author$project$Main$categoryFromString, $elm$json$Json$Decode$string)),
+					$elm$core$Maybe$Nothing,
+					A4(
+						$author$project$Json$Decode$Pipeline$optional,
+						'amount',
+						A2($elm$json$Json$Decode$map, $elm$core$Maybe$Just, $elm$json$Json$Decode$float),
+						$elm$core$Maybe$Nothing,
+						$elm$json$Json$Decode$succeed($author$project$Main$OcrData)))))));
 var $author$project$Main$monthNum = function (month) {
 	switch (month.$) {
 		case 'Jan':
@@ -7619,7 +7681,7 @@ var $author$project$Main$toastFor = function (_v0) {
 };
 var $author$project$Main$updateEntry = F3(
 	function (token, sheetId, entry) {
-		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':I' + $elm$core$String$fromInt(entry.rowIndex)));
+		var range = 'Expenses!A' + ($elm$core$String$fromInt(entry.rowIndex) + (':J' + $elm$core$String$fromInt(entry.rowIndex)));
 		var body = $elm$json$Json$Encode$object(
 			_List_fromArray(
 				[
@@ -7662,7 +7724,8 @@ var $author$project$Main$updateEntry = F3(
 												return $elm$json$Json$Encode$string(
 													$elm$core$String$fromFloat(v));
 											},
-											entry.lon))
+											entry.lon)),
+										$elm$json$Json$Encode$string(entry.longNote)
 									]))
 							])))
 				]));
@@ -7875,6 +7938,16 @@ var $author$project$Main$update = F2(
 							{note: s});
 					},
 					model);
+			case 'LongNoteChanged':
+				var s = msg.a;
+				return A2(
+					$author$project$Main$updatePending,
+					function (p) {
+						return _Utils_update(
+							p,
+							{longNote: s});
+					},
+					model);
 			case 'MerchantChanged':
 				var s = msg.a;
 				return A2(
@@ -7966,6 +8039,7 @@ var $author$project$Main$update = F2(
 										return original.lon;
 								}
 							}(),
+							longNote: p.longNote,
 							merchant: p.merchant,
 							note: p.note
 						});
@@ -7999,6 +8073,7 @@ var $author$project$Main$update = F2(
 							$elm$time$Time$posixToMillis(posix)),
 						lat: eLat,
 						lon: eLon,
+						longNote: p.longNote,
 						merchant: p.merchant,
 						note: p.note,
 						rowIndex: 0
@@ -8346,6 +8421,7 @@ var $author$project$Main$update = F2(
 						$elm$core$Platform$Cmd$none);
 				} else {
 					var itemId = msg.a;
+					var debug = msg.d;
 					return _Utils_Tuple2(
 						_Utils_update(
 							model,
@@ -8356,7 +8432,7 @@ var $author$project$Main$update = F2(
 									function (i) {
 										return _Utils_update(
 											i,
-											{locationState: $author$project$Main$LocationNoExifGps});
+											{exifDebug: debug, locationState: $author$project$Main$LocationNoExifGps});
 									},
 									model.scanQueue)
 							}),
@@ -8377,7 +8453,7 @@ var $author$project$Main$update = F2(
 					var item = _v18.a;
 					var ocr = A2(
 						$elm$core$Maybe$withDefault,
-						{amount: $elm$core$Maybe$Nothing, category: $elm$core$Maybe$Nothing, merchant: $elm$core$Maybe$Nothing, note: $elm$core$Maybe$Nothing},
+						{amount: $elm$core$Maybe$Nothing, category: $elm$core$Maybe$Nothing, date: $elm$core$Maybe$Nothing, longNote: $elm$core$Maybe$Nothing, merchant: $elm$core$Maybe$Nothing, note: $elm$core$Maybe$Nothing},
 						item.ocrData);
 					var newPending = {
 						amount: A2(
@@ -8385,8 +8461,9 @@ var $author$project$Main$update = F2(
 							'',
 							A2($elm$core$Maybe$map, $elm$core$String$fromFloat, ocr.amount)),
 						category: A2($elm$core$Maybe$withDefault, $author$project$Main$Fuel, ocr.category),
-						date: model.today,
+						date: A2($elm$core$Maybe$withDefault, model.today, ocr.date),
 						locationState: item.locationState,
+						longNote: A2($elm$core$Maybe$withDefault, '', ocr.longNote),
 						merchant: A2($elm$core$Maybe$withDefault, '', ocr.merchant),
 						note: A2($elm$core$Maybe$withDefault, '', ocr.note)
 					};
@@ -8437,6 +8514,9 @@ var $author$project$Main$CancelEdit = {$: 'CancelEdit'};
 var $author$project$Main$DateChanged = function (a) {
 	return {$: 'DateChanged', a: a};
 };
+var $author$project$Main$LongNoteChanged = function (a) {
+	return {$: 'LongNoteChanged', a: a};
+};
 var $author$project$Main$MerchantChanged = function (a) {
 	return {$: 'MerchantChanged', a: a};
 };
@@ -8445,7 +8525,7 @@ var $author$project$Main$NoteChanged = function (a) {
 };
 var $author$project$Main$SubmitEntry = {$: 'SubmitEntry'};
 var $author$project$Main$allCategories = _List_fromArray(
-	[$author$project$Main$Fuel, $author$project$Main$Food, $author$project$Main$Camp, $author$project$Main$Ferry, $author$project$Main$Gear, $author$project$Main$Misc]);
+	[$author$project$Main$Fuel, $author$project$Main$Food, $author$project$Main$Camp, $author$project$Main$Lodging, $author$project$Main$Ferry, $author$project$Main$Activities, $author$project$Main$Shopping, $author$project$Main$Gear, $author$project$Main$Transport, $author$project$Main$Medical, $author$project$Main$Misc]);
 var $elm$virtual_dom$VirtualDom$attribute = F2(
 	function (key, value) {
 		return A2(
@@ -8549,6 +8629,7 @@ var $elm$html$Html$Attributes$placeholder = $elm$html$Html$Attributes$stringProp
 var $author$project$Main$sectionHead = A2($elm$html$Html$Attributes$style, 'font-size', '13px');
 var $elm$html$Html$span = _VirtualDom_node('span');
 var $author$project$Main$textInputStyle = A2($elm$html$Html$Attributes$style, 'width', '100%');
+var $elm$html$Html$textarea = _VirtualDom_node('textarea');
 var $elm$html$Html$Attributes$type_ = $elm$html$Html$Attributes$stringProperty('type');
 var $elm$html$Html$Attributes$value = $elm$html$Html$Attributes$stringProperty('value');
 var $author$project$Main$CategorySelected = function (a) {
@@ -8566,6 +8647,16 @@ var $author$project$Main$categoryColor = function (cat) {
 			return '#c060e0';
 		case 'Gear':
 			return '#e85030';
+		case 'Lodging':
+			return '#40c0b0';
+		case 'Activities':
+			return '#f0b040';
+		case 'Shopping':
+			return '#e060a0';
+		case 'Medical':
+			return '#ff6060';
+		case 'Transport':
+			return '#a0a0e0';
 		default:
 			return '#7a8a80';
 	}
@@ -8582,6 +8673,16 @@ var $author$project$Main$categoryIcon = function (cat) {
 			return '⛴';
 		case 'Gear':
 			return '🔧';
+		case 'Lodging':
+			return '🏨';
+		case 'Activities':
+			return '🎯';
+		case 'Shopping':
+			return '🛍';
+		case 'Medical':
+			return '💊';
+		case 'Transport':
+			return '🚌';
 		default:
 			return '📦';
 	}
@@ -9034,9 +9135,7 @@ var $author$project$Main$viewAddTab = function (model) {
 					$elm$html$Html$div,
 					_List_fromArray(
 						[
-							A2($elm$html$Html$Attributes$style, 'display', 'grid'),
-							A2($elm$html$Html$Attributes$style, 'grid-template-columns', 'repeat(3, 1fr)'),
-							A2($elm$html$Html$Attributes$style, 'gap', '8px')
+							$elm$html$Html$Attributes$class('grid grid-cols-4 gap-2')
 						]),
 					A2(
 						$elm$core$List$map,
@@ -9052,8 +9151,25 @@ var $author$project$Main$viewAddTab = function (model) {
 							$elm$html$Html$Attributes$type_('text'),
 							$elm$html$Html$Attributes$value(p.note),
 							$elm$html$Html$Events$onInput($author$project$Main$NoteChanged),
-							$elm$html$Html$Attributes$placeholder('optional'),
+							$elm$html$Html$Attributes$placeholder('brief (50 chars)'),
+							A2($elm$html$Html$Attributes$attribute, 'maxlength', '50'),
 							$author$project$Main$textInputStyle
+						]),
+					_List_Nil)),
+				A2(
+				$author$project$Main$formField,
+				'DETAILS',
+				A2(
+					$elm$html$Html$textarea,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$value(p.longNote),
+							$elm$html$Html$Events$onInput($author$project$Main$LongNoteChanged),
+							$elm$html$Html$Attributes$placeholder('optional — what happened, where, any context (280 chars)'),
+							A2($elm$html$Html$Attributes$attribute, 'maxlength', '280'),
+							A2($elm$html$Html$Attributes$attribute, 'rows', '3'),
+							$elm$html$Html$Attributes$class('w-full p-3 bg-[#1e2220] border border-[#3a4240] text-[#c8d0c8] rounded-lg font-[inherit] text-base resize-none leading-snug'),
+							A2($elm$html$Html$Attributes$style, 'outline', 'none')
 						]),
 					_List_Nil)),
 				A2(
@@ -9494,6 +9610,16 @@ var $author$project$Main$viewEntryRow = function (entry) {
 						_List_fromArray(
 							[
 								$elm$html$Html$text(entry.merchant)
+							])) : $elm$html$Html$text(''),
+						(entry.longNote !== '') ? A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('text-xs text-[#4a5a50] mt-1 leading-snug line-clamp-2')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text(entry.longNote)
 							])) : $elm$html$Html$text('')
 					])),
 				A2(
@@ -10248,12 +10374,62 @@ var $author$project$Main$viewScanTab = function (model) {
 						_List_fromArray(
 							[
 								$elm$html$Html$Events$onClick($author$project$Main$ClearDoneItems),
-								$elm$html$Html$Attributes$class('w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit]')
+								$elm$html$Html$Attributes$class('w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit] mb-4')
 							]),
 						_List_fromArray(
 							[
 								$elm$html$Html$text('Clear submitted')
-							])) : $elm$html$Html$text('')
+							])) : $elm$html$Html$text(''),
+						function () {
+						var debugItems = A2(
+							$elm$core$List$filter,
+							function (i) {
+								return i.exifDebug !== '';
+							},
+							model.scanQueue);
+						return $elm$core$List$isEmpty(debugItems) ? $elm$html$Html$text('') : A2(
+							$elm$html$Html$div,
+							_List_fromArray(
+								[
+									$elm$html$Html$Attributes$class('mt-2')
+								]),
+							A2(
+								$elm$core$List$indexedMap,
+								F2(
+									function (idx, item) {
+										return A2(
+											$elm$html$Html$div,
+											_List_fromArray(
+												[
+													$elm$html$Html$Attributes$class('mb-3 rounded-lg bg-[#161918] p-3')
+												]),
+											_List_fromArray(
+												[
+													A2(
+													$elm$html$Html$div,
+													_List_fromArray(
+														[
+															$elm$html$Html$Attributes$class('text-[#4a5a50] text-xs mb-1')
+														]),
+													_List_fromArray(
+														[
+															$elm$html$Html$text(
+															'EXIF dump — photo ' + $elm$core$String$fromInt(idx + 1))
+														])),
+													A2(
+													$elm$html$Html$div,
+													_List_fromArray(
+														[
+															$elm$html$Html$Attributes$class('font-mono text-[10px] text-[#7a8a80] break-all whitespace-pre-wrap max-h-40 overflow-y-auto')
+														]),
+													_List_fromArray(
+														[
+															$elm$html$Html$text(item.exifDebug)
+														]))
+												]));
+									}),
+								debugItems));
+					}()
 					]))
 			]));
 };
@@ -10442,6 +10618,29 @@ var $author$project$Main$biggestDay = function (entries) {
 									entries))));
 				},
 				$author$project$Main$uniqueDates(entries))));
+};
+var $author$project$Main$isoToDayCount = function (s) {
+	var _v0 = A2(
+		$elm$core$List$filterMap,
+		$elm$core$String$toInt,
+		A2($elm$core$String$split, '-', s));
+	if (((_v0.b && _v0.b.b) && _v0.b.b.b) && (!_v0.b.b.b.b)) {
+		var y = _v0.a;
+		var _v1 = _v0.b;
+		var m = _v1.a;
+		var _v2 = _v1.b;
+		var d = _v2.a;
+		var monthOffsets = _List_fromArray(
+			[0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]);
+		var offset = A2(
+			$elm$core$Maybe$withDefault,
+			0,
+			$elm$core$List$head(
+				A2($elm$core$List$drop, m - 1, monthOffsets)));
+		return ((y * 365) + offset) + d;
+	} else {
+		return 0;
+	}
 };
 var $author$project$Main$medianAmount = function (entries) {
 	var amounts = $elm$core$List$sort(
@@ -14629,6 +14828,1001 @@ var $author$project$Main$viewCategoryChart = function (entries) {
 					]))
 			]));
 };
+var $terezka$elm_charts$Internal$Svg$Linear = {$: 'Linear'};
+var $terezka$elm_charts$Chart$Attributes$linear = $terezka$elm_charts$Internal$Helpers$Attribute(
+	function (config) {
+		return _Utils_update(
+			config,
+			{
+				method: $elm$core$Maybe$Just($terezka$elm_charts$Internal$Svg$Linear)
+			});
+	});
+var $terezka$elm_charts$Chart$interpolated = F2(
+	function (y, inter) {
+		return A2(
+			$terezka$elm_charts$Internal$Property$notStacked,
+			A2($elm$core$Basics$composeR, y, $elm$core$Maybe$Just),
+			_Utils_ap(
+				_List_fromArray(
+					[$terezka$elm_charts$Chart$Attributes$linear]),
+				inter));
+	});
+var $terezka$elm_charts$Chart$SeriesElement = F4(
+	function (a, b, c, d) {
+		return {$: 'SeriesElement', a: a, b: b, c: c, d: d};
+	});
+var $terezka$elm_charts$Internal$Legend$LineLegend = F3(
+	function (a, b, c) {
+		return {$: 'LineLegend', a: a, b: b, c: c};
+	});
+var $terezka$elm_charts$Internal$Svg$defaultInterpolation = {attrs: _List_Nil, color: $terezka$elm_charts$Internal$Helpers$pink, dashed: _List_Nil, design: $elm$core$Maybe$Nothing, method: $elm$core$Maybe$Nothing, opacity: 0, width: 1};
+var $terezka$elm_charts$Internal$Helpers$noChange = $terezka$elm_charts$Internal$Helpers$Attribute($elm$core$Basics$identity);
+var $terezka$elm_charts$Chart$Attributes$opacity = function (v) {
+	return $terezka$elm_charts$Internal$Helpers$Attribute(
+		function (config) {
+			return _Utils_update(
+				config,
+				{opacity: v});
+		});
+};
+var $terezka$elm_charts$Internal$Legend$toDotLegends = F2(
+	function (elIndex, properties) {
+		var toInterConfig = function (attrs) {
+			return A2($terezka$elm_charts$Internal$Helpers$apply, attrs, $terezka$elm_charts$Internal$Svg$defaultInterpolation);
+		};
+		var toDotLegend = F3(
+			function (props, prop, colorIndex) {
+				var defaultOpacity = ($elm$core$List$length(props) > 1) ? 0.4 : 0;
+				var interAttr = _Utils_ap(
+					_List_fromArray(
+						[
+							$terezka$elm_charts$Chart$Attributes$color(
+							$terezka$elm_charts$Internal$Helpers$toDefaultColor(colorIndex)),
+							$terezka$elm_charts$Chart$Attributes$opacity(defaultOpacity)
+						]),
+					prop.interpolation);
+				var interConfig = toInterConfig(interAttr);
+				var defaultName = 'Property #' + $elm$core$String$fromInt(colorIndex + 1);
+				var defaultAttrs = _List_fromArray(
+					[
+						$terezka$elm_charts$Chart$Attributes$color(interConfig.color),
+						$terezka$elm_charts$Chart$Attributes$border(interConfig.color),
+						_Utils_eq(interConfig.method, $elm$core$Maybe$Nothing) ? $terezka$elm_charts$Chart$Attributes$circle : $terezka$elm_charts$Internal$Helpers$noChange
+					]);
+				var dotAttrs = _Utils_ap(defaultAttrs, prop.presentation);
+				return A3(
+					$terezka$elm_charts$Internal$Legend$LineLegend,
+					A2($elm$core$Maybe$withDefault, defaultName, prop.tooltipName),
+					interAttr,
+					dotAttrs);
+			});
+		return A2(
+			$elm$core$List$indexedMap,
+			F2(
+				function (propIndex, f) {
+					return f(elIndex + propIndex);
+				}),
+			A2(
+				$elm$core$List$concatMap,
+				function (ps) {
+					return A2(
+						$elm$core$List$map,
+						toDotLegend(ps),
+						ps);
+				},
+				A2($elm$core$List$map, $terezka$elm_charts$Internal$Property$toConfigs, properties)));
+	});
+var $terezka$elm_charts$Internal$Item$Dot = function (a) {
+	return {$: 'Dot', a: a};
+};
+var $terezka$elm_charts$Internal$Coordinates$Point = F2(
+	function (x, y) {
+		return {x: x, y: y};
+	});
+var $elm$svg$Svg$Attributes$fillRule = _VirtualDom_attribute('fill-rule');
+var $terezka$elm_charts$Internal$Interpolation$linear = $elm$core$List$map(
+	$elm$core$List$map(
+		function (_v0) {
+			var x = _v0.x;
+			var y = _v0.y;
+			return A2($terezka$elm_charts$Internal$Commands$Line, x, y);
+		}));
+var $terezka$elm_charts$Internal$Interpolation$First = {$: 'First'};
+var $terezka$elm_charts$Internal$Interpolation$Previous = function (a) {
+	return {$: 'Previous', a: a};
+};
+var $terezka$elm_charts$Internal$Interpolation$monotoneCurve = F4(
+	function (point0, point1, tangent0, tangent1) {
+		var dx = (point1.x - point0.x) / 3;
+		return A6($terezka$elm_charts$Internal$Commands$CubicBeziers, point0.x + dx, point0.y + (dx * tangent0), point1.x - dx, point1.y - (dx * tangent1), point1.x, point1.y);
+	});
+var $terezka$elm_charts$Internal$Interpolation$slope2 = F3(
+	function (point0, point1, t) {
+		var h = point1.x - point0.x;
+		return (!(!h)) ? ((((3 * (point1.y - point0.y)) / h) - t) / 2) : t;
+	});
+var $elm$core$Basics$isNaN = _Basics_isNaN;
+var $terezka$elm_charts$Internal$Interpolation$sign = function (x) {
+	return (x < 0) ? (-1) : 1;
+};
+var $terezka$elm_charts$Internal$Interpolation$toH = F2(
+	function (h0, h1) {
+		return (!h0) ? ((h1 < 0) ? (0 * (-1)) : h1) : h0;
+	});
+var $terezka$elm_charts$Internal$Interpolation$slope3 = F3(
+	function (point0, point1, point2) {
+		var h1 = point2.x - point1.x;
+		var h0 = point1.x - point0.x;
+		var s0h = A2($terezka$elm_charts$Internal$Interpolation$toH, h0, h1);
+		var s0 = (point1.y - point0.y) / s0h;
+		var s1h = A2($terezka$elm_charts$Internal$Interpolation$toH, h1, h0);
+		var s1 = (point2.y - point1.y) / s1h;
+		var p = ((s0 * h1) + (s1 * h0)) / (h0 + h1);
+		var slope = ($terezka$elm_charts$Internal$Interpolation$sign(s0) + $terezka$elm_charts$Internal$Interpolation$sign(s1)) * A2(
+			$elm$core$Basics$min,
+			A2(
+				$elm$core$Basics$min,
+				$elm$core$Basics$abs(s0),
+				$elm$core$Basics$abs(s1)),
+			0.5 * $elm$core$Basics$abs(p));
+		return $elm$core$Basics$isNaN(slope) ? 0 : slope;
+	});
+var $terezka$elm_charts$Internal$Interpolation$monotonePart = F2(
+	function (points, _v0) {
+		var tangent = _v0.a;
+		var commands = _v0.b;
+		var _v1 = _Utils_Tuple2(tangent, points);
+		_v1$4:
+		while (true) {
+			if (_v1.a.$ === 'First') {
+				if (_v1.b.b && _v1.b.b.b) {
+					if (_v1.b.b.b.b) {
+						var _v2 = _v1.a;
+						var _v3 = _v1.b;
+						var p0 = _v3.a;
+						var _v4 = _v3.b;
+						var p1 = _v4.a;
+						var _v5 = _v4.b;
+						var p2 = _v5.a;
+						var rest = _v5.b;
+						var t1 = A3($terezka$elm_charts$Internal$Interpolation$slope3, p0, p1, p2);
+						var t0 = A3($terezka$elm_charts$Internal$Interpolation$slope2, p0, p1, t1);
+						return A2(
+							$terezka$elm_charts$Internal$Interpolation$monotonePart,
+							A2(
+								$elm$core$List$cons,
+								p1,
+								A2($elm$core$List$cons, p2, rest)),
+							_Utils_Tuple2(
+								$terezka$elm_charts$Internal$Interpolation$Previous(t1),
+								_Utils_ap(
+									commands,
+									_List_fromArray(
+										[
+											A4($terezka$elm_charts$Internal$Interpolation$monotoneCurve, p0, p1, t0, t1)
+										]))));
+					} else {
+						var _v9 = _v1.a;
+						var _v10 = _v1.b;
+						var p0 = _v10.a;
+						var _v11 = _v10.b;
+						var p1 = _v11.a;
+						var t1 = A3($terezka$elm_charts$Internal$Interpolation$slope3, p0, p1, p1);
+						return _Utils_Tuple2(
+							$terezka$elm_charts$Internal$Interpolation$Previous(t1),
+							_Utils_ap(
+								commands,
+								_List_fromArray(
+									[
+										A4($terezka$elm_charts$Internal$Interpolation$monotoneCurve, p0, p1, t1, t1),
+										A2($terezka$elm_charts$Internal$Commands$Line, p1.x, p1.y)
+									])));
+					}
+				} else {
+					break _v1$4;
+				}
+			} else {
+				if (_v1.b.b && _v1.b.b.b) {
+					if (_v1.b.b.b.b) {
+						var t0 = _v1.a.a;
+						var _v6 = _v1.b;
+						var p0 = _v6.a;
+						var _v7 = _v6.b;
+						var p1 = _v7.a;
+						var _v8 = _v7.b;
+						var p2 = _v8.a;
+						var rest = _v8.b;
+						var t1 = A3($terezka$elm_charts$Internal$Interpolation$slope3, p0, p1, p2);
+						return A2(
+							$terezka$elm_charts$Internal$Interpolation$monotonePart,
+							A2(
+								$elm$core$List$cons,
+								p1,
+								A2($elm$core$List$cons, p2, rest)),
+							_Utils_Tuple2(
+								$terezka$elm_charts$Internal$Interpolation$Previous(t1),
+								_Utils_ap(
+									commands,
+									_List_fromArray(
+										[
+											A4($terezka$elm_charts$Internal$Interpolation$monotoneCurve, p0, p1, t0, t1)
+										]))));
+					} else {
+						var t0 = _v1.a.a;
+						var _v12 = _v1.b;
+						var p0 = _v12.a;
+						var _v13 = _v12.b;
+						var p1 = _v13.a;
+						var t1 = A3($terezka$elm_charts$Internal$Interpolation$slope3, p0, p1, p1);
+						return _Utils_Tuple2(
+							$terezka$elm_charts$Internal$Interpolation$Previous(t1),
+							_Utils_ap(
+								commands,
+								_List_fromArray(
+									[
+										A4($terezka$elm_charts$Internal$Interpolation$monotoneCurve, p0, p1, t0, t1),
+										A2($terezka$elm_charts$Internal$Commands$Line, p1.x, p1.y)
+									])));
+					}
+				} else {
+					break _v1$4;
+				}
+			}
+		}
+		return _Utils_Tuple2(tangent, commands);
+	});
+var $terezka$elm_charts$Internal$Interpolation$monotoneSection = F2(
+	function (points, _v0) {
+		var tangent = _v0.a;
+		var acc = _v0.b;
+		var _v1 = function () {
+			if (points.b) {
+				var p0 = points.a;
+				var rest = points.b;
+				return A2(
+					$terezka$elm_charts$Internal$Interpolation$monotonePart,
+					A2($elm$core$List$cons, p0, rest),
+					_Utils_Tuple2(
+						tangent,
+						_List_fromArray(
+							[
+								A2($terezka$elm_charts$Internal$Commands$Line, p0.x, p0.y)
+							])));
+			} else {
+				return _Utils_Tuple2(tangent, _List_Nil);
+			}
+		}();
+		var t0 = _v1.a;
+		var commands = _v1.b;
+		return _Utils_Tuple2(
+			t0,
+			A2($elm$core$List$cons, commands, acc));
+	});
+var $terezka$elm_charts$Internal$Interpolation$monotone = function (sections) {
+	return A3(
+		$elm$core$List$foldr,
+		$terezka$elm_charts$Internal$Interpolation$monotoneSection,
+		_Utils_Tuple2($terezka$elm_charts$Internal$Interpolation$First, _List_Nil),
+		sections).b;
+};
+var $terezka$elm_charts$Internal$Interpolation$Point = F2(
+	function (x, y) {
+		return {x: x, y: y};
+	});
+var $terezka$elm_charts$Internal$Interpolation$after = F2(
+	function (a, b) {
+		return _List_fromArray(
+			[
+				a,
+				A2($terezka$elm_charts$Internal$Interpolation$Point, b.x, a.y),
+				b
+			]);
+	});
+var $terezka$elm_charts$Internal$Interpolation$stepped = function (sections) {
+	var expand = F2(
+		function (result, section) {
+			expand:
+			while (true) {
+				if (section.b) {
+					if (section.b.b) {
+						var a = section.a;
+						var _v1 = section.b;
+						var b = _v1.a;
+						var rest = _v1.b;
+						var $temp$result = _Utils_ap(
+							result,
+							A2($terezka$elm_charts$Internal$Interpolation$after, a, b)),
+							$temp$section = A2($elm$core$List$cons, b, rest);
+						result = $temp$result;
+						section = $temp$section;
+						continue expand;
+					} else {
+						var last = section.a;
+						return result;
+					}
+				} else {
+					return result;
+				}
+			}
+		});
+	return A2(
+		$elm$core$List$map,
+		A2(
+			$elm$core$Basics$composeR,
+			expand(_List_Nil),
+			$elm$core$List$map(
+				function (_v2) {
+					var x = _v2.x;
+					var y = _v2.y;
+					return A2($terezka$elm_charts$Internal$Commands$Line, x, y);
+				})),
+		sections);
+};
+var $terezka$elm_charts$Internal$Svg$last = function (list) {
+	return $elm$core$List$head(
+		A2(
+			$elm$core$List$drop,
+			$elm$core$List$length(list) - 1,
+			list));
+};
+var $terezka$elm_charts$Internal$Svg$withBorder = F2(
+	function (stuff, func) {
+		if (stuff.b) {
+			var first = stuff.a;
+			var rest = stuff.b;
+			return $elm$core$Maybe$Just(
+				A2(
+					func,
+					first,
+					A2(
+						$elm$core$Maybe$withDefault,
+						first,
+						$terezka$elm_charts$Internal$Svg$last(rest))));
+		} else {
+			return $elm$core$Maybe$Nothing;
+		}
+	});
+var $terezka$elm_charts$Internal$Svg$toCommands = F4(
+	function (method, toX, toY, data) {
+		var toSets = F2(
+			function (ps, cmds) {
+				return A2(
+					$terezka$elm_charts$Internal$Svg$withBorder,
+					ps,
+					F2(
+						function (first, last_) {
+							return _Utils_Tuple3(first, cmds, last_);
+						}));
+			});
+		var fold = F2(
+			function (datum_, acc) {
+				var _v1 = toY(datum_);
+				if (_v1.$ === 'Just') {
+					var y_ = _v1.a;
+					if (acc.b) {
+						var latest = acc.a;
+						var rest = acc.b;
+						return A2(
+							$elm$core$List$cons,
+							_Utils_ap(
+								latest,
+								_List_fromArray(
+									[
+										{
+										x: toX(datum_),
+										y: y_
+									}
+									])),
+							rest);
+					} else {
+						return A2(
+							$elm$core$List$cons,
+							_List_fromArray(
+								[
+									{
+									x: toX(datum_),
+									y: y_
+								}
+								]),
+							acc);
+					}
+				} else {
+					return A2($elm$core$List$cons, _List_Nil, acc);
+				}
+			});
+		var points = $elm$core$List$reverse(
+			A3($elm$core$List$foldl, fold, _List_Nil, data));
+		var commands = function () {
+			switch (method.$) {
+				case 'Linear':
+					return $terezka$elm_charts$Internal$Interpolation$linear(points);
+				case 'Monotone':
+					return $terezka$elm_charts$Internal$Interpolation$monotone(points);
+				default:
+					return $terezka$elm_charts$Internal$Interpolation$stepped(points);
+			}
+		}();
+		return A2(
+			$elm$core$List$filterMap,
+			$elm$core$Basics$identity,
+			A3($elm$core$List$map2, toSets, points, commands));
+	});
+var $terezka$elm_charts$Internal$Svg$area = F6(
+	function (plane, toX, toY2M, toY, config, data) {
+		var _v0 = function () {
+			var _v1 = config.design;
+			if (_v1.$ === 'Nothing') {
+				return _Utils_Tuple2(
+					$elm$svg$Svg$text(''),
+					config.color);
+			} else {
+				var design = _v1.a;
+				return A2($terezka$elm_charts$Internal$Svg$toPattern, config.color, design);
+			}
+		}();
+		var patternDefs = _v0.a;
+		var fill = _v0.b;
+		var view = function (cmds) {
+			return A4(
+				$terezka$elm_charts$Internal$Svg$withAttrs,
+				config.attrs,
+				$elm$svg$Svg$path,
+				_List_fromArray(
+					[
+						$elm$svg$Svg$Attributes$class('elm-charts__area-section'),
+						$elm$svg$Svg$Attributes$fill(fill),
+						$elm$svg$Svg$Attributes$fillOpacity(
+						$elm$core$String$fromFloat(config.opacity)),
+						$elm$svg$Svg$Attributes$strokeWidth('0'),
+						$elm$svg$Svg$Attributes$fillRule('evenodd'),
+						$elm$svg$Svg$Attributes$d(
+						A2($terezka$elm_charts$Internal$Commands$description, plane, cmds)),
+						$terezka$elm_charts$Internal$Svg$withinChartArea(plane)
+					]),
+				_List_Nil);
+		};
+		var withUnder = F2(
+			function (_v5, _v6) {
+				var firstBottom = _v5.a;
+				var cmdsBottom = _v5.b;
+				var endBottom = _v5.c;
+				var firstTop = _v6.a;
+				var cmdsTop = _v6.b;
+				var endTop = _v6.c;
+				return view(
+					_Utils_ap(
+						_List_fromArray(
+							[
+								A2($terezka$elm_charts$Internal$Commands$Move, firstBottom.x, firstBottom.y),
+								A2($terezka$elm_charts$Internal$Commands$Line, firstTop.x, firstTop.y)
+							]),
+						_Utils_ap(
+							cmdsTop,
+							_Utils_ap(
+								_List_fromArray(
+									[
+										A2($terezka$elm_charts$Internal$Commands$Move, firstBottom.x, firstBottom.y)
+									]),
+								_Utils_ap(
+									cmdsBottom,
+									_List_fromArray(
+										[
+											A2($terezka$elm_charts$Internal$Commands$Line, endTop.x, endTop.y)
+										]))))));
+			});
+		var withoutUnder = function (_v4) {
+			var first = _v4.a;
+			var cmds = _v4.b;
+			var end = _v4.c;
+			return view(
+				_Utils_ap(
+					_List_fromArray(
+						[
+							A2($terezka$elm_charts$Internal$Commands$Move, first.x, 0),
+							A2($terezka$elm_charts$Internal$Commands$Line, first.x, first.y)
+						]),
+					_Utils_ap(
+						cmds,
+						_List_fromArray(
+							[
+								A2($terezka$elm_charts$Internal$Commands$Line, end.x, 0)
+							]))));
+		};
+		if (config.opacity <= 0) {
+			return $elm$svg$Svg$text('');
+		} else {
+			var _v2 = config.method;
+			if (_v2.$ === 'Nothing') {
+				return $elm$svg$Svg$text('');
+			} else {
+				var method = _v2.a;
+				return A2(
+					$elm$svg$Svg$g,
+					_List_fromArray(
+						[
+							$elm$svg$Svg$Attributes$class('elm-charts__area-sections')
+						]),
+					function () {
+						if (toY2M.$ === 'Nothing') {
+							return A2(
+								$elm$core$List$cons,
+								patternDefs,
+								A2(
+									$elm$core$List$map,
+									withoutUnder,
+									A4($terezka$elm_charts$Internal$Svg$toCommands, method, toX, toY, data)));
+						} else {
+							var toY2 = toY2M.a;
+							return A2(
+								$elm$core$List$cons,
+								patternDefs,
+								A3(
+									$elm$core$List$map2,
+									withUnder,
+									A4($terezka$elm_charts$Internal$Svg$toCommands, method, toX, toY2, data),
+									A4($terezka$elm_charts$Internal$Svg$toCommands, method, toX, toY, data)));
+						}
+					}());
+			}
+		}
+	});
+var $terezka$elm_charts$Internal$Svg$interpolation = F5(
+	function (plane, toX, toY, config, data) {
+		var view = function (_v1) {
+			var first = _v1.a;
+			var cmds = _v1.b;
+			return A4(
+				$terezka$elm_charts$Internal$Svg$withAttrs,
+				config.attrs,
+				$elm$svg$Svg$path,
+				_List_fromArray(
+					[
+						$elm$svg$Svg$Attributes$class('elm-charts__interpolation-section'),
+						$elm$svg$Svg$Attributes$fill('transparent'),
+						$elm$svg$Svg$Attributes$stroke(config.color),
+						$elm$svg$Svg$Attributes$strokeDasharray(
+						A2(
+							$elm$core$String$join,
+							' ',
+							A2($elm$core$List$map, $elm$core$String$fromFloat, config.dashed))),
+						$elm$svg$Svg$Attributes$strokeWidth(
+						$elm$core$String$fromFloat(config.width)),
+						$elm$svg$Svg$Attributes$d(
+						A2(
+							$terezka$elm_charts$Internal$Commands$description,
+							plane,
+							A2(
+								$elm$core$List$cons,
+								A2($terezka$elm_charts$Internal$Commands$Move, first.x, first.y),
+								cmds))),
+						$terezka$elm_charts$Internal$Svg$withinChartArea(plane)
+					]),
+				_List_Nil);
+		};
+		var _v0 = config.method;
+		if (_v0.$ === 'Nothing') {
+			return $elm$svg$Svg$text('');
+		} else {
+			var method = _v0.a;
+			return A2(
+				$elm$svg$Svg$g,
+				_List_fromArray(
+					[
+						$elm$svg$Svg$Attributes$class('elm-charts__interpolation-sections')
+					]),
+				A2(
+					$elm$core$List$map,
+					view,
+					A4($terezka$elm_charts$Internal$Svg$toCommands, method, toX, toY, data)));
+		}
+	});
+var $elm$core$Maybe$map2 = F3(
+	function (func, ma, mb) {
+		if (ma.$ === 'Nothing') {
+			return $elm$core$Maybe$Nothing;
+		} else {
+			var a = ma.a;
+			if (mb.$ === 'Nothing') {
+				return $elm$core$Maybe$Nothing;
+			} else {
+				var b = mb.a;
+				return $elm$core$Maybe$Just(
+					A2(func, a, b));
+			}
+		}
+	});
+var $terezka$elm_charts$Internal$Svg$toRadius = F2(
+	function (size_, shape) {
+		var area_ = (2 * $elm$core$Basics$pi) * size_;
+		switch (shape.$) {
+			case 'Circle':
+				return $elm$core$Basics$sqrt(area_ / $elm$core$Basics$pi);
+			case 'Triangle':
+				var side = $elm$core$Basics$sqrt(
+					(area_ * 4) / $elm$core$Basics$sqrt(3));
+				return $elm$core$Basics$sqrt(3) * side;
+			case 'Square':
+				return $elm$core$Basics$sqrt(area_) / 2;
+			case 'Diamond':
+				return $elm$core$Basics$sqrt(area_) / 2;
+			case 'Cross':
+				return $elm$core$Basics$sqrt(area_ / 4);
+			default:
+				return $elm$core$Basics$sqrt(area_ / 4);
+		}
+	});
+var $terezka$elm_charts$Internal$Produce$toDotSeries = F4(
+	function (elementIndex, toX, properties, data) {
+		var forEachDataPoint = F9(
+			function (absoluteIndex, stackSeriesConfigIndex, lineSeriesConfigIndex, lineSeriesConfig, interpolationConfig, defaultColor, defaultOpacity, dataIndex, datum) {
+				var y = A2(
+					$elm$core$Maybe$withDefault,
+					0,
+					lineSeriesConfig.toYSum(datum));
+				var x = toX(datum);
+				var limits = {x1: x, x2: x, y1: y, y2: y};
+				var identification = {absoluteIndex: absoluteIndex, dataIndex: dataIndex, elementIndex: elementIndex, seriesIndex: lineSeriesConfigIndex, stackIndex: stackSeriesConfigIndex};
+				var defaultAttrs = _List_fromArray(
+					[
+						$terezka$elm_charts$Chart$Attributes$color(interpolationConfig.color),
+						$terezka$elm_charts$Chart$Attributes$border(interpolationConfig.color),
+						_Utils_eq(interpolationConfig.method, $elm$core$Maybe$Nothing) ? $terezka$elm_charts$Chart$Attributes$circle : $terezka$elm_charts$Internal$Helpers$noChange
+					]);
+				var dotAttrs = _Utils_ap(
+					defaultAttrs,
+					_Utils_ap(
+						lineSeriesConfig.presentation,
+						A2(lineSeriesConfig.variation, identification, datum)));
+				var dotConfig = A2($terezka$elm_charts$Internal$Helpers$apply, dotAttrs, $terezka$elm_charts$Internal$Svg$defaultDot);
+				var radius = A2(
+					$elm$core$Maybe$withDefault,
+					0,
+					A2(
+						$elm$core$Maybe$map,
+						$terezka$elm_charts$Internal$Svg$toRadius(dotConfig.size),
+						dotConfig.shape));
+				var tooltipTextColor = (dotConfig.color === 'white') ? ((dotConfig.border === 'white') ? interpolationConfig.color : dotConfig.border) : dotConfig.color;
+				return _Utils_Tuple2(
+					limits,
+					F2(
+						function (topLevel, localPlane) {
+							var radiusY = A2($terezka$elm_charts$Internal$Coordinates$scaleCartesianY, localPlane, radius);
+							var radiusX = A2($terezka$elm_charts$Internal$Coordinates$scaleCartesianX, localPlane, radius);
+							var position = {x1: x - radiusX, x2: x + radiusX, y1: y - radiusY, y2: y + radiusY};
+							return A2(
+								$terezka$elm_charts$Internal$Item$Rendered,
+								{
+									color: tooltipTextColor,
+									datum: datum,
+									identification: identification,
+									isReal: !_Utils_eq(
+										lineSeriesConfig.toY(datum),
+										$elm$core$Maybe$Nothing),
+									name: lineSeriesConfig.tooltipName,
+									presentation: $terezka$elm_charts$Internal$Item$Dot(dotConfig),
+									toAny: $elm$core$Basics$identity,
+									tooltipText: lineSeriesConfig.tooltipText(datum),
+									x1: x,
+									x2: x,
+									y: y
+								},
+								{
+									limits: limits,
+									limitsTop: A3($terezka$elm_charts$Internal$Coordinates$convertPos, topLevel, localPlane, limits),
+									localPlane: localPlane,
+									planeTop: topLevel,
+									position: position,
+									positionTop: A3($terezka$elm_charts$Internal$Coordinates$convertPos, topLevel, localPlane, position),
+									render: function (_v11) {
+										var _v12 = lineSeriesConfig.toY(datum);
+										if (_v12.$ === 'Nothing') {
+											return $elm$svg$Svg$text('');
+										} else {
+											return A5(
+												$terezka$elm_charts$Internal$Svg$dot,
+												localPlane,
+												function ($) {
+													return $.x;
+												},
+												function ($) {
+													return $.y;
+												},
+												dotConfig,
+												A2($terezka$elm_charts$Internal$Coordinates$Point, x, y));
+										}
+									},
+									tooltip: function (_v13) {
+										return _List_fromArray(
+											[
+												A3(
+												$terezka$elm_charts$Internal$Produce$tooltipRow,
+												tooltipTextColor,
+												A2($terezka$elm_charts$Internal$Produce$toDefaultName, identification, lineSeriesConfig.tooltipName),
+												lineSeriesConfig.tooltipText(datum))
+											]);
+									}
+								});
+						}));
+			});
+		var forEachLine = F5(
+			function (isStacked, absoluteIndex, stackSeriesConfigIndex, lineSeriesConfigIndex, lineSeriesConfig) {
+				var defaultOpacity = isStacked ? 0.4 : 0;
+				var absoluteIndexNew = absoluteIndex + lineSeriesConfigIndex;
+				var defaultColor = $terezka$elm_charts$Internal$Helpers$toDefaultColor(absoluteIndexNew);
+				var interpolationAttrs = _List_fromArray(
+					[
+						$terezka$elm_charts$Chart$Attributes$color(defaultColor),
+						$terezka$elm_charts$Chart$Attributes$opacity(defaultOpacity)
+					]);
+				var interpolationConfig = A2(
+					$terezka$elm_charts$Internal$Helpers$apply,
+					_Utils_ap(interpolationAttrs, lineSeriesConfig.interpolation),
+					$terezka$elm_charts$Internal$Svg$defaultInterpolation);
+				var viewSeries = F2(
+					function (plane, dotItems) {
+						var toBottom = function (datum) {
+							return A3(
+								$elm$core$Maybe$map2,
+								F2(
+									function (y, ySum) {
+										return ySum - y;
+									}),
+								lineSeriesConfig.toY(datum),
+								lineSeriesConfig.toYSum(datum));
+						};
+						return A2(
+							$elm$svg$Svg$g,
+							_List_fromArray(
+								[
+									$elm$svg$Svg$Attributes$class('elm-charts__series')
+								]),
+							_List_fromArray(
+								[
+									A6(
+									$terezka$elm_charts$Internal$Svg$area,
+									plane,
+									toX,
+									$elm$core$Maybe$Just(toBottom),
+									lineSeriesConfig.toYSum,
+									interpolationConfig,
+									data),
+									A5($terezka$elm_charts$Internal$Svg$interpolation, plane, toX, lineSeriesConfig.toYSum, interpolationConfig, data),
+									A2(
+									$elm$svg$Svg$g,
+									_List_fromArray(
+										[
+											$elm$svg$Svg$Attributes$class('elm-charts__dots')
+										]),
+									A2($elm$core$List$map, $terezka$elm_charts$Internal$Item$render, dotItems))
+								]));
+					});
+				var _v8 = $elm$core$List$unzip(
+					A2(
+						$elm$core$List$indexedMap,
+						A7(forEachDataPoint, absoluteIndexNew, stackSeriesConfigIndex, lineSeriesConfigIndex, lineSeriesConfig, interpolationConfig, defaultColor, defaultOpacity),
+						data));
+				var limits = _v8.a;
+				var toDotItems = _v8.b;
+				return _Utils_Tuple2(
+					limits,
+					F2(
+						function (topLevel, localPlane) {
+							var dotItems = A2(
+								$elm$core$List$map,
+								function (i) {
+									return A2(i, topLevel, localPlane);
+								},
+								toDotItems);
+							return A2(
+								$terezka$elm_charts$Internal$Helpers$withFirst,
+								dotItems,
+								F2(
+									function (first, rest) {
+										var groupPosition = A2($terezka$elm_charts$Internal$Coordinates$foldPosition, $terezka$elm_charts$Internal$Item$getPosition, dotItems);
+										var groupLimits = A2($terezka$elm_charts$Internal$Coordinates$foldPosition, $terezka$elm_charts$Internal$Item$getLimits, dotItems);
+										return A2(
+											$terezka$elm_charts$Internal$Item$Rendered,
+											_Utils_Tuple2(first, rest),
+											{
+												limits: groupLimits,
+												limitsTop: A3($terezka$elm_charts$Internal$Coordinates$convertPos, topLevel, localPlane, groupLimits),
+												localPlane: localPlane,
+												planeTop: topLevel,
+												position: groupPosition,
+												positionTop: A3($terezka$elm_charts$Internal$Coordinates$convertPos, topLevel, localPlane, groupPosition),
+												render: function (_v9) {
+													return A2(viewSeries, localPlane, dotItems);
+												},
+												tooltip: function (_v10) {
+													return _List_fromArray(
+														[
+															A2(
+															$elm$html$Html$table,
+															_List_fromArray(
+																[
+																	A2($elm$html$Html$Attributes$style, 'margin', '0')
+																]),
+															A2($elm$core$List$concatMap, $terezka$elm_charts$Internal$Item$tooltip, dotItems))
+														]);
+												}
+											});
+									}));
+						}));
+			});
+		var forEachStackSeriesConfig = F2(
+			function (stackSeriesConfig, _v6) {
+				var absoluteIndex = _v6.a;
+				var stackSeriesConfigIndex = _v6.b;
+				var _v7 = _v6.c;
+				var limits = _v7.a;
+				var items = _v7.b;
+				var _v4 = $elm$core$List$unzip(
+					function () {
+						if (stackSeriesConfig.$ === 'NotStacked') {
+							var lineSeriesConfig = stackSeriesConfig.a;
+							return _List_fromArray(
+								[
+									A5(forEachLine, false, absoluteIndex, stackSeriesConfigIndex, 0, lineSeriesConfig)
+								]);
+						} else {
+							var lineSeriesConfigs = stackSeriesConfig.a;
+							return A2(
+								$elm$core$List$indexedMap,
+								A3(forEachLine, true, absoluteIndex, stackSeriesConfigIndex),
+								lineSeriesConfigs);
+						}
+					}());
+				var newLimits = _v4.a;
+				var lineItems = _v4.b;
+				return _Utils_Tuple3(
+					absoluteIndex + $elm$core$List$length(lineItems),
+					stackSeriesConfigIndex + 1,
+					_Utils_Tuple2(
+						_Utils_ap(
+							limits,
+							$elm$core$List$concat(newLimits)),
+						F2(
+							function (topLevel, localPlane) {
+								return _Utils_ap(
+									A2(items, topLevel, localPlane),
+									A2(
+										$elm$core$List$filterMap,
+										$elm$core$Basics$identity,
+										A2(
+											$elm$core$List$map,
+											function (i) {
+												return A2(i, topLevel, localPlane);
+											},
+											lineItems)));
+							})));
+			});
+		return function (_v2) {
+			var newElementIndex = _v2.a;
+			var _v3 = _v2.c;
+			var limits = _v3.a;
+			var items = _v3.b;
+			return _Utils_Tuple3(newElementIndex, limits, items);
+		}(
+			A3(
+				$elm$core$List$foldl,
+				forEachStackSeriesConfig,
+				_Utils_Tuple3(
+					elementIndex,
+					0,
+					_Utils_Tuple2(
+						_List_Nil,
+						F2(
+							function (_v0, _v1) {
+								return _List_Nil;
+							}))),
+				properties));
+	});
+var $terezka$elm_charts$Chart$seriesMap = F4(
+	function (mapData, toX, properties, data) {
+		return $terezka$elm_charts$Chart$Indexed(
+			F2(
+				function (_v0, index) {
+					var legends = A2($terezka$elm_charts$Internal$Legend$toDotLegends, index, properties);
+					var _v1 = A4($terezka$elm_charts$Internal$Produce$toDotSeries, index, toX, properties, data);
+					var newElementIndex = _v1.a;
+					var limits = _v1.b;
+					var items = _v1.c;
+					var toItems = F2(
+						function (topLevel, localPlane) {
+							return A2(
+								$elm$core$List$concatMap,
+								A2(
+									$elm$core$Basics$composeR,
+									$terezka$elm_charts$Internal$Many$getMembers,
+									$elm$core$List$map(
+										$terezka$elm_charts$Internal$Item$map(mapData))),
+								A2(items, topLevel, localPlane));
+						});
+					return _Utils_Tuple2(
+						A4(
+							$terezka$elm_charts$Chart$SeriesElement,
+							A2($terezka$elm_charts$Internal$Coordinates$foldPosition, $elm$core$Basics$identity, limits),
+							toItems,
+							legends,
+							F2(
+								function (topLevel, p) {
+									return A2(
+										$elm$svg$Svg$map,
+										$elm$core$Basics$never,
+										A2(
+											$elm$svg$Svg$g,
+											_List_fromArray(
+												[
+													$elm$svg$Svg$Attributes$class('elm-charts__dot-series')
+												]),
+											A2(
+												$elm$core$List$map,
+												$terezka$elm_charts$Internal$Item$render,
+												A2(items, topLevel, p))));
+								})),
+						newElementIndex);
+				}));
+	});
+var $terezka$elm_charts$Chart$series = F3(
+	function (toX, properties, data) {
+		return A4($terezka$elm_charts$Chart$seriesMap, $elm$core$Basics$identity, toX, properties, data);
+	});
+var $author$project$Main$viewCumulativeChart = function (entries) {
+	var sorted = $elm$core$List$reverse(
+		$author$project$Main$uniqueDates(entries));
+	var points = A2(
+		$elm$core$List$indexedMap,
+		F2(
+			function (i, date) {
+				return {
+					x: i + 1,
+					y: $elm$core$List$sum(
+						A2(
+							$elm$core$List$map,
+							function ($) {
+								return $.amount;
+							},
+							A2(
+								$elm$core$List$filter,
+								function (e) {
+									return _Utils_cmp(e.date, date) < 1;
+								},
+								entries)))
+				};
+			}),
+		sorted);
+	return A2(
+		$terezka$elm_charts$Chart$chart,
+		_List_fromArray(
+			[
+				$terezka$elm_charts$Chart$Attributes$height(160),
+				$terezka$elm_charts$Chart$Attributes$margin(
+				{bottom: 10, left: 0, right: 0, top: 10})
+			]),
+		_List_fromArray(
+			[
+				A3(
+				$terezka$elm_charts$Chart$series,
+				function ($) {
+					return $.x;
+				},
+				_List_fromArray(
+					[
+						A3(
+						$terezka$elm_charts$Chart$interpolated,
+						function ($) {
+							return $.y;
+						},
+						_List_fromArray(
+							[
+								$terezka$elm_charts$Chart$Attributes$color('#4090e0'),
+								$terezka$elm_charts$Chart$Attributes$width(2)
+							]),
+						_List_Nil)
+					]),
+				points)
+			]));
+};
 var $author$project$Main$viewDailyChart = function (entries) {
 	var days = A2(
 		$elm$core$List$map,
@@ -14713,6 +15907,7 @@ var $author$project$Main$viewStatsTab = function (model) {
 				return $.amount;
 			},
 			entries));
+	var daysIn = ((model.tripStart !== '') && (model.today !== '')) ? (($author$project$Main$isoToDayCount(model.today) - $author$project$Main$isoToDayCount(model.tripStart)) + 1) : 0;
 	var bigDay = $author$project$Main$biggestDay(entries);
 	var avgPerEntry = (numEntries > 0) ? (total / numEntries) : 0;
 	var avgPerDay = (numDays > 0) ? (total / numDays) : 0;
@@ -14779,7 +15974,7 @@ var $author$project$Main$viewStatsTab = function (model) {
 									return $author$project$Main$categoryIcon(c) + (' ' + $author$project$Main$categoryLabel(c));
 								},
 								topCat))),
-						A2(
+						(numDays > 1) ? A2(
 						$author$project$Main$statCard,
 						'BIGGEST DAY',
 						A2(
@@ -14788,10 +15983,22 @@ var $author$project$Main$viewStatsTab = function (model) {
 							A2(
 								$elm$core$Maybe$map,
 								function (_v0) {
+									var d = _v0.a;
 									var t = _v0.b;
-									return $author$project$Main$formatAmount(t);
+									return A3($elm$core$String$slice, 5, 10, d) + ('  ' + $author$project$Main$formatAmount(t));
 								},
-								bigDay)))
+								bigDay))) : A2(
+						$author$project$Main$statCard,
+						'ENTRIES TODAY',
+						$elm$core$String$fromInt(numEntries)),
+						A2(
+						$author$project$Main$statCard,
+						'DAYS INTO TRIP',
+						(daysIn > 0) ? $elm$core$String$fromInt(daysIn) : '—'),
+						A2(
+						$author$project$Main$statCard,
+						'PROJ / 30 DAYS',
+						(avgPerDay > 0) ? $author$project$Main$formatAmount(avgPerDay * 30) : '—')
 					])),
 				$elm$core$List$isEmpty(entries) ? $elm$html$Html$text('') : A2(
 				$elm$html$Html$div,
@@ -14844,6 +16051,32 @@ var $author$project$Main$viewStatsTab = function (model) {
 								$elm$html$Html$text('DAILY SPENDING')
 							])),
 						$author$project$Main$viewDailyChart(entries)
+					])) : $elm$html$Html$text(''),
+				(numDays > 1) ? A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'background', '#161918'),
+						A2($elm$html$Html$Attributes$style, 'border-radius', '10px'),
+						A2($elm$html$Html$Attributes$style, 'padding', '20px'),
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '16px')
+					]),
+				_List_fromArray(
+					[
+						A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								A2($elm$html$Html$Attributes$style, 'font-size', '11px'),
+								A2($elm$html$Html$Attributes$style, 'letter-spacing', '0.1em'),
+								A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+								A2($elm$html$Html$Attributes$style, 'margin-bottom', '8px')
+							]),
+						_List_fromArray(
+							[
+								$elm$html$Html$text('CUMULATIVE SPEND')
+							])),
+						$author$project$Main$viewCumulativeChart(entries)
 					])) : $elm$html$Html$text(''),
 				$elm$core$List$isEmpty(top5) ? $elm$html$Html$text('') : A2(
 				$elm$html$Html$div,
@@ -15197,11 +16430,12 @@ var $author$project$Main$main = $elm$browser$Browser$element(
 						}),
 						$author$project$Main$gotExifResult(
 						function (r) {
-							return r.hasGps ? A3(
+							return r.hasGps ? A4(
 								$author$project$Main$GotExifCoords,
 								r.id,
 								$elm$core$Maybe$Just(r.lat),
-								$elm$core$Maybe$Just(r.lon)) : A3($author$project$Main$GotExifCoords, r.id, $elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing);
+								$elm$core$Maybe$Just(r.lon),
+								'') : A4($author$project$Main$GotExifCoords, r.id, $elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing, r.debug);
 						})
 					]));
 		},

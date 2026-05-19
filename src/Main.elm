@@ -47,7 +47,7 @@ port extractExifGps : { id : String, dataUrl : String } -> Cmd msg
 port gotGpsCoords : ({ lat : Float, lon : Float, denied : Bool } -> msg) -> Sub msg
 
 
-port gotExifResult : ({ id : String, lat : Float, lon : Float, hasGps : Bool } -> msg) -> Sub msg
+port gotExifResult : ({ id : String, lat : Float, lon : Float, hasGps : Bool, debug : String } -> msg) -> Sub msg
 
 
 
@@ -60,6 +60,11 @@ type Category
     | Camp
     | Ferry
     | Gear
+    | Lodging
+    | Activities
+    | Shopping
+    | Medical
+    | Transport
     | Misc
 
 
@@ -99,6 +104,7 @@ type alias ScanItem =
     , status : ScanStatus
     , ocrData : Maybe OcrData
     , locationState : LocationState
+    , exifDebug : String
     }
 
 
@@ -108,6 +114,7 @@ type alias Entry =
     , amount : Float
     , category : Category
     , note : String
+    , longNote : String
     , merchant : String
     , createdAt : String
     , rowIndex : Int
@@ -120,6 +127,7 @@ type alias PendingEntry =
     { amount : String
     , category : Category
     , note : String
+    , longNote : String
     , merchant : String
     , date : String
     , locationState : LocationState
@@ -167,6 +175,7 @@ type Msg
     | AmountChanged String
     | CategorySelected Category
     | NoteChanged String
+    | LongNoteChanged String
     | MerchantChanged String
     | DateChanged String
     | SubmitEntry
@@ -190,7 +199,7 @@ type Msg
     | MapPickerConfirmed Float Float
     | DismissMapPicker
     | SkipLocation
-    | GotExifCoords String (Maybe Float) (Maybe Float)
+    | GotExifCoords String (Maybe Float) (Maybe Float) String
 
 
 
@@ -200,55 +209,75 @@ type Msg
 categoryColor : Category -> String
 categoryColor cat =
     case cat of
-        Fuel -> "#e8a020"
-        Food -> "#3ecf6a"
-        Camp -> "#4090e0"
-        Ferry -> "#c060e0"
-        Gear -> "#e85030"
-        Misc -> "#7a8a80"
+        Fuel       -> "#e8a020"
+        Food       -> "#3ecf6a"
+        Camp       -> "#4090e0"
+        Ferry      -> "#c060e0"
+        Gear       -> "#e85030"
+        Lodging    -> "#40c0b0"
+        Activities -> "#f0b040"
+        Shopping   -> "#e060a0"
+        Medical    -> "#ff6060"
+        Transport  -> "#a0a0e0"
+        Misc       -> "#7a8a80"
 
 
 categoryLabel : Category -> String
 categoryLabel cat =
     case cat of
-        Fuel -> "fuel"
-        Food -> "food"
-        Camp -> "camp"
-        Ferry -> "ferry"
-        Gear -> "gear"
-        Misc -> "misc"
+        Fuel       -> "fuel"
+        Food       -> "food"
+        Camp       -> "camp"
+        Ferry      -> "ferry"
+        Gear       -> "gear"
+        Lodging    -> "lodging"
+        Activities -> "activities"
+        Shopping   -> "shopping"
+        Medical    -> "medical"
+        Transport  -> "transport"
+        Misc       -> "misc"
 
 
 categoryIcon : Category -> String
 categoryIcon cat =
     case cat of
-        Fuel -> "⛽"
-        Food -> "🍔"
-        Camp -> "⛺"
-        Ferry -> "⛴"
-        Gear -> "🔧"
-        Misc -> "📦"
+        Fuel       -> "⛽"
+        Food       -> "🍔"
+        Camp       -> "⛺"
+        Ferry      -> "⛴"
+        Gear       -> "🔧"
+        Lodging    -> "🏨"
+        Activities -> "🎯"
+        Shopping   -> "🛍"
+        Medical    -> "💊"
+        Transport  -> "🚌"
+        Misc       -> "📦"
 
 
 categoryFromString : String -> Category
 categoryFromString s =
     case s of
-        "fuel" -> Fuel
-        "food" -> Food
-        "camp" -> Camp
-        "ferry" -> Ferry
-        "gear" -> Gear
-        _ -> Misc
+        "fuel"       -> Fuel
+        "food"       -> Food
+        "camp"       -> Camp
+        "ferry"      -> Ferry
+        "gear"       -> Gear
+        "lodging"    -> Lodging
+        "activities" -> Activities
+        "shopping"   -> Shopping
+        "medical"    -> Medical
+        "transport"  -> Transport
+        _            -> Misc
 
 
 allCategories : List Category
 allCategories =
-    [ Fuel, Food, Camp, Ferry, Gear, Misc ]
+    [ Fuel, Food, Camp, Lodging, Ferry, Activities, Shopping, Gear, Transport, Medical, Misc ]
 
 
 ocrSystemPrompt : String
 ocrSystemPrompt =
-    "You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<fuel|food|camp|ferry|gear|misc>\", \"note\": \"<brief description max 50 chars>\", \"merchant\": \"<store name>\"}. Choose the best matching category."
+    "You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<fuel|food|camp|ferry|gear|lodging|activities|shopping|medical|transport|misc>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 280 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\"}. Choose the best matching category."
 
 
 
@@ -257,7 +286,7 @@ ocrSystemPrompt =
 
 defaultPendingEntry : String -> PendingEntry
 defaultPendingEntry today =
-    { amount = "", category = Fuel, note = "", merchant = "", date = today
+    { amount = "", category = Fuel, note = "", longNote = "", merchant = "", date = today
     , locationState = LocationIdle
     }
 
@@ -267,6 +296,7 @@ entryToPending e =
     { amount = String.fromFloat e.amount
     , category = e.category
     , note = e.note
+    , longNote = e.longNote
     , merchant = e.merchant
     , date = e.date
     , locationState =
@@ -296,6 +326,7 @@ freshScanItem id =
     , status = ScanQueued
     , ocrData = Nothing
     , locationState = LocationCheckingExif
+    , exifDebug = ""
     }
 
 
@@ -493,6 +524,9 @@ update msg model =
         NoteChanged s ->
             updatePending (\p -> { p | note = s }) model
 
+        LongNoteChanged s ->
+            updatePending (\p -> { p | longNote = s }) model
+
         MerchantChanged s ->
             updatePending (\p -> { p | merchant = s }) model
 
@@ -529,6 +563,7 @@ update msg model =
                                 , amount = String.toFloat p.amount |> Maybe.withDefault 0
                                 , category = p.category
                                 , note = p.note
+                                , longNote = p.longNote
                                 , merchant = p.merchant
                                 , lat =
                                     case p.locationState of
@@ -560,6 +595,7 @@ update msg model =
                             , amount = String.toFloat p.amount |> Maybe.withDefault 0
                             , category = p.category
                             , note = p.note
+                            , longNote = p.longNote
                             , merchant = p.merchant
                             , createdAt = posixToIso posix
                             , rowIndex = 0
@@ -768,13 +804,13 @@ update msg model =
         ToastExpired ->
             ( { model | toast = Nothing }, Cmd.none )
 
-        GotExifCoords itemId (Just lat) (Just lon) ->
+        GotExifCoords itemId (Just lat) (Just lon) _ ->
             ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationGot lat lon ExifGps }) model.scanQueue }
             , Cmd.none
             )
 
-        GotExifCoords itemId _ _ ->
-            ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationNoExifGps }) model.scanQueue }
+        GotExifCoords itemId _ _ debug ->
+            ( { model | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationNoExifGps, exifDebug = debug }) model.scanQueue }
             , Cmd.none
             )
 
@@ -787,15 +823,16 @@ update msg model =
                     let
                         ocr =
                             Maybe.withDefault
-                                { amount = Nothing, category = Nothing, note = Nothing, merchant = Nothing }
+                                { amount = Nothing, category = Nothing, note = Nothing, merchant = Nothing, date = Nothing, longNote = Nothing }
                                 item.ocrData
 
                         newPending =
                             { amount = ocr.amount |> Maybe.map String.fromFloat |> Maybe.withDefault ""
                             , category = Maybe.withDefault Fuel ocr.category
                             , note = Maybe.withDefault "" ocr.note
+                            , longNote = Maybe.withDefault "" ocr.longNote
                             , merchant = Maybe.withDefault "" ocr.merchant
-                            , date = model.today
+                            , date = Maybe.withDefault model.today ocr.date
                             , locationState = item.locationState
                             }
                     in
@@ -837,7 +874,7 @@ fetchEntries token sheetId =
     Http.request
         { method = "GET"
         , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
-        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A2:I"
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A2:J"
         , body = Http.emptyBody
         , expect = expectJsonBody EntriesFetched entriesDecoder
         , timeout = Nothing
@@ -862,6 +899,7 @@ appendEntry token sheetId entry =
                             , E.string entry.createdAt
                             , entry.lat |> Maybe.map (\v -> E.string (String.fromFloat v)) |> Maybe.withDefault (E.string "")
                             , entry.lon |> Maybe.map (\v -> E.string (String.fromFloat v)) |> Maybe.withDefault (E.string "")
+                            , E.string entry.longNote
                             ]
                         ]
                   )
@@ -870,7 +908,7 @@ appendEntry token sheetId entry =
     Http.request
         { method = "POST"
         , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
-        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A:I:append?valueInputOption=RAW"
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ "/values/Expenses!A:J:append?valueInputOption=RAW"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntrySubmitted
         , timeout = Nothing
@@ -918,7 +956,7 @@ updateEntry : String -> String -> Entry -> Cmd Msg
 updateEntry token sheetId entry =
     let
         range =
-            "Expenses!A" ++ String.fromInt entry.rowIndex ++ ":I" ++ String.fromInt entry.rowIndex
+            "Expenses!A" ++ String.fromInt entry.rowIndex ++ ":J" ++ String.fromInt entry.rowIndex
 
         body =
             E.object
@@ -934,6 +972,7 @@ updateEntry token sheetId entry =
                             , E.string entry.createdAt
                             , entry.lat |> Maybe.map (\v -> E.string (String.fromFloat v)) |> Maybe.withDefault (E.string "")
                             , entry.lon |> Maybe.map (\v -> E.string (String.fromFloat v)) |> Maybe.withDefault (E.string "")
+                            , E.string entry.longNote
                             ]
                         ]
                   )
@@ -1076,12 +1115,13 @@ entriesDecoder =
 rowDecoder : D.Decoder Entry
 rowDecoder =
     D.succeed
-        (\id date amount category note merchant createdAt lat lon ->
+        (\id date amount category note merchant createdAt lat lon longNote ->
             { id = id
             , date = date
             , amount = amount
             , category = category
             , note = note
+            , longNote = longNote
             , merchant = merchant
             , createdAt = createdAt
             , rowIndex = 0
@@ -1098,6 +1138,7 @@ rowDecoder =
         |> Pipeline.custom (optIndex 6 D.string "")
         |> Pipeline.custom (optMaybeFloat 7)
         |> Pipeline.custom (optMaybeFloat 8)
+        |> Pipeline.custom (optIndex 9 D.string "")
 
 
 optIndex : Int -> D.Decoder a -> a -> D.Decoder a
@@ -1142,20 +1183,24 @@ claudeTextDecoder =
 
 
 type alias OcrData =
-    { amount : Maybe Float
+    { amount   : Maybe Float
     , category : Maybe Category
-    , note : Maybe String
+    , note     : Maybe String
     , merchant : Maybe String
+    , date     : Maybe String
+    , longNote : Maybe String
     }
 
 
 ocrDataDecoder : D.Decoder OcrData
 ocrDataDecoder =
     D.succeed OcrData
-        |> Pipeline.optional "amount" (D.map Just D.float) Nothing
+        |> Pipeline.optional "amount"   (D.map Just D.float) Nothing
         |> Pipeline.optional "category" (D.map Just (D.map categoryFromString D.string)) Nothing
-        |> Pipeline.optional "note" (D.map Just D.string) Nothing
+        |> Pipeline.optional "note"     (D.map Just D.string) Nothing
         |> Pipeline.optional "merchant" (D.map Just D.string) Nothing
+        |> Pipeline.optional "date"     (D.map Just D.string) Nothing
+        |> Pipeline.optional "longNote" (D.map Just D.string) Nothing
 
 
 fileListDecoder : D.Decoder (List File)
@@ -1385,6 +1430,23 @@ uniqueDates entries =
             []
         |> List.sort
         |> List.reverse
+
+
+isoToDayCount : String -> Int
+isoToDayCount s =
+    case List.filterMap String.toInt (String.split "-" s) of
+        [ y, m, d ] ->
+            let
+                monthOffsets =
+                    [ 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 ]
+
+                offset =
+                    List.drop (m - 1) monthOffsets |> List.head |> Maybe.withDefault 0
+            in
+            y * 365 + offset + d
+
+        _ ->
+            0
 
 
 medianAmount : List Entry -> Float
@@ -1706,12 +1768,34 @@ viewScanTab model =
                 , if List.any (\i -> i.status == ScanSubmitted) model.scanQueue then
                     button
                         [ onClick ClearDoneItems
-                        , class "w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit]"
+                        , class "w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit] mb-4"
                         ]
                         [ text "Clear submitted" ]
 
                   else
                     text ""
+                , let
+                    debugItems =
+                        List.filter (\i -> i.exifDebug /= "") model.scanQueue
+                  in
+                  if List.isEmpty debugItems then
+                    text ""
+
+                  else
+                    div [ class "mt-2" ]
+                        (List.indexedMap
+                            (\idx item ->
+                                div [ class "mb-3 rounded-lg bg-[#161918] p-3" ]
+                                    [ div [ class "text-[#4a5a50] text-xs mb-1" ]
+                                        [ text ("EXIF dump — photo " ++ String.fromInt (idx + 1)) ]
+                                    , div
+                                        [ class "font-mono text-[10px] text-[#7a8a80] break-all whitespace-pre-wrap max-h-40 overflow-y-auto"
+                                        ]
+                                        [ text item.exifDebug ]
+                                    ]
+                            )
+                            debugItems
+                        )
                 ]
         ]
 
@@ -1849,9 +1933,7 @@ viewAddTab model =
             )
         , formField "CATEGORY"
             (div
-                [ style "display" "grid"
-                , style "grid-template-columns" "repeat(3, 1fr)"
-                , style "gap" "8px"
+                [ class "grid grid-cols-4 gap-2"
                 ]
                 (List.map (viewCategoryBtn p.category) allCategories)
             )
@@ -1860,8 +1942,21 @@ viewAddTab model =
                 [ type_ "text"
                 , value p.note
                 , onInput NoteChanged
-                , placeholder "optional"
+                , placeholder "brief (50 chars)"
+                , attribute "maxlength" "50"
                 , textInputStyle
+                ]
+                []
+            )
+        , formField "DETAILS"
+            (textarea
+                [ value p.longNote
+                , onInput LongNoteChanged
+                , placeholder "optional — what happened, where, any context (280 chars)"
+                , attribute "maxlength" "280"
+                , attribute "rows" "3"
+                , class "w-full p-3 bg-[#1e2220] border border-[#3a4240] text-[#c8d0c8] rounded-lg font-[inherit] text-base resize-none leading-snug"
+                , style "outline" "none"
                 ]
                 []
             )
@@ -2285,6 +2380,11 @@ viewEntryRow entry =
 
               else
                 text ""
+            , if entry.longNote /= "" then
+                div [ class "text-xs text-[#4a5a50] mt-1 leading-snug line-clamp-2" ] [ text entry.longNote ]
+
+              else
+                text ""
             ]
         , span
             [ style "font-family" "monospace"
@@ -2390,6 +2490,13 @@ viewStatsTab model =
             entries
                 |> List.sortBy (\e -> negate e.amount)
                 |> List.take 5
+
+        daysIn =
+            if model.tripStart /= "" && model.today /= "" then
+                isoToDayCount model.today - isoToDayCount model.tripStart + 1
+
+            else
+                0
     in
     div [ style "padding" "20px" ]
         [ h2 [ sectionHead ] [ text "STATS" ]
@@ -2410,11 +2517,18 @@ viewStatsTab model =
                     |> Maybe.map (\c -> categoryIcon c ++ " " ++ categoryLabel c)
                     |> Maybe.withDefault "—"
                 )
-            , statCard "BIGGEST DAY"
-                (bigDay
-                    |> Maybe.map (\( _, t ) -> formatAmount t)
-                    |> Maybe.withDefault "—"
-                )
+            , if numDays > 1 then
+                statCard "BIGGEST DAY"
+                    (bigDay
+                        |> Maybe.map (\( d, t ) -> String.slice 5 10 d ++ "  " ++ formatAmount t)
+                        |> Maybe.withDefault "—"
+                    )
+              else
+                statCard "ENTRIES TODAY" (String.fromInt numEntries)
+            , statCard "DAYS INTO TRIP"
+                (if daysIn > 0 then String.fromInt daysIn else "—")
+            , statCard "PROJ / 30 DAYS"
+                (if avgPerDay > 0 then formatAmount (avgPerDay * 30) else "—")
             ]
         , if List.isEmpty entries then
             text ""
@@ -2440,6 +2554,20 @@ viewStatsTab model =
                 [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "8px" ]
                     [ text "DAILY SPENDING" ]
                 , viewDailyChart entries
+                ]
+
+          else
+            text ""
+        , if numDays > 1 then
+            div
+                [ style "background" "#161918"
+                , style "border-radius" "10px"
+                , style "padding" "20px"
+                , style "margin-bottom" "16px"
+                ]
+                [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "8px" ]
+                    [ text "CUMULATIVE SPEND" ]
+                , viewCumulativeChart entries
                 ]
 
           else
@@ -2551,6 +2679,35 @@ viewDailyChart entries =
             [ C.bar .total [ CA.color "#e8a020" ] ]
             days
         , C.binLabels .date [ CA.moveDown 16, CA.color "#7a8a80", CA.fontSize 8 ]
+        ]
+
+
+viewCumulativeChart : List Entry -> Html Msg
+viewCumulativeChart entries =
+    let
+        sorted =
+            uniqueDates entries |> List.reverse
+
+        points =
+            List.indexedMap
+                (\i date ->
+                    { x = toFloat (i + 1)
+                    , y =
+                        entries
+                            |> List.filter (\e -> e.date <= date)
+                            |> List.map .amount
+                            |> List.sum
+                    }
+                )
+                sorted
+    in
+    C.chart
+        [ CA.height 160
+        , CA.margin { top = 10, bottom = 10, left = 0, right = 0 }
+        ]
+        [ C.series .x
+            [ C.interpolated .y [ CA.color "#4090e0", CA.width 2 ] [] ]
+            points
         ]
 
 
@@ -2712,6 +2869,6 @@ main =
                 Sub.batch
                     [ gotNewToken GotOAuthToken
                     , gotGpsCoords (\r -> if r.denied then GeolocationDenied else GotGpsCoords r.lat r.lon)
-                    , gotExifResult (\r -> if r.hasGps then GotExifCoords r.id (Just r.lat) (Just r.lon) else GotExifCoords r.id Nothing Nothing)
+                    , gotExifResult (\r -> if r.hasGps then GotExifCoords r.id (Just r.lat) (Just r.lon) "" else GotExifCoords r.id Nothing Nothing r.debug)
                     ]
         }
