@@ -6843,7 +6843,6 @@ var $author$project$Main$ScanReady = {$: 'ScanReady'};
 var $author$project$Main$ScanSubmitted = {$: 'ScanSubmitted'};
 var $author$project$Main$ScanTab = {$: 'ScanTab'};
 var $author$project$Main$SessionExpired = {$: 'SessionExpired'};
-var $author$project$Main$TripsTab = {$: 'TripsTab'};
 var $elm$core$List$any = F2(
 	function (isOkay, list) {
 		any:
@@ -8852,7 +8851,7 @@ var $author$project$Main$updateAuth = F2(
 								loadingEntries: shouldFetch,
 								pendingEntry: newPending,
 								tab: tab,
-								tripForm: (!_Utils_eq(tab, $author$project$Main$TripsTab)) ? $elm$core$Maybe$Nothing : as_.tripForm
+								tripForm: $elm$core$Maybe$Nothing
 							})),
 					$elm$core$Platform$Cmd$batch(
 						_List_fromArray(
@@ -9553,20 +9552,32 @@ var $author$project$Main$updateGuest = F2(
 				} else {
 					var token = _v1.a;
 					if (result.$ === 'Err') {
-						var e = result.a;
-						return _Utils_Tuple2(
-							$author$project$Main$GuestModel(
-								_Utils_update(
-									gs,
-									{
-										pendingToken: $elm$core$Maybe$Nothing,
-										session: {
-											config: gs.session.config,
-											reason: $author$project$Main$MetadataError(
-												$author$project$Main$httpErrString(e))
-										}
-									})),
-							$elm$core$Platform$Cmd$none);
+						if ((result.a.$ === 'BadStatus') && (result.a.a === 401)) {
+							return _Utils_Tuple2(
+								$author$project$Main$GuestModel(
+									_Utils_update(
+										gs,
+										{
+											pendingToken: $elm$core$Maybe$Nothing,
+											session: {config: gs.session.config, reason: $author$project$Main$SessionExpired}
+										})),
+								$elm$core$Platform$Cmd$none);
+						} else {
+							var e = result.a;
+							return _Utils_Tuple2(
+								$author$project$Main$GuestModel(
+									_Utils_update(
+										gs,
+										{
+											pendingToken: $elm$core$Maybe$Nothing,
+											session: {
+												config: gs.session.config,
+												reason: $author$project$Main$MetadataError(
+													$author$project$Main$httpErrString(e))
+											}
+										})),
+								$elm$core$Platform$Cmd$none);
+						}
 					} else {
 						var props = result.a;
 						var tripsZipper = A5($author$project$Main$buildTripsZipper, gs.storedTrips, gs.activeTripTab, props, $elm$core$Maybe$Nothing, $elm$core$Maybe$Nothing);
@@ -10437,6 +10448,7 @@ var $author$project$Main$viewAddTab = function (model) {
 			]));
 };
 var $author$project$Main$StatsTab = {$: 'StatsTab'};
+var $author$project$Main$TripsTab = {$: 'TripsTab'};
 var $elm$html$Html$nav = _VirtualDom_node('nav');
 var $author$project$Main$TabChanged = function (a) {
 	return {$: 'TabChanged', a: a};
@@ -18022,7 +18034,18 @@ var $author$project$Main$viewGuest = function (gs) {
 					return $elm$html$Html$text('');
 				}
 			}(),
-				A2(
+				(!_Utils_eq(gs.pendingToken, $elm$core$Maybe$Nothing)) ? A2(
+				$elm$html$Html$p,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'color', '#7a8a80'),
+						A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+						A2($elm$html$Html$Attributes$style, 'padding', '16px')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('Loading…')
+					])) : A2(
 				$elm$html$Html$button,
 				_List_fromArray(
 					[

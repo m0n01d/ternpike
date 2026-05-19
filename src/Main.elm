@@ -748,6 +748,15 @@ updateGuest msg gs =
 
                 Just token ->
                     case result of
+                        Err (Http.BadStatus 401) ->
+                            ( GuestModel
+                                { gs
+                                    | pendingToken = Nothing
+                                    , session = { config = gs.session.config, reason = SessionExpired }
+                                }
+                            , Cmd.none
+                            )
+
                         Err e ->
                             ( GuestModel
                                 { gs
@@ -1087,7 +1096,7 @@ updateAuth msg as_ =
                     , loadingEntries = shouldFetch
                     , pendingEntry = newPending
                     , editingEntry = if tab /= AddTab then Nothing else as_.editingEntry
-                    , tripForm = if tab /= TripsTab then Nothing else as_.tripForm
+                    , tripForm = Nothing
                 }
             , Cmd.batch
                 [ if shouldFetch then fetchEntries as_.creds as_.config.sheetId (Zipper.current as_.trips).tabName else Cmd.none
@@ -2132,20 +2141,24 @@ viewGuest gs =
                     [ text msg ]
             Nothing ->
                 text ""
-        , button
-            [ onClick SignInClicked
-            , style "background" "#e8a020"
-            , style "color" "#0d0f0e"
-            , style "border" "none"
-            , style "border-radius" "8px"
-            , style "padding" "16px 32px"
-            , style "font-size" "16px"
-            , style "font-weight" "700"
-            , style "cursor" "pointer"
-            , style "letter-spacing" "0.05em"
-            , style "min-height" "52px"
-            ]
-            [ text "SIGN IN WITH GOOGLE" ]
+        , if gs.pendingToken /= Nothing then
+            p [ style "color" "#7a8a80", style "font-size" "14px", style "padding" "16px" ]
+                [ text "Loading…" ]
+          else
+            button
+                [ onClick SignInClicked
+                , style "background" "#e8a020"
+                , style "color" "#0d0f0e"
+                , style "border" "none"
+                , style "border-radius" "8px"
+                , style "padding" "16px 32px"
+                , style "font-size" "16px"
+                , style "font-weight" "700"
+                , style "cursor" "pointer"
+                , style "letter-spacing" "0.05em"
+                , style "min-height" "52px"
+                ]
+                [ text "SIGN IN WITH GOOGLE" ]
         , p [ style "color" "#4a5a50", style "margin-top" "24px", style "font-size" "13px" ]
             [ text "Need a Google Client ID? Enter it in Settings below." ]
         , div [ style "margin-top" "48px", style "width" "100%" ]
