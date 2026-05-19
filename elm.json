@@ -1,7 +1,9 @@
 {
     "type": "application",
     "source-directories": [
-        "src"
+        "src",
+        "vendor/rtfeldman/elm-validate/src",
+        "vendor/turboMaCk/non-empty-list-alias/src"
     ],
     "elm-version": "0.19.1",
     "dependencies": {
