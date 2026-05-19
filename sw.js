@@ -1,5 +1,5 @@
 // Cache name is stamped with git SHA by CI — ensures old caches are cleaned up on deploy.
-const CACHE = 'alaska-0bc2f0753d65baa83f7cbda0911191db1c29984b';
+const CACHE = 'alaska-7727710d8508c458e69a4484bf2e5e95c06f0dd3';
 
 const SKIP_CACHE = [
   'googleapis.com',

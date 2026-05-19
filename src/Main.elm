@@ -1226,7 +1226,15 @@ updateAuth msg as_ =
                     Zipper.focus (\t -> t.tabName == tabName) as_.trips
                         |> Maybe.withDefault as_.trips
             in
-            ( AuthModel { as_ | trips = trips_, loadingEntries = True, tab = LedgerTab }
+            ( AuthModel
+                { as_
+                    | trips = trips_
+                    , loadingEntries = True
+                    , tab = LedgerTab
+                    , entries = []
+                    , editingEntry = Nothing
+                    , pendingEntry = defaultPendingEntry as_.today
+                }
             , Cmd.batch
                 [ saveStorage { key = "active_trip", value = tabName }
                 , fetchEntries as_.creds as_.config.sheetId (Zipper.current trips_).tabName
@@ -1356,6 +1364,9 @@ updateAuth msg as_ =
                                     , tripForm = Nothing
                                     , loadingEntries = True
                                     , tab = LedgerTab
+                                    , entries = []
+                                    , editingEntry = Nothing
+                                    , pendingEntry = defaultPendingEntry as_.today
                                 }
                             , Cmd.batch
                                 [ saveStorage { key = "trips", value = E.encode 0 (E.list encodeTrip (Zipper.toList trips_)) }
