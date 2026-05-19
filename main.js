@@ -6665,7 +6665,7 @@ var $author$project$Main$toAuthState = F2(
 			geoBlocked: false,
 			loadingEntries: gs.session.config.sheetId !== '',
 			pendingEntry: $author$project$Main$defaultPendingEntry(gs.today),
-			scanQueue: _List_Nil,
+			scanQueue: $elm$core$Dict$empty,
 			showLedgerMap: false,
 			showMapPicker: false,
 			submitting: false,
@@ -7085,6 +7085,42 @@ var $author$project$Main$extractExifGps = _Platform_outgoingPort(
 					$elm$json$Json$Encode$string($.id))
 				]));
 	});
+var $elm$core$Dict$foldl = F3(
+	function (func, acc, dict) {
+		foldl:
+		while (true) {
+			if (dict.$ === 'RBEmpty_elm_builtin') {
+				return acc;
+			} else {
+				var key = dict.b;
+				var value = dict.c;
+				var left = dict.d;
+				var right = dict.e;
+				var $temp$func = func,
+					$temp$acc = A3(
+					func,
+					key,
+					value,
+					A3($elm$core$Dict$foldl, func, acc, left)),
+					$temp$dict = right;
+				func = $temp$func;
+				acc = $temp$acc;
+				dict = $temp$dict;
+				continue foldl;
+			}
+		}
+	});
+var $elm$core$Dict$filter = F2(
+	function (isGood, dict) {
+		return A3(
+			$elm$core$Dict$foldl,
+			F3(
+				function (k, v, d) {
+					return A2(isGood, k, v) ? A3($elm$core$Dict$insert, k, v, d) : d;
+				}),
+			$elm$core$Dict$empty,
+			dict);
+	});
 var $elm$core$List$filter = F2(
 	function (isGood, list) {
 		return A3(
@@ -7103,15 +7139,6 @@ var $author$project$Main$freshScanItem = function (id) {
 };
 var $author$project$Main$getMimeType = function (dataUrl) {
 	return A2($elm$core$String$contains, 'image/png', dataUrl) ? 'image/png' : (A2($elm$core$String$contains, 'image/gif', dataUrl) ? 'image/gif' : (A2($elm$core$String$contains, 'image/webp', dataUrl) ? 'image/webp' : 'image/jpeg'));
-};
-var $elm$core$List$head = function (list) {
-	if (list.b) {
-		var x = list.a;
-		var xs = list.b;
-		return $elm$core$Maybe$Just(x);
-	} else {
-		return $elm$core$Maybe$Nothing;
-	}
 };
 var $elm$json$Json$Decode$at = F2(
 	function (fields, decoder) {
@@ -7649,6 +7676,26 @@ var $author$project$Main$setLocation = F2(
 			p,
 			{locationState: ls});
 	});
+var $elm$core$Dict$sizeHelp = F2(
+	function (n, dict) {
+		sizeHelp:
+		while (true) {
+			if (dict.$ === 'RBEmpty_elm_builtin') {
+				return n;
+			} else {
+				var left = dict.d;
+				var right = dict.e;
+				var $temp$n = A2($elm$core$Dict$sizeHelp, n + 1, right),
+					$temp$dict = left;
+				n = $temp$n;
+				dict = $temp$dict;
+				continue sizeHelp;
+			}
+		}
+	});
+var $elm$core$Dict$size = function (dict) {
+	return A2($elm$core$Dict$sizeHelp, 0, dict);
+};
 var $elm$core$List$drop = F2(
 	function (n, list) {
 		drop:
@@ -7670,6 +7717,15 @@ var $elm$core$List$drop = F2(
 			}
 		}
 	});
+var $elm$core$List$head = function (list) {
+	if (list.b) {
+		var x = list.a;
+		var xs = list.b;
+		return $elm$core$Maybe$Just(x);
+	} else {
+		return $elm$core$Maybe$Nothing;
+	}
+};
 var $elm$core$String$lines = _String_lines;
 var $elm$core$String$trim = _String_trim;
 var $author$project$Main$stripCodeFence = function (s) {
@@ -7781,13 +7837,16 @@ var $author$project$Main$updateEntry = F3(
 				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ('/values/' + (range + '?valueInputOption=RAW')))
 			});
 	});
-var $author$project$Main$updateScanItem = F2(
-	function (id, f) {
-		return $elm$core$List$map(
-			function (item) {
-				return _Utils_eq(item.id, id) ? f(item) : item;
-			});
-	});
+var $elm$core$Dict$values = function (dict) {
+	return A3(
+		$elm$core$Dict$foldr,
+		F3(
+			function (key, value, valueList) {
+				return A2($elm$core$List$cons, value, valueList);
+			}),
+		_List_Nil,
+		dict);
+};
 var $author$project$Main$updateAuth = F2(
 	function (msg, as_) {
 		switch (msg.$) {
@@ -7822,7 +7881,7 @@ var $author$project$Main$updateAuth = F2(
 					$author$project$Main$clearAllStorage(_Utils_Tuple0));
 			case 'FilesSelected':
 				var files = msg.a;
-				var startIdx = $elm$core$List$length(as_.scanQueue);
+				var startIdx = $elm$core$Dict$size(as_.scanQueue);
 				var indexed = A2(
 					$elm$core$List$indexedMap,
 					F2(
@@ -7832,12 +7891,18 @@ var $author$project$Main$updateAuth = F2(
 								f);
 						}),
 					files);
-				var newItems = A2(
-					$elm$core$List$map,
-					function (_v2) {
-						var id = _v2.a;
-						return $author$project$Main$freshScanItem(id);
-					},
+				var newQueue = A3(
+					$elm$core$List$foldl,
+					F2(
+						function (_v2, d) {
+							var id = _v2.a;
+							return A3(
+								$elm$core$Dict$insert,
+								id,
+								$author$project$Main$freshScanItem(id),
+								d);
+						}),
+					as_.scanQueue,
 					indexed);
 				var urlCmds = A2(
 					$elm$core$List$map,
@@ -7854,22 +7919,21 @@ var $author$project$Main$updateAuth = F2(
 					$author$project$Main$AuthModel(
 						_Utils_update(
 							as_,
-							{
-								scanQueue: _Utils_ap(as_.scanQueue, newItems)
-							})),
+							{scanQueue: newQueue})),
 					$elm$core$Platform$Cmd$batch(urlCmds));
 			case 'GotFileUrl':
 				var itemId = msg.a;
 				var dataUrl = msg.b;
 				var newStatus = (as_.config.anthropicKey !== '') ? $author$project$Main$ScanProcessing : $author$project$Main$ScanReady;
 				var updatedQueue = A3(
-					$author$project$Main$updateScanItem,
+					$elm$core$Dict$update,
 					itemId,
-					function (i) {
-						return _Utils_update(
-							i,
-							{imageUrl: dataUrl, status: newStatus});
-					},
+					$elm$core$Maybe$map(
+						function (i) {
+							return _Utils_update(
+								i,
+								{imageUrl: dataUrl, status: newStatus});
+						}),
 					as_.scanQueue);
 				return _Utils_Tuple2(
 					$author$project$Main$AuthModel(
@@ -7915,13 +7979,14 @@ var $author$project$Main$updateAuth = F2(
 					}
 				}();
 				var updatedQueue = A3(
-					$author$project$Main$updateScanItem,
+					$elm$core$Dict$update,
 					itemId,
-					function (i) {
-						return _Utils_update(
-							i,
-							{ocrData: ocrData, status: $author$project$Main$ScanReady});
-					},
+					$elm$core$Maybe$map(
+						function (i) {
+							return _Utils_update(
+								i,
+								{ocrData: ocrData, status: $author$project$Main$ScanReady});
+						}),
 					as_.scanQueue);
 				return _Utils_Tuple2(
 					$author$project$Main$AuthModel(
@@ -8098,13 +8163,14 @@ var $author$project$Main$updateAuth = F2(
 						if (_v13.$ === 'Just') {
 							var id = _v13.a;
 							return A3(
-								$author$project$Main$updateScanItem,
+								$elm$core$Dict$update,
 								id,
-								function (i) {
-									return _Utils_update(
-										i,
-										{status: $author$project$Main$ScanSubmitted});
-								},
+								$elm$core$Maybe$map(
+									function (i) {
+										return _Utils_update(
+											i,
+											{status: $author$project$Main$ScanSubmitted});
+									}),
 								as_.scanQueue);
 						} else {
 							return as_.scanQueue;
@@ -8115,7 +8181,7 @@ var $author$project$Main$updateAuth = F2(
 						function (i) {
 							return !_Utils_eq(i.status, $author$project$Main$ScanSubmitted);
 						},
-						updatedQueue);
+						$elm$core$Dict$values(updatedQueue));
 					var nextTab = ((!_Utils_eq(as_.activeScanItemId, $elm$core$Maybe$Nothing)) && hasRemaining) ? $author$project$Main$ScanTab : $author$project$Main$LedgerTab;
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(
@@ -8428,15 +8494,16 @@ var $author$project$Main$updateAuth = F2(
 								as_,
 								{
 									scanQueue: A3(
-										$author$project$Main$updateScanItem,
+										$elm$core$Dict$update,
 										itemId,
-										function (i) {
-											return _Utils_update(
-												i,
-												{
-													locationState: A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$ExifGps)
-												});
-										},
+										$elm$core$Maybe$map(
+											function (i) {
+												return _Utils_update(
+													i,
+													{
+														locationState: A3($author$project$Main$LocationGot, lat, lon, $author$project$Main$ExifGps)
+													});
+											}),
 										as_.scanQueue)
 								})),
 						$elm$core$Platform$Cmd$none);
@@ -8449,26 +8516,21 @@ var $author$project$Main$updateAuth = F2(
 								as_,
 								{
 									scanQueue: A3(
-										$author$project$Main$updateScanItem,
+										$elm$core$Dict$update,
 										itemId,
-										function (i) {
-											return _Utils_update(
-												i,
-												{exifDebug: debug, locationState: $author$project$Main$LocationNoExifGps});
-										},
+										$elm$core$Maybe$map(
+											function (i) {
+												return _Utils_update(
+													i,
+													{exifDebug: debug, locationState: $author$project$Main$LocationNoExifGps});
+											}),
 										as_.scanQueue)
 								})),
 						$elm$core$Platform$Cmd$none);
 				}
 			case 'ReviewScanItem':
 				var itemId = msg.a;
-				var _v16 = $elm$core$List$head(
-					A2(
-						$elm$core$List$filter,
-						function (i) {
-							return _Utils_eq(i.id, itemId);
-						},
-						as_.scanQueue));
+				var _v16 = A2($elm$core$Dict$get, itemId, as_.scanQueue);
 				if (_v16.$ === 'Nothing') {
 					return _Utils_Tuple2(
 						$author$project$Main$AuthModel(as_),
@@ -8521,10 +8583,11 @@ var $author$project$Main$updateAuth = F2(
 							as_,
 							{
 								scanQueue: A2(
-									$elm$core$List$filter,
-									function (i) {
-										return !_Utils_eq(i.status, $author$project$Main$ScanSubmitted);
-									},
+									$elm$core$Dict$filter,
+									F2(
+										function (_v17, i) {
+											return !_Utils_eq(i.status, $author$project$Main$ScanSubmitted);
+										}),
 									as_.scanQueue)
 							})),
 					$elm$core$Platform$Cmd$none);
@@ -8760,6 +8823,7 @@ var $author$project$Main$formField = F2(
 				]));
 	});
 var $elm$html$Html$h2 = _VirtualDom_node('h2');
+var $elm$html$Html$img = _VirtualDom_node('img');
 var $elm$html$Html$input = _VirtualDom_node('input');
 var $elm$virtual_dom$VirtualDom$Normal = function (a) {
 	return {$: 'Normal', a: a};
@@ -8808,6 +8872,12 @@ var $elm$html$Html$Events$onInput = function (tagger) {
 var $elm$html$Html$Attributes$placeholder = $elm$html$Html$Attributes$stringProperty('placeholder');
 var $author$project$Main$sectionHead = A2($elm$html$Html$Attributes$style, 'font-size', '13px');
 var $elm$html$Html$span = _VirtualDom_node('span');
+var $elm$html$Html$Attributes$src = function (url) {
+	return A2(
+		$elm$html$Html$Attributes$stringProperty,
+		'src',
+		_VirtualDom_noJavaScriptOrHtmlUri(url));
+};
 var $author$project$Main$textInputStyle = A2($elm$html$Html$Attributes$style, 'width', '100%');
 var $elm$html$Html$textarea = _VirtualDom_node('textarea');
 var $elm$html$Html$Attributes$type_ = $elm$html$Html$Attributes$stringProperty('type');
@@ -9261,6 +9331,30 @@ var $author$project$Main$viewAddTab = function (model) {
 								$elm$html$Html$text('← cancel')
 							])) : $elm$html$Html$text(''))
 					])),
+				function () {
+				var _v0 = model.activeScanItemId;
+				if (_v0.$ === 'Nothing') {
+					return $elm$html$Html$text('');
+				} else {
+					var id = _v0.a;
+					var _v1 = A2($elm$core$Dict$get, id, model.scanQueue);
+					if (_v1.$ === 'Just') {
+						var item = _v1.a;
+						return A2(
+							$elm$html$Html$img,
+							_List_fromArray(
+								[
+									$elm$html$Html$Attributes$src(item.imageUrl),
+									$elm$html$Html$Attributes$class('w-full rounded-xl object-contain mb-4'),
+									A2($elm$html$Html$Attributes$style, 'max-height', '240px'),
+									A2($elm$html$Html$Attributes$style, 'background', '#1a2420')
+								]),
+							_List_Nil);
+					} else {
+						return $elm$html$Html$text('');
+					}
+				}
+			}(),
 				A2(
 				$author$project$Main$formField,
 				'AMOUNT',
@@ -10275,14 +10369,14 @@ var $author$project$Main$fileListDecoder = A2(
 				A2($elm$core$List$range, 0, n - 1)));
 	},
 	A2($elm$json$Json$Decode$field, 'length', $elm$json$Json$Decode$int));
-var $elm$html$Html$label = _VirtualDom_node('label');
-var $elm$html$Html$img = _VirtualDom_node('img');
-var $elm$html$Html$Attributes$src = function (url) {
-	return A2(
-		$elm$html$Html$Attributes$stringProperty,
-		'src',
-		_VirtualDom_noJavaScriptOrHtmlUri(url));
+var $elm$core$Dict$isEmpty = function (dict) {
+	if (dict.$ === 'RBEmpty_elm_builtin') {
+		return true;
+	} else {
+		return false;
+	}
 };
+var $elm$html$Html$label = _VirtualDom_node('label');
 var $author$project$Main$ReviewScanItem = function (a) {
 	return {$: 'ReviewScanItem', a: a};
 };
@@ -10520,7 +10614,7 @@ var $author$project$Main$viewScanTab = function (model) {
 							]),
 						_List_Nil)
 					])),
-				$elm$core$List$isEmpty(model.scanQueue) ? A2(
+				$elm$core$Dict$isEmpty(model.scanQueue) ? A2(
 				$elm$html$Html$button,
 				_List_fromArray(
 					[
@@ -10542,13 +10636,16 @@ var $author$project$Main$viewScanTab = function (model) {
 							[
 								$elm$html$Html$Attributes$class('grid grid-cols-2 gap-3 mb-4')
 							]),
-						A2($elm$core$List$map, $author$project$Main$viewScanCard, model.scanQueue)),
+						A2(
+							$elm$core$List$map,
+							$author$project$Main$viewScanCard,
+							$elm$core$Dict$values(model.scanQueue))),
 						A2(
 						$elm$core$List$any,
 						function (i) {
 							return _Utils_eq(i.status, $author$project$Main$ScanSubmitted);
 						},
-						model.scanQueue) ? A2(
+						$elm$core$Dict$values(model.scanQueue)) ? A2(
 						$elm$html$Html$button,
 						_List_fromArray(
 							[
@@ -10565,7 +10662,7 @@ var $author$project$Main$viewScanTab = function (model) {
 							function (i) {
 								return i.exifDebug !== '';
 							},
-							model.scanQueue);
+							$elm$core$Dict$values(model.scanQueue));
 						return $elm$core$List$isEmpty(debugItems) ? $elm$html$Html$text('') : A2(
 							$elm$html$Html$div,
 							_List_fromArray(
@@ -11269,26 +11366,6 @@ var $elm$core$Tuple$pair = F2(
 	function (a, b) {
 		return _Utils_Tuple2(a, b);
 	});
-var $elm$core$Dict$sizeHelp = F2(
-	function (n, dict) {
-		sizeHelp:
-		while (true) {
-			if (dict.$ === 'RBEmpty_elm_builtin') {
-				return n;
-			} else {
-				var left = dict.d;
-				var right = dict.e;
-				var $temp$n = A2($elm$core$Dict$sizeHelp, n + 1, right),
-					$temp$dict = left;
-				n = $temp$n;
-				dict = $temp$dict;
-				continue sizeHelp;
-			}
-		}
-	});
-var $elm$core$Dict$size = function (dict) {
-	return A2($elm$core$Dict$sizeHelp, 0, dict);
-};
 var $terezka$elm_charts$Internal$Helpers$toDefault = F3(
 	function (_default, items, index) {
 		var dict = $elm$core$Dict$fromList(

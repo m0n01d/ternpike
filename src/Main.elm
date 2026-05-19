@@ -12,6 +12,7 @@ import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 import Chart as C
 import Chart.Attributes as CA
+import Dict exposing (Dict)
 import Process
 import Task
 import Time
@@ -176,7 +177,7 @@ type alias AuthState =
     , loadingEntries   : Bool
     , pendingEntry     : PendingEntry
     , editingEntry     : Maybe Entry
-    , scanQueue        : List ScanItem
+    , scanQueue        : Dict String ScanItem
     , activeScanItemId : Maybe String
     , error            : Maybe String
     , submitting       : Bool
@@ -337,7 +338,7 @@ toAuthState creds gs =
     , loadingEntries   = gs.session.config.sheetId /= ""
     , pendingEntry     = defaultPendingEntry gs.today
     , editingEntry     = Nothing
-    , scanQueue        = []
+    , scanQueue        = Dict.empty
     , activeScanItemId = Nothing
     , error            = Nothing
     , submitting       = False
@@ -413,10 +414,6 @@ freshScanItem id =
     , exifDebug = ""
     }
 
-
-updateScanItem : String -> (ScanItem -> ScanItem) -> List ScanItem -> List ScanItem
-updateScanItem id f =
-    List.map (\item -> if item.id == id then f item else item)
 
 
 init : D.Value -> ( Model, Cmd Msg )
@@ -553,18 +550,18 @@ updateAuth msg as_ =
         FilesSelected files ->
             let
                 startIdx =
-                    List.length as_.scanQueue
+                    Dict.size as_.scanQueue
 
                 indexed =
                     List.indexedMap (\i f -> ( "scan-" ++ String.fromInt (startIdx + i), f )) files
 
-                newItems =
-                    List.map (\( id, _ ) -> freshScanItem id) indexed
+                newQueue =
+                    List.foldl (\( id, _ ) d -> Dict.insert id (freshScanItem id) d) as_.scanQueue indexed
 
                 urlCmds =
                     List.map (\( id, f ) -> Task.perform (GotFileUrl id) (File.toUrl f)) indexed
             in
-            ( AuthModel { as_ | scanQueue = as_.scanQueue ++ newItems }
+            ( AuthModel { as_ | scanQueue = newQueue }
             , Cmd.batch urlCmds
             )
 
@@ -577,7 +574,7 @@ updateAuth msg as_ =
                         ScanReady
 
                 updatedQueue =
-                    updateScanItem itemId (\i -> { i | imageUrl = dataUrl, status = newStatus }) as_.scanQueue
+                    Dict.update itemId (Maybe.map (\i -> { i | imageUrl = dataUrl, status = newStatus })) as_.scanQueue
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }
             , Cmd.batch
@@ -603,7 +600,7 @@ updateAuth msg as_ =
                         Err _ -> Nothing
 
                 updatedQueue =
-                    updateScanItem itemId (\i -> { i | status = ScanReady, ocrData = ocrData }) as_.scanQueue
+                    Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = ocrData })) as_.scanQueue
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
 
@@ -694,12 +691,12 @@ updateAuth msg as_ =
                         updatedQueue =
                             case as_.activeScanItemId of
                                 Just id ->
-                                    updateScanItem id (\i -> { i | status = ScanSubmitted }) as_.scanQueue
+                                    Dict.update id (Maybe.map (\i -> { i | status = ScanSubmitted })) as_.scanQueue
                                 Nothing ->
                                     as_.scanQueue
 
                         hasRemaining =
-                            List.any (\i -> i.status /= ScanSubmitted) updatedQueue
+                            Dict.values updatedQueue |> List.any (\i -> i.status /= ScanSubmitted)
 
                         nextTab =
                             if as_.activeScanItemId /= Nothing && hasRemaining then
@@ -873,17 +870,17 @@ updateAuth msg as_ =
             ( AuthModel { as_ | toast = Nothing }, Cmd.none )
 
         GotExifCoords itemId (Just lat) (Just lon) _ ->
-            ( AuthModel { as_ | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationGot lat lon ExifGps }) as_.scanQueue }
+            ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map (\i -> { i | locationState = LocationGot lat lon ExifGps })) as_.scanQueue }
             , Cmd.none
             )
 
         GotExifCoords itemId _ _ debug ->
-            ( AuthModel { as_ | scanQueue = updateScanItem itemId (\i -> { i | locationState = LocationNoExifGps, exifDebug = debug }) as_.scanQueue }
+            ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map (\i -> { i | locationState = LocationNoExifGps, exifDebug = debug })) as_.scanQueue }
             , Cmd.none
             )
 
         ReviewScanItem itemId ->
-            case List.head (List.filter (\i -> i.id == itemId) as_.scanQueue) of
+            case Dict.get itemId as_.scanQueue of
                 Nothing ->
                     ( AuthModel as_, Cmd.none )
 
@@ -925,7 +922,7 @@ updateAuth msg as_ =
             )
 
         ClearDoneItems ->
-            ( AuthModel { as_ | scanQueue = List.filter (\i -> i.status /= ScanSubmitted) as_.scanQueue }
+            ( AuthModel { as_ | scanQueue = Dict.filter (\_ i -> i.status /= ScanSubmitted) as_.scanQueue }
             , Cmd.none
             )
 
@@ -1828,7 +1825,7 @@ viewScanTab model =
                 ]
                 []
             ]
-        , if List.isEmpty model.scanQueue then
+        , if Dict.isEmpty model.scanQueue then
             button
                 [ onClick (TabChanged AddTab)
                 , class "w-full py-3.5 rounded-lg border border-[#3a4240] text-[#7a8a80] text-sm cursor-pointer bg-transparent font-[inherit]"
@@ -1838,8 +1835,8 @@ viewScanTab model =
           else
             div []
                 [ div [ class "grid grid-cols-2 gap-3 mb-4" ]
-                    (List.map viewScanCard model.scanQueue)
-                , if List.any (\i -> i.status == ScanSubmitted) model.scanQueue then
+                    (Dict.values model.scanQueue |> List.map viewScanCard)
+                , if Dict.values model.scanQueue |> List.any (\i -> i.status == ScanSubmitted) then
                     button
                         [ onClick ClearDoneItems
                         , class "w-full py-2 rounded-lg border border-[#3a4240] text-[#4a5a50] text-xs cursor-pointer bg-transparent font-[inherit] mb-4"
@@ -1850,7 +1847,7 @@ viewScanTab model =
                     text ""
                 , let
                     debugItems =
-                        List.filter (\i -> i.exifDebug /= "") model.scanQueue
+                        Dict.values model.scanQueue |> List.filter (\i -> i.exifDebug /= "")
                   in
                   if List.isEmpty debugItems then
                     text ""
@@ -1975,6 +1972,23 @@ viewAddTab model =
               else
                 text ""
             ]
+        , case model.activeScanItemId of
+            Nothing ->
+                text ""
+
+            Just id ->
+                case Dict.get id model.scanQueue of
+                    Just item ->
+                        img
+                            [ src item.imageUrl
+                            , class "w-full rounded-xl object-contain mb-4"
+                            , style "max-height" "240px"
+                            , style "background" "#1a2420"
+                            ]
+                            []
+
+                    Nothing ->
+                        text ""
         , formField "AMOUNT"
             (div [ style "position" "relative" ]
                 [ span
