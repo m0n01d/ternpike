@@ -10,6 +10,7 @@ import Html.Attributes
 import List.NonEmpty.Zipper as Zipper
 import Types exposing (..)
 import UI.Layout exposing (sectionHead)
+import UI.Theme
 
 
 viewStatsTab : AuthState -> Html Msg
@@ -177,7 +178,7 @@ viewCategoryChart entries =
                 |> C.variation (\_ d -> [ CA.color d.color ])
             ]
             rows
-        , C.binLabels .label [ CA.moveDown 16, CA.color "#8a8a78", CA.fontSize 9 ]
+        , C.binLabels .label [ CA.moveDown 16, CA.color UI.Theme.colorMuted, CA.fontSize 9 ]
         ]
 
 
@@ -203,9 +204,9 @@ viewDailyChart entries =
         , CA.margin { top = 10, bottom = 28, left = 0, right = 0 }
         ]
         [ C.bars []
-            [ C.bar .total [ CA.color "#b85c38" ] ]
+            [ C.bar .total [ CA.color UI.Theme.colorRust ] ]
             days
-        , C.binLabels .date [ CA.moveDown 16, CA.color "#8a8a78", CA.fontSize 8 ]
+        , C.binLabels .date [ CA.moveDown 16, CA.color UI.Theme.colorMuted, CA.fontSize 8 ]
         ]
 
 
@@ -233,6 +234,6 @@ viewCumulativeChart entries =
         , CA.margin { top = 10, bottom = 10, left = 0, right = 0 }
         ]
         [ C.series .x
-            [ C.interpolated .y [ CA.color "#b85c38", CA.width 2 ] [] ]
+            [ C.interpolated .y [ CA.color UI.Theme.colorRust, CA.width 2 ] [] ]
             points
         ]

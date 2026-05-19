@@ -17,6 +17,10 @@
   --color-parchment:    #faf7f0;
   --color-muted:        #8a8a78;
 
+  /* ── Semantic / derived ────────────────────────────────────── */
+  --color-rust-tint:    #fdf0ea;  /* soft rust bg — error/warning banners */
+  --color-danger:       #a83020;  /* destructive — delete buttons, over-budget */
+
   /* ── Fonts ─────────────────────────────────────────────────── */
   --font-display: 'Playfair Display', Georgia, serif;
   --font-mono:    'DM Mono', ui-monospace, monospace;
@@ -35,75 +39,84 @@
   /* ── Animations ────────────────────────────────────────────── */
   --animate-fade-up:      fade-up 0.9s ease both;
   --animate-fade-up-slow: fade-up 0.9s 0.3s ease both;
+  --animate-soar:         soar 7s ease-in-out infinite;
 
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(20px); }
     to   { opacity: 1; transform: translateY(0); }
   }
+
+  @keyframes soar {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    35%      { transform: translateY(-16px) rotate(1.5deg); }
+    70%      { transform: translateY(-8px) rotate(-1deg); }
+  }
 }
 
-/* ── Base resets ───────────────────────────────────────────────── */
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
+@layer base {
+  /* ── Base resets ─────────────────────────────────────────────── */
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-html, body {
-  height: 100%;
-  background: #faf7f0;
-}
+  html, body {
+    height: 100%;
+    background: #faf7f0;
+  }
 
-body {
-  overscroll-behavior: none;
-  font-family: 'Crimson Pro', Georgia, serif;
-  color: #1e2818;
-}
+  body {
+    overscroll-behavior: none;
+    font-family: 'Crimson Pro', Georgia, serif;
+    color: #1e2818;
+  }
 
-button, select, textarea {
-  font-family: inherit;
-}
+  button, select, textarea {
+    font-family: inherit;
+  }
 
-input[type="text"],
-input[type="password"],
-input[type="number"],
-input[type="date"],
-input[type="url"],
-textarea {
-  width: 100%;
-  padding: 14px;
-  background: #ebe5d4;
-  border: 1px solid #d4c9a8;
-  color: #1e2818;
-  border-radius: 8px;
-  font-family: 'Crimson Pro', Georgia, serif;
-  font-size: 16px;
-  -webkit-appearance: none;
-  appearance: none;
-}
+  input[type="text"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="url"],
+  textarea {
+    width: 100%;
+    padding: 14px;
+    background: #ebe5d4;
+    border: 1px solid #d4c9a8;
+    color: #1e2818;
+    border-radius: 8px;
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 16px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
 
-textarea {
-  resize: none;
-  line-height: 1.4;
-}
+  textarea {
+    resize: none;
+    line-height: 1.4;
+  }
 
-input:focus,
-textarea:focus {
-  outline: 2px solid #b85c38;
-  border-color: transparent;
-}
+  input:focus,
+  textarea:focus {
+    outline: 2px solid #b85c38;
+    border-color: transparent;
+  }
 
-input[type="number"] {
-  font-family: 'DM Mono', ui-monospace, monospace;
-}
+  input[type="number"] {
+    font-family: 'DM Mono', ui-monospace, monospace;
+  }
 
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 
-input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.3) sepia(0.4) hue-rotate(60deg);
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.3) sepia(0.4) hue-rotate(60deg);
+  }
 }

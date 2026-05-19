@@ -17,19 +17,25 @@ import Html.Attributes
 import Html.Events
 import List.NonEmpty.Zipper as Zipper
 import Types exposing (..)
+import UI.Mascot
 
 
 viewHeader : AuthState -> Html Msg
 viewHeader as_ =
     Html.div
         [ Html.Attributes.class "bg-cream border-b border-tan px-5 py-3 flex items-center justify-between sticky top-0 z-10" ]
-        [ Html.div []
-            [ Html.span
-                [ Html.Attributes.class "text-xl font-bold text-rust font-display tracking-tight" ]
-                [ Html.text "Ternpike" ]
-            , Html.span
-                [ Html.Attributes.class "text-[11px] text-muted ml-2.5 tracking-widest" ]
-                [ Html.text (Zipper.current as_.trips).name ]
+        [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+            [ UI.Mascot.ternSvg "w-7 shrink-0"
+            , Html.div []
+                [ Html.span
+                    [ Html.Attributes.class "text-xl font-black font-display tracking-tight text-forest" ]
+                    [ Html.text "Tern"
+                    , Html.span [ Html.Attributes.class "text-rust" ] [ Html.text "pike" ]
+                    ]
+                , Html.span
+                    [ Html.Attributes.class "text-[11px] text-muted ml-2.5 tracking-widest" ]
+                    [ Html.text (Zipper.current as_.trips).name ]
+                ]
             ]
         , Html.button
             [ Html.Events.onClick
@@ -101,7 +107,7 @@ viewErrorBanner maybeErr =
 
         Just err ->
             Html.div
-                [ Html.Attributes.class "bg-[#fdf0ea] border-l-4 border-rust text-rust px-4 py-3 mx-5 mb-4 rounded-r-lg text-sm flex justify-between items-center" ]
+                [ Html.Attributes.class "bg-rust-tint border-l-4 border-rust text-rust px-4 py-3 mx-5 mb-4 rounded-r-lg text-sm flex justify-between items-center" ]
                 [ Html.text err
                 , Html.button
                     [ Html.Events.onClick DismissError
@@ -129,7 +135,7 @@ viewDeleteConfirmModal trip =
                     [ Html.text "Cancel" ]
                 , Html.button
                     [ Html.Events.onClick (DeleteTrip trip)
-                    , Html.Attributes.class "flex-1 py-3 rounded-lg border-none bg-[#a83020] text-parchment text-sm font-bold cursor-pointer"
+                    , Html.Attributes.class "flex-1 py-3 rounded-lg border-none bg-danger text-parchment text-sm font-bold cursor-pointer"
                     ]
                     [ Html.text "Delete trip" ]
                 ]
@@ -169,7 +175,7 @@ viewSettingsPanel cfg isSignedIn version =
                 [ Html.text "Reset all settings" ]
             ]
         , if version /= "" then
-            Html.p [ Html.Attributes.class "text-[#c4b898] text-[11px] text-center mt-6 font-mono" ]
+            Html.p [ Html.Attributes.class "text-muted text-[11px] text-center mt-6 font-mono" ]
                 [ Html.text version ]
           else
             Html.text ""

@@ -5,29 +5,32 @@ import Html.Attributes
 import Html.Events
 import Types exposing (..)
 import UI.Layout exposing (viewSettingsPanel)
+import UI.Mascot
 
 
 viewGuest : GuestState -> Html Msg
 viewGuest gs =
     Html.div
         [ Html.Attributes.class "flex flex-col items-center justify-center min-h-screen px-6 py-8 text-center" ]
-        [ Html.div [ Html.Attributes.class "text-5xl mb-4" ] [ Html.text "🏔" ]
+        [ UI.Mascot.ternSvg "animate-soar mb-6 w-36"
         , Html.h1
-            [ Html.Attributes.class "text-[38px] font-bold text-rust font-display tracking-tight mb-2" ]
-            [ Html.text "Ternpike" ]
+            [ Html.Attributes.class "text-4xl font-black font-display tracking-tight mb-2 text-forest" ]
+            [ Html.text "Tern"
+            , Html.span [ Html.Attributes.class "text-rust" ] [ Html.text "pike" ]
+            ]
         , Html.p [ Html.Attributes.class "text-muted mb-8 text-base" ]
             [ Html.text "Road log for the long way north" ]
         , case gs.authError of
             Just err ->
                 Html.div
-                    [ Html.Attributes.class "w-full max-w-xs mb-4 px-4 py-3 rounded-lg bg-[#fdf0ea] border border-rust text-rust text-sm text-left" ]
+                    [ Html.Attributes.class "w-full max-w-xs mb-4 px-4 py-3 rounded-lg bg-rust-tint border border-rust text-rust text-sm text-left" ]
                     [ Html.text err ]
 
             Nothing ->
                 case gs.session.reason of
                     SessionExpired ->
                         Html.div
-                            [ Html.Attributes.class "w-full max-w-xs mb-4 px-4 py-3 rounded-lg bg-[#fdf0ea] border border-rust text-rust text-sm text-left" ]
+                            [ Html.Attributes.class "w-full max-w-xs mb-4 px-4 py-3 rounded-lg bg-rust-tint border border-rust text-rust text-sm text-left" ]
                             [ Html.text "Session expired — sign in to continue." ]
 
                     _ ->

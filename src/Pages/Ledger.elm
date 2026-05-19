@@ -60,7 +60,7 @@ viewLedgerTab model =
                     , Html.Attributes.class
                         ("px-3 py-1.5 rounded border text-sm cursor-pointer "
                             ++ (if model.showLedgerMap then
-                                    "border-[#c4d8f0] bg-[#edf4fc] text-[#4a6a9e]"
+                                    "border-forest-light bg-cream text-forest"
                                  else
                                     "border-tan bg-transparent text-muted"
                                )
@@ -95,8 +95,7 @@ viewLedgerMap model entries =
     if model.showLedgerMap then
         Html.node "waypoint-map"
             [ Html.Attributes.attribute "points" (encodeWaypoints entries)
-            , Html.Attributes.class "block w-full rounded-xl overflow-hidden mb-5"
-            , Html.Attributes.style "height" "260px"
+            , Html.Attributes.class "block w-full rounded-xl overflow-hidden mb-5 h-[260px]"
             ]
             []
 
@@ -186,7 +185,7 @@ viewEntryRow entry =
         , case entry.lat of
             Just _ ->
                 Html.span
-                    [ Html.Attributes.class "text-sm text-[#4a6a9e] shrink-0"
+                    [ Html.Attributes.class "text-sm text-moss shrink-0"
                     , Html.Attributes.title "Has GPS coordinates"
                     ]
                     [ Html.text "📍" ]

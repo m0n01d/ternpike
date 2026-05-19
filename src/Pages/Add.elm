@@ -237,7 +237,7 @@ viewLocationStatus ls =
                         ManualPin  -> "📍 pinned"
             in
             Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
-                [ Html.span [ Html.Attributes.class "text-[#4a6a9e] text-sm" ]
+                [ Html.span [ Html.Attributes.class "text-moss text-sm" ]
                     [ Html.text (sourceLabel ++ " — " ++ formatCoord lat lon) ]
                 , Html.button
                     [ Html.Events.onClick OpenMapPicker

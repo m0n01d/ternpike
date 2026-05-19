@@ -1,0 +1,78 @@
+module UI.Mascot exposing (ternSvg)
+
+import Html exposing (Html)
+import Svg
+import Svg.Attributes
+import Types exposing (Msg)
+import UI.Theme
+
+
+ternSvg : String -> Html Msg
+ternSvg className =
+    Svg.svg
+        [ Svg.Attributes.width "120"
+        , Svg.Attributes.height "80"
+        , Svg.Attributes.viewBox "0 0 120 80"
+        , Svg.Attributes.fill "none"
+        , Svg.Attributes.class className
+        ]
+        [ Svg.path
+            [ Svg.Attributes.d "M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z"
+            , Svg.Attributes.fill UI.Theme.colorForest
+            ]
+            []
+        , Svg.path
+            [ Svg.Attributes.d "M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z"
+            , Svg.Attributes.fill UI.Theme.colorForestMid
+            ]
+            []
+        , Svg.ellipse
+            [ Svg.Attributes.cx "60"
+            , Svg.Attributes.cy "43"
+            , Svg.Attributes.rx "20"
+            , Svg.Attributes.ry "7"
+            , Svg.Attributes.fill UI.Theme.colorForest
+            ]
+            []
+        , Svg.path
+            [ Svg.Attributes.d "M44 47 L28 62"
+            , Svg.Attributes.stroke UI.Theme.colorForest
+            , Svg.Attributes.strokeWidth "2.5"
+            , Svg.Attributes.strokeLinecap "round"
+            ]
+            []
+        , Svg.path
+            [ Svg.Attributes.d "M44 47 L34 65"
+            , Svg.Attributes.stroke UI.Theme.colorForest
+            , Svg.Attributes.strokeWidth "2"
+            , Svg.Attributes.strokeLinecap "round"
+            ]
+            []
+        , Svg.ellipse
+            [ Svg.Attributes.cx "76"
+            , Svg.Attributes.cy "40"
+            , Svg.Attributes.rx "9"
+            , Svg.Attributes.ry "7"
+            , Svg.Attributes.fill UI.Theme.colorInk
+            ]
+            []
+        , Svg.path
+            [ Svg.Attributes.d "M84 40 L96 38.5 L84 42Z"
+            , Svg.Attributes.fill UI.Theme.colorRust
+            ]
+            []
+        , Svg.circle
+            [ Svg.Attributes.cx "79"
+            , Svg.Attributes.cy "38.5"
+            , Svg.Attributes.r "1.8"
+            , Svg.Attributes.fill UI.Theme.colorTan
+            ]
+            []
+        , Svg.circle
+            [ Svg.Attributes.cx "79.5"
+            , Svg.Attributes.cy "38.5"
+            , Svg.Attributes.r "0.8"
+            , Svg.Attributes.fill UI.Theme.colorInk
+            ]
+            []
+        ]

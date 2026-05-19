@@ -81,7 +81,7 @@ viewScanCard item =
             Html.img [ Html.Attributes.src item.imageUrl, Html.Attributes.class "w-full h-28 object-cover" ] []
 
           else
-            Html.div [ Html.Attributes.class "w-full h-28 bg-[#ebe5d4] flex items-center justify-center text-3xl text-tan" ]
+            Html.div [ Html.Attributes.class "w-full h-28 bg-cream flex items-center justify-center text-3xl text-tan" ]
                 [ Html.text "📷" ]
         , Html.div [ Html.Attributes.class "p-2" ]
             [ viewScanCardStatus item ]

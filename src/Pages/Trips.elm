@@ -73,7 +73,7 @@ viewTripsTab as_ =
                         ]
                     , Html.div [ Html.Attributes.class "bg-tan rounded h-1.5" ]
                         [ Html.div
-                            [ Html.Attributes.class ("rounded h-1.5 " ++ (if pct >= 1.0 then "bg-[#a83020]" else "bg-rust"))
+                            [ Html.Attributes.class ("rounded h-1.5 " ++ (if pct >= 1.0 then "bg-danger" else "bg-rust"))
                             -- dynamic percentage; cannot express as a Tailwind class
                             , Html.Attributes.style "width" (String.fromFloat (pct * 100) ++ "%")
                             ]
@@ -124,7 +124,7 @@ viewTripForm form =
         [ Html.p [ Html.Attributes.class "text-[15px] font-bold text-rust font-display mb-4" ]
             [ Html.text (if form.editing == Nothing then "New Trip" else "Edit Trip") ]
         , if not (List.isEmpty form.errors) then
-            Html.div [ Html.Attributes.class "bg-[#fdf0ea] border border-rust rounded-lg p-2.5 mb-3" ]
+            Html.div [ Html.Attributes.class "bg-rust-tint border border-rust rounded-lg p-2.5 mb-3" ]
                 (List.map (\e -> Html.p [ Html.Attributes.class "text-sm text-rust" ] [ Html.text e ]) form.errors)
           else
             Html.text ""
