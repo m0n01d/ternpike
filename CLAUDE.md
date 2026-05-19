@@ -6,12 +6,12 @@
 - Anthropic API for OCR (receipt scanning)
 - Tailwind CSS via Play CDN
 - GitHub Pages deployment (CI triggers on push to main)
-- Elm binary: `/root/.npm/_npx/5bf0f3665e572b9f/node_modules/elm/bin/elm`
+- Elm binary: `elm` (via asdf at `~/.asdf/shims/elm`)
 
 ## Compile before committing
 Always run the compiler before staging:
 ```
-/root/.npm/_npx/5bf0f3665e572b9f/node_modules/elm/bin/elm make src/Main.elm --output=main.js
+elm make src/Main.elm --output=main.js
 ```
 
 ## Git discipline — do NOT repeat this mistake
@@ -37,6 +37,24 @@ all stash changes. The correct sequence when a stash pop conflicts:
 ## Elm style guide
 - **Alphabetize** all record fields and all type constructor lists.
   Apply to every new type and every edit of an existing type.
+  Always fully qualify imports. If you touch a module, or a function, and its imports are NOT fully qualified you should refactor the function or module to be fully qualified
+  You can expose the type, but not "(..)" all.
+
+  for example : 
+  ```elm
+  // don't do
+  import Json.Decode as D
+  import Html exposing exposing (..)
+  import Html.Attributes exposing (..)
+
+  text "hello world"
+
+  // do 
+  import Json.Decode 
+  import Html exposing  (Html)
+  import Html.Attributes
+  Html.div [Html.Attrtibutes.class "tw-flex" ] [Html.text "hello world"]
+  ```
 
 ## Sheet columns
 A=id, B=date, C=amount, D=category, E=note, F=merchant, G=createdAt, H=lat, I=lon, J=longNote

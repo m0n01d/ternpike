@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,500;1,700&family=DM+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400;1,600&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  /* ── Palette ───────────────────────────────────────────────── */
+  --color-ink:          #1e2818;
+  --color-forest:       #2d3a22;
+  --color-forest-mid:   #3d4e2e;
+  --color-forest-light: #4a5e3a;
+  --color-moss:         #6b7c58;
+  --color-rust:         #b85c38;
+  --color-rust-light:   #cc7050;
+  --color-tan:          #d4c9a8;
+  --color-cream:        #f2ede3;
+  --color-parchment:    #faf7f0;
+  --color-muted:        #8a8a78;
+
+  /* ── Fonts ─────────────────────────────────────────────────── */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-mono:    'DM Mono', ui-monospace, monospace;
+  --font-body:    'Crimson Pro', Georgia, serif;
+
+  /* ── Radii ─────────────────────────────────────────────────── */
+  --radius-card:  16px;
+  --radius-panel: 20px;
+  --radius-sheet: 24px;
+
+  /* ── Shadows ───────────────────────────────────────────────── */
+  --shadow-card:  0 4px 24px rgb(45 58 34 / 0.10);
+  --shadow-panel: 0 8px 40px rgb(45 58 34 / 0.12);
+  --shadow-lift:  0 12px 48px rgb(45 58 34 / 0.20);
+
+  /* ── Animations ────────────────────────────────────────────── */
+  --animate-soar:           soar 7s ease-in-out infinite;
+  --animate-fly-across:     fly-across 5s ease-in-out infinite;
+  --animate-fade-up:        fade-up 0.9s ease both;
+  --animate-fade-up-slow:   fade-up 0.9s 0.3s ease both;
+
+  @keyframes soar {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    35%      { transform: translateY(-14px) rotate(1.5deg); }
+    70%      { transform: translateY(-8px) rotate(-1deg); }
+  }
+
+  @keyframes fly-across {
+    0%   { transform: translateX(-80px) translateY(10px) scaleX(1); }
+    48%  { transform: translateX(20px) translateY(-24px) scaleX(1); }
+    52%  { transform: translateX(30px) translateY(-26px) scaleX(-1); }
+    100% { transform: translateX(-70px) translateY(10px) scaleX(-1); }
+  }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* ── Base resets ───────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  height: 100%;
+  background: #0d0f0e;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="url"] {
+  width: 100%;
+  padding: 14px;
+  background: #1e2220;
+  border: 1px solid #3a4240;
+  color: #c8d0c8;
+  border-radius: 8px;
+  font-family: 'Barlow Condensed', system-ui, sans-serif;
+  font-size: 16px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input:focus {
+  outline: 2px solid #e8a020;
+  border-color: transparent;
+}
+
+input[type="number"] {
+  font-family: 'Courier New', monospace;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.5);
+}
+
+h2 {
+  font-size: 13px !important;
+  letter-spacing: 0.1em;
+  color: #7a8a80;
+  margin-bottom: 20px;
+  font-weight: 600;
+}

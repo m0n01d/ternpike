@@ -16,6 +16,7 @@
             "elm/json": "1.1.4",
             "elm/svg": "1.0.1",
             "elm/time": "1.0.0",
+            "elm/url": "1.0.0",
             "terezka/elm-charts": "5.0.0"
         },
         "indirect": {
@@ -23,7 +24,6 @@
             "danhandrea/elm-time-extra": "1.1.0",
             "elm/bytes": "1.0.8",
             "elm/parser": "1.1.0",
-            "elm/url": "1.0.0",
             "elm/virtual-dom": "1.0.5",
             "justinmimbs/date": "4.1.0",
             "justinmimbs/time-extra": "1.2.0",
