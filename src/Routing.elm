@@ -1,14 +1,16 @@
 module Routing exposing
     ( editEntryPath
+    , effectiveRoute
     , routeFromUrl
     , routeParser
+    , routeTitle
     , routeToTab
     , tabToPath
     )
 
 import Data.ExpenseId as ExpenseId
 import Data.TripId as TripId
-import Types exposing (Route(..), Tab(..))
+import Types exposing (AuthState, Route(..), Tab(..))
 import Url
 import Url.Parser as Parser exposing ((</>))
 
@@ -44,13 +46,58 @@ routeFromUrl basePath url =
 routeToTab : Route -> Tab
 routeToTab route =
     case route of
-        RouteAdd          -> AddTab
-        RouteEditEntry _ _ -> AddTab
-        RouteLedger       -> LedgerTab
-        RouteScan         -> ScanTab
-        RouteSettings     -> SettingsTab
-        RouteStats        -> StatsTab
-        RouteTrips        -> TripsTab
+        RouteAdd            -> AddTab
+        RouteAddReviewScan  -> AddTab
+        RouteEditEntry _ _  -> AddTab
+        RouteLedger         -> LedgerTab
+        RouteScan           -> ScanTab
+        RouteSettings       -> SettingsTab
+        RouteStats          -> StatsTab
+        RouteTrips          -> TripsTab
+
+
+routeTitle : Route -> String
+routeTitle route =
+    case route of
+        RouteAdd            -> "ADD EXPENSE"
+        RouteAddReviewScan  -> "REVIEW SCAN"
+        RouteEditEntry _ _  -> "EDIT EXPENSE"
+        RouteLedger         -> "LEDGER"
+        RouteScan           -> "SCAN RECEIPTS"
+        RouteSettings       -> "SETTINGS"
+        RouteStats          -> "STATS"
+        RouteTrips          -> "TRIPS"
+
+
+effectiveRoute : AuthState -> Route
+effectiveRoute as_ =
+    case as_.tab of
+        AddTab ->
+            case as_.editingEntry of
+                Just expense ->
+                    RouteEditEntry expense.tripId expense.id
+
+                Nothing ->
+                    if as_.activeScanItemId /= Nothing then
+                        RouteAddReviewScan
+
+                    else
+                        RouteAdd
+
+        LedgerTab ->
+            RouteLedger
+
+        ScanTab ->
+            RouteScan
+
+        SettingsTab ->
+            RouteSettings
+
+        StatsTab ->
+            RouteStats
+
+        TripsTab ->
+            RouteTrips
 
 
 tabToPath : String -> Tab -> String

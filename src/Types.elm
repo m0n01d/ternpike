@@ -33,6 +33,7 @@ type Tab
 
 type Route
     = RouteAdd
+    | RouteAddReviewScan
     | RouteEditEntry TripId ExpenseId
     | RouteLedger
     | RouteScan

@@ -1,5 +1,6 @@
 module UI.Layout exposing
     ( formField
+    , page
     , sectionHead
     , textInputStyle
     , viewBottomNav
@@ -7,7 +8,6 @@ module UI.Layout exposing
     , viewErrorBanner
     , viewHeader
     , viewNavTab
-    , viewSettingsPanel
     , viewToast
     )
 
@@ -16,6 +16,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import List.NonEmpty.Zipper as Zipper
+import Routing
 import Types exposing (..)
 import UI.Mascot
 
@@ -23,12 +24,12 @@ import UI.Mascot
 viewHeader : AuthState -> Html Msg
 viewHeader as_ =
     Html.div
-        [ Html.Attributes.class "bg-cream border-b border-tan px-5 py-3 flex items-center justify-between sticky top-0 z-10" ]
+        [ Html.Attributes.class "sticky top-0 z-10 flex items-center justify-between px-5 py-3 border-b bg-cream border-tan" ]
         [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
             [ UI.Mascot.ternSvg "w-7 shrink-0"
             , Html.div []
                 [ Html.span
-                    [ Html.Attributes.class "text-xl font-black font-display tracking-tight text-forest" ]
+                    [ Html.Attributes.class "text-xl font-black tracking-tight font-display text-forest" ]
                     [ Html.text "Tern"
                     , Html.span [ Html.Attributes.class "text-rust" ] [ Html.text "pike" ]
                     ]
@@ -90,10 +91,10 @@ viewToast toast =
         Just message ->
             Html.div
                 [ Html.Attributes.class "fixed bottom-[72px] left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel" ]
-                [ Html.span [ Html.Attributes.class "text-ink text-sm flex-1" ] [ Html.text message ]
+                [ Html.span [ Html.Attributes.class "flex-1 text-sm text-ink" ] [ Html.text message ]
                 , Html.button
                     [ Html.Events.onClick ToastExpired
-                    , Html.Attributes.class "bg-transparent border-none text-muted text-lg leading-none cursor-pointer p-0 shrink-0"
+                    , Html.Attributes.class "p-0 text-lg leading-none bg-transparent border-none cursor-pointer text-muted shrink-0"
                     ]
                     [ Html.text "✕" ]
                 ]
@@ -107,11 +108,11 @@ viewErrorBanner maybeErr =
 
         Just err ->
             Html.div
-                [ Html.Attributes.class "bg-rust-tint border-l-4 border-rust text-rust px-4 py-3 mx-5 mb-4 rounded-r-lg text-sm flex justify-between items-center" ]
+                [ Html.Attributes.class "flex items-center justify-between px-4 py-3 mx-5 mb-4 text-sm border-l-4 rounded-r-lg bg-rust-tint border-rust text-rust" ]
                 [ Html.text err
                 , Html.button
                     [ Html.Events.onClick DismissError
-                    , Html.Attributes.class "bg-transparent border-none text-rust cursor-pointer text-lg p-0 pl-3"
+                    , Html.Attributes.class "p-0 pl-3 text-lg bg-transparent border-none cursor-pointer text-rust"
                     ]
                     [ Html.text "✕" ]
                 ]
@@ -122,63 +123,24 @@ viewDeleteConfirmModal trip =
     Html.div
         [ Html.Attributes.class "fixed inset-0 bg-forest/65 z-[9998] flex items-center justify-center p-6" ]
         [ Html.div
-            [ Html.Attributes.class "bg-parchment border border-tan rounded-2xl p-6 w-full max-w-sm shadow-panel" ]
-            [ Html.p [ Html.Attributes.class "text-lg font-bold text-ink font-display mb-2" ]
+            [ Html.Attributes.class "w-full max-w-sm p-6 border bg-parchment border-tan rounded-2xl shadow-panel" ]
+            [ Html.p [ Html.Attributes.class "mb-2 text-lg font-bold text-ink font-display" ]
                 [ Html.text ("Delete \u{201C}" ++ trip.name ++ "\u{201D}?") ]
-            , Html.p [ Html.Attributes.class "text-sm text-muted mb-6 leading-relaxed" ]
+            , Html.p [ Html.Attributes.class "mb-6 text-sm leading-relaxed text-muted" ]
                 [ Html.text "This will permanently delete the trip and all its expense data." ]
             , Html.div [ Html.Attributes.class "flex gap-3" ]
                 [ Html.button
                     [ Html.Events.onClick CancelDeleteTrip
-                    , Html.Attributes.class "flex-1 py-3 rounded-lg border border-tan bg-transparent text-muted text-sm cursor-pointer"
+                    , Html.Attributes.class "flex-1 py-3 text-sm bg-transparent border rounded-lg cursor-pointer border-tan text-muted"
                     ]
                     [ Html.text "Cancel" ]
                 , Html.button
                     [ Html.Events.onClick (DeleteTrip trip)
-                    , Html.Attributes.class "flex-1 py-3 rounded-lg border-none bg-danger text-parchment text-sm font-bold cursor-pointer"
+                    , Html.Attributes.class "flex-1 py-3 text-sm font-bold border-none rounded-lg cursor-pointer bg-danger text-parchment"
                     ]
                     [ Html.text "Delete trip" ]
                 ]
             ]
-        ]
-
-
-viewSettingsPanel : AppConfig -> Bool -> String -> Html Msg
-viewSettingsPanel cfg isSignedIn version =
-    Html.div [ Html.Attributes.class "px-5 py-6" ]
-        [ Html.h2 [ sectionHead ] [ Html.text "SETTINGS" ]
-        , formField "ANTHROPIC API KEY"
-            (Html.input
-                [ Html.Attributes.type_ "password"
-                , Html.Attributes.value cfg.anthropicKey
-                , Html.Events.onInput ApiKeyChanged
-                , Html.Attributes.placeholder "sk-ant-..."
-                , textInputStyle
-                ]
-                []
-            )
-        , if isSignedIn then
-            Html.div [ Html.Attributes.class "mt-8" ]
-                [ Html.button
-                    [ Html.Events.onClick SignOutClicked
-                    , Html.Attributes.class "w-full bg-transparent border border-rust text-rust rounded-lg py-3.5 text-[15px] cursor-pointer"
-                    ]
-                    [ Html.text "SIGN OUT" ]
-                ]
-          else
-            Html.text ""
-        , Html.div [ Html.Attributes.class "mt-2" ]
-            [ Html.button
-                [ Html.Events.onClick ResetSettingsClicked
-                , Html.Attributes.class "w-full bg-transparent border border-tan text-muted rounded-lg py-3.5 text-sm cursor-pointer"
-                ]
-                [ Html.text "Reset all settings" ]
-            ]
-        , if version /= "" then
-            Html.p [ Html.Attributes.class "text-muted text-[11px] text-center mt-6 font-mono" ]
-                [ Html.text version ]
-          else
-            Html.text ""
         ]
 
 
@@ -191,9 +153,24 @@ formField label_ input_ =
         ]
 
 
+page : { actions : List (Html Msg), body : Html Msg, hero : Html Msg, route : Route } -> Html Msg
+page { actions, body, hero, route } =
+    Html.div [ Html.Attributes.class "p-5" ]
+        [ Html.div [ Html.Attributes.class "p-4 mb-5 bg-cream rounded-xl" ]
+            [ Html.div
+                [ Html.Attributes.class "flex justify-between mb-3 gap-3 min-h-7" ]
+                [ Html.span [ sectionHead ] [ Html.text (Routing.routeTitle route) ]
+                , Html.div [ Html.Attributes.class "flex gap-2" ] actions
+                ]
+            , hero
+            ]
+        , body
+        ]
+
+
 sectionHead : Html.Attribute Msg
 sectionHead =
-    Html.Attributes.class "text-xs tracking-widest text-moss uppercase font-semibold mb-5"
+    Html.Attributes.class "text-xs font-semibold tracking-widest uppercase text-moss"
 
 
 textInputStyle : Html.Attribute Msg

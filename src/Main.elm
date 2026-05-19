@@ -19,18 +19,19 @@ import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 import List.NonEmpty.Zipper as Zipper exposing (Zipper)
-import Pages.Add exposing (viewAddTab)
+import Pages.Add
 import Pages.Guest exposing (viewGuest)
-import Pages.Ledger exposing (viewLedgerTab)
-import Pages.Scan exposing (viewScanTab)
-import Pages.Stats exposing (viewStatsTab)
-import Pages.Trips exposing (viewTripsTab)
+import Pages.Ledger
+import Pages.Scan
+import Pages.Settings
+import Pages.Stats
+import Pages.Trips
 import Process
 import Routing
 import Task
 import Time
 import Types exposing (..)
-import UI.Layout exposing (viewBottomNav, viewDeleteConfirmModal, viewErrorBanner, viewHeader, viewSettingsPanel, viewToast)
+import UI.Layout
 import Url
 import Validate
 
@@ -1425,23 +1426,37 @@ view model =
 
 viewAuth : AuthState -> Html Msg
 viewAuth as_ =
+    let
+        route =
+            Routing.effectiveRoute as_
+
+        tab =
+            case route of
+                RouteAdd            -> Pages.Add.viewTab as_
+                RouteAddReviewScan  -> Pages.Add.viewTab as_
+                RouteEditEntry _ _  -> Pages.Add.viewTab as_
+                RouteLedger         -> Pages.Ledger.viewTab as_
+                RouteScan           -> Pages.Scan.viewTab as_
+                RouteSettings       -> Pages.Settings.viewTab as_
+                RouteStats          -> Pages.Stats.viewTab as_
+                RouteTrips          -> Pages.Trips.viewTab as_
+    in
     Html.div []
-        [ viewHeader as_
-        , viewErrorBanner as_.error
+        [ UI.Layout.viewHeader as_
+        , UI.Layout.viewErrorBanner as_.error
         , Html.div [ Html.Attributes.class "pb-20" ]
-            [ case as_.tab of
-                ScanTab     -> viewScanTab as_
-                AddTab      -> viewAddTab as_
-                LedgerTab   -> viewLedgerTab as_
-                StatsTab    -> viewStatsTab as_
-                SettingsTab -> viewSettingsPanel as_.config True as_.version
-                TripsTab    -> viewTripsTab as_
+            [ UI.Layout.page
+                { actions = tab.actions
+                , body    = tab.body
+                , hero    = tab.hero
+                , route   = route
+                }
             ]
-        , viewBottomNav as_.tab
+        , UI.Layout.viewBottomNav as_.tab
         , case as_.confirmDeleteTrip of
-            Just trip -> viewDeleteConfirmModal trip
+            Just trip -> UI.Layout.viewDeleteConfirmModal trip
             Nothing   -> Html.text ""
-        , viewToast as_.toast
+        , UI.Layout.viewToast as_.toast
         ]
 
 

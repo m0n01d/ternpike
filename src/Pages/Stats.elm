@@ -1,4 +1,4 @@
-module Pages.Stats exposing (viewStatsTab)
+module Pages.Stats exposing (viewTab)
 
 import Chart as C
 import Chart.Attributes as CA
@@ -9,12 +9,53 @@ import Html exposing (Html)
 import Html.Attributes
 import List.NonEmpty.Zipper as Zipper
 import Types exposing (..)
-import UI.Layout exposing (sectionHead)
 import UI.Theme
 
 
-viewStatsTab : AuthState -> Html Msg
-viewStatsTab model =
+viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
+viewTab as_ =
+    { actions = []
+    , body = viewBody as_
+    , hero = viewHero as_
+    }
+
+
+viewHero : AuthState -> Html Msg
+viewHero model =
+    let
+        entries =
+            case model.expensesState of
+                Loaded es -> es
+                _         -> []
+
+        total =
+            List.sum (List.map .amount entries)
+
+        numDays =
+            List.length (Entry.uniqueDates entries)
+
+        numEntries =
+            List.length entries
+    in
+    Html.div [ Html.Attributes.class "grid grid-cols-3 gap-3" ]
+        [ heroStat "TOTAL" (formatAmount total)
+        , heroStat "ENTRIES" (String.fromInt numEntries)
+        , heroStat "DAYS" (String.fromInt numDays)
+        ]
+
+
+heroStat : String -> String -> Html Msg
+heroStat label_ value =
+    Html.div []
+        [ Html.div [ Html.Attributes.class "text-[11px] tracking-widest text-moss mb-1.5" ]
+            [ Html.text label_ ]
+        , Html.div [ Html.Attributes.class "text-[22px] font-mono text-rust" ]
+            [ Html.text value ]
+        ]
+
+
+viewBody : AuthState -> Html Msg
+viewBody model =
     let
         entries =
             case model.expensesState of
@@ -59,13 +100,9 @@ viewStatsTab model =
             else
                 0
     in
-    Html.div [ Html.Attributes.class "p-5" ]
-        [ Html.h2 [ sectionHead ] [ Html.text "STATS" ]
-        , Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3 mb-6" ]
-            [ statCard "TOTAL SPENT" (formatAmount total)
-            , statCard "ENTRIES" (String.fromInt numEntries)
-            , statCard "DAYS ON ROAD" (String.fromInt numDays)
-            , statCard "AVG / DAY" (formatAmount avgPerDay)
+    Html.div []
+        [ Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3 mb-6" ]
+            [ statCard "AVG / DAY" (formatAmount avgPerDay)
             , statCard "AVG / ENTRY" (formatAmount avgPerEntry)
             , statCard "MEDIAN" (formatAmount median)
             , statCard "TOP CATEGORY"

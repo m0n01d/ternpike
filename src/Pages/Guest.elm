@@ -4,7 +4,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Types exposing (..)
-import UI.Layout exposing (viewSettingsPanel)
+import Pages.Settings
 import UI.Mascot
 
 
@@ -84,7 +84,7 @@ viewGuest gs =
                 ]
                 [ Html.text "⚙ Settings" ]
             , if gs.showSettings then
-                viewSettingsPanel gs.session.config False gs.version
+                Pages.Settings.viewPanel gs.session.config False gs.version
 
               else
                 Html.text ""

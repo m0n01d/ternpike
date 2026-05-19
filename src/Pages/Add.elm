@@ -1,4 +1,4 @@
-module Pages.Add exposing (viewAddTab)
+module Pages.Add exposing (viewTab)
 
 import Data.Category as Category exposing (Category(..))
 import Dict
@@ -8,11 +8,59 @@ import Html.Attributes
 import Html.Events
 import Json.Decode
 import Types exposing (..)
-import UI.Layout exposing (formField, sectionHead, textInputStyle)
+import UI.Layout
 
 
-viewAddTab : AuthState -> Html Msg
-viewAddTab model =
+viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
+viewTab as_ =
+    { actions = viewActions as_
+    , body = viewBody as_
+    , hero = viewHero as_
+    }
+
+
+viewActions : AuthState -> List (Html Msg)
+viewActions model =
+    if model.activeScanItemId /= Nothing then
+        [ Html.button
+            [ Html.Events.onClick BackToQueue
+            , Html.Attributes.class "bg-transparent border-none text-muted text-sm cursor-pointer p-1"
+            ]
+            [ Html.text "← queue" ]
+        ]
+
+    else if model.editingEntry /= Nothing then
+        [ Html.button
+            [ Html.Events.onClick CancelEdit
+            , Html.Attributes.class "bg-transparent border-none text-muted text-sm cursor-pointer p-1"
+            ]
+            [ Html.text "← cancel" ]
+        ]
+
+    else
+        []
+
+
+viewHero : AuthState -> Html Msg
+viewHero model =
+    Html.div [ Html.Attributes.class "relative" ]
+        [ Html.span
+            [ Html.Attributes.class "absolute left-3.5 top-1/2 -translate-y-1/2 text-rust text-xl font-mono pointer-events-none" ]
+            [ Html.text "$" ]
+        , Html.input
+            [ Html.Attributes.type_ "number"
+            , Html.Attributes.attribute "inputmode" "decimal"
+            , Html.Attributes.value model.pendingEntry.amount
+            , Html.Events.onInput AmountChanged
+            , Html.Attributes.placeholder "0.00"
+            , Html.Attributes.class "w-full pl-9 text-2xl font-mono bg-transparent border-tan"
+            ]
+            []
+        ]
+
+
+viewBody : AuthState -> Html Msg
+viewBody model =
     let
         p =
             model.pendingEntry
@@ -20,38 +68,8 @@ viewAddTab model =
         isEditing =
             model.editingEntry /= Nothing
     in
-    Html.div [ Html.Attributes.class "p-5" ]
-        [ Html.div [ Html.Attributes.class "flex items-center justify-between mb-5" ]
-            [ Html.h2 [ sectionHead ]
-                [ Html.text
-                    (if isEditing then
-                        "EDIT EXPENSE"
-
-                     else if model.activeScanItemId /= Nothing then
-                        "REVIEW SCAN"
-
-                     else
-                        "ADD EXPENSE"
-                    )
-                ]
-            , if model.activeScanItemId /= Nothing then
-                Html.button
-                    [ Html.Events.onClick BackToQueue
-                    , Html.Attributes.class "bg-transparent border-none text-muted text-sm cursor-pointer p-1"
-                    ]
-                    [ Html.text "← queue" ]
-
-              else if isEditing then
-                Html.button
-                    [ Html.Events.onClick CancelEdit
-                    , Html.Attributes.class "bg-transparent border-none text-muted text-sm cursor-pointer p-1"
-                    ]
-                    [ Html.text "← cancel" ]
-
-              else
-                Html.text ""
-            ]
-        , case model.activeScanItemId of
+    Html.div []
+        [ case model.activeScanItemId of
             Nothing ->
                 Html.text ""
 
@@ -66,38 +84,22 @@ viewAddTab model =
 
                     Nothing ->
                         Html.text ""
-        , formField "AMOUNT"
-            (Html.div [ Html.Attributes.class "relative" ]
-                [ Html.span
-                    [ Html.Attributes.class "absolute left-3.5 top-1/2 -translate-y-1/2 text-rust text-xl font-mono" ]
-                    [ Html.text "$" ]
-                , Html.input
-                    [ Html.Attributes.type_ "number"
-                    , Html.Attributes.attribute "inputmode" "decimal"
-                    , Html.Attributes.value p.amount
-                    , Html.Events.onInput AmountChanged
-                    , Html.Attributes.placeholder "0.00"
-                    , Html.Attributes.class "w-full pl-9 text-2xl font-mono"
-                    ]
-                    []
-                ]
-            )
-        , formField "CATEGORY"
+        , UI.Layout.formField "CATEGORY"
             (Html.div [ Html.Attributes.class "grid grid-cols-4 gap-2" ]
                 (List.map (viewCategoryBtn p.category) Category.all)
             )
-        , formField "NOTE"
+        , UI.Layout.formField "NOTE"
             (Html.input
                 [ Html.Attributes.type_ "text"
                 , Html.Attributes.value p.note
                 , Html.Events.onInput NoteChanged
                 , Html.Attributes.placeholder "brief (50 chars)"
                 , Html.Attributes.attribute "maxlength" "50"
-                , textInputStyle
+                , UI.Layout.textInputStyle
                 ]
                 []
             )
-        , formField "DETAILS"
+        , UI.Layout.formField "DETAILS"
             (Html.textarea
                 [ Html.Attributes.value p.longNote
                 , Html.Events.onInput LongNoteChanged
@@ -108,22 +110,22 @@ viewAddTab model =
                 ]
                 []
             )
-        , formField "MERCHANT"
+        , UI.Layout.formField "MERCHANT"
             (Html.input
                 [ Html.Attributes.type_ "text"
                 , Html.Attributes.value p.merchant
                 , Html.Events.onInput MerchantChanged
                 , Html.Attributes.placeholder "optional"
-                , textInputStyle
+                , UI.Layout.textInputStyle
                 ]
                 []
             )
-        , formField "DATE"
+        , UI.Layout.formField "DATE"
             (Html.input
                 [ Html.Attributes.type_ "date"
                 , Html.Attributes.value p.date
                 , Html.Events.onInput DateChanged
-                , textInputStyle
+                , UI.Layout.textInputStyle
                 ]
                 []
             )

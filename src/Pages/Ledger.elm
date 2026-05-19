@@ -1,4 +1,4 @@
-module Pages.Ledger exposing (viewLedgerTab)
+module Pages.Ledger exposing (viewTab)
 
 import Data.Category as Category
 import Data.Entry as Entry
@@ -10,11 +10,52 @@ import Html.Events
 import Html.Keyed as Keyed
 import Json.Decode
 import Types exposing (..)
-import UI.Layout exposing (sectionHead)
 
 
-viewLedgerTab : AuthState -> Html Msg
-viewLedgerTab model =
+viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
+viewTab as_ =
+    { actions = viewActions as_
+    , body = viewBody as_
+    , hero = viewHero as_
+    }
+
+
+viewActions : AuthState -> List (Html Msg)
+viewActions model =
+    [ Html.button
+        [ Html.Events.onClick ToggleLedgerMap
+        , Html.Attributes.class
+            ("px-3 py-1.5 rounded border text-sm cursor-pointer "
+                ++ (if model.showLedgerMap then
+                        "border-forest-light bg-cream text-forest"
+
+                    else
+                        "border-tan bg-transparent text-muted"
+                   )
+            )
+        ]
+        [ Html.text "🗺 map" ]
+    , Html.button
+        [ Html.Events.onClick RefreshClicked
+        , Html.Attributes.class "px-3 py-1.5 rounded border border-tan bg-transparent text-muted text-sm cursor-pointer"
+        ]
+        [ Html.text "↻ refresh" ]
+    ]
+
+
+viewHero : AuthState -> Html Msg
+viewHero model =
+    case model.expensesState of
+        Loaded entries ->
+            viewLedgerSummary entries
+
+        _ ->
+            Html.div [ Html.Attributes.class "font-mono text-[22px] text-muted" ]
+                [ Html.text "—" ]
+
+
+viewBody : AuthState -> Html Msg
+viewBody model =
     let
         entriesView =
             case model.expensesState of
@@ -52,36 +93,8 @@ viewLedgerTab model =
                                 )
                         )
     in
-    Html.div [ Html.Attributes.class "p-5" ]
-        [ Html.div [ Html.Attributes.class "flex items-center justify-between mb-5" ]
-            [ Html.h2 [ sectionHead ] [ Html.text "LEDGER" ]
-            , Html.div [ Html.Attributes.class "flex gap-2" ]
-                [ Html.button
-                    [ Html.Events.onClick ToggleLedgerMap
-                    , Html.Attributes.class
-                        ("px-3 py-1.5 rounded border text-sm cursor-pointer "
-                            ++ (if model.showLedgerMap then
-                                    "border-forest-light bg-cream text-forest"
-                                 else
-                                    "border-tan bg-transparent text-muted"
-                               )
-                        )
-                    ]
-                    [ Html.text "🗺 map" ]
-                , Html.button
-                    [ Html.Events.onClick RefreshClicked
-                    , Html.Attributes.class "px-3 py-1.5 rounded border border-tan bg-transparent text-muted text-sm cursor-pointer"
-                    ]
-                    [ Html.text "↻ refresh" ]
-                ]
-            ]
-        , case model.expensesState of
-            Loaded entries ->
-                viewLedgerSummary entries
-
-            _ ->
-                Html.text ""
-        , case model.expensesState of
+    Html.div []
+        [ case model.expensesState of
             Loaded entries ->
                 viewLedgerMap model entries
 
@@ -127,7 +140,7 @@ viewLedgerSummary entries =
                             Nothing
                     )
     in
-    Html.div [ Html.Attributes.class "bg-cream rounded-xl px-4 py-3.5 mb-5" ]
+    Html.div []
         [ Html.div [ Html.Attributes.class "font-mono text-[22px] text-rust mb-3" ]
             [ Html.text (formatAmount total) ]
         , Html.div [ Html.Attributes.class "flex flex-wrap gap-2.5" ]
