@@ -9127,7 +9127,14 @@ var $author$project$Main$updateAuth = F2(
 					$author$project$Main$AuthModel(
 						_Utils_update(
 							as_,
-							{loadingEntries: true, tab: $author$project$Main$LedgerTab, trips: trips_})),
+							{
+								editingEntry: $elm$core$Maybe$Nothing,
+								entries: _List_Nil,
+								loadingEntries: true,
+								pendingEntry: $author$project$Main$defaultPendingEntry(as_.today),
+								tab: $author$project$Main$LedgerTab,
+								trips: trips_
+							})),
 					$elm$core$Platform$Cmd$batch(
 						_List_fromArray(
 							[
@@ -9325,7 +9332,15 @@ var $author$project$Main$updateAuth = F2(
 							$author$project$Main$AuthModel(
 								_Utils_update(
 									as_,
-									{loadingEntries: true, tab: $author$project$Main$LedgerTab, tripForm: $elm$core$Maybe$Nothing, trips: trips_})),
+									{
+										editingEntry: $elm$core$Maybe$Nothing,
+										entries: _List_Nil,
+										loadingEntries: true,
+										pendingEntry: $author$project$Main$defaultPendingEntry(as_.today),
+										tab: $author$project$Main$LedgerTab,
+										tripForm: $elm$core$Maybe$Nothing,
+										trips: trips_
+									})),
 							$elm$core$Platform$Cmd$batch(
 								_List_fromArray(
 									[
