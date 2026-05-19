@@ -1020,18 +1020,25 @@ updateAuth msg as_ =
                 geoCmd =
                     if tab == AddTab && not as_.geoBlocked then requestGeolocation () else Cmd.none
 
-                newPending =
-                    if tab == AddTab && not as_.geoBlocked then
-                        setLocation LocationFetching as_.pendingEntry
+                basePending =
+                    if tab == AddTab && as_.editingEntry /= Nothing then
+                        defaultPendingEntry as_.today
                     else
                         as_.pendingEntry
+
+                newPending =
+                    if tab == AddTab && not as_.geoBlocked then
+                        setLocation LocationFetching basePending
+                    else
+                        basePending
             in
             ( AuthModel
                 { as_
-                    | editingEntry = if tab /= AddTab then Nothing else as_.editingEntry
-                    , pendingEntry = newPending
-                    , tab          = tab
-                    , tripForm     = Nothing
+                    | editingEntry     = Nothing
+                    , pendingEditEntry = Nothing
+                    , pendingEntry     = newPending
+                    , tab              = tab
+                    , tripForm         = Nothing
                 }
             , Cmd.batch [ geoCmd, Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tab) ]
             )
