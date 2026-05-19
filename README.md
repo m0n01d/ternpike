@@ -1,77 +1,75 @@
-# Alaska Expense Tracker
+# Ternpike
 
-Mobile-first expense tracker for the Florida → Juneau road trip. Google Sheets is the database. Runs entirely in the browser — no server.
+Local-first trip expense tracker — scan receipts, log expenses, see totals per trip.
 
-## Setup
+## Stack
 
-### 1. Google Cloud project
+- Elm 0.19.1 — `src/Main.elm` plus `src/Pages/`, `src/UI/`, `src/Data/`, `src/Types.elm`, `src/Helpers.elm`
+- Vite 8 + `vite-plugin-elm`
+- Tailwind CSS v4 via `@tailwindcss/postcss` (theme in `src/global.css`)
+- PouchDB for local storage (CouchDB sync planned)
+- Leaflet for waypoint maps; `exifr` for photo EXIF
+- Anthropic API called directly from the browser for receipt OCR
+- GitHub Pages deploy via `.github/workflows/deploy.yml`
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) → New project
-2. Enable **Google Sheets API** (APIs & Services → Library)
-3. Create an **OAuth 2.0 Client ID** (APIs & Services → Credentials → Create Credentials → OAuth client ID → Web application)
-4. Add authorized JavaScript origins:
-   - `http://localhost:3000` (for local dev)
-   - Your production domain when deployed
-5. Copy the **Client ID** — you'll paste it into Settings
+See `CLAUDE.md` for the architectural notes (model split, append-only doc scheme).
 
-### 2. Google Sheet
+## Prerequisites
 
-1. Create a new Google Sheet
-2. Rename the first tab to exactly: **`Expenses`** (case-sensitive)
-3. Add a header row in row 1:
-   ```
-   id | date | amount | category | note | merchant | created_at
-   ```
-4. Copy the spreadsheet ID from the URL — it's the long string between `/d/` and `/edit`
+- Node 22 (see `.tool-versions`)
+- Elm 0.19.1
 
-### 3. Anthropic API key (for receipt OCR)
-
-Get one at [console.anthropic.com](https://console.anthropic.com). The app calls Claude directly from the browser — your key is stored only in `localStorage`.
-
-### 4. Run locally
+## Run locally
 
 ```bash
-npx elm make src/Main.elm --output=main.js
-python3 -m http.server 3000
+npm install
+npm run dev
 ```
-
-Open `http://localhost:3000` in your browser.
-
-### 5. First launch
-
-1. Open Settings (⚙ icon) and enter:
-   - Google Client ID
-   - Sheet ID
-   - Anthropic API key (optional — for receipt scanning)
-2. Click **Sign in with Google** → authorize the Spreadsheets scope
-3. You're in
-
-## Usage
-
-| Tab | What it does |
-|-----|-------------|
-| **Scan** | Photo → Claude reads the receipt → pre-fills the form |
-| **Add** | Manual entry — amount, category, note, date |
-| **Ledger** | All entries grouped by date, newest first. Tap ✕ to delete |
-| **Stats** | Totals, category bar chart, top 5 expenses |
-| **⚙** | Settings — keys, sheet ID, trip start date |
-
-## Categories
-
-`fuel` · `food` · `camp` · `ferry` · `gear` · `misc`
 
 ## Build
 
 ```bash
-npx elm make src/Main.elm --output=main.js        # development
-npx elm make src/Main.elm --output=main.js --optimize  # production (smaller)
+npm run build      # outputs to dist/
+npm run preview    # serve the built dist/ locally
 ```
 
-Deploy by serving `index.html` + `main.js` from any static host (Netlify, GitHub Pages, S3).
+## Test
 
-## Notes
+```bash
+npm test           # runs elm-test; suites in tests/
+```
 
-- Token is stored in `localStorage` — Sign Out clears it
-- If the token expires (typically 1 hour), Sign Out and sign back in
-- The Sheet ID and API key survive sign-out — they're stored separately
-- Delete physically removes the row via Sheets `batchUpdate` — row indices shift, so the ledger auto-refreshes after every delete
+## Sign in
+
+Passwordless email + one-time code:
+
+1. Enter your email.
+2. Receive a code by email.
+3. Enter the code. The session is persisted to PouchDB and survives reloads; Sign Out clears it.
+
+## Receipt OCR (optional)
+
+Paste an Anthropic API key into Settings. It's stored in the session config (PouchDB) and used directly from the browser by the Scan flow — no server in between.
+
+## Tabs
+
+| Tab | Purpose |
+|-----|---------|
+| Trips | Create or select a trip (budget, cover photo, dates). |
+| Add | Manual expense entry — amount, category, note, date, geo. |
+| Scan | Photo → Claude reads the receipt → pre-fills the form. Queues multiple images. |
+| Ledger | Expenses grouped by date with daily totals; optional waypoint map. |
+| Stats | Totals, category chart, daily and cumulative charts, top 5 expenses. |
+| Settings | Anthropic key, sign out. |
+
+## Categories
+
+`Activities` · `Camp` · `Ferry` · `Food` · `Fuel` · `Gear` · `Lodging` · `Medical` · `Misc` · `Shopping` · `Transport`
+
+## Storage
+
+Append-only PouchDB documents: `trip`, `expense`, `amend`, `void`. Edits and deletions are recorded as new docs rather than mutating originals — see `CLAUDE.md` for the rationale and the planned CouchDB sync tiers.
+
+## Deploy
+
+Push to `main`. GitHub Actions runs `npm run build` and publishes `dist/` to GitHub Pages, with `404.html` as the SPA fallback. The Vite `base` switches to `/ternpike/` in CI so subdirectory routing works.
