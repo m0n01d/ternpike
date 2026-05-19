@@ -2,13 +2,13 @@ module Pages.Add exposing (viewAddTab)
 
 import Data.Category as Category exposing (Category(..))
 import Dict
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Html.Events exposing (..)
-import Json.Decode as D
+import Helpers exposing (formatCoord)
+import Html exposing (Html)
+import Html.Attributes
+import Html.Events
+import Json.Decode
 import Types exposing (..)
 import UI.Layout exposing (formField, sectionHead, textInputStyle)
-import Helpers exposing (formatCoord)
 
 
 viewAddTab : AuthState -> Html Msg
@@ -20,15 +20,10 @@ viewAddTab model =
         isEditing =
             model.editingEntry /= Nothing
     in
-    div [ style "padding" "24px 20px" ]
-        [ div
-            [ style "display" "flex"
-            , style "align-items" "center"
-            , style "justify-content" "space-between"
-            , style "margin-bottom" "20px"
-            ]
-            [ h2 [ sectionHead ]
-                [ text
+    Html.div [ Html.Attributes.class "px-5 py-6" ]
+        [ Html.div [ Html.Attributes.class "flex items-center justify-between mb-5" ]
+            [ Html.h2 [ sectionHead ]
+                [ Html.text
                     (if isEditing then
                         "EDIT EXPENSE"
 
@@ -40,134 +35,108 @@ viewAddTab model =
                     )
                 ]
             , if model.activeScanItemId /= Nothing then
-                button
-                    [ onClick BackToQueue
-                    , class "bg-transparent border-none text-[#7a8a80] text-sm cursor-pointer p-1 font-[inherit]"
+                Html.button
+                    [ Html.Events.onClick BackToQueue
+                    , Html.Attributes.class "bg-transparent border-none text-muted text-sm cursor-pointer p-1"
                     ]
-                    [ text "← queue" ]
+                    [ Html.text "← queue" ]
 
               else if isEditing then
-                button
-                    [ onClick CancelEdit
-                    , class "bg-transparent border-none text-[#7a8a80] text-sm cursor-pointer p-1 font-[inherit]"
+                Html.button
+                    [ Html.Events.onClick CancelEdit
+                    , Html.Attributes.class "bg-transparent border-none text-muted text-sm cursor-pointer p-1"
                     ]
-                    [ text "← cancel" ]
+                    [ Html.text "← cancel" ]
 
               else
-                text ""
+                Html.text ""
             ]
         , case model.activeScanItemId of
             Nothing ->
-                text ""
+                Html.text ""
 
             Just id ->
                 case Dict.get id model.scanQueue of
                     Just item ->
-                        img
-                            [ src item.imageUrl
-                            , class "w-full rounded-xl object-contain mb-4"
-                            , style "max-height" "240px"
-                            , style "background" "#1a2420"
+                        Html.img
+                            [ Html.Attributes.src item.imageUrl
+                            , Html.Attributes.class "w-full rounded-xl object-contain mb-4 max-h-60 bg-cream"
                             ]
                             []
 
                     Nothing ->
-                        text ""
+                        Html.text ""
         , formField "AMOUNT"
-            (div [ style "position" "relative" ]
-                [ span
-                    [ style "position" "absolute"
-                    , style "left" "14px"
-                    , style "top" "50%"
-                    , style "transform" "translateY(-50%)"
-                    , style "color" "#e8a020"
-                    , style "font-size" "20px"
-                    , style "font-family" "monospace"
-                    ]
-                    [ text "$" ]
-                , input
-                    [ type_ "number"
-                    , attribute "inputmode" "decimal"
-                    , value p.amount
-                    , onInput AmountChanged
-                    , placeholder "0.00"
-                    , style "width" "100%"
-                    , style "background" "#1e2220"
-                    , style "border" "1px solid #3a4240"
-                    , style "color" "#c8d0c8"
-                    , style "border-radius" "8px"
-                    , style "padding" "16px 14px 16px 36px"
-                    , style "font-size" "24px"
-                    , style "font-family" "monospace"
+            (Html.div [ Html.Attributes.class "relative" ]
+                [ Html.span
+                    [ Html.Attributes.class "absolute left-3.5 top-1/2 -translate-y-1/2 text-rust text-xl font-mono" ]
+                    [ Html.text "$" ]
+                , Html.input
+                    [ Html.Attributes.type_ "number"
+                    , Html.Attributes.attribute "inputmode" "decimal"
+                    , Html.Attributes.value p.amount
+                    , Html.Events.onInput AmountChanged
+                    , Html.Attributes.placeholder "0.00"
+                    , Html.Attributes.class "w-full pl-9 text-2xl font-mono"
                     ]
                     []
                 ]
             )
         , formField "CATEGORY"
-            (div [ class "grid grid-cols-4 gap-2" ]
+            (Html.div [ Html.Attributes.class "grid grid-cols-4 gap-2" ]
                 (List.map (viewCategoryBtn p.category) Category.all)
             )
         , formField "NOTE"
-            (input
-                [ type_ "text"
-                , value p.note
-                , onInput NoteChanged
-                , placeholder "brief (50 chars)"
-                , attribute "maxlength" "50"
+            (Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value p.note
+                , Html.Events.onInput NoteChanged
+                , Html.Attributes.placeholder "brief (50 chars)"
+                , Html.Attributes.attribute "maxlength" "50"
                 , textInputStyle
                 ]
                 []
             )
         , formField "DETAILS"
-            (textarea
-                [ value p.longNote
-                , onInput LongNoteChanged
-                , placeholder "optional — what happened, where, any context (280 chars)"
-                , attribute "maxlength" "280"
-                , attribute "rows" "3"
-                , class "w-full p-3 bg-[#1e2220] border border-[#3a4240] text-[#c8d0c8] rounded-lg font-[inherit] text-base resize-none leading-snug"
-                , style "outline" "none"
+            (Html.textarea
+                [ Html.Attributes.value p.longNote
+                , Html.Events.onInput LongNoteChanged
+                , Html.Attributes.placeholder "optional — what happened, where, any context (280 chars)"
+                , Html.Attributes.attribute "maxlength" "280"
+                , Html.Attributes.attribute "rows" "3"
+                , Html.Attributes.class "w-full"
                 ]
                 []
             )
         , formField "MERCHANT"
-            (input
-                [ type_ "text"
-                , value p.merchant
-                , onInput MerchantChanged
-                , placeholder "optional"
+            (Html.input
+                [ Html.Attributes.type_ "text"
+                , Html.Attributes.value p.merchant
+                , Html.Events.onInput MerchantChanged
+                , Html.Attributes.placeholder "optional"
                 , textInputStyle
                 ]
                 []
             )
         , formField "DATE"
-            (input
-                [ type_ "date"
-                , value p.date
-                , onInput DateChanged
+            (Html.input
+                [ Html.Attributes.type_ "date"
+                , Html.Attributes.value p.date
+                , Html.Events.onInput DateChanged
                 , textInputStyle
                 ]
                 []
             )
         , viewLocationWidget model
-        , button
-            [ onClick SubmitEntry
-            , disabled model.submitting
-            , style "width" "100%"
-            , style "background" "#e8a020"
-            , style "color" "#0d0f0e"
-            , style "border" "none"
-            , style "border-radius" "8px"
-            , style "padding" "18px"
-            , style "font-size" "18px"
-            , style "font-weight" "700"
-            , style "letter-spacing" "0.05em"
-            , style "cursor" (if model.submitting then "not-allowed" else "pointer")
-            , style "margin-top" "8px"
-            , style "min-height" "56px"
-            , style "opacity" (if model.submitting then "0.6" else "1")
+        , Html.button
+            [ Html.Events.onClick SubmitEntry
+            , Html.Attributes.disabled model.submitting
+            , Html.Attributes.class
+                ("w-full bg-rust text-parchment border-none rounded-lg py-[18px] text-lg font-bold tracking-wide cursor-pointer mt-2 min-h-[56px] "
+                    ++ (if model.submitting then "opacity-60 cursor-not-allowed" else "")
+                )
             ]
-            [ text
+            [ Html.text
                 (if model.submitting then
                     "SAVING..."
 
@@ -187,34 +156,28 @@ viewCategoryBtn selected cat =
         active =
             selected == cat
     in
-    button
-        [ onClick (CategorySelected cat)
-        , style "background" (if active then Category.color cat else "#1e2220")
-        , style "color" (if active then "#0d0f0e" else "#c8d0c8")
-        , style "border" ("1px solid " ++ (if active then Category.color cat else "#3a4240"))
-        , style "border-radius" "8px"
-        , style "padding" "12px 8px"
-        , style "font-size" "14px"
-        , style "font-weight" (if active then "700" else "400")
-        , style "cursor" "pointer"
-        , style "display" "flex"
-        , style "flex-direction" "column"
-        , style "align-items" "center"
-        , style "gap" "4px"
-        , style "min-height" "64px"
+    Html.button
+        [ Html.Events.onClick (CategorySelected cat)
+        , Html.Attributes.class
+            ("rounded-lg py-3 px-2 text-sm cursor-pointer flex flex-col items-center gap-1 min-h-[64px] text-ink "
+                ++ (if active then "font-bold" else "border border-tan bg-cream")
+            )
+        -- dynamic color from data; cannot express as a Tailwind class
+        , Html.Attributes.style "background" (if active then Category.color cat else "")
+        , Html.Attributes.style "border-color" (if active then Category.color cat else "")
         ]
-        [ span [ style "font-size" "20px" ] [ text (Category.icon cat) ]
-        , text (Category.label cat)
+        [ Html.span [ Html.Attributes.class "text-xl leading-none" ] [ Html.text (Category.icon cat) ]
+        , Html.text (Category.label cat)
         ]
 
 
 viewLocationWidget : AuthState -> Html Msg
 viewLocationWidget model =
-    div [ style "margin-bottom" "16px" ]
+    Html.div [ Html.Attributes.class "mb-4" ]
         [ viewLocationStatus model.pendingEntry.locationState
         , if model.showMapPicker then
             Html.node "map-picker"
-                [ attribute "lat"
+                [ Html.Attributes.attribute "lat"
                     (case model.pendingEntry.locationState of
                         LocationGot la _ _ ->
                             String.fromFloat la
@@ -222,7 +185,7 @@ viewLocationWidget model =
                         _ ->
                             "64.2008"
                     )
-                , attribute "lon"
+                , Html.Attributes.attribute "lon"
                     (case model.pendingEntry.locationState of
                         LocationGot _ lo _ ->
                             String.fromFloat lo
@@ -230,17 +193,17 @@ viewLocationWidget model =
                         _ ->
                             "-153.4937"
                     )
-                , on "confirm"
-                    (D.map2 MapPickerConfirmed
-                        (D.at [ "detail", "lat" ] D.float)
-                        (D.at [ "detail", "lon" ] D.float)
+                , Html.Events.on "confirm"
+                    (Json.Decode.map2 MapPickerConfirmed
+                        (Json.Decode.at [ "detail", "lat" ] Json.Decode.float)
+                        (Json.Decode.at [ "detail", "lon" ] Json.Decode.float)
                     )
-                , on "dismiss" (D.succeed DismissMapPicker)
+                , Html.Events.on "dismiss" (Json.Decode.succeed DismissMapPicker)
                 ]
                 []
 
           else
-            text ""
+            Html.text ""
         ]
 
 
@@ -248,23 +211,21 @@ viewLocationStatus : LocationState -> Html Msg
 viewLocationStatus ls =
     case ls of
         LocationFetching ->
-            div
-                [ style "color" "#4a5a50"
-                , style "font-size" "13px"
-                , style "padding" "8px 0"
-                ]
-                [ text "📍 Getting location…" ]
+            Html.div [ Html.Attributes.class "text-moss text-sm py-2" ]
+                [ Html.text "📍 Getting location…" ]
 
         LocationCheckingExif ->
-            div [ class "text-[#4a5a50] text-sm py-2" ]
-                [ text "📍 Reading photo…" ]
+            Html.div [ Html.Attributes.class "text-moss text-sm py-2" ]
+                [ Html.text "📍 Reading photo…" ]
 
         LocationNoExifGps ->
-            div [ class "flex items-center gap-3 py-2" ]
-                [ span [ class "text-[#4a5a50] text-sm" ] [ text "No GPS in photo" ]
-                , button [ onClick OpenMapPicker
-                         , class "bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]" ]
-                    [ text "pin manually" ]
+            Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
+                [ Html.span [ Html.Attributes.class "text-moss text-sm" ] [ Html.text "No GPS in photo" ]
+                , Html.button
+                    [ Html.Events.onClick OpenMapPicker
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
+                    ]
+                    [ Html.text "pin manually" ]
                 ]
 
         LocationGot lat lon source ->
@@ -275,70 +236,41 @@ viewLocationStatus ls =
                         BrowserGeo -> "📍 GPS"
                         ManualPin  -> "📍 pinned"
             in
-            div [ class "flex items-center gap-3 py-2" ]
-                [ span [ class "text-[#4090e0] text-sm" ]
-                    [ text (sourceLabel ++ " — " ++ formatCoord lat lon) ]
-                , button
-                    [ onClick OpenMapPicker
-                    , class "bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]"
+            Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
+                [ Html.span [ Html.Attributes.class "text-[#4a6a9e] text-sm" ]
+                    [ Html.text (sourceLabel ++ " — " ++ formatCoord lat lon) ]
+                , Html.button
+                    [ Html.Events.onClick OpenMapPicker
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
                     ]
-                    [ text "adjust" ]
-                , button
-                    [ onClick SkipLocation
-                    , class "bg-transparent border-none text-[#4a5a50] text-xs cursor-pointer p-0 font-[inherit]"
+                    [ Html.text "adjust" ]
+                , Html.button
+                    [ Html.Events.onClick SkipLocation
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
                     ]
-                    [ text "remove" ]
+                    [ Html.text "remove" ]
                 ]
 
         LocationSkipped ->
-            div
-                [ style "display" "flex"
-                , style "align-items" "center"
-                , style "gap" "12px"
-                , style "padding" "8px 0"
-                ]
-                [ span [ style "color" "#4a5a50", style "font-size" "13px" ] [ text "no location" ]
-                , button
-                    [ onClick OpenMapPicker
-                    , style "background" "none"
-                    , style "border" "none"
-                    , style "color" "#4a5a50"
-                    , style "font-size" "12px"
-                    , style "cursor" "pointer"
-                    , style "padding" "0"
-                    , style "font-family" "inherit"
+            Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
+                [ Html.span [ Html.Attributes.class "text-moss text-sm" ] [ Html.text "no location" ]
+                , Html.button
+                    [ Html.Events.onClick OpenMapPicker
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
                     ]
-                    [ text "pin manually" ]
+                    [ Html.text "pin manually" ]
                 ]
 
         LocationIdle ->
-            div
-                [ style "display" "flex"
-                , style "gap" "12px"
-                , style "align-items" "center"
-                ]
-                [ button
-                    [ onClick OpenMapPicker
-                    , style "background" "#1e2220"
-                    , style "border" "1px solid #3a4240"
-                    , style "color" "#c8d0c8"
-                    , style "border-radius" "8px"
-                    , style "padding" "12px 16px"
-                    , style "font-size" "14px"
-                    , style "cursor" "pointer"
-                    , style "flex" "1"
-                    , style "font-family" "inherit"
+            Html.div [ Html.Attributes.class "flex gap-3 items-center" ]
+                [ Html.button
+                    [ Html.Events.onClick OpenMapPicker
+                    , Html.Attributes.class "flex-1 bg-cream border border-tan text-ink rounded-lg py-3 px-4 text-sm cursor-pointer"
                     ]
-                    [ text "📍 Pin manually" ]
-                , button
-                    [ onClick SkipLocation
-                    , style "background" "none"
-                    , style "border" "none"
-                    , style "color" "#4a5a50"
-                    , style "font-size" "13px"
-                    , style "cursor" "pointer"
-                    , style "padding" "8px"
-                    , style "font-family" "inherit"
+                    [ Html.text "📍 Pin manually" ]
+                , Html.button
+                    [ Html.Events.onClick SkipLocation
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-sm cursor-pointer py-2"
                     ]
-                    [ text "Skip location" ]
+                    [ Html.text "Skip location" ]
                 ]

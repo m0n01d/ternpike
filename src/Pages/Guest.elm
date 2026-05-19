@@ -1,121 +1,83 @@
 module Pages.Guest exposing (viewGuest)
 
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Html.Events exposing (..)
+import Html exposing (Html)
+import Html.Attributes
+import Html.Events
 import Types exposing (..)
 import UI.Layout exposing (viewSettingsPanel)
 
 
 viewGuest : GuestState -> Html Msg
 viewGuest gs =
-    div
-        [ style "display" "flex"
-        , style "flex-direction" "column"
-        , style "align-items" "center"
-        , style "justify-content" "center"
-        , style "min-height" "100vh"
-        , style "padding" "32px 24px"
-        , style "text-align" "center"
-        ]
-        [ div [ style "font-size" "48px", style "margin-bottom" "16px" ] [ text "🏔" ]
-        , h1
-            [ style "font-size" "32px"
-            , style "font-weight" "700"
-            , style "color" "#e8a020"
-            , style "letter-spacing" "0.05em"
-            , style "margin-bottom" "8px"
-            ]
-            [ text "ALASKA TRACKER" ]
-        , p [ style "color" "#7a8a80", style "margin-bottom" "24px", style "font-size" "16px" ]
-            [ text "Road log for the long way north" ]
+    Html.div
+        [ Html.Attributes.class "flex flex-col items-center justify-center min-h-screen px-6 py-8 text-center" ]
+        [ Html.div [ Html.Attributes.class "text-5xl mb-4" ] [ Html.text "🏔" ]
+        , Html.h1
+            [ Html.Attributes.class "text-[38px] font-bold text-rust font-display tracking-tight mb-2" ]
+            [ Html.text "Ternpike" ]
+        , Html.p [ Html.Attributes.class "text-muted mb-8 text-base" ]
+            [ Html.text "Road log for the long way north" ]
         , case gs.authError of
             Just err ->
-                div
-                    [ class "w-full mb-4 px-4 py-3 rounded-lg bg-[#2a1510] border border-[#e85030] text-[#e8a020] text-sm text-left" ]
-                    [ text err ]
+                Html.div
+                    [ Html.Attributes.class "w-full max-w-xs mb-4 px-4 py-3 rounded-lg bg-[#fdf0ea] border border-rust text-rust text-sm text-left" ]
+                    [ Html.text err ]
 
             Nothing ->
                 case gs.session.reason of
                     SessionExpired ->
-                        div
-                            [ class "w-full mb-4 px-4 py-3 rounded-lg bg-[#2a1510] border border-[#e85030] text-[#e8a020] text-sm text-left" ]
-                            [ text "Session expired — sign in to continue." ]
+                        Html.div
+                            [ Html.Attributes.class "w-full max-w-xs mb-4 px-4 py-3 rounded-lg bg-[#fdf0ea] border border-rust text-rust text-sm text-left" ]
+                            [ Html.text "Session expired — sign in to continue." ]
 
                     _ ->
-                        text ""
+                        Html.text ""
         , case gs.session.reason of
             AwaitingCode _ ->
-                div [ style "width" "100%", style "max-width" "320px" ]
-                    [ p [ style "color" "#7a8a80", style "font-size" "14px", style "margin-bottom" "16px" ]
-                        [ text ("A code was sent to " ++ gs.emailInput ++ ". Enter it below.") ]
-                    , input
-                        [ type_ "text"
-                        , value gs.codeInput
-                        , onInput CodeInputChanged
-                        , placeholder "123456"
-                        , style "width" "100%"
-                        , style "margin-bottom" "12px"
+                Html.div [ Html.Attributes.class "w-full max-w-xs" ]
+                    [ Html.p [ Html.Attributes.class "text-muted text-sm mb-4" ]
+                        [ Html.text ("A code was sent to " ++ gs.emailInput ++ ". Enter it below.") ]
+                    , Html.input
+                        [ Html.Attributes.type_ "text"
+                        , Html.Attributes.value gs.codeInput
+                        , Html.Events.onInput CodeInputChanged
+                        , Html.Attributes.placeholder "123456"
+                        , Html.Attributes.class "w-full mb-3"
                         ]
                         []
-                    , button
-                        [ onClick SubmitCode
-                        , style "width" "100%"
-                        , style "background" "#e8a020"
-                        , style "color" "#0d0f0e"
-                        , style "border" "none"
-                        , style "border-radius" "8px"
-                        , style "padding" "16px"
-                        , style "font-size" "16px"
-                        , style "font-weight" "700"
-                        , style "cursor" "pointer"
-                        , style "min-height" "52px"
+                    , Html.button
+                        [ Html.Events.onClick SubmitCode
+                        , Html.Attributes.class "w-full bg-rust text-parchment border-none rounded-lg py-4 text-base font-bold cursor-pointer min-h-[52px] tracking-widest"
                         ]
-                        [ text "VERIFY CODE" ]
+                        [ Html.text "VERIFY CODE" ]
                     ]
 
             _ ->
-                div [ style "width" "100%", style "max-width" "320px" ]
-                    [ input
-                        [ type_ "text"
-                        , value gs.emailInput
-                        , onInput EmailInputChanged
-                        , placeholder "your@email.com"
-                        , style "width" "100%"
-                        , style "margin-bottom" "12px"
+                Html.div [ Html.Attributes.class "w-full max-w-xs" ]
+                    [ Html.input
+                        [ Html.Attributes.type_ "text"
+                        , Html.Attributes.value gs.emailInput
+                        , Html.Events.onInput EmailInputChanged
+                        , Html.Attributes.placeholder "your@email.com"
+                        , Html.Attributes.class "w-full mb-3"
                         ]
                         []
-                    , button
-                        [ onClick SubmitEmail
-                        , style "width" "100%"
-                        , style "background" "#e8a020"
-                        , style "color" "#0d0f0e"
-                        , style "border" "none"
-                        , style "border-radius" "8px"
-                        , style "padding" "16px"
-                        , style "font-size" "16px"
-                        , style "font-weight" "700"
-                        , style "cursor" "pointer"
-                        , style "min-height" "52px"
+                    , Html.button
+                        [ Html.Events.onClick SubmitEmail
+                        , Html.Attributes.class "w-full bg-rust text-parchment border-none rounded-lg py-4 text-base font-bold cursor-pointer min-h-[52px] tracking-widest"
                         ]
-                        [ text "CONTINUE" ]
+                        [ Html.text "CONTINUE" ]
                     ]
-        , div [ style "margin-top" "48px", style "width" "100%" ]
-            [ button
-                [ onClick ToggleGuestSettings
-                , style "background" "none"
-                , style "border" "1px solid #3a4240"
-                , style "color" "#7a8a80"
-                , style "border-radius" "6px"
-                , style "padding" "10px 20px"
-                , style "font-size" "14px"
-                , style "cursor" "pointer"
+        , Html.div [ Html.Attributes.class "mt-12 w-full" ]
+            [ Html.button
+                [ Html.Events.onClick ToggleGuestSettings
+                , Html.Attributes.class "bg-transparent border border-tan text-muted rounded-md px-5 py-2.5 text-sm cursor-pointer"
                 ]
-                [ text "⚙ Settings" ]
+                [ Html.text "⚙ Settings" ]
             , if gs.showSettings then
                 viewSettingsPanel gs.session.config False gs.version
 
               else
-                text ""
+                Html.text ""
             ]
         ]

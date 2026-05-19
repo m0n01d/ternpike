@@ -5,8 +5,8 @@ import Chart.Attributes as CA
 import Data.Category as Category
 import Data.Entry as Entry
 import Helpers exposing (formatAmount, isoToDayCount)
-import Html exposing (..)
-import Html.Attributes exposing (..)
+import Html exposing (Html)
+import Html.Attributes
 import List.NonEmpty.Zipper as Zipper
 import Types exposing (..)
 import UI.Layout exposing (sectionHead)
@@ -58,14 +58,9 @@ viewStatsTab model =
             else
                 0
     in
-    div [ style "padding" "20px" ]
-        [ h2 [ sectionHead ] [ text "STATS" ]
-        , div
-            [ style "display" "grid"
-            , style "grid-template-columns" "1fr 1fr"
-            , style "gap" "12px"
-            , style "margin-bottom" "24px"
-            ]
+    Html.div [ Html.Attributes.class "p-5" ]
+        [ Html.h2 [ sectionHead ] [ Html.text "STATS" ]
+        , Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3 mb-6" ]
             [ statCard "TOTAL SPENT" (formatAmount total)
             , statCard "ENTRIES" (String.fromInt numEntries)
             , statCard "DAYS ON ROAD" (String.fromInt numDays)
@@ -91,77 +86,53 @@ viewStatsTab model =
                 (if avgPerDay > 0 then formatAmount (avgPerDay * 30) else "—")
             ]
         , if List.isEmpty entries then
-            text ""
+            Html.text ""
 
           else
-            div
-                [ style "background" "#161918"
-                , style "border-radius" "10px"
-                , style "padding" "20px"
-                , style "margin-bottom" "16px"
-                ]
-                [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "8px" ]
-                    [ text "BY CATEGORY" ]
+            Html.div [ Html.Attributes.class "bg-cream rounded-xl p-5 mb-4" ]
+                [ Html.div [ Html.Attributes.class "text-xs tracking-widest text-moss mb-2" ] [ Html.text "BY CATEGORY" ]
                 , viewCategoryChart entries
                 ]
         , if numDays > 1 then
-            div
-                [ style "background" "#161918"
-                , style "border-radius" "10px"
-                , style "padding" "20px"
-                , style "margin-bottom" "16px"
-                ]
-                [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "8px" ]
-                    [ text "DAILY SPENDING" ]
+            Html.div [ Html.Attributes.class "bg-cream rounded-xl p-5 mb-4" ]
+                [ Html.div [ Html.Attributes.class "text-xs tracking-widest text-moss mb-2" ] [ Html.text "DAILY SPENDING" ]
                 , viewDailyChart entries
                 ]
 
           else
-            text ""
+            Html.text ""
         , if numDays > 1 then
-            div
-                [ style "background" "#161918"
-                , style "border-radius" "10px"
-                , style "padding" "20px"
-                , style "margin-bottom" "16px"
-                ]
-                [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "8px" ]
-                    [ text "CUMULATIVE SPEND" ]
+            Html.div [ Html.Attributes.class "bg-cream rounded-xl p-5 mb-4" ]
+                [ Html.div [ Html.Attributes.class "text-xs tracking-widest text-moss mb-2" ] [ Html.text "CUMULATIVE SPEND" ]
                 , viewCumulativeChart entries
                 ]
 
           else
-            text ""
+            Html.text ""
         , if List.isEmpty top5 then
-            text ""
+            Html.text ""
 
           else
-            div
-                [ style "background" "#161918"
-                , style "border-radius" "10px"
-                , style "padding" "20px"
-                ]
-                [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "12px" ]
-                    [ text "TOP 5 LARGEST" ]
-                , div []
+            Html.div [ Html.Attributes.class "bg-cream rounded-xl p-5" ]
+                [ Html.div [ Html.Attributes.class "text-xs tracking-widest text-moss mb-3" ] [ Html.text "TOP 5 LARGEST" ]
+                , Html.div []
                     (List.indexedMap
                         (\i entry ->
-                            div
-                                [ style "display" "flex"
-                                , style "align-items" "center"
-                                , style "gap" "12px"
-                                , style "padding" "10px 0"
-                                , style "border-bottom" (if i < List.length top5 - 1 then "1px solid #2a3230" else "none")
+                            Html.div
+                                [ Html.Attributes.class
+                                    ("flex items-center gap-3 py-2.5 "
+                                        ++ (if i < List.length top5 - 1 then "border-b border-tan" else "")
+                                    )
                                 ]
-                                [ span [ style "color" "#4a5a50", style "font-family" "monospace", style "width" "20px" ]
-                                    [ text (String.fromInt (i + 1) ++ ".") ]
-                                , span [ style "font-size" "18px" ] [ text (Category.icon entry.category) ]
-                                , div [ style "flex" "1" ]
-                                    [ div [ style "font-size" "14px" ] [ text (if entry.note /= "" then entry.note else Category.label entry.category) ]
-                                    , div [ style "font-size" "11px", style "color" "#7a8a80" ] [ text entry.date ]
+                                [ Html.span [ Html.Attributes.class "text-moss font-mono w-5" ]
+                                    [ Html.text (String.fromInt (i + 1) ++ ".") ]
+                                , Html.span [ Html.Attributes.class "text-lg leading-none" ] [ Html.text (Category.icon entry.category) ]
+                                , Html.div [ Html.Attributes.class "flex-1" ]
+                                    [ Html.div [ Html.Attributes.class "text-sm text-ink" ] [ Html.text (if entry.note /= "" then entry.note else Category.label entry.category) ]
+                                    , Html.div [ Html.Attributes.class "text-[11px] text-muted" ] [ Html.text entry.date ]
                                     ]
-                                , span [ style "font-family" "monospace", style "color" "#e8a020", style "font-size" "16px" ]
-                                    [ text (formatAmount entry.amount) ]
+                                , Html.span [ Html.Attributes.class "font-mono text-rust text-base" ]
+                                    [ Html.text (formatAmount entry.amount) ]
                                 ]
                         )
                         top5
@@ -172,15 +143,11 @@ viewStatsTab model =
 
 statCard : String -> String -> Html Msg
 statCard label_ value =
-    div
-        [ style "background" "#161918"
-        , style "border-radius" "10px"
-        , style "padding" "16px"
-        ]
-        [ div [ style "font-size" "11px", style "letter-spacing" "0.1em", style "color" "#7a8a80", style "margin-bottom" "6px" ]
-            [ text label_ ]
-        , div [ style "font-size" "22px", style "font-family" "monospace", style "color" "#e8a020" ]
-            [ text value ]
+    Html.div [ Html.Attributes.class "bg-cream rounded-xl p-4" ]
+        [ Html.div [ Html.Attributes.class "text-[11px] tracking-widest text-moss mb-1.5" ]
+            [ Html.text label_ ]
+        , Html.div [ Html.Attributes.class "text-[22px] font-mono text-rust" ]
+            [ Html.text value ]
         ]
 
 
@@ -210,7 +177,7 @@ viewCategoryChart entries =
                 |> C.variation (\_ d -> [ CA.color d.color ])
             ]
             rows
-        , C.binLabels .label [ CA.moveDown 16, CA.color "#7a8a80", CA.fontSize 9 ]
+        , C.binLabels .label [ CA.moveDown 16, CA.color "#8a8a78", CA.fontSize 9 ]
         ]
 
 
@@ -236,9 +203,9 @@ viewDailyChart entries =
         , CA.margin { top = 10, bottom = 28, left = 0, right = 0 }
         ]
         [ C.bars []
-            [ C.bar .total [ CA.color "#e8a020" ] ]
+            [ C.bar .total [ CA.color "#b85c38" ] ]
             days
-        , C.binLabels .date [ CA.moveDown 16, CA.color "#7a8a80", CA.fontSize 8 ]
+        , C.binLabels .date [ CA.moveDown 16, CA.color "#8a8a78", CA.fontSize 8 ]
         ]
 
 
@@ -266,6 +233,6 @@ viewCumulativeChart entries =
         , CA.margin { top = 10, bottom = 10, left = 0, right = 0 }
         ]
         [ C.series .x
-            [ C.interpolated .y [ CA.color "#4090e0", CA.width 2 ] [] ]
+            [ C.interpolated .y [ CA.color "#b85c38", CA.width 2 ] [] ]
             points
         ]

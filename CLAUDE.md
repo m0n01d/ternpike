@@ -1,17 +1,19 @@
 # Alaska Expense Tracker — Claude Notes
 
 ## Stack
-- Elm 0.19.1, single file: `src/Main.elm`
-- Google Sheets backend via REST API
+- Elm 0.19.1 — split across `src/Main.elm`, `src/Pages/`, `src/UI/`, `src/Data/`, `src/Types.elm`, `src/Helpers.elm`
+- Vite 8 + vite-plugin-elm (replaces manual elm make)
+- Tailwind CSS v4 via `@tailwindcss/postcss` — config in `src/global.css` `@theme {}` block
+- PouchDB for local-first storage; CouchDB sync planned
 - Anthropic API for OCR (receipt scanning)
-- Tailwind CSS via Play CDN
-- GitHub Pages deployment (CI triggers on push to main)
+- GitHub Pages deployment from `dist/` (CI triggers on push to main)
 - Elm binary: `elm` (via asdf at `~/.asdf/shims/elm`)
+- Node.js 22 required (set via `.tool-versions`)
 
-## Compile before committing
-Always run the compiler before staging:
+## Build
 ```
-elm make src/Main.elm --output=main.js
+npm run dev      # Vite dev server
+npm run build    # produces dist/
 ```
 
 ## Git discipline — do NOT repeat this mistake
@@ -55,6 +57,9 @@ all stash changes. The correct sequence when a stash pop conflicts:
   import Html.Attributes
   Html.div [Html.Attrtibutes.class "tw-flex" ] [Html.text "hello world"]
   ```
+
+ any style attributes (Html.Attributes.style) need to be rewritten as tailwind classes. 
+ No inline styles.
 
 ## Sheet columns
 A=id, B=date, C=amount, D=category, E=note, F=merchant, G=createdAt, H=lat, I=lon, J=longNote

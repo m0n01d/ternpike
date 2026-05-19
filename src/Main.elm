@@ -11,8 +11,8 @@ import Data.Trip as Trip exposing (TripField(..))
 import Data.Void as Void
 import Dict
 import File
-import Html exposing (..)
-import Html.Attributes exposing (..)
+import Html exposing (Html)
+import Html.Attributes
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
@@ -1341,15 +1341,8 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "Ternpike"
     , body =
-        [ div
-            [ style "background" "#0d0f0e"
-            , style "color" "#c8d0c8"
-            , style "min-height" "100vh"
-            , style "font-family" "'Barlow Condensed', system-ui, sans-serif"
-            , style "max-width" "480px"
-            , style "margin" "0 auto"
-            , style "position" "relative"
-            ]
+        [ Html.div
+            [ Html.Attributes.class "bg-parchment text-ink min-h-screen font-body max-w-[480px] mx-auto relative" ]
             [ case model of
                 GuestModel gs -> viewGuest gs
                 AuthModel as_ -> viewAuth as_
@@ -1360,10 +1353,10 @@ view model =
 
 viewAuth : AuthState -> Html Msg
 viewAuth as_ =
-    div []
+    Html.div []
         [ viewHeader as_
         , viewErrorBanner as_.error
-        , div [ style "padding-bottom" "80px" ]
+        , Html.div [ Html.Attributes.class "pb-20" ]
             [ case as_.tab of
                 ScanTab     -> viewScanTab as_
                 AddTab      -> viewAddTab as_
@@ -1375,7 +1368,7 @@ viewAuth as_ =
         , viewBottomNav as_.tab
         , case as_.confirmDeleteTrip of
             Just trip -> viewDeleteConfirmModal trip
-            Nothing   -> text ""
+            Nothing   -> Html.text ""
         , viewToast as_.toast
         ]
 

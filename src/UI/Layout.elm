@@ -12,73 +12,45 @@ module UI.Layout exposing
     )
 
 import Data.Trip exposing (Trip)
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Html.Events exposing (..)
+import Html exposing (Html)
+import Html.Attributes
+import Html.Events
 import List.NonEmpty.Zipper as Zipper
 import Types exposing (..)
 
 
 viewHeader : AuthState -> Html Msg
 viewHeader as_ =
-    div
-        [ style "background" "#161918"
-        , style "border-bottom" "1px solid #2a3230"
-        , style "padding" "12px 20px"
-        , style "display" "flex"
-        , style "align-items" "center"
-        , style "justify-content" "space-between"
-        , style "position" "sticky"
-        , style "top" "0"
-        , style "z-index" "10"
-        ]
-        [ div []
-            [ span
-                [ style "font-size" "18px"
-                , style "font-weight" "700"
-                , style "color" "#e8a020"
-                , style "letter-spacing" "0.08em"
-                ]
-                [ text "ALASKA" ]
-            , span
-                [ style "font-size" "11px"
-                , style "color" "#7a8a80"
-                , style "margin-left" "8px"
-                ]
-                [ text (Zipper.current as_.trips).name ]
+    Html.div
+        [ Html.Attributes.class "bg-cream border-b border-tan px-5 py-3 flex items-center justify-between sticky top-0 z-10" ]
+        [ Html.div []
+            [ Html.span
+                [ Html.Attributes.class "text-xl font-bold text-rust font-display tracking-tight" ]
+                [ Html.text "Ternpike" ]
+            , Html.span
+                [ Html.Attributes.class "text-[11px] text-muted ml-2.5 tracking-widest" ]
+                [ Html.text (Zipper.current as_.trips).name ]
             ]
-        , button
-            [ onClick
+        , Html.button
+            [ Html.Events.onClick
                 (if as_.tab == SettingsTab then
                     TabChanged LedgerTab
                  else
                     TabChanged SettingsTab
                 )
-            , style "background" "none"
-            , style "border" "none"
-            , style "font-size" "22px"
-            , style "cursor" "pointer"
-            , style "padding" "4px 8px"
-            , style "color" (if as_.tab == SettingsTab then "#e8a020" else "#7a8a80")
+            , Html.Attributes.class
+                ("bg-transparent border-none text-2xl cursor-pointer px-2 py-1 "
+                    ++ (if as_.tab == SettingsTab then "text-rust" else "text-muted")
+                )
             ]
-            [ text "⚙" ]
+            [ Html.text "⚙" ]
         ]
 
 
 viewBottomNav : Tab -> Html Msg
 viewBottomNav currentTab =
-    nav
-        [ style "position" "fixed"
-        , style "bottom" "0"
-        , style "left" "50%"
-        , style "transform" "translateX(-50%)"
-        , style "width" "100%"
-        , style "max-width" "480px"
-        , style "background" "#161918"
-        , style "border-top" "1px solid #2a3230"
-        , style "display" "flex"
-        , style "z-index" "10"
-        ]
+    Html.nav
+        [ Html.Attributes.class "fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-cream border-t border-tan flex z-10" ]
         (List.map (viewNavTab currentTab)
             [ ( ScanTab,   "📷", "Scan" )
             , ( AddTab,    "+",  "Add" )
@@ -91,26 +63,15 @@ viewBottomNav currentTab =
 
 viewNavTab : Tab -> ( Tab, String, String ) -> Html Msg
 viewNavTab currentTab ( tab, icon, label_ ) =
-    let
-        active =
-            currentTab == tab
-    in
-    button
-        [ onClick (TabChanged tab)
-        , style "flex" "1"
-        , style "background" "none"
-        , style "border" "none"
-        , style "padding" "10px 4px"
-        , style "display" "flex"
-        , style "flex-direction" "column"
-        , style "align-items" "center"
-        , style "gap" "2px"
-        , style "cursor" "pointer"
-        , style "color" (if active then "#e8a020" else "#7a8a80")
-        , style "min-height" "56px"
+    Html.button
+        [ Html.Events.onClick (TabChanged tab)
+        , Html.Attributes.class
+            ("flex-1 bg-transparent border-none py-2.5 px-1 flex flex-col items-center gap-0.5 cursor-pointer min-h-[56px] "
+                ++ (if currentTab == tab then "text-rust" else "text-muted")
+            )
         ]
-        [ span [ style "font-size" "20px" ] [ text icon ]
-        , span [ style "font-size" "10px", style "letter-spacing" "0.05em" ] [ text label_ ]
+        [ Html.span [ Html.Attributes.class "text-xl leading-none" ] [ Html.text icon ]
+        , Html.span [ Html.Attributes.class "text-[10px] tracking-wide" ] [ Html.text label_ ]
         ]
 
 
@@ -118,16 +79,17 @@ viewToast : Maybe String -> Html Msg
 viewToast toast =
     case toast of
         Nothing ->
-            text ""
+            Html.text ""
 
         Just message ->
-            div [ class "fixed bottom-16 left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-[#1e2220] border border-[#e85030] shadow-lg" ]
-                [ span [ class "text-[#e8c080] text-sm flex-1" ] [ text message ]
-                , button
-                    [ onClick ToastExpired
-                    , class "bg-transparent border-none text-[#7a8a80] text-lg leading-none cursor-pointer p-0 flex-shrink-0"
+            Html.div
+                [ Html.Attributes.class "fixed bottom-[72px] left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel" ]
+                [ Html.span [ Html.Attributes.class "text-ink text-sm flex-1" ] [ Html.text message ]
+                , Html.button
+                    [ Html.Events.onClick ToastExpired
+                    , Html.Attributes.class "bg-transparent border-none text-muted text-lg leading-none cursor-pointer p-0 shrink-0"
                     ]
-                    [ text "✕" ]
+                    [ Html.text "✕" ]
                 ]
 
 
@@ -135,87 +97,41 @@ viewErrorBanner : Maybe String -> Html Msg
 viewErrorBanner maybeErr =
     case maybeErr of
         Nothing ->
-            text ""
+            Html.text ""
 
         Just err ->
-            div
-                [ style "background" "#2a1510"
-                , style "border-left" "4px solid #e85030"
-                , style "color" "#e8a020"
-                , style "padding" "12px 16px"
-                , style "margin" "0 20px 16px"
-                , style "border-radius" "0 6px 6px 0"
-                , style "font-size" "14px"
-                , style "display" "flex"
-                , style "justify-content" "space-between"
-                , style "align-items" "center"
-                ]
-                [ text err
-                , button
-                    [ onClick DismissError
-                    , style "background" "none"
-                    , style "border" "none"
-                    , style "color" "#e85030"
-                    , style "cursor" "pointer"
-                    , style "font-size" "18px"
-                    , style "padding" "0 0 0 12px"
+            Html.div
+                [ Html.Attributes.class "bg-[#fdf0ea] border-l-4 border-rust text-rust px-4 py-3 mx-5 mb-4 rounded-r-lg text-sm flex justify-between items-center" ]
+                [ Html.text err
+                , Html.button
+                    [ Html.Events.onClick DismissError
+                    , Html.Attributes.class "bg-transparent border-none text-rust cursor-pointer text-lg p-0 pl-3"
                     ]
-                    [ text "✕" ]
+                    [ Html.text "✕" ]
                 ]
 
 
 viewDeleteConfirmModal : Trip -> Html Msg
 viewDeleteConfirmModal trip =
-    div
-        [ style "position" "fixed"
-        , style "inset" "0"
-        , style "background" "rgba(0,0,0,0.75)"
-        , style "z-index" "9998"
-        , style "display" "flex"
-        , style "align-items" "center"
-        , style "justify-content" "center"
-        , style "padding" "24px"
-        ]
-        [ div
-            [ style "background" "#1e2220"
-            , style "border" "1px solid #3a4240"
-            , style "border-radius" "12px"
-            , style "padding" "24px"
-            , style "width" "100%"
-            , style "max-width" "360px"
-            ]
-            [ p [ style "font-size" "18px", style "font-weight" "700", style "margin-bottom" "8px" ]
-                [ text ("Delete \u{201C}" ++ trip.name ++ "\u{201D}?") ]
-            , p [ style "font-size" "14px", style "color" "#7a8a80", style "margin-bottom" "24px", style "line-height" "1.5" ]
-                [ text "This will permanently delete the trip and all its expense data." ]
-            , div [ style "display" "flex", style "gap" "12px" ]
-                [ button
-                    [ onClick CancelDeleteTrip
-                    , style "flex" "1"
-                    , style "padding" "12px"
-                    , style "border-radius" "8px"
-                    , style "border" "1px solid #3a4240"
-                    , style "background" "none"
-                    , style "color" "#7a8a80"
-                    , style "font-size" "14px"
-                    , style "cursor" "pointer"
-                    , style "font-family" "inherit"
+    Html.div
+        [ Html.Attributes.class "fixed inset-0 bg-forest/65 z-[9998] flex items-center justify-center p-6" ]
+        [ Html.div
+            [ Html.Attributes.class "bg-parchment border border-tan rounded-2xl p-6 w-full max-w-sm shadow-panel" ]
+            [ Html.p [ Html.Attributes.class "text-lg font-bold text-ink font-display mb-2" ]
+                [ Html.text ("Delete \u{201C}" ++ trip.name ++ "\u{201D}?") ]
+            , Html.p [ Html.Attributes.class "text-sm text-muted mb-6 leading-relaxed" ]
+                [ Html.text "This will permanently delete the trip and all its expense data." ]
+            , Html.div [ Html.Attributes.class "flex gap-3" ]
+                [ Html.button
+                    [ Html.Events.onClick CancelDeleteTrip
+                    , Html.Attributes.class "flex-1 py-3 rounded-lg border border-tan bg-transparent text-muted text-sm cursor-pointer"
                     ]
-                    [ text "Cancel" ]
-                , button
-                    [ onClick (DeleteTrip trip)
-                    , style "flex" "1"
-                    , style "padding" "12px"
-                    , style "border-radius" "8px"
-                    , style "border" "none"
-                    , style "background" "#b82020"
-                    , style "color" "#ffffff"
-                    , style "font-size" "14px"
-                    , style "font-weight" "700"
-                    , style "cursor" "pointer"
-                    , style "font-family" "inherit"
+                    [ Html.text "Cancel" ]
+                , Html.button
+                    [ Html.Events.onClick (DeleteTrip trip)
+                    , Html.Attributes.class "flex-1 py-3 rounded-lg border-none bg-[#a83020] text-parchment text-sm font-bold cursor-pointer"
                     ]
-                    [ text "Delete trip" ]
+                    [ Html.text "Delete trip" ]
                 ]
             ]
         ]
@@ -223,69 +139,57 @@ viewDeleteConfirmModal trip =
 
 viewSettingsPanel : AppConfig -> Bool -> String -> Html Msg
 viewSettingsPanel cfg isSignedIn version =
-    div [ style "padding" "24px 20px" ]
-        [ h2 [ sectionHead ] [ text "SETTINGS" ]
+    Html.div [ Html.Attributes.class "px-5 py-6" ]
+        [ Html.h2 [ sectionHead ] [ Html.text "SETTINGS" ]
         , formField "ANTHROPIC API KEY"
-            (input
-                [ type_ "password"
-                , value cfg.anthropicKey
-                , onInput ApiKeyChanged
-                , placeholder "sk-ant-..."
+            (Html.input
+                [ Html.Attributes.type_ "password"
+                , Html.Attributes.value cfg.anthropicKey
+                , Html.Events.onInput ApiKeyChanged
+                , Html.Attributes.placeholder "sk-ant-..."
                 , textInputStyle
                 ]
                 []
             )
         , if isSignedIn then
-            div [ style "margin-top" "32px" ]
-                [ button
-                    [ onClick SignOutClicked
-                    , style "width" "100%"
-                    , style "background" "none"
-                    , style "border" "1px solid #e85030"
-                    , style "color" "#e85030"
-                    , style "border-radius" "8px"
-                    , style "padding" "14px"
-                    , style "font-size" "15px"
-                    , style "cursor" "pointer"
+            Html.div [ Html.Attributes.class "mt-8" ]
+                [ Html.button
+                    [ Html.Events.onClick SignOutClicked
+                    , Html.Attributes.class "w-full bg-transparent border border-rust text-rust rounded-lg py-3.5 text-[15px] cursor-pointer"
                     ]
-                    [ text "SIGN OUT" ]
+                    [ Html.text "SIGN OUT" ]
                 ]
           else
-            text ""
-        , div [ style "margin-top" "8px" ]
-            [ button
-                [ onClick ResetSettingsClicked
-                , class "w-full py-3.5 rounded-lg border border-red-900/60 text-red-400/80 text-sm cursor-pointer bg-transparent font-[inherit] hover:border-red-700 hover:text-red-300 transition-colors"
+            Html.text ""
+        , Html.div [ Html.Attributes.class "mt-2" ]
+            [ Html.button
+                [ Html.Events.onClick ResetSettingsClicked
+                , Html.Attributes.class "w-full bg-transparent border border-tan text-muted rounded-lg py-3.5 text-sm cursor-pointer"
                 ]
-                [ text "Reset all settings" ]
+                [ Html.text "Reset all settings" ]
             ]
         , if version /= "" then
-            p [ class "text-[#3a4a40] text-xs text-center mt-6 font-mono" ]
-                [ text version ]
+            Html.p [ Html.Attributes.class "text-[#c4b898] text-[11px] text-center mt-6 font-mono" ]
+                [ Html.text version ]
           else
-            text ""
+            Html.text ""
         ]
 
 
 formField : String -> Html Msg -> Html Msg
 formField label_ input_ =
-    div [ style "margin-bottom" "20px" ]
-        [ div
-            [ style "font-size" "11px"
-            , style "letter-spacing" "0.1em"
-            , style "color" "#7a8a80"
-            , style "margin-bottom" "8px"
-            ]
-            [ text label_ ]
+    Html.div [ Html.Attributes.class "mb-5" ]
+        [ Html.div [ Html.Attributes.class "text-xs tracking-[0.1em] text-moss mb-2 font-mono" ]
+            [ Html.text label_ ]
         , input_
         ]
 
 
-sectionHead : Attribute Msg
+sectionHead : Html.Attribute Msg
 sectionHead =
-    style "font-size" "13px"
+    Html.Attributes.class "text-xs tracking-widest text-moss uppercase font-semibold mb-5"
 
 
-textInputStyle : Attribute Msg
+textInputStyle : Html.Attribute Msg
 textInputStyle =
-    style "width" "100%"
+    Html.Attributes.class "w-full"

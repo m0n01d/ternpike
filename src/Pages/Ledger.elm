@@ -3,11 +3,11 @@ module Pages.Ledger exposing (viewLedgerTab)
 import Data.Category as Category
 import Data.Entry as Entry
 import Helpers exposing (effectiveEntryToExpense, encodeWaypoints, formatAmount, formatDateDisplay)
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Html.Events exposing (..)
+import Html exposing (Html)
+import Html.Attributes
+import Html.Events
 import Html.Keyed as Keyed
-import Json.Decode as D
+import Json.Decode
 import Types exposing (..)
 import UI.Layout exposing (sectionHead)
 
@@ -24,8 +24,8 @@ viewLedgerTab model =
                     viewSkeleton
 
                 Loaded [] ->
-                    p [ style "color" "#7a8a80", style "text-align" "center", style "padding" "32px 0" ]
-                        [ text "No expenses yet. Add your first one!" ]
+                    Html.p [ Html.Attributes.class "text-muted text-center py-8" ]
+                        [ Html.text "No expenses yet. Add your first one!" ]
 
                 Loaded entries ->
                     Keyed.node "div"
@@ -38,25 +38,12 @@ viewLedgerTab model =
                                             List.filter (\e -> e.date == date) entries
                                     in
                                     ( date
-                                    , div [ style "margin-bottom" "24px" ]
-                                        [ div
-                                            [ style "font-size" "11px"
-                                            , style "letter-spacing" "0.1em"
-                                            , style "color" "#7a8a80"
-                                            , style "margin-bottom" "8px"
-                                            , style "padding-bottom" "6px"
-                                            , style "border-bottom" "1px solid #2a3230"
-                                            , style "display" "flex"
-                                            , style "justify-content" "space-between"
-                                            , style "align-items" "center"
-                                            ]
-                                            [ text (String.toUpper (formatDateDisplay date))
-                                            , span
-                                                [ style "font-family" "monospace"
-                                                , style "color" "#e8a020"
-                                                , style "letter-spacing" "0"
-                                                ]
-                                                [ text (formatAmount (List.sum (List.map .amount dayEntries))) ]
+                                    , Html.div [ Html.Attributes.class "mb-6" ]
+                                        [ Html.div
+                                            [ Html.Attributes.class "text-[11px] tracking-widest text-muted mb-2 pb-1.5 border-b border-tan flex justify-between items-center" ]
+                                            [ Html.text (String.toUpper (formatDateDisplay date))
+                                            , Html.span [ Html.Attributes.class "font-mono text-rust tracking-normal" ]
+                                                [ Html.text (formatAmount (List.sum (List.map .amount dayEntries))) ]
                                             ]
                                         , Keyed.node "div" [] (List.map (\e -> ( e.id, viewEntryRow e )) dayEntries)
                                         ]
@@ -64,26 +51,27 @@ viewLedgerTab model =
                                 )
                         )
     in
-    div [ style "padding" "20px" ]
-        [ div [ class "flex items-center justify-between mb-5" ]
-            [ h2 [ sectionHead ] [ text "LEDGER" ]
-            , div [ class "flex gap-2" ]
-                [ button
-                    [ onClick ToggleLedgerMap
-                    , class
-                        (if model.showLedgerMap then
-                            "px-3 py-1.5 rounded border border-[#3a4240] bg-[#1e3a50] text-[#4090e0] text-sm cursor-pointer font-[inherit]"
-
-                         else
-                            "px-3 py-1.5 rounded border border-[#3a4240] bg-transparent text-[#7a8a80] text-sm cursor-pointer font-[inherit]"
+    Html.div [ Html.Attributes.class "p-5" ]
+        [ Html.div [ Html.Attributes.class "flex items-center justify-between mb-5" ]
+            [ Html.h2 [ sectionHead ] [ Html.text "LEDGER" ]
+            , Html.div [ Html.Attributes.class "flex gap-2" ]
+                [ Html.button
+                    [ Html.Events.onClick ToggleLedgerMap
+                    , Html.Attributes.class
+                        ("px-3 py-1.5 rounded border text-sm cursor-pointer "
+                            ++ (if model.showLedgerMap then
+                                    "border-[#c4d8f0] bg-[#edf4fc] text-[#4a6a9e]"
+                                 else
+                                    "border-tan bg-transparent text-muted"
+                               )
                         )
                     ]
-                    [ text "🗺 map" ]
-                , button
-                    [ onClick RefreshClicked
-                    , class "px-3 py-1.5 rounded border border-[#3a4240] bg-transparent text-[#7a8a80] text-sm cursor-pointer font-[inherit]"
+                    [ Html.text "🗺 map" ]
+                , Html.button
+                    [ Html.Events.onClick RefreshClicked
+                    , Html.Attributes.class "px-3 py-1.5 rounded border border-tan bg-transparent text-muted text-sm cursor-pointer"
                     ]
-                    [ text "↻ refresh" ]
+                    [ Html.text "↻ refresh" ]
                 ]
             ]
         , case model.expensesState of
@@ -91,13 +79,13 @@ viewLedgerTab model =
                 viewLedgerSummary entries
 
             _ ->
-                text ""
+                Html.text ""
         , case model.expensesState of
             Loaded entries ->
                 viewLedgerMap model entries
 
             _ ->
-                text ""
+                Html.text ""
         , entriesView
         ]
 
@@ -106,14 +94,14 @@ viewLedgerMap : AuthState -> List Entry.EffectiveEntry -> Html Msg
 viewLedgerMap model entries =
     if model.showLedgerMap then
         Html.node "waypoint-map"
-            [ attribute "points" (encodeWaypoints entries)
-            , class "block w-full rounded-xl overflow-hidden mb-5"
-            , style "height" "260px"
+            [ Html.Attributes.attribute "points" (encodeWaypoints entries)
+            , Html.Attributes.class "block w-full rounded-xl overflow-hidden mb-5"
+            , Html.Attributes.style "height" "260px"
             ]
             []
 
     else
-        text ""
+        Html.text ""
 
 
 viewLedgerSummary : List Entry.EffectiveEntry -> Html Msg
@@ -139,38 +127,16 @@ viewLedgerSummary entries =
                             Nothing
                     )
     in
-    div
-        [ style "background" "#161918"
-        , style "border-radius" "10px"
-        , style "padding" "14px 16px"
-        , style "margin-bottom" "20px"
-        ]
-        [ div
-            [ style "font-family" "monospace"
-            , style "font-size" "22px"
-            , style "color" "#e8a020"
-            , style "margin-bottom" "12px"
-            ]
-            [ text (formatAmount total) ]
-        , div
-            [ style "display" "flex"
-            , style "flex-wrap" "wrap"
-            , style "gap" "10px"
-            ]
+    Html.div [ Html.Attributes.class "bg-cream rounded-xl px-4 py-3.5 mb-5" ]
+        [ Html.div [ Html.Attributes.class "font-mono text-[22px] text-rust mb-3" ]
+            [ Html.text (formatAmount total) ]
+        , Html.div [ Html.Attributes.class "flex flex-wrap gap-2.5" ]
             (List.map
                 (\( cat, t ) ->
-                    div
-                        [ style "display" "flex"
-                        , style "align-items" "center"
-                        , style "gap" "4px"
-                        ]
-                        [ span [ style "font-size" "15px" ] [ text (Category.icon cat) ]
-                        , span
-                            [ style "font-family" "monospace"
-                            , style "font-size" "13px"
-                            , style "color" "#7a8a80"
-                            ]
-                            [ text (formatAmount t) ]
+                    Html.div [ Html.Attributes.class "flex items-center gap-1" ]
+                        [ Html.span [ Html.Attributes.class "text-[15px]" ] [ Html.text (Category.icon cat) ]
+                        , Html.span [ Html.Attributes.class "font-mono text-[13px] text-muted" ]
+                            [ Html.text (formatAmount t) ]
                         ]
                 )
                 catRow
@@ -180,35 +146,20 @@ viewLedgerSummary entries =
 
 viewEntryRow : Entry.EffectiveEntry -> Html Msg
 viewEntryRow entry =
-    div
-        [ onClick (EditEntry (effectiveEntryToExpense entry))
-        , style "background" "#161918"
-        , style "border-radius" "8px"
-        , style "padding" "14px 16px"
-        , style "margin-bottom" "8px"
-        , style "display" "flex"
-        , style "align-items" "center"
-        , style "gap" "12px"
-        , style "cursor" "pointer"
+    Html.div
+        [ Html.Events.onClick (EditEntry (effectiveEntryToExpense entry))
+        , Html.Attributes.class "bg-cream rounded-lg px-4 py-3.5 mb-2 flex items-center gap-3 cursor-pointer"
         ]
-        [ div
-            [ style "width" "10px"
-            , style "height" "10px"
-            , style "border-radius" "50%"
-            , style "background" (Category.color entry.category)
-            , style "flex-shrink" "0"
+        [ Html.div
+            [ Html.Attributes.class "w-2.5 h-2.5 rounded-full shrink-0"
+            -- dynamic category color cannot be expressed as a Tailwind class
+            , Html.Attributes.style "background" (Category.color entry.category)
             ]
             []
-        , span [ style "font-size" "20px", style "flex-shrink" "0" ] [ text (Category.icon entry.category) ]
-        , div [ style "flex" "1", style "min-width" "0" ]
-            [ div
-                [ style "font-size" "15px"
-                , style "color" "#c8d0c8"
-                , style "white-space" "nowrap"
-                , style "overflow" "hidden"
-                , style "text-overflow" "ellipsis"
-                ]
-                [ text
+        , Html.span [ Html.Attributes.class "text-xl shrink-0 leading-none" ] [ Html.text (Category.icon entry.category) ]
+        , Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
+            [ Html.div [ Html.Attributes.class "text-[15px] text-ink truncate" ]
+                [ Html.text
                     (if entry.note /= "" then
                         entry.note
 
@@ -220,69 +171,45 @@ viewEntryRow entry =
                     )
                 ]
             , if entry.merchant /= "" && entry.note /= "" then
-                div [ style "font-size" "12px", style "color" "#4a5a50" ] [ text entry.merchant ]
+                Html.div [ Html.Attributes.class "text-xs text-moss" ] [ Html.text entry.merchant ]
 
               else
-                text ""
+                Html.text ""
             , if entry.longNote /= "" then
-                div [ class "text-xs text-[#4a5a50] mt-1 leading-snug line-clamp-2" ] [ text entry.longNote ]
+                Html.div [ Html.Attributes.class "text-xs text-moss mt-0.5 leading-snug line-clamp-2" ] [ Html.text entry.longNote ]
 
               else
-                text ""
+                Html.text ""
             ]
-        , span
-            [ style "font-family" "monospace"
-            , style "font-size" "17px"
-            , style "color" "#c8d0c8"
-            , style "flex-shrink" "0"
-            ]
-            [ text (formatAmount entry.amount) ]
+        , Html.span [ Html.Attributes.class "font-mono text-[17px] text-ink shrink-0" ]
+            [ Html.text (formatAmount entry.amount) ]
         , case entry.lat of
             Just _ ->
-                span
-                    [ style "font-size" "14px"
-                    , style "color" "#4090e0"
-                    , style "flex-shrink" "0"
-                    , title "Has GPS coordinates"
+                Html.span
+                    [ Html.Attributes.class "text-sm text-[#4a6a9e] shrink-0"
+                    , Html.Attributes.title "Has GPS coordinates"
                     ]
-                    [ text "📍" ]
+                    [ Html.text "📍" ]
 
             Nothing ->
-                text ""
-        , button
-            [ Html.Events.stopPropagationOn "click" (D.succeed ( VoidEntry (effectiveEntryToExpense entry), True ))
-            , style "background" "none"
-            , style "border" "none"
-            , style "color" "#e85030"
-            , style "font-size" "18px"
-            , style "cursor" "pointer"
-            , style "padding" "4px 8px"
-            , style "flex-shrink" "0"
-            , style "min-width" "44px"
-            , style "min-height" "44px"
-            , style "display" "flex"
-            , style "align-items" "center"
-            , style "justify-content" "center"
+                Html.text ""
+        , Html.button
+            [ Html.Events.stopPropagationOn "click" (Json.Decode.succeed ( VoidEntry (effectiveEntryToExpense entry), True ))
+            , Html.Attributes.class "bg-transparent border-none text-rust text-lg cursor-pointer px-2 py-1 shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
             ]
-            [ text "✕" ]
+            [ Html.text "✕" ]
         ]
 
 
 viewSkeleton : Html Msg
 viewSkeleton =
-    div []
+    Html.div []
         (List.repeat 5
-            (div
-                [ style "background" "#161918"
-                , style "border-radius" "8px"
-                , style "padding" "18px 16px"
-                , style "margin-bottom" "8px"
-                , style "display" "flex"
-                , style "gap" "12px"
-                ]
-                [ div [ style "width" "10px", style "height" "10px", style "border-radius" "50%", style "background" "#2a3230" ] []
-                , div [ style "flex" "1", style "height" "16px", style "background" "#2a3230", style "border-radius" "4px" ] []
-                , div [ style "width" "60px", style "height" "16px", style "background" "#2a3230", style "border-radius" "4px" ] []
+            (Html.div
+                [ Html.Attributes.class "bg-cream rounded-lg py-[18px] px-4 mb-2 flex gap-3" ]
+                [ Html.div [ Html.Attributes.class "w-2.5 h-2.5 rounded-full bg-tan mt-1" ] []
+                , Html.div [ Html.Attributes.class "flex-1 h-4 bg-tan rounded" ] []
+                , Html.div [ Html.Attributes.class "w-14 h-4 bg-tan rounded" ] []
                 ]
             )
         )
