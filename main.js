@@ -7185,6 +7185,50 @@ var $author$project$Main$deleteEntry = F4(
 				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ':batchUpdate')
 			});
 	});
+var $author$project$Main$TripSheetDeleted = function (a) {
+	return {$: 'TripSheetDeleted', a: a};
+};
+var $author$project$Main$deleteTripSheet = F3(
+	function (creds, sheetId, sheetGid) {
+		var body = $elm$json$Json$Encode$object(
+			_List_fromArray(
+				[
+					_Utils_Tuple2(
+					'requests',
+					A2(
+						$elm$json$Json$Encode$list,
+						$elm$core$Basics$identity,
+						_List_fromArray(
+							[
+								$elm$json$Json$Encode$object(
+								_List_fromArray(
+									[
+										_Utils_Tuple2(
+										'deleteSheet',
+										$elm$json$Json$Encode$object(
+											_List_fromArray(
+												[
+													_Utils_Tuple2(
+													'sheetId',
+													$elm$json$Json$Encode$int(sheetGid))
+												])))
+									]))
+							])))
+				]));
+		return $elm$http$Http$request(
+			{
+				body: $elm$http$Http$jsonBody(body),
+				expect: $author$project$Main$expectWhateverBody($author$project$Main$TripSheetDeleted),
+				headers: _List_fromArray(
+					[
+						A2($elm$http$Http$header, 'Authorization', 'Bearer ' + creds.token)
+					]),
+				method: 'POST',
+				timeout: $elm$core$Maybe$Nothing,
+				tracker: $elm$core$Maybe$Nothing,
+				url: 'https://sheets.googleapis.com/v4/spreadsheets/' + (sheetId + ':batchUpdate')
+			});
+	});
 var $author$project$Main$encodeTrip = function (t) {
 	return $elm$json$Json$Encode$object(
 		_List_fromArray(
@@ -9411,17 +9455,47 @@ var $author$project$Main$updateAuth = F2(
 							_Utils_update(
 								as_,
 								{confirmDeleteTrip: $elm$core$Maybe$Nothing, trips: trips_})),
-						$author$project$Main$saveStorage(
-							{
-								key: 'trips',
-								value: A2(
-									$elm$json$Json$Encode$encode,
-									0,
-									A2(
-										$elm$json$Json$Encode$list,
-										$author$project$Main$encodeTrip,
-										$author$project$List$NonEmpty$Zipper$toList(trips_)))
-							}));
+						$elm$core$Platform$Cmd$batch(
+							_List_fromArray(
+								[
+									$author$project$Main$saveStorage(
+									{
+										key: 'trips',
+										value: A2(
+											$elm$json$Json$Encode$encode,
+											0,
+											A2(
+												$elm$json$Json$Encode$list,
+												$author$project$Main$encodeTrip,
+												$author$project$List$NonEmpty$Zipper$toList(trips_)))
+									}),
+									A3($author$project$Main$deleteTripSheet, as_.creds, as_.config.sheetId, trip.sheetGid)
+								])));
+				}
+			case 'TripSheetDeleted':
+				var result = msg.a;
+				if (result.$ === 'Ok') {
+					return _Utils_Tuple2(
+						$author$project$Main$AuthModel(as_),
+						$elm$core$Platform$Cmd$none);
+				} else {
+					if ((result.a.$ === 'BadStatus') && (result.a.a === 401)) {
+						return _Utils_Tuple2(
+							$author$project$Main$GuestModel(
+								A2($author$project$Main$toGuestState, $author$project$Main$SessionExpired, as_)),
+							$author$project$Main$clearStorage(_Utils_Tuple0));
+					} else {
+						var e = result.a;
+						return _Utils_Tuple2(
+							$author$project$Main$AuthModel(
+								_Utils_update(
+									as_,
+									{
+										toast: $elm$core$Maybe$Just(
+											'Could not delete sheet tab: ' + $author$project$Main$httpErrString(e))
+									})),
+							$elm$core$Platform$Cmd$none);
+					}
 				}
 			default:
 				return _Utils_Tuple2(
@@ -10626,7 +10700,7 @@ var $author$project$Main$viewDeleteConfirmModal = function (trip) {
 							]),
 						_List_fromArray(
 							[
-								$elm$html$Html$text('This removes the trip from your app. Your expense data in Google Sheets will not be deleted.')
+								$elm$html$Html$text('This will permanently delete the trip and its Google Sheets tab. All expense data in that tab will be lost.')
 							])),
 						A2(
 						$elm$html$Html$div,

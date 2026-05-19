@@ -271,6 +271,7 @@ type Msg
     | GotOcrResult String (Result Http.Error String)
     | GotSheetMeta (Result Http.Error (List SheetProp))
     | GotTripCreated (Result Http.Error SheetProp)
+    | TripSheetDeleted (Result Http.Error ())
     | LongNoteChanged String
     | MapPickerConfirmed Float Float
     | MerchantChanged String
@@ -1403,7 +1404,23 @@ updateAuth msg as_ =
                                 |> Maybe.withDefault (Zipper.fromCons h t)
                     in
                     ( AuthModel { as_ | trips = trips_, confirmDeleteTrip = Nothing }
-                    , saveStorage { key = "trips", value = E.encode 0 (E.list encodeTrip (Zipper.toList trips_)) }
+                    , Cmd.batch
+                        [ saveStorage { key = "trips", value = E.encode 0 (E.list encodeTrip (Zipper.toList trips_)) }
+                        , deleteTripSheet as_.creds as_.config.sheetId trip.sheetGid
+                        ]
+                    )
+
+        TripSheetDeleted result ->
+            case result of
+                Ok () ->
+                    ( AuthModel as_, Cmd.none )
+
+                Err (Http.BadStatus 401) ->
+                    ( GuestModel (toGuestState SessionExpired as_), clearStorage () )
+
+                Err e ->
+                    ( AuthModel { as_ | toast = Just ("Could not delete sheet tab: " ++ httpErrString e) }
+                    , Cmd.none
                     )
 
         _ ->
@@ -1497,6 +1514,33 @@ deleteEntry creds sheetId sheetGid rowIndex =
         , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ ":batchUpdate"
         , body = Http.jsonBody body
         , expect = expectWhateverBody EntryDeleted
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+deleteTripSheet : Creds -> String -> Int -> Cmd Msg
+deleteTripSheet creds sheetId sheetGid =
+    let
+        body =
+            E.object
+                [ ( "requests"
+                  , E.list identity
+                        [ E.object
+                            [ ( "deleteSheet"
+                              , E.object [ ( "sheetId", E.int sheetGid ) ]
+                              )
+                            ]
+                        ]
+                  )
+                ]
+    in
+    Http.request
+        { method = "POST"
+        , headers = [ Http.header "Authorization" ("Bearer " ++ creds.token) ]
+        , url = "https://sheets.googleapis.com/v4/spreadsheets/" ++ sheetId ++ ":batchUpdate"
+        , body = Http.jsonBody body
+        , expect = expectWhateverBody TripSheetDeleted
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -2258,7 +2302,7 @@ viewDeleteConfirmModal trip =
             [ p [ style "font-size" "18px", style "font-weight" "700", style "margin-bottom" "8px" ]
                 [ text ("Delete \u{201C}" ++ trip.name ++ "\u{201D}?") ]
             , p [ style "font-size" "14px", style "color" "#7a8a80", style "margin-bottom" "24px", style "line-height" "1.5" ]
-                [ text "This removes the trip from your app. Your expense data in Google Sheets will not be deleted." ]
+                [ text "This will permanently delete the trip and its Google Sheets tab. All expense data in that tab will be lost." ]
             , div [ style "display" "flex", style "gap" "12px" ]
                 [ button
                     [ onClick CancelDeleteTrip
