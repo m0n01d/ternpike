@@ -113,11 +113,6 @@ toAuthState creds initialTripId initialTab gs =
     }
 
 
-currentTrip : AuthState -> Maybe Trip.Trip
-currentTrip as_ =
-    Dict.get (TripId.toString as_.currentTripId) as_.trips
-
-
 toGuestState : GuestReason -> AuthState -> GuestState
 toGuestState reason as_ =
     { authError    = Nothing
@@ -199,18 +194,6 @@ upsertBy getId item list =
         List.map (\x -> if getId x == getId item then item else x) list
     else
         list ++ [ item ]
-
-
-updateOrAddTrip : Trip.Trip -> List Trip.Trip -> List Trip.Trip
-updateOrAddTrip trip trips =
-    let
-        exists =
-            List.any (\t -> t.id == trip.id) trips
-    in
-    if exists then
-        List.map (\t -> if t.id == trip.id then trip else t) trips
-    else
-        trips ++ [ trip ]
 
 
 recomputeEntries : AuthState -> AuthState
