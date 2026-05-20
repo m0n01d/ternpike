@@ -9,6 +9,7 @@ import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
 import Data.Trip exposing (Trip, TripField, TripForm)
 import Data.TripId exposing (TripId)
+import Data.Trips exposing (Trips)
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import File exposing (File)
@@ -107,7 +108,10 @@ type alias PendingEntry =
 
 
 type alias Creds =
-    { userId : String }
+    { dbName   : String
+    , email    : String
+    , password : String
+    }
 
 
 type alias AppConfig =
@@ -117,9 +121,16 @@ type alias AppConfig =
 
 
 type ExpensesState
-    = Loaded (List EffectiveEntry)
-    | Loading
-    | NotAsked
+    = ExpensesFailed String
+    | ExpensesLoading
+    | ExpensesReady (List EffectiveEntry)
+
+
+type TripsState
+    = NoTripsYet
+    | TripsFailed String
+    | TripsLoaded Trips
+    | TripsLoading (Dict String Trip) (Maybe TripId)
 
 
 type SyncState
@@ -133,7 +144,9 @@ type SyncState
 type GuestReason
     = AwaitingCode String
     | NotLoggedIn
+    | RequestingCode String
     | SessionExpired
+    | VerifyingCode String String
 
 
 type alias GuestSession =
@@ -162,7 +175,6 @@ type alias AuthState =
     , config            : AppConfig
     , confirmDeleteTrip : Maybe Trip
     , creds             : Creds
-    , currentTripId     : TripId
     , editingEntry      : Maybe Expense
     , error             : Maybe String
     , expensesState     : ExpensesState
@@ -180,7 +192,7 @@ type alias AuthState =
     , toast             : Maybe String
     , today             : String
     , tripForm          : Maybe TripForm
-    , trips             : Dict String Trip
+    , trips             : TripsState
     , version           : String
     , voids             : List Void
     }
@@ -228,6 +240,7 @@ type Msg
     | OpenMapPicker
     | OpenNewTripForm
     | RefreshClicked
+    | RequestCodeResult (Result Http.Error ())
     | ResetSettingsClicked
     | ReviewScanItem String
     | SaveTripForm
@@ -244,6 +257,7 @@ type Msg
     | ToastExpired
     | TripFieldChanged TripField String
     | UrlChanged Url.Url
+    | VerifyCodeResult (Result Http.Error Creds)
     | VoidEntry Expense
 
 

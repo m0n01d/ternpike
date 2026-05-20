@@ -45,43 +45,98 @@ viewGuest gs =
 viewFormCard : GuestState -> Html Msg
 viewFormCard gs =
     case gs.session.reason of
-        AwaitingCode _ ->
-            UI.Card.subCard
-                [ Html.form
-                    [ Html.Events.onSubmit SubmitCode
-                    , Html.Attributes.class "w-full"
-                    ]
-                    [ Html.p [ Html.Attributes.class "text-muted text-sm mb-4" ]
-                        [ Html.text ("A code was sent to " ++ gs.emailInput ++ ". Enter it below.") ]
-                    , Html.input
-                        [ Html.Attributes.type_ "text"
-                        , Html.Attributes.value gs.codeInput
-                        , Html.Events.onInput CodeInputChanged
-                        , Html.Attributes.placeholder "123456"
-                        , Html.Attributes.class "w-full mb-3"
-                        ]
-                        []
-                    , UI.Button.primary { label = "Verify code", onClick = SubmitCode }
-                    ]
-                ]
+        NotLoggedIn ->
+            viewEmailForm gs.emailInput { busy = False, label = "Continue" }
 
-        _ ->
-            UI.Card.subCard
-                [ Html.form
-                    [ Html.Events.onSubmit SubmitEmail
-                    , Html.Attributes.class "w-full"
-                    ]
-                    [ Html.input
-                        [ Html.Attributes.type_ "text"
-                        , Html.Attributes.value gs.emailInput
-                        , Html.Events.onInput EmailInputChanged
-                        , Html.Attributes.placeholder "your@email.com"
-                        , Html.Attributes.class "w-full mb-3"
-                        ]
+        SessionExpired ->
+            viewEmailForm gs.emailInput { busy = False, label = "Continue" }
+
+        RequestingCode email ->
+            viewEmailForm email { busy = True, label = "Sending…" }
+
+        AwaitingCode email ->
+            viewCodeForm email gs.codeInput { busy = False, label = "Verify code" }
+
+        VerifyingCode email code ->
+            viewCodeForm email code { busy = True, label = "Verifying…" }
+
+
+viewEmailForm : String -> { busy : Bool, label : String } -> Html Msg
+viewEmailForm value { busy, label } =
+    let
+        formAttrs =
+            Html.Attributes.class "w-full"
+                :: (if busy then
                         []
-                    , UI.Button.primary { label = "Continue", onClick = SubmitEmail }
-                    ]
-                ]
+
+                    else
+                        [ Html.Events.onSubmit SubmitEmail ]
+                   )
+
+        inputAttrs =
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value value
+            , Html.Attributes.placeholder "your@email.com"
+            , Html.Attributes.class "w-full mb-3"
+            , Html.Attributes.disabled busy
+            ]
+                ++ (if busy then
+                        []
+
+                    else
+                        [ Html.Events.onInput EmailInputChanged ]
+                   )
+    in
+    UI.Card.subCard
+        [ Html.form formAttrs
+            [ Html.input inputAttrs []
+            , if busy then
+                UI.Button.primaryBusy { label = label }
+
+              else
+                UI.Button.primary { label = label, onClick = SubmitEmail }
+            ]
+        ]
+
+
+viewCodeForm : String -> String -> { busy : Bool, label : String } -> Html Msg
+viewCodeForm email code { busy, label } =
+    let
+        formAttrs =
+            Html.Attributes.class "w-full"
+                :: (if busy then
+                        []
+
+                    else
+                        [ Html.Events.onSubmit SubmitCode ]
+                   )
+
+        inputAttrs =
+            [ Html.Attributes.type_ "text"
+            , Html.Attributes.value code
+            , Html.Attributes.placeholder "123456"
+            , Html.Attributes.class "w-full mb-3"
+            , Html.Attributes.disabled busy
+            ]
+                ++ (if busy then
+                        []
+
+                    else
+                        [ Html.Events.onInput CodeInputChanged ]
+                   )
+    in
+    UI.Card.subCard
+        [ Html.form formAttrs
+            [ Html.p [ Html.Attributes.class "text-muted text-sm mb-4" ]
+                [ Html.text ("A code was sent to " ++ email ++ ". Enter it below.") ]
+            , Html.input inputAttrs []
+            , if busy then
+                UI.Button.primaryBusy { label = label }
+
+              else
+                UI.Button.primary { label = label, onClick = SubmitCode }
+            ]
+        ]
 
 
 viewErrorChip : GuestState -> Html Msg

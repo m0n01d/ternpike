@@ -7,6 +7,11 @@ const base = process.env.GITHUB_ACTIONS ? '/ternpike/' : '/'
 
 export default defineConfig({
   base,
+  server: {
+    port: 3000,
+    strictPort: true,
+    proxy: { '/auth': 'http://localhost:4000' },
+  },
   plugins: [elm()],
   resolve: {
     alias: {

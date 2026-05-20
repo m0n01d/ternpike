@@ -1,17 +1,17 @@
 module Pages.Trips exposing (viewTab)
 
 import Data.Trip exposing (Trip, TripField(..), TripForm)
-import Data.TripId as TripId
-import Dict
+import Data.Trips as Trips
 import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Types exposing (AuthState, ExpensesState(..), Msg(..), Tab(..))
+import Types exposing (AuthState, ExpensesState(..), Msg(..), Tab(..), TripsState(..))
 import UI.Button
 import UI.Icons
 import UI.Layout
 import UI.Rule
+import UI.Skeleton
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -24,18 +24,15 @@ viewTab as_ =
 
 viewActions : AuthState -> List (Html Msg)
 viewActions as_ =
-    let
-        maybeActiveTrip =
-            Dict.get (TripId.toString as_.currentTripId) as_.trips
+    case as_.trips of
+        TripsLoaded trips ->
+            let
+                activeTrip =
+                    Trips.selectedTrip trips
 
-        canDelete =
-            Dict.size as_.trips > 1
-    in
-    case maybeActiveTrip of
-        Nothing ->
-            []
-
-        Just activeTrip ->
+                canDelete =
+                    not (List.isEmpty (Trips.otherTrips trips))
+            in
             UI.Button.iconButton
                 { icon = UI.Icons.pencil "w-4 h-4"
                 , onClick = OpenEditTripForm activeTrip
@@ -53,84 +50,104 @@ viewActions as_ =
                         []
                    )
 
+        _ ->
+            []
+
 
 viewHero : AuthState -> Html Msg
 viewHero as_ =
-    case Dict.get (TripId.toString as_.currentTripId) as_.trips of
-        Nothing ->
+    case as_.trips of
+        TripsLoading _ _ ->
             Html.div [ Html.Attributes.class "py-2" ]
-                [ Html.div [ Html.Attributes.class "font-display text-4xl font-black text-forest tracking-tight leading-tight" ]
-                    [ Html.text "Loading..." ]
-                ]
+                [ UI.Skeleton.row ]
 
-        Just activeTrip ->
-            let
-                totalSpent =
-                    case as_.expensesState of
-                        Loaded entries ->
-                            List.sum (List.map .amount entries)
+        TripsFailed err ->
+            Html.div [ Html.Attributes.class "py-2 text-rust text-sm" ]
+                [ Html.text ("Couldn't load trips: " ++ err) ]
 
-                        _ ->
-                            0
-
-                hasStart =
-                    activeTrip.startDate /= ""
-
-                hasEnd =
-                    activeTrip.endDate /= ""
-
-                dateLine =
-                    if hasStart && hasEnd then
-                        Helpers.formatDateDisplay activeTrip.startDate
-                            ++ " \u{2014} "
-                            ++ Helpers.formatDateDisplay activeTrip.endDate
-
-                    else if hasStart then
-                        Helpers.formatDateDisplay activeTrip.startDate
-
-                    else
-                        ""
-
-                totalDays =
-                    if hasStart && hasEnd then
-                        Basics.max 1
-                            (Helpers.isoToDayCount activeTrip.endDate
-                                - Helpers.isoToDayCount activeTrip.startDate
-                                + 1
-                            )
-
-                    else
-                        0
-            in
+        NoTripsYet ->
             Html.div [ Html.Attributes.class "py-2" ]
                 [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
-                    [ Html.text "ACTIVE TRIP" ]
-                , Html.div [ Html.Attributes.class "font-display text-4xl font-black text-forest tracking-tight leading-tight" ]
-                    [ Html.text activeTrip.name ]
-                , if activeTrip.description /= "" then
-                    Html.p [ Html.Attributes.class "mt-2 text-sm text-muted" ]
-                        [ Html.text activeTrip.description ]
+                    [ Html.text "WELCOME" ]
+                , Html.div [ Html.Attributes.class "font-display text-3xl font-black text-forest tracking-tight leading-tight" ]
+                    [ Html.text "Start your first trip" ]
+                , Html.p [ Html.Attributes.class "mt-2 text-sm text-muted" ]
+                    [ Html.text "Create a trip below to start tracking expenses." ]
+                ]
 
-                  else
-                    Html.text ""
-                , if dateLine /= "" then
-                    Html.div [ Html.Attributes.class "mt-2 flex items-center gap-2 text-xs font-mono tracking-wide text-muted" ]
-                        [ Html.text dateLine
-                        , if totalDays > 0 then
-                            Html.text (" \u{00B7} " ++ String.fromInt totalDays ++ " DAYS")
+        TripsLoaded trips ->
+            viewTripHero (Trips.selectedTrip trips) as_.expensesState
 
-                          else
-                            Html.text ""
-                        ]
 
-                  else
-                    Html.text ""
-                , if activeTrip.budget > 0 then
-                    viewBudgetBar totalSpent activeTrip.budget
+viewTripHero : Trip -> ExpensesState -> Html Msg
+viewTripHero activeTrip expensesState =
+    let
+        totalSpent =
+            case expensesState of
+                ExpensesReady entries ->
+                    List.sum (List.map .amount entries)
+
+                _ ->
+                    0
+
+        hasStart =
+            activeTrip.startDate /= ""
+
+        hasEnd =
+            activeTrip.endDate /= ""
+
+        dateLine =
+            if hasStart && hasEnd then
+                Helpers.formatDateDisplay activeTrip.startDate
+                    ++ " \u{2014} "
+                    ++ Helpers.formatDateDisplay activeTrip.endDate
+
+            else if hasStart then
+                Helpers.formatDateDisplay activeTrip.startDate
+
+            else
+                ""
+
+        totalDays =
+            if hasStart && hasEnd then
+                Basics.max 1
+                    (Helpers.isoToDayCount activeTrip.endDate
+                        - Helpers.isoToDayCount activeTrip.startDate
+                        + 1
+                    )
+
+            else
+                0
+    in
+    Html.div [ Html.Attributes.class "py-2" ]
+        [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
+            [ Html.text "ACTIVE TRIP" ]
+        , Html.div [ Html.Attributes.class "font-display text-4xl font-black text-forest tracking-tight leading-tight" ]
+            [ Html.text activeTrip.name ]
+        , if activeTrip.description /= "" then
+            Html.p [ Html.Attributes.class "mt-2 text-sm text-muted" ]
+                [ Html.text activeTrip.description ]
+
+          else
+            Html.text ""
+        , if dateLine /= "" then
+            Html.div [ Html.Attributes.class "mt-2 flex items-center gap-2 text-xs font-mono tracking-wide text-muted" ]
+                [ Html.text dateLine
+                , if totalDays > 0 then
+                    Html.text (" \u{00B7} " ++ String.fromInt totalDays ++ " DAYS")
 
                   else
                     Html.text ""
                 ]
+
+          else
+            Html.text ""
+        , if activeTrip.budget > 0 then
+            viewBudgetBar totalSpent activeTrip.budget
+
+          else
+            Html.text ""
+        ]
 
 
 viewBudgetBar : Float -> Float -> Html Msg
@@ -142,12 +159,25 @@ viewBudgetBar totalSpent budget =
         pctInt =
             round (pct * 100)
 
+        isOver =
+            pct >= 1.0
+
         barColor =
-            if pct >= 1.0 then
+            if isOver then
                 "h-full bg-danger transition-all duration-500"
 
             else
                 "h-full bg-rust transition-all duration-500"
+
+        spentAmountClass =
+            if isOver then
+                "text-sm font-semibold text-danger"
+
+            else
+                "text-sm font-semibold text-rust"
+
+        labelClass =
+            "text-[10px] font-mono uppercase tracking-widest text-moss"
     in
     Html.div []
         [ UI.Rule.dashedRule
@@ -160,9 +190,19 @@ viewBudgetBar totalSpent budget =
                 ]
                 []
             ]
-        , Html.div [ Html.Attributes.class "mt-2 flex justify-between text-xs font-mono text-moss" ]
-            [ Html.text ("$" ++ String.fromInt (round totalSpent) ++ " spent")
-            , Html.text ("$" ++ String.fromInt (round budget) ++ " budget")
+        , Html.div [ Html.Attributes.class "mt-2 flex justify-between items-baseline gap-3" ]
+            [ Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
+                [ Html.span [ Html.Attributes.class spentAmountClass ]
+                    [ Html.text ("$" ++ String.fromInt (round totalSpent)) ]
+                , Html.span [ Html.Attributes.class labelClass ]
+                    [ Html.text "spent" ]
+                ]
+            , Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
+                [ Html.span [ Html.Attributes.class "text-sm font-semibold text-forest" ]
+                    [ Html.text ("$" ++ String.fromInt (round budget)) ]
+                , Html.span [ Html.Attributes.class labelClass ]
+                    [ Html.text "budget" ]
+                ]
             ]
         ]
 
@@ -170,20 +210,18 @@ viewBudgetBar totalSpent budget =
 viewBody : AuthState -> Html Msg
 viewBody as_ =
     let
-        currentId =
-            as_.currentTripId
+        others =
+            case as_.trips of
+                TripsLoaded trips ->
+                    Trips.otherTrips trips
 
-        allTrips =
-            Dict.values as_.trips
-                |> List.sortBy (TripId.toString << .id)
-
-        otherTrips =
-            List.filter (\t -> t.id /= currentId) allTrips
+                _ ->
+                    []
     in
     Html.div []
-        [ if not (List.isEmpty otherTrips) then
+        [ if not (List.isEmpty others) then
             Html.div [ Html.Attributes.class "mb-5" ]
-                (List.map viewOtherTripRow otherTrips)
+                (List.map viewOtherTripRow others)
 
           else
             Html.text ""

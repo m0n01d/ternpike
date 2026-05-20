@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ternpike — Track Every Turn of the Road</title>
+<meta name="description" content="Snap a photo of your receipt at camp. Ternpike reads it, logs your GPS, and shows exactly where your budget stands before you pull out tomorrow morning.">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,500;1,700&family=DM+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --forest:       #2d3a22;
+  --forest-mid:   #3d4e2e;
+  --forest-light: #4a5e3a;
+  --moss:         #6b7c58;
+  --rust:         #b85c38;
+  --rust-light:   #cc7050;
+  --tan:          #d4c9a8;
+  --cream:        #f2ede3;
+  --parchment:    #faf7f0;
+  --ink:          #1e2818;
+  --muted:        #8a8a78;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--parchment);
+  color: var(--forest);
+  font-family: 'Crimson Pro', serif;
+  font-size: 18px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+/* Grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.5;
+}
+
+/* ─── TOPO PATTERN ─── */
+.topo {
+  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%234a5e3a' stroke-width='0.5' opacity='0.15'%3E%3Cellipse cx='50' cy='50' rx='15' ry='9'/%3E%3Cellipse cx='50' cy='50' rx='28' ry='17'/%3E%3Cellipse cx='50' cy='50' rx='40' ry='25'/%3E%3Cellipse cx='50' cy='50' rx='48' ry='32'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* ─── NAV ─── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(250,247,240,0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(212,201,168,0.4);
+  transition: border-color 0.3s;
+}
+
+.nav-logo {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--forest);
+  text-decoration: none;
+}
+.nav-logo span { color: var(--rust); }
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.nav-link {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--moss);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.nav-link:hover { color: var(--forest); }
+
+.nav-cta {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: var(--forest);
+  color: var(--tan);
+  padding: 10px 20px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.15s;
+}
+.nav-cta:hover { background: var(--forest-mid); transform: translateY(-1px); }
+
+@media (max-width: 640px) {
+  .nav-links { gap: 16px; }
+  .nav-link { display: none; }
+}
+
+/* ─── HERO ─── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 24px 80px;
+  position: relative;
+  overflow: hidden;
+  background: var(--cream);
+}
+
+/* Ruled lines */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 39px,
+    rgba(74,94,58,0.07) 39px,
+    rgba(74,94,58,0.07) 40px
+  );
+  pointer-events: none;
+}
+
+/* Margin line */
+.hero-margin {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: clamp(40px, 8vw, 80px);
+  width: 1px;
+  background: rgba(184,92,56,0.18);
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 820px;
+  animation: fade-up 0.9s ease both;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.hero-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--rust);
+  margin-bottom: 24px;
+  animation: fade-up 0.9s 0.1s ease both;
+}
+
+.hero-tern {
+  margin-bottom: 20px;
+  animation: soar 7s ease-in-out infinite, fade-up 0.9s 0.05s ease both;
+}
+@keyframes soar {
+  0%,100% { transform: translateY(0) rotate(-2deg); }
+  35%     { transform: translateY(-16px) rotate(1.5deg); }
+  70%     { transform: translateY(-8px) rotate(-1deg); }
+}
+
+.hero-h1 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: clamp(56px, 11vw, 116px);
+  letter-spacing: -0.03em;
+  line-height: 0.93;
+  color: var(--forest);
+  animation: fade-up 0.9s 0.15s ease both;
+}
+.hero-h1 span { color: var(--rust); }
+
+.hero-sub {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(20px, 3.5vw, 28px);
+  color: var(--muted);
+  margin-top: 20px;
+  line-height: 1.35;
+  max-width: 580px;
+  animation: fade-up 0.9s 0.25s ease both;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 40px;
+  flex-wrap: wrap;
+  justify-content: center;
+  animation: fade-up 0.9s 0.35s ease both;
+}
+
+.btn-primary {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: var(--forest);
+  color: var(--tan);
+  padding: 16px 32px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 16px rgba(45,58,34,0.2);
+}
+.btn-primary:hover {
+  background: var(--ink);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(45,58,34,0.25);
+}
+
+.btn-ghost {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--moss);
+  padding: 16px 24px;
+  border-radius: 8px;
+  text-decoration: none;
+  border: 1px solid var(--tan);
+  transition: border-color 0.2s, color 0.2s, transform 0.15s;
+}
+.btn-ghost:hover {
+  border-color: var(--moss);
+  color: var(--forest);
+  transform: translateY(-2px);
+}
+
+.hero-proof {
+  margin-top: 48px;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  animation: fade-up 0.9s 0.45s ease both;
+}
+
+/* scroll cue */
+.scroll-cue {
+  position: absolute;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: fade-up 1s 0.8s ease both;
+}
+.scroll-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--tan);
+  animation: scroll-pulse 1.6s ease-in-out infinite;
+}
+.scroll-dot:nth-child(2) { animation-delay: 0.2s; }
+.scroll-dot:nth-child(3) { animation-delay: 0.4s; opacity: 0.4; }
+@keyframes scroll-pulse {
+  0%,100% { transform: translateY(0); opacity: 1; }
+  50%     { transform: translateY(4px); opacity: 0.4; }
+}
+
+/* ─── HOW IT WORKS ─── */
+.how {
+  padding: 100px 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.section-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--rust);
+  margin-bottom: 12px;
+}
+
+.section-h2 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: clamp(36px, 6vw, 60px);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--forest);
+  margin-bottom: 60px;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  background: var(--tan);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(45,58,34,0.1);
+}
+
+@media (max-width: 680px) {
+  .steps { grid-template-columns: 1fr; }
+}
+
+.step {
+  background: var(--parchment);
+  padding: 40px 32px;
+  position: relative;
+  transition: background 0.2s;
+}
+.step:hover { background: var(--cream); }
+
+.step-num {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: 64px;
+  line-height: 1;
+  color: var(--tan);
+  letter-spacing: -0.03em;
+  margin-bottom: 16px;
+}
+
+.step-icon {
+  font-size: 28px;
+  margin-bottom: 12px;
+}
+
+.step-title {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--forest);
+  margin-bottom: 10px;
+  line-height: 1.2;
+}
+
+.step-body {
+  font-family: 'Crimson Pro', serif;
+  font-size: 17px;
+  color: var(--moss);
+  line-height: 1.6;
+}
+
+/* ─── FEATURES ─── */
+.features {
+  padding: 80px 24px;
+  background: var(--forest);
+  position: relative;
+  overflow: hidden;
+}
+
+.features::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%234a5e3a' stroke-width='0.6' opacity='0.3'%3E%3Cellipse cx='50' cy='50' rx='15' ry='9'/%3E%3Cellipse cx='50' cy='50' rx='28' ry='17'/%3E%3Cellipse cx='50' cy='50' rx='40' ry='25'/%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.features-inner {
+  max-width: 1000px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.features .section-eyebrow { color: var(--rust-light); }
+.features .section-h2 { color: var(--tan); margin-bottom: 56px; }
+
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2px;
+  background: rgba(107,124,88,0.3);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) { .feat-grid { grid-template-columns: 1fr; } }
+
+.feat {
+  background: var(--forest);
+  padding: 36px 32px;
+  transition: background 0.2s;
+}
+.feat:hover { background: var(--forest-mid); }
+
+.feat-icon {
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+
+.feat-title {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--tan);
+  margin-bottom: 10px;
+  line-height: 1.2;
+}
+
+.feat-body {
+  font-family: 'Crimson Pro', serif;
+  font-size: 16px;
+  color: var(--moss);
+  line-height: 1.6;
+}
+
+/* ─── LEDGER PREVIEW ─── */
+.preview-section {
+  padding: 100px 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.ledger-mock {
+  background: var(--parchment);
+  border: 1px solid var(--tan);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 16px 60px rgba(45,58,34,0.12);
+  margin-top: 48px;
+}
+
+.mock-nav {
+  background: var(--forest);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mock-nav-word {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--tan);
+}
+.mock-nav-word span { color: var(--rust-light); }
+
+.mock-tabs {
+  display: flex;
+  gap: 2px;
+}
+
+.mock-tab {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 4px;
+  color: var(--moss);
+  cursor: default;
+}
+.mock-tab.active {
+  background: rgba(107,124,88,0.3);
+  color: var(--tan);
+}
+
+.mock-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--cream);
+  border-bottom: 1px solid var(--tan);
+}
+
+@media (max-width: 560px) { .mock-stats { grid-template-columns: repeat(2,1fr); } }
+
+.mock-stat {
+  padding: 20px 20px;
+  border-right: 1px solid var(--tan);
+}
+.mock-stat:last-child { border-right: none; }
+
+.mock-stat-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--moss);
+  margin-bottom: 4px;
+}
+
+.mock-stat-val {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 22px;
+  color: var(--forest);
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+.mock-day {
+  padding: 8px 24px 4px;
+  font-family: 'DM Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--moss);
+  background: var(--parchment);
+  border-bottom: 1px solid var(--tan);
+}
+
+.mock-entry {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 24px;
+  border-bottom: 1px solid rgba(212,201,168,0.45);
+  transition: background 0.15s;
+  cursor: default;
+}
+.mock-entry:hover { background: var(--cream); }
+
+.mock-cat {
+  width: 34px; height: 34px;
+  border-radius: 9px;
+  background: var(--cream);
+  border: 1px solid var(--tan);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.mock-info { flex: 1; min-width: 0; }
+
+.mock-merchant {
+  font-family: 'Crimson Pro', serif;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--forest);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mock-note {
+  font-family: 'Crimson Pro', serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mock-pin { font-size: 11px; color: var(--moss); flex-shrink: 0; }
+
+.mock-amt {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--forest);
+  flex-shrink: 0;
+}
+
+/* ─── WHY TERNPIKE ─── */
+.why {
+  padding: 100px 24px;
+  background: var(--cream);
+  position: relative;
+  overflow: hidden;
+}
+
+.why::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 39px,
+    rgba(74,94,58,0.06) 39px,
+    rgba(74,94,58,0.06) 40px
+  );
+}
+
+.why-inner {
+  max-width: 1000px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 48px;
+}
+@media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
+
+.compare-col { }
+
+.compare-head {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  border-radius: 6px 6px 0 0;
+  margin-bottom: 0;
+}
+
+.compare-head.them {
+  background: rgba(138,138,120,0.15);
+  color: var(--muted);
+}
+.compare-head.us {
+  background: var(--forest);
+  color: var(--tan);
+}
+
+.compare-body {
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+  border: 1px solid var(--tan);
+  border-top: none;
+}
+
+.compare-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(212,201,168,0.5);
+  background: var(--parchment);
+  font-family: 'Crimson Pro', serif;
+  font-size: 16px;
+  color: var(--forest);
+  line-height: 1.3;
+}
+.compare-row:last-child { border-bottom: none; }
+
+.compare-row.us-row { background: rgba(250,247,240,0.6); }
+
+.c-icon { flex-shrink: 0; font-size: 14px; }
+
+/* ─── OPEN SOURCE ─── */
+.oss {
+  padding: 100px 24px;
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.oss-card {
+  background: var(--forest);
+  border-radius: 20px;
+  padding: 60px 48px;
+  position: relative;
+  overflow: hidden;
+}
+
+.oss-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%234a5e3a' stroke-width='0.6' opacity='0.35'%3E%3Cellipse cx='50' cy='50' rx='15' ry='9'/%3E%3Cellipse cx='50' cy='50' rx='28' ry='17'/%3E%3Cellipse cx='50' cy='50' rx='40' ry='25'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.oss-inner { position: relative; z-index: 1; }
+
+.oss-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--rust-light);
+  margin-bottom: 16px;
+}
+
+.oss-h2 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: clamp(32px, 5vw, 52px);
+  letter-spacing: -0.02em;
+  color: var(--tan);
+  line-height: 1.05;
+  margin-bottom: 20px;
+}
+
+.oss-body {
+  font-family: 'Crimson Pro', serif;
+  font-style: italic;
+  font-size: 20px;
+  color: var(--moss);
+  line-height: 1.55;
+  max-width: 540px;
+  margin: 0 auto 36px;
+}
+
+.oss-links {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.oss-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 14px 28px;
+  border-radius: 7px;
+  text-decoration: none;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.oss-btn:hover { transform: translateY(-2px); }
+
+.oss-btn.gh {
+  background: var(--tan);
+  color: var(--forest);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+.oss-btn.gh:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.25); }
+
+.oss-btn.docs {
+  border: 1px solid rgba(212,201,168,0.35);
+  color: var(--tan);
+}
+
+/* ─── EMAIL CAPTURE ─── */
+.signup {
+  padding: 100px 24px;
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.signup-h2 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: clamp(36px, 6vw, 56px);
+  letter-spacing: -0.02em;
+  color: var(--forest);
+  line-height: 1.05;
+  margin-bottom: 16px;
+}
+
+.signup-sub {
+  font-family: 'Crimson Pro', serif;
+  font-style: italic;
+  font-size: 20px;
+  color: var(--muted);
+  margin-bottom: 36px;
+  line-height: 1.4;
+}
+
+.email-form {
+  display: flex;
+  gap: 8px;
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+@media (max-width: 480px) { .email-form { flex-direction: column; } }
+
+.email-input {
+  flex: 1;
+  font-family: 'Crimson Pro', serif;
+  font-size: 16px;
+  color: var(--forest);
+  background: var(--cream);
+  border: 1px solid var(--tan);
+  border-radius: 8px;
+  padding: 14px 18px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.email-input:focus { border-color: var(--moss); }
+.email-input::placeholder { color: var(--muted); font-style: italic; }
+
+.email-btn {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  background: var(--rust);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 14px 24px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+.email-btn:hover { background: var(--rust-light); transform: translateY(-1px); }
+
+.signup-fine {
+  margin-top: 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ─── FOOTER ─── */
+footer {
+  border-top: 1px solid var(--tan);
+  padding: 48px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.footer-logo {
+  font-family: 'Playfair Display', serif;
+  font-weight: 900;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  color: var(--forest);
+}
+.footer-logo span { color: var(--rust); }
+
+.footer-tagline {
+  font-family: 'Crimson Pro', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.footer-links {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.footer-link {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.footer-link:hover { color: var(--forest); }
+
+.footer-tern {
+  animation: soar 6s ease-in-out infinite;
+  display: inline-block;
+}
+</style>
+</head>
+<body>
+
+<!-- ══ NAV ══ -->
+<nav>
+  <a href="#" class="nav-logo">Tern<span>pike</span></a>
+  <div class="nav-links">
+    <a href="#how" class="nav-link">How it works</a>
+    <a href="#features" class="nav-link">Features</a>
+    <a href="#oss" class="nav-link">Open Source</a>
+    <a href="#signup" class="nav-cta">Get Early Access</a>
+  </div>
+</nav>
+
+<!-- ══ HERO ══ -->
+<section class="hero topo">
+  <div class="hero-margin"></div>
+  <div class="hero-inner">
+
+    <div class="hero-eyebrow">Road Trip Expense Tracker</div>
+
+    <div class="hero-tern">
+      <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
+        <path d="M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z" fill="var(--forest)"/>
+        <path d="M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z" fill="var(--forest-mid)"/>
+        <ellipse cx="60" cy="43" rx="20" ry="7" fill="var(--forest)"/>
+        <path d="M44 47 L28 62" stroke="var(--forest)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M44 47 L34 65" stroke="var(--forest)" stroke-width="2" stroke-linecap="round"/>
+        <ellipse cx="76" cy="40" rx="9" ry="7" fill="var(--ink)"/>
+        <path d="M84 40 L96 38.5 L84 42Z" fill="var(--rust)"/>
+        <circle cx="79" cy="38.5" r="1.8" fill="var(--tan)"/>
+        <circle cx="79.5" cy="38.5" r="0.8" fill="var(--ink)"/>
+      </svg>
+    </div>
+
+    <h1 class="hero-h1">Tern<span>pike</span></h1>
+
+    <p class="hero-sub">Snap a photo of your receipt at camp. We read it, log your GPS, and show exactly where your budget stands before you pull out tomorrow morning.</p>
+
+    <div class="hero-actions">
+      <a href="#signup" class="btn-primary">Get Early Access →</a>
+      <a href="#how" class="btn-ghost">See How It Works</a>
+    </div>
+
+    <p class="hero-proof">Built on the Alaska Highway · Zero subscription · Your data, your Google Sheet</p>
+
+  </div>
+
+  <div class="scroll-cue">
+    <div class="scroll-dot"></div>
+    <div class="scroll-dot"></div>
+    <div class="scroll-dot"></div>
+  </div>
+</section>
+
+<!-- ══ HOW IT WORKS ══ -->
+<section class="how" id="how">
+  <div class="section-eyebrow">How It Works</div>
+  <h2 class="section-h2">Three steps.<br>Then go to sleep.</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">01</div>
+      <div class="step-icon">📸</div>
+      <div class="step-title">Snap your receipts</div>
+      <div class="step-body">Photograph one or a stack at the end of a long driving day. Queue them all at once — Ternpike processes in parallel.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">02</div>
+      <div class="step-icon">🤖</div>
+      <div class="step-title">AI reads them</div>
+      <div class="step-body">Claude extracts the amount, merchant, date, and category. Writes a short note and a detailed one. You review and confirm — or edit anything.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">03</div>
+      <div class="step-icon">📍</div>
+      <div class="step-title">Logged with GPS</div>
+      <div class="step-body">Every entry gets coordinates — from the photo EXIF, your browser, or a map pin you drop. Your spending trail plots on a map of the whole route.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FEATURES ══ -->
+<section class="features topo" id="features">
+  <div class="features-inner">
+    <div class="section-eyebrow">Features</div>
+    <h2 class="section-h2">Built for<br>the realities of remote travel.</h2>
+
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="feat-icon">📶</div>
+        <div class="feat-title">Works offline</div>
+        <div class="feat-body">Installable PWA. Queue receipts in the backcountry, sync when you hit signal. Cached data always viewable.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🗺️</div>
+        <div class="feat-title">Waypoint map</div>
+        <div class="feat-body">Every expense with coordinates plots on a live map. Your financial trail and your geographic trail in one view.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">📊</div>
+        <div class="feat-title">Live stats dashboard</div>
+        <div class="feat-body">10 live metrics. Daily spending chart. Category breakdown. Cumulative spend curve. Know your burn rate at a glance.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🔒</div>
+        <div class="feat-title">Your data, your sheet</div>
+        <div class="feat-body">One Google Sheet is the entire database. You own it. Export to CSV, run formulas, connect to Looker Studio. We're a UI layer, not a data silo.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">⚡</div>
+        <div class="feat-title">No account required</div>
+        <div class="feat-body">Google sign-in only — no passwords, no new accounts. Works without an API key too: photos queue for manual entry.</div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🏕️</div>
+        <div class="feat-title">11 road-trip categories</div>
+        <div class="feat-body">Fuel · Food · Camp · Ferry · Gear · Lodging · Activities · Shopping · Medical · Transport · Misc. Broad enough for months, specific enough to be useful.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ LEDGER PREVIEW ══ -->
+<section class="preview-section" id="preview">
+  <div class="section-eyebrow">The Ledger</div>
+  <h2 class="section-h2">Looks like a journal.<br>Works like a spreadsheet.</h2>
+
+  <div class="ledger-mock">
+    <div class="mock-nav">
+      <div class="mock-nav-word">Tern<span>pike</span></div>
+      <div class="mock-tabs">
+        <div class="mock-tab active">Ledger</div>
+        <div class="mock-tab">Stats</div>
+        <div class="mock-tab">Map</div>
+      </div>
+    </div>
+
+    <div class="mock-stats">
+      <div class="mock-stat">
+        <div class="mock-stat-label">Total Spent</div>
+        <div class="mock-stat-val">$1,247</div>
+      </div>
+      <div class="mock-stat">
+        <div class="mock-stat-label">Days on Road</div>
+        <div class="mock-stat-val">14</div>
+      </div>
+      <div class="mock-stat">
+        <div class="mock-stat-label">Avg / Day</div>
+        <div class="mock-stat-val">$89</div>
+      </div>
+      <div class="mock-stat">
+        <div class="mock-stat-label">Top Category</div>
+        <div class="mock-stat-val">⛽ Fuel</div>
+      </div>
+    </div>
+
+    <div class="mock-day">Aug 2, 2026 · Whitehorse, YT · $134.60</div>
+
+    <div class="mock-entry">
+      <div class="mock-cat">⛽</div>
+      <div class="mock-info">
+        <div class="mock-merchant">Petro-Canada — Alaska Hwy</div>
+        <div class="mock-note">Fill-up before long stretch to Watson Lake</div>
+      </div>
+      <div class="mock-pin">📍</div>
+      <div class="mock-amt">$67.40</div>
+    </div>
+
+    <div class="mock-entry">
+      <div class="mock-cat">🍔</div>
+      <div class="mock-info">
+        <div class="mock-merchant">Tim Hortons, Whitehorse</div>
+        <div class="mock-note">Double double, breakfast sandwich</div>
+      </div>
+      <div class="mock-pin">📍</div>
+      <div class="mock-amt">$11.20</div>
+    </div>
+
+    <div class="mock-entry">
+      <div class="mock-cat">⛺</div>
+      <div class="mock-info">
+        <div class="mock-merchant">Yukon River Camp</div>
+        <div class="mock-note">Tenting, no hookups — beautiful spot</div>
+      </div>
+      <div class="mock-pin">📍</div>
+      <div class="mock-amt">$24.00</div>
+    </div>
+
+    <div class="mock-day">Aug 1, 2026 · Watson Lake, YT · $98.30</div>
+
+    <div class="mock-entry" style="opacity:0.6;">
+      <div class="mock-cat">⛽</div>
+      <div class="mock-info">
+        <div class="mock-merchant">Shell — Watson Lake</div>
+        <div class="mock-note">Pricey but no choice, next station 220mi</div>
+      </div>
+      <div class="mock-pin">📍</div>
+      <div class="mock-amt">$74.30</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ WHY TERNPIKE ══ -->
+<section class="why" id="compare">
+  <div class="why-inner">
+    <div class="section-eyebrow">Why Ternpike</div>
+    <h2 class="section-h2">The only app that does all four.</h2>
+
+    <div class="compare">
+      <div class="compare-col">
+        <div class="compare-head them">Every other app</div>
+        <div class="compare-body">
+          <div class="compare-row"><span class="c-icon">❌</span> No AI receipt scanning</div>
+          <div class="compare-row"><span class="c-icon">❌</span> No GPS logging or route map</div>
+          <div class="compare-row"><span class="c-icon">❌</span> Your data in their silo</div>
+          <div class="compare-row"><span class="c-icon">❌</span> Monthly subscription</div>
+          <div class="compare-row"><span class="c-icon">❌</span> Built for offices, not roads</div>
+        </div>
+      </div>
+      <div class="compare-col">
+        <div class="compare-head us">Ternpike</div>
+        <div class="compare-body">
+          <div class="compare-row us-row"><span class="c-icon">✅</span> AI reads receipts instantly</div>
+          <div class="compare-row us-row"><span class="c-icon">✅</span> GPS on every entry, live route map</div>
+          <div class="compare-row us-row"><span class="c-icon">✅</span> Your own Google Sheet, always</div>
+          <div class="compare-row us-row"><span class="c-icon">✅</span> Free to self-host, forever</div>
+          <div class="compare-row us-row"><span class="c-icon">✅</span> Built on the Alaska Highway</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ OPEN SOURCE ══ -->
+<section class="oss" id="oss">
+  <div class="oss-card topo">
+    <div class="oss-inner">
+
+      <div class="oss-eyebrow">Open Source</div>
+      <h2 class="oss-h2">Fork it.<br>Self-host it.<br>Make it yours.</h2>
+      <p class="oss-body">The full source is on GitHub. Bring your own Google Sheet and API keys and it costs you nothing. If you'd rather skip the setup, a managed version is coming soon.</p>
+
+      <div class="oss-links">
+        <a href="#" class="oss-btn gh">⭐ Star on GitHub</a>
+        <a href="#" class="oss-btn docs">Read the Docs →</a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ EMAIL CAPTURE ══ -->
+<section class="signup" id="signup">
+  <h2 class="signup-h2">Know before<br>you pull out.</h2>
+  <p class="signup-sub">Get notified when the managed version launches — zero setup, just scan and go.</p>
+
+  <div class="email-form">
+    <input class="email-input" type="email" placeholder="your@email.com">
+    <button class="email-btn">Notify Me</button>
+  </div>
+
+  <p class="signup-fine">No spam. Unsubscribe anytime. We're building this in public.</p>
+</section>
+
+<!-- ══ FOOTER ══ -->
+<footer>
+  <div>
+    <div class="footer-logo">
+      <span class="footer-tern">
+        <svg width="28" height="18" viewBox="0 0 120 80" fill="none" style="display:inline;vertical-align:middle;margin-right:6px;">
+          <path d="M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z" fill="var(--forest)"/>
+          <path d="M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z" fill="var(--forest-mid)"/>
+          <ellipse cx="60" cy="43" rx="20" ry="7" fill="var(--forest)"/>
+          <path d="M44 47 L28 62" stroke="var(--forest)" stroke-width="2.5" stroke-linecap="round"/>
+          <ellipse cx="76" cy="40" rx="9" ry="7" fill="var(--ink)"/>
+          <path d="M84 40 L96 38.5 L84 42Z" fill="var(--rust)"/>
+        </svg>
+      </span>Tern<span>pike</span>
+    </div>
+    <div class="footer-tagline">Track every turn of the road.</div>
+  </div>
+
+  <div class="footer-links">
+    <a href="#" class="footer-link">GitHub</a>
+    <a href="#" class="footer-link">Docs</a>
+    <a href="#" class="footer-link">Privacy</a>
+    <a href="#" class="footer-link">Contact</a>
+  </div>
+</footer>
+
+<script>
+  // Smooth scroll for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+    });
+  });
+
+  // Email form feedback
+  const btn = document.querySelector('.email-btn');
+  const input = document.querySelector('.email-input');
+  if (btn && input) {
+    btn.addEventListener('click', () => {
+      if (input.value.includes('@')) {
+        btn.textContent = 'You\'re in ✓';
+        btn.style.background = 'var(--forest)';
+        input.value = '';
+        input.placeholder = 'See you on the road.';
+      } else {
+        input.style.borderColor = 'var(--rust)';
+        setTimeout(() => input.style.borderColor = '', 1000);
+      }
+    });
+  }
+</script>
+
+</body>
+</html>

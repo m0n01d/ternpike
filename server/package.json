@@ -1,0 +1,13 @@
+{
+  "name": "ternpike-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --env-file=../.env.local index.js",
+    "start": "node --env-file=../.env.local index.js"
+  },
+  "dependencies": {
+    "express": "^5.0.0",
+    "nodemailer": "^8.0.7"
+  }
+}

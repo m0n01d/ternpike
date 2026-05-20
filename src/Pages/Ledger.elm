@@ -47,7 +47,7 @@ viewActions model =
 viewHero : AuthState -> Html Msg
 viewHero model =
     case model.expensesState of
-        Loaded entries ->
+        ExpensesReady entries ->
             viewLedgerHero entries
 
         _ ->
@@ -100,27 +100,34 @@ viewBody model =
     let
         entriesView =
             case model.expensesState of
-                Loading ->
+                ExpensesLoading ->
                     viewSkeleton
 
-                NotAsked ->
-                    viewSkeleton
+                ExpensesFailed err ->
+                    viewError err
 
-                Loaded [] ->
+                ExpensesReady [] ->
                     viewEmptyState
 
-                Loaded entries ->
+                ExpensesReady entries ->
                     viewEntries entries
     in
     Html.div []
         [ case model.expensesState of
-            Loaded entries ->
+            ExpensesReady entries ->
                 viewLedgerMap model entries
 
             _ ->
                 Html.text ""
         , entriesView
         ]
+
+
+viewError : String -> Html Msg
+viewError err =
+    Html.div
+        [ Html.Attributes.class "rounded-xl border border-rust/40 bg-rust-tint p-4 text-rust text-sm" ]
+        [ Html.text ("Couldn't load expenses: " ++ err) ]
 
 
 viewEntries : List Entry.EffectiveEntry -> Html Msg

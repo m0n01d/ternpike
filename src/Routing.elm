@@ -11,7 +11,8 @@ module Routing exposing
 
 import Data.ExpenseId as ExpenseId
 import Data.TripId as TripId
-import Types exposing (AuthState, Route(..), Tab(..))
+import Data.Trips as Trips
+import Types exposing (AuthState, Route(..), Tab(..), TripsState(..))
 import Url
 import Url.Parser as Parser exposing ((</>))
 
@@ -75,6 +76,15 @@ routeTitle route =
 
 effectiveRoute : AuthState -> Route
 effectiveRoute as_ =
+    let
+        withSelectedTrip toRoute =
+            case as_.trips of
+                TripsLoaded trips ->
+                    toRoute (Trips.selectedTrip trips).id
+
+                _ ->
+                    RouteTrips
+    in
     case as_.tab of
         AddTab ->
             case as_.editingEntry of
@@ -86,19 +96,19 @@ effectiveRoute as_ =
                         RouteAddReviewScan
 
                     else
-                        RouteAdd as_.currentTripId
+                        withSelectedTrip RouteAdd
 
         LedgerTab ->
-            RouteLedger as_.currentTripId
+            withSelectedTrip RouteLedger
 
         ScanTab ->
-            RouteScan as_.currentTripId
+            withSelectedTrip RouteScan
 
         SettingsTab ->
             RouteSettings
 
         StatsTab ->
-            RouteStats as_.currentTripId
+            withSelectedTrip RouteStats
 
         TripsTab ->
             RouteTrips

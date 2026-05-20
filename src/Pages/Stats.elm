@@ -7,8 +7,7 @@ import Data.Entry as Entry
 import Helpers exposing (formatAmount, isoToDayCount)
 import Html exposing (Html)
 import Html.Attributes
-import Data.TripId as TripId
-import Dict
+import Data.Trips as Trips
 import Svg
 import Svg.Attributes
 import Types exposing (..)
@@ -30,8 +29,8 @@ viewHero model =
     let
         entries =
             case model.expensesState of
-                Loaded es -> es
-                _         -> []
+                ExpensesReady es -> es
+                _                -> []
 
         total =
             List.sum (List.map .amount entries)
@@ -49,9 +48,12 @@ viewHero model =
             if numEntries > 0 then total / toFloat numEntries else 0
 
         tripStart =
-            Dict.get (TripId.toString model.currentTripId) model.trips
-                |> Maybe.map .startDate
-                |> Maybe.withDefault ""
+            case model.trips of
+                TripsLoaded trips ->
+                    (Trips.selectedTrip trips).startDate
+
+                _ ->
+                    ""
 
         daysIn =
             if tripStart /= "" && model.today /= "" then
@@ -163,8 +165,8 @@ viewBody model =
     let
         entries =
             case model.expensesState of
-                Loaded es -> es
-                _         -> []
+                ExpensesReady es -> es
+                _                -> []
 
         total =
             List.sum (List.map .amount entries)
@@ -193,9 +195,12 @@ viewBody model =
                 |> List.take 5
 
         tripStart =
-            Dict.get (TripId.toString model.currentTripId) model.trips
-                |> Maybe.map .startDate
-                |> Maybe.withDefault ""
+            case model.trips of
+                TripsLoaded trips ->
+                    (Trips.selectedTrip trips).startDate
+
+                _ ->
+                    ""
 
         daysIn =
             if tripStart /= "" && model.today /= "" then

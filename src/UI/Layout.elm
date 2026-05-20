@@ -12,8 +12,7 @@ module UI.Layout exposing
     )
 
 import Data.Trip exposing (Trip)
-import Data.TripId as TripId
-import Dict
+import Data.Trips as Trips
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -39,30 +38,79 @@ viewHeader as_ =
                     [ Html.text "Tern"
                     , Html.span [ Html.Attributes.class "text-rust" ] [ Html.text "pike" ]
                     ]
-                , Html.span
-                    [ Html.Attributes.class "text-[11px] text-muted ml-2.5 tracking-widest" ]
-                    [ Html.text
-                        (Dict.get (TripId.toString as_.currentTripId) as_.trips
-                            |> Maybe.map .name
-                            |> Maybe.withDefault "Loading..."
-                        )
-                    ]
+                , viewTripKicker as_.trips
                 ]
             ]
-        , Html.button
-            [ Html.Events.onClick
-                (if as_.tab == SettingsTab then
-                    TabChanged LedgerTab
-                 else
-                    TabChanged SettingsTab
-                )
-            , Html.Attributes.class
-                ("bg-transparent border-none cursor-pointer px-2 py-1 "
-                    ++ (if as_.tab == SettingsTab then "text-rust" else "text-muted")
-                )
+        , Html.div [ Html.Attributes.class "flex items-center gap-3" ]
+            [ viewSyncBadge as_.syncState
+            , Html.button
+                [ Html.Events.onClick
+                    (if as_.tab == SettingsTab then
+                        TabChanged LedgerTab
+                     else
+                        TabChanged SettingsTab
+                    )
+                , Html.Attributes.class
+                    ("bg-transparent border-none cursor-pointer px-2 py-1 "
+                        ++ (if as_.tab == SettingsTab then "text-rust" else "text-muted")
+                    )
+                ]
+                [ UI.Icons.settings "w-5 h-5" ]
             ]
-            [ UI.Icons.settings "w-5 h-5" ]
         ]
+
+
+viewTripKicker : TripsState -> Html Msg
+viewTripKicker state =
+    let
+        kicker label =
+            Html.span
+                [ Html.Attributes.class "text-[11px] text-muted ml-2.5 tracking-widest" ]
+                [ Html.text label ]
+    in
+    case state of
+        NoTripsYet ->
+            kicker "No trips yet"
+
+        TripsFailed _ ->
+            kicker "Couldn't load trips"
+
+        TripsLoaded trips ->
+            kicker (Trips.selectedTrip trips).name
+
+        TripsLoading _ _ ->
+            Html.text ""
+
+
+viewSyncBadge : SyncState -> Html Msg
+viewSyncBadge state =
+    case state of
+        AuthExpired ->
+            Html.text ""
+
+        NotEnabled ->
+            Html.text ""
+
+        SyncError ->
+            Html.span
+                [ Html.Attributes.class "text-xs text-rust"
+                , Html.Attributes.title "Sync error"
+                ]
+                [ Html.text "⚠" ]
+
+        Synced ->
+            Html.span
+                [ Html.Attributes.class "text-xs text-moss"
+                , Html.Attributes.title "Synced"
+                ]
+                [ Html.text "●" ]
+
+        Syncing ->
+            Html.span
+                [ Html.Attributes.class "text-xs text-rust animate-pulse"
+                , Html.Attributes.title "Syncing"
+                ]
+                [ Html.text "●" ]
 
 
 viewBottomNav : Tab -> Html Msg

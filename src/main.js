@@ -1,8 +1,8 @@
 import { Elm } from './Main.elm'
-import PouchDB from 'pouchdb'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import * as exifr from 'exifr'
+import { attachPouch } from './pouch.js'
 import './global.css'
 
 ;(async function () {
@@ -58,27 +58,28 @@ import './global.css'
   }
 
   // ── App keys for wipe ─────────────────────────────────────────────────
-  const APP_KEYS = ['session_token', 'anthropic_key']
+  const APP_KEYS = ['auth_creds', 'anthropic_key']
 
   // ── Load all persisted settings before starting Elm ───────────────────
 
-  const [sessionToken, anthropicKey] = await Promise.all([
-    idbGet('session_token'),
+  const [authCredsRaw, anthropicKey] = await Promise.all([
+    idbGet('auth_creds'),
     idbGet('anthropic_key'),
   ])
 
+  let authCreds = null
+  if (authCredsRaw) {
+    try { authCreds = JSON.parse(authCredsRaw) } catch (_) { authCreds = null }
+  }
+
   const flags = {
-    sessionToken: sessionToken  || null,
+    authCreds:    authCreds,
     anthropicKey: anthropicKey  || '',
     backendUrl:   '',
     basePath:     import.meta.env.BASE_URL,
     today:        new Date().toISOString().slice(0, 10),
     version:      __BUILD_SHA__,
   }
-
-  // ── PouchDB setup ──────────────────────────────────────────────────────
-  const pouchDb = new PouchDB('ternpike', { auto_compaction: true })
-  pouchDb.compact().catch(err => console.warn('compact:', err))
 
   // ── <map-picker> custom element ────────────────────────────────────────
   class MapPicker extends HTMLElement {
@@ -211,85 +212,7 @@ import './global.css'
 
   const app = Elm.Main.init({ flags })
 
-  // ── PouchDB: changes feed → Elm ────────────────────────────────────────
-
-  pouchDb.changes({
-    since: 'now',
-    live: true,
-    include_docs: true,
-  }).on('change', change => {
-    const { _rev, ...doc } = change.doc || {}
-    app.ports.pouchIn.send({
-      tag:     'DbChange',
-      id:      change.id,
-      deleted: !!(change.deleted),
-      doc,
-    })
-  }).on('error', err => {
-    app.ports.pouchIn.send({ tag: 'DbError', message: String(err) })
-  })
-
-  // ── PouchDB: outbound commands from Elm ────────────────────────────────
-
-  app.ports.pouchOut.subscribe(async (msg) => {
-    try {
-      switch (msg.tag) {
-
-        case 'GetAllTrips': {
-          const result = await pouchDb.allDocs({ include_docs: true })
-          result.rows.forEach(row => {
-            if (!row.doc || row.doc.type !== 'trip') return
-            const { _rev, ...doc } = row.doc
-            app.ports.pouchIn.send({ tag: 'DbChange', id: row.id, deleted: false, doc })
-          })
-          app.ports.pouchIn.send({ tag: 'QueryComplete', queryType: 'trips' })
-          break
-        }
-
-        case 'GetExpenses': {
-          const result = await pouchDb.allDocs({ include_docs: true })
-          result.rows.forEach(row => {
-            const d = row.doc
-            if (!d) return
-            if (
-              (d.type === 'expense' && d.tripId === msg.tripId) ||
-              (d.type === 'amend'   && d.targetId && d.targetId.startsWith('expense::')) ||
-              (d.type === 'void'    && d.targetId && d.targetId.startsWith('expense::'))
-            ) {
-              const { _rev, ...doc } = d
-              app.ports.pouchIn.send({ tag: 'DbChange', id: row.id, deleted: false, doc })
-            }
-          })
-          app.ports.pouchIn.send({ tag: 'QueryComplete', queryType: 'expenses' })
-          break
-        }
-
-        case 'SaveTrip':
-        case 'SaveExpense':
-        case 'SaveAmend':
-        case 'SaveVoid': {
-          const doc = msg.doc
-          try {
-            const existing = await pouchDb.get(doc._id)
-            await pouchDb.put({ ...doc, _rev: existing._rev })
-          } catch (e) {
-            if (e.status === 404) {
-              await pouchDb.put(doc)
-            } else {
-              throw e
-            }
-          }
-          break
-        }
-
-        default:
-          console.warn('Unknown pouchOut tag:', msg.tag)
-      }
-    } catch (err) {
-      console.error('pouchOut error:', err)
-      app.ports.pouchIn.send({ tag: 'DbError', message: String(err) })
-    }
-  })
+  attachPouch(app, { creds: authCreds })
 
   // ── Port handlers ──────────────────────────────────────────────────────
 
@@ -297,7 +220,7 @@ import './global.css'
     await idbSet(key, value)
   })
 
-  app.ports.clearStorage.subscribe(() => idbDel('session_token'))
+  app.ports.clearStorage.subscribe(() => idbDel('auth_creds'))
 
   app.ports.clearAllStorage.subscribe(() => idbDel(...APP_KEYS))
 
