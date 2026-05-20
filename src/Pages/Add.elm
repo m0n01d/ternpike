@@ -39,7 +39,7 @@ viewHero model =
     Html.div [ Html.Attributes.class "py-2" ]
         [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
             [ Html.text "AMOUNT" ]
-        , Html.div [ Html.Attributes.class "flex items-start gap-2" ]
+        , Html.div [ Html.Attributes.class "h-[3rem] flex items-start gap-0" ]
             [ Html.span
                 [ Html.Attributes.class "font-display text-5xl font-black text-forest leading-none" ]
                 [ Html.text "$" ]
@@ -49,7 +49,7 @@ viewHero model =
                 , Html.Attributes.value model.pendingEntry.amount
                 , Html.Events.onInput AmountChanged
                 , Html.Attributes.placeholder "0.00"
-                , Html.Attributes.class "h-[3rem] w-full bg-transparent border-0 outline-none p-0 appearance-none font-display text-5xl font-black text-forest tabular-nums tracking-tight leading-none"
+                , Html.Attributes.class "w-full bg-transparent border-0 outline-none p-0 appearance-none font-display text-5xl font-black text-forest tabular-nums tracking-tight leading-none"
                 ]
                 []
             ]
