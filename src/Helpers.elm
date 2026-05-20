@@ -15,17 +15,17 @@ import Json.Encode as E
 
 effectiveEntryToExpense : EffectiveEntry -> Expense
 effectiveEntryToExpense e =
-    { amount    = e.amount
-    , category  = e.category
+    { amount = e.amount
+    , category = e.category
     , createdAt = e.createdAt
-    , date      = e.date
-    , id        = e.id
-    , lat       = e.lat
-    , lon       = e.lon
-    , longNote  = e.longNote
-    , merchant  = e.merchant
-    , note      = e.note
-    , tripId    = e.tripId
+    , date = e.date
+    , id = e.id
+    , lat = e.lat
+    , lon = e.lon
+    , longNote = e.longNote
+    , merchant = e.merchant
+    , note = e.note
+    , tripId = e.tripId
     }
 
 
@@ -56,19 +56,44 @@ formatDateDisplay iso =
             let
                 mn =
                     case m of
-                        "01" -> "Jan"
-                        "02" -> "Feb"
-                        "03" -> "Mar"
-                        "04" -> "Apr"
-                        "05" -> "May"
-                        "06" -> "Jun"
-                        "07" -> "Jul"
-                        "08" -> "Aug"
-                        "09" -> "Sep"
-                        "10" -> "Oct"
-                        "11" -> "Nov"
-                        "12" -> "Dec"
-                        _    -> m
+                        "01" ->
+                            "Jan"
+
+                        "02" ->
+                            "Feb"
+
+                        "03" ->
+                            "Mar"
+
+                        "04" ->
+                            "Apr"
+
+                        "05" ->
+                            "May"
+
+                        "06" ->
+                            "Jun"
+
+                        "07" ->
+                            "Jul"
+
+                        "08" ->
+                            "Aug"
+
+                        "09" ->
+                            "Sep"
+
+                        "10" ->
+                            "Oct"
+
+                        "11" ->
+                            "Nov"
+
+                        "12" ->
+                            "Dec"
+
+                        _ ->
+                            m
 
                 day =
                     String.toInt d |> Maybe.withDefault 0 |> String.fromInt
@@ -110,7 +135,12 @@ encodeWaypoints entries =
                                     , ( "lon", E.float lo )
                                     , ( "label"
                                       , E.string
-                                            ((if e.merchant /= "" then e.merchant else Category.label e.category)
+                                            ((if e.merchant /= "" then
+                                                e.merchant
+
+                                              else
+                                                Category.label e.category
+                                             )
                                                 ++ " "
                                                 ++ formatAmount e.amount
                                             )

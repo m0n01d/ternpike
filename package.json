@@ -8,12 +8,18 @@
     "dev:server": "npm --prefix server run dev",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "npx elm-test"
+    "test": "npx elm-test",
+    "format": "elm-format src --yes",
+    "format:check": "elm-format src --validate",
+    "review": "elm-review",
+    "review:fix": "elm-review --fix-all"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
     "autoprefixer": "^10.5.0",
     "concurrently": "^9.0.0",
+    "elm-format": "^0.8.8",
+    "elm-review": "^2.13.5",
     "playwright": "^1.60.0",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.0",
