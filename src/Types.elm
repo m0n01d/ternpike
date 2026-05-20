@@ -15,6 +15,7 @@ import Dict exposing (Dict)
 import File exposing (File)
 import Http
 import Json.Decode as D
+import Set exposing (Set)
 import Time
 import Url
 
@@ -120,10 +121,20 @@ type alias AppConfig =
     }
 
 
-type ExpensesState
-    = ExpensesFailed String
-    | ExpensesLoading
-    | ExpensesReady (List EffectiveEntry)
+type AddPageMode
+    = AddPageEditing ExpenseId
+    | AddPageLoading ExpenseId
+    | AddPageNew
+
+
+type LedgerMode
+    = LedgerLoading
+    | LedgerReady (List EffectiveEntry)
+
+
+type PendingForm
+    = EditForm ExpenseId PendingEntry
+    | FreshForm PendingEntry
 
 
 type TripsState
@@ -170,31 +181,31 @@ type alias GuestState =
 
 type alias AuthState =
     { activeScanItemId  : Maybe String
-    , amendments        : List Amendment
+    , amendments        : Dict String Amendment
     , basePath          : String
     , config            : AppConfig
     , confirmDeleteTrip : Maybe Trip
     , creds             : Creds
-    , editingEntry      : Maybe Expense
     , error             : Maybe String
-    , expensesState     : ExpensesState
+    , expenses          : Dict String Expense
+    , form              : PendingForm
     , geoBlocked        : Bool
     , key               : Nav.Key
-    , pendingEntryId    : Maybe ExpenseId
-    , pendingEntry      : PendingEntry
-    , rawExpenses       : List Expense
+    , loadingExpenses   : Set String
+    , loadingTrips      : Set String
+    , route             : Route
     , scanQueue         : Dict String ScanItem
     , showLedgerMap     : Bool
     , showMapPicker     : Bool
     , submitting        : Bool
     , syncState         : SyncState
-    , tab               : Tab
     , toast             : Maybe String
     , today             : String
     , tripForm          : Maybe TripForm
+    , tripLoaded        : Set String
     , trips             : TripsState
     , version           : String
-    , voids             : List Void
+    , voids             : Dict String Void
     }
 
 
@@ -263,23 +274,41 @@ type Msg
 
 type PouchOutbound
     = GetAllTrips
-    | GetExpenses String
-    | SaveAmend   D.Value
-    | SaveExpense D.Value
-    | SaveTrip    D.Value
-    | SaveVoid    D.Value
+    | GetExpense     ExpenseId
+    | GetTripExpenses TripId
+    | SaveAmend      D.Value
+    | SaveExpense    D.Value
+    | SaveTrip       D.Value
+    | SaveVoid       D.Value
 
 
 type PouchInbound
     = AuthExpiredMsg
-    | DbChange DbChangeData
-    | DbError  String
-    | QueryComplete String
+    | DbChange DocChange
+    | DbDeleted String
+    | DbError String
+    | ExpenseFetched ExpenseId ExpenseBundle
     | SyncStateMsg SyncState
+    | TripExpensesFetched TripId TripBundle
+    | TripsFetched (Dict String Trip)
 
 
-type alias DbChangeData =
-    { deleted : Bool
-    , doc     : D.Value
-    , id      : String
+type DocChange
+    = AmendChanged Amendment
+    | ExpenseChanged Expense
+    | TripChanged Trip
+    | VoidChanged Void
+
+
+type alias TripBundle =
+    { amendments : Dict String Amendment
+    , expenses   : Dict String Expense
+    , voids      : Dict String Void
+    }
+
+
+type alias ExpenseBundle =
+    { amendments : Dict String Amendment
+    , expense    : Maybe Expense
+    , void       : Maybe Void
     }

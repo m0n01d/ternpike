@@ -1,13 +1,17 @@
 module Pages.Trips exposing (viewTab)
 
+import Data.Entry as Entry
 import Data.Trip exposing (Trip, TripField(..), TripForm)
+import Data.TripId as TripId
 import Data.Trips as Trips
+import Dict
 import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Routing
-import Types exposing (AuthState, ExpensesState(..), Msg(..), Tab(..), TripsState(..))
+import Set
+import Types exposing (AuthState, Msg(..), Tab(..), TripsState(..))
 import UI.Button
 import UI.Icons
 import UI.Layout
@@ -77,19 +81,29 @@ viewHero as_ =
                 ]
 
         TripsLoaded trips ->
-            viewTripHero (Trips.selectedTrip trips) as_.expensesState
+            let
+                activeTrip =
+                    Trips.selectedTrip trips
+
+                entries =
+                    if Set.member (TripId.toString activeTrip.id) as_.tripLoaded then
+                        Entry.resolve
+                            (Dict.values as_.expenses)
+                            (Dict.values as_.amendments)
+                            (Dict.values as_.voids)
+                            activeTrip.id
+
+                    else
+                        []
+            in
+            viewTripHero activeTrip entries
 
 
-viewTripHero : Trip -> ExpensesState -> Html Msg
-viewTripHero activeTrip expensesState =
+viewTripHero : Trip -> List Entry.EffectiveEntry -> Html Msg
+viewTripHero activeTrip entries =
     let
         totalSpent =
-            case expensesState of
-                ExpensesReady entries ->
-                    List.sum (List.map .amount entries)
-
-                _ ->
-                    0
+            List.sum (List.map .amount entries)
 
         hasStart =
             activeTrip.startDate /= ""

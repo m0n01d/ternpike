@@ -4,10 +4,14 @@ import Chart as C
 import Chart.Attributes as CA
 import Data.Category as Category
 import Data.Entry as Entry
+import Data.TripId as TripId
+import Dict
 import Helpers exposing (formatAmount, isoToDayCount)
 import Html exposing (Html)
 import Html.Attributes
 import Data.Trips as Trips
+import Routing
+import Set
 import Svg
 import Svg.Attributes
 import Types exposing (..)
@@ -18,19 +22,38 @@ import UI.Theme
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
 viewTab as_ =
+    let
+        entries =
+            entriesForCurrentTrip as_
+    in
     { actions = []
-    , body = viewBody as_
-    , hero = viewHero as_
+    , body    = viewBody as_ entries
+    , hero    = viewHero as_ entries
     }
 
 
-viewHero : AuthState -> Html Msg
-viewHero model =
+-- Resolved entries for the route's trip, or [] if not loaded yet.
+entriesForCurrentTrip : AuthState -> List Entry.EffectiveEntry
+entriesForCurrentTrip as_ =
+    case Routing.routeTripId as_.route of
+        Just tripId ->
+            if Set.member (TripId.toString tripId) as_.tripLoaded then
+                Entry.resolve
+                    (Dict.values as_.expenses)
+                    (Dict.values as_.amendments)
+                    (Dict.values as_.voids)
+                    tripId
+
+            else
+                []
+
+        Nothing ->
+            []
+
+
+viewHero : AuthState -> List Entry.EffectiveEntry -> Html Msg
+viewHero model entries =
     let
-        entries =
-            case model.expensesState of
-                ExpensesReady es -> es
-                _                -> []
 
         total =
             List.sum (List.map .amount entries)
@@ -160,14 +183,9 @@ sparkline values =
         bars
 
 
-viewBody : AuthState -> Html Msg
-viewBody model =
+viewBody : AuthState -> List Entry.EffectiveEntry -> Html Msg
+viewBody model entries =
     let
-        entries =
-            case model.expensesState of
-                ExpensesReady es -> es
-                _                -> []
-
         total =
             List.sum (List.map .amount entries)
 

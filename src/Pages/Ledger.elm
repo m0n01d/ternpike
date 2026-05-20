@@ -3,6 +3,8 @@ module Pages.Ledger exposing (viewTab)
 import Data.Category as Category
 import Data.Entry as Entry
 import Data.ExpenseId as ExpenseId
+import Data.TripId as TripId
+import Dict
 import Helpers exposing (effectiveEntryToExpense, encodeWaypoints, formatAmount, formatDateDisplay)
 import Html exposing (Html)
 import Html.Attributes
@@ -10,6 +12,7 @@ import Html.Events
 import Html.Keyed as Keyed
 import Json.Decode
 import Routing
+import Set
 import Types exposing (..)
 import UI.Button
 import UI.Icons
@@ -19,10 +22,36 @@ import UI.Skeleton
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
 viewTab as_ =
+    let
+        mode =
+            ledgerMode as_
+    in
     { actions = viewActions as_
-    , body = viewBody as_
-    , hero = viewHero as_
+    , body    = viewBody as_ mode
+    , hero    = viewHero mode
     }
+
+
+-- LedgerLoading until the current trip's bulk fetch has completed; then
+-- LedgerReady with the resolved entries derived from the cache.
+ledgerMode : AuthState -> LedgerMode
+ledgerMode as_ =
+    case Routing.routeTripId as_.route of
+        Just tripId ->
+            if Set.member (TripId.toString tripId) as_.tripLoaded then
+                LedgerReady
+                    (Entry.resolve
+                        (Dict.values as_.expenses)
+                        (Dict.values as_.amendments)
+                        (Dict.values as_.voids)
+                        tripId
+                    )
+
+            else
+                LedgerLoading
+
+        Nothing ->
+            LedgerLoading
 
 
 viewActions : AuthState -> List (Html Msg)
@@ -45,13 +74,13 @@ viewActions model =
     ]
 
 
-viewHero : AuthState -> Html Msg
-viewHero model =
-    case model.expensesState of
-        ExpensesReady entries ->
+viewHero : LedgerMode -> Html Msg
+viewHero mode =
+    case mode of
+        LedgerReady entries ->
             viewLedgerHero entries
 
-        _ ->
+        LedgerLoading ->
             Html.div [ Html.Attributes.class "font-mono text-[22px] text-muted" ]
                 [ Html.text "—" ]
 
@@ -96,39 +125,20 @@ viewLedgerHero entries =
         ]
 
 
-viewBody : AuthState -> Html Msg
-viewBody model =
-    let
-        entriesView =
-            case model.expensesState of
-                ExpensesLoading ->
-                    viewSkeleton
+viewBody : AuthState -> LedgerMode -> Html Msg
+viewBody model mode =
+    case mode of
+        LedgerLoading ->
+            viewSkeleton
 
-                ExpensesFailed err ->
-                    viewError err
+        LedgerReady [] ->
+            viewEmptyState
 
-                ExpensesReady [] ->
-                    viewEmptyState
-
-                ExpensesReady entries ->
-                    viewEntries model.basePath entries
-    in
-    Html.div []
-        [ case model.expensesState of
-            ExpensesReady entries ->
-                viewLedgerMap model entries
-
-            _ ->
-                Html.text ""
-        , entriesView
-        ]
-
-
-viewError : String -> Html Msg
-viewError err =
-    Html.div
-        [ Html.Attributes.class "rounded-xl border border-rust/40 bg-rust-tint p-4 text-rust text-sm" ]
-        [ Html.text ("Couldn't load expenses: " ++ err) ]
+        LedgerReady entries ->
+            Html.div []
+                [ viewLedgerMap model entries
+                , viewEntries model.basePath entries
+                ]
 
 
 viewEntries : String -> List Entry.EffectiveEntry -> Html Msg

@@ -29,6 +29,7 @@ import Pages.Stats
 import Pages.Trips
 import Process
 import Routing
+import Set
 import Task
 import Time
 import Types exposing (..)
@@ -88,34 +89,34 @@ mapGuestConfig f gs =
     { gs | config = f gs.config }
 
 
-toAuthState : Creds -> Maybe TripId.TripId -> Tab -> GuestState -> AuthState
-toAuthState creds intendedTripId initialTab gs =
+toAuthState : Creds -> Route -> GuestState -> AuthState
+toAuthState creds initialRoute gs =
     { activeScanItemId  = Nothing
-    , amendments        = []
+    , amendments        = Dict.empty
     , basePath          = gs.basePath
     , config            = gs.session.config
     , confirmDeleteTrip = Nothing
     , creds             = creds
-    , editingEntry      = Nothing
     , error             = Nothing
-    , expensesState     = ExpensesLoading
+    , expenses          = Dict.empty
+    , form              = FreshForm (defaultPendingEntry gs.today)
     , geoBlocked        = False
     , key               = gs.key
-    , pendingEntryId    = Nothing
-    , pendingEntry      = defaultPendingEntry gs.today
-    , rawExpenses       = []
+    , loadingExpenses   = Set.empty
+    , loadingTrips      = Set.empty
+    , route             = initialRoute
     , scanQueue         = Dict.empty
     , showLedgerMap     = False
     , showMapPicker     = False
     , submitting        = False
     , syncState         = NotEnabled
-    , tab               = initialTab
     , toast             = Nothing
     , today             = gs.today
     , tripForm          = Nothing
-    , trips             = TripsLoading Dict.empty intendedTripId
+    , tripLoaded        = Set.empty
+    , trips             = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
     , version           = gs.version
-    , voids             = []
+    , voids             = Dict.empty
     }
 
 
@@ -157,12 +158,25 @@ encodeCreds c =
 encodePouchOut : PouchOutbound -> D.Value
 encodePouchOut msg =
     case msg of
-        GetAllTrips      -> E.object [ ( "tag", E.string "GetAllTrips" ) ]
-        GetExpenses id   -> E.object [ ( "tag", E.string "GetExpenses" ), ( "tripId", E.string id ) ]
-        SaveAmend doc    -> E.object [ ( "tag", E.string "SaveAmend" ),   ( "doc", doc ) ]
-        SaveExpense doc  -> E.object [ ( "tag", E.string "SaveExpense" ), ( "doc", doc ) ]
-        SaveTrip doc     -> E.object [ ( "tag", E.string "SaveTrip" ),    ( "doc", doc ) ]
-        SaveVoid doc     -> E.object [ ( "tag", E.string "SaveVoid" ),    ( "doc", doc ) ]
+        GetAllTrips ->
+            E.object [ ( "tag", E.string "GetAllTrips" ) ]
+
+        GetExpense id ->
+            E.object
+                [ ( "tag", E.string "GetExpense" )
+                , ( "expenseId", E.string (ExpenseId.toString id) )
+                ]
+
+        GetTripExpenses id ->
+            E.object
+                [ ( "tag", E.string "GetTripExpenses" )
+                , ( "tripId", E.string (TripId.toString id) )
+                ]
+
+        SaveAmend doc   -> E.object [ ( "tag", E.string "SaveAmend" ),   ( "doc", doc ) ]
+        SaveExpense doc -> E.object [ ( "tag", E.string "SaveExpense" ), ( "doc", doc ) ]
+        SaveTrip doc    -> E.object [ ( "tag", E.string "SaveTrip" ),    ( "doc", doc ) ]
+        SaveVoid doc    -> E.object [ ( "tag", E.string "SaveVoid" ),    ( "doc", doc ) ]
 
 
 sendPouch : PouchOutbound -> Cmd Msg
@@ -176,21 +190,67 @@ pouchInDecoder =
         |> D.andThen
             (\tag ->
                 case tag of
-                    "AuthExpired"   -> D.succeed AuthExpiredMsg
-                    "DbChange"      -> D.map DbChange dbChangeDataDecoder
-                    "DbError"       -> D.map DbError (D.field "message" D.string)
-                    "QueryComplete" -> D.map QueryComplete (D.field "queryType" D.string)
-                    "SyncState"     -> D.map SyncStateMsg (D.field "state" syncStateDecoder)
-                    _               -> D.fail ("Unknown pouchIn tag: " ++ tag)
+                    "AuthExpired" ->
+                        D.succeed AuthExpiredMsg
+
+                    "DbChange" ->
+                        D.map DbChange (D.field "doc" docChangeDecoder)
+
+                    "DbDeleted" ->
+                        D.map DbDeleted (D.field "id" D.string)
+
+                    "DbError" ->
+                        D.map DbError (D.field "message" D.string)
+
+                    "ExpenseLoaded" ->
+                        D.map2 ExpenseFetched
+                            (D.field "expenseId" ExpenseId.decode)
+                            expenseBundleDecoder
+
+                    "SyncState" ->
+                        D.map SyncStateMsg (D.field "state" syncStateDecoder)
+
+                    "TripExpensesLoaded" ->
+                        D.map2 TripExpensesFetched
+                            (D.field "tripId" TripId.decode)
+                            tripBundleDecoder
+
+                    "TripsLoaded" ->
+                        D.map TripsFetched (D.field "trips" (D.dict Trip.decoder))
+
+                    _ ->
+                        D.fail ("Unknown pouchIn tag: " ++ tag)
             )
 
 
-dbChangeDataDecoder : D.Decoder DbChangeData
-dbChangeDataDecoder =
-    D.map3 DbChangeData
-        (D.field "deleted" D.bool)
-        (D.field "doc" D.value)
-        (D.field "id" D.string)
+docChangeDecoder : D.Decoder DocChange
+docChangeDecoder =
+    D.field "type" D.string
+        |> D.andThen
+            (\t ->
+                case t of
+                    "amend"   -> D.map AmendChanged   Amendment.decoder
+                    "expense" -> D.map ExpenseChanged Expense.decoder
+                    "trip"    -> D.map TripChanged    Trip.decoder
+                    "void"    -> D.map VoidChanged    Void.decoder
+                    _         -> D.fail ("Unknown doc type: " ++ t)
+            )
+
+
+tripBundleDecoder : D.Decoder TripBundle
+tripBundleDecoder =
+    D.map3 TripBundle
+        (D.field "amendments" (D.dict Amendment.decoder))
+        (D.field "expenses"   (D.dict Expense.decoder))
+        (D.field "voids"      (D.dict Void.decoder))
+
+
+expenseBundleDecoder : D.Decoder ExpenseBundle
+expenseBundleDecoder =
+    D.map3 ExpenseBundle
+        (D.field "amendments" (D.dict Amendment.decoder))
+        (D.field "expense"    (D.nullable Expense.decoder))
+        (D.field "void"       (D.nullable Void.decoder))
 
 
 syncStateDecoder : D.Decoder SyncState
@@ -208,113 +268,214 @@ syncStateDecoder =
 
 
 
--- DB HELPERS
+-- CACHE LOOKUPS
 
 
-upsertBy : (a -> String) -> a -> List a -> List a
-upsertBy getId item list =
-    if List.any (\x -> getId x == getId item) list then
-        List.map (\x -> if getId x == getId item then item else x) list
-    else
-        list ++ [ item ]
+resolveForTrip : TripId.TripId -> AuthState -> List Entry.EffectiveEntry
+resolveForTrip tripId as_ =
+    Entry.resolve
+        (Dict.values as_.expenses)
+        (Dict.values as_.amendments)
+        (Dict.values as_.voids)
+        tripId
 
 
-recomputeEntries : AuthState -> AuthState
-recomputeEntries as_ =
-    case ( as_.expensesState, as_.trips ) of
-        ( ExpensesLoading, _ ) ->
-            as_
+findEffective : ExpenseId.ExpenseId -> AuthState -> Maybe Expense.Expense
+findEffective id as_ =
+    Dict.get (ExpenseId.toString id) as_.expenses
+        |> Maybe.andThen
+            (\raw ->
+                Entry.resolve
+                    [ raw ]
+                    (Dict.values as_.amendments)
+                    (Dict.values as_.voids)
+                    raw.tripId
+                    |> List.head
+                    |> Maybe.map Helpers.effectiveEntryToExpense
+            )
 
-        ( _, TripsLoaded trips ) ->
-            { as_
-                | expensesState =
-                    ExpensesReady
-                        (Entry.resolve as_.rawExpenses as_.amendments as_.voids (Trips.selectedTrip trips).id)
-            }
+
+mapForm : (PendingEntry -> PendingEntry) -> PendingForm -> PendingForm
+mapForm f form =
+    case form of
+        EditForm id p -> EditForm id (f p)
+        FreshForm p   -> FreshForm (f p)
+
+
+formPending : PendingForm -> PendingEntry
+formPending form =
+    case form of
+        EditForm _ p -> p
+        FreshForm p  -> p
+
+
+-- Build a Route from a Tab + tripId, for navigations that pick a tab
+-- (post-submit, scan flow, etc.). Tabs without a tripId map to their
+-- bare routes.
+routeForTab : Tab -> TripId.TripId -> Route
+routeForTab tab tripId =
+    case tab of
+        AddTab      -> RouteAdd tripId
+        LedgerTab   -> RouteLedger tripId
+        ScanTab     -> RouteScan tripId
+        SettingsTab -> RouteSettings
+        StatsTab    -> RouteStats tripId
+        TripsTab    -> RouteTrips
+
+
+-- ROUTE-DRIVEN STATE TRANSITIONS
+
+
+-- Sync the form to the current route. On entering an edit route, hydrate
+-- from the cached effective expense (if available — else wait for it).
+-- On leaving an edit route, reset to a fresh defaults form.
+hydrateFormForRoute : AuthState -> AuthState
+hydrateFormForRoute as_ =
+    case as_.route of
+        RouteEditEntry _ id ->
+            let
+                alreadyHydrated =
+                    case as_.form of
+                        EditForm formId _ -> formId == id
+                        FreshForm _       -> False
+            in
+            if alreadyHydrated then
+                as_
+
+            else
+                case findEffective id as_ of
+                    Just expense ->
+                        { as_ | form = EditForm id (expenseToPending expense) }
+
+                    Nothing ->
+                        as_
 
         _ ->
-            as_
+            case as_.form of
+                EditForm _ _ ->
+                    { as_ | form = FreshForm (defaultPendingEntry as_.today) }
+
+                FreshForm _ ->
+                    as_
 
 
-handleDbChange : D.Value -> AuthState -> ( Model, Cmd Msg )
-handleDbChange doc as_ =
-    case D.decodeValue (D.field "type" D.string) doc of
-        Ok "trip" ->
-            case D.decodeValue Trip.decoder doc of
-                Ok trip ->
-                    ( AuthModel { as_ | trips = upsertTripIntoState trip as_.trips }
-                    , Cmd.none
-                    )
-
-                Err _ ->
-                    ( AuthModel as_, Cmd.none )
-
-        Ok "expense" ->
-            case D.decodeValue Expense.decoder doc of
-                Ok expense ->
+-- Fire fetches needed to satisfy the route. Idempotent: if the trip is
+-- already loaded (or loading), no bulk fetch; if the expense is already
+-- cached (or being fetched), no targeted fetch. Also syncs the trips
+-- zipper selection to the route's tripId when possible, and hydrates the
+-- form if data is already available.
+fetchesForRoute : AuthState -> ( AuthState, Cmd Msg )
+fetchesForRoute as_ =
+    let
+        ( as1, tripCmd ) =
+            case Routing.routeTripId as_.route of
+                Just tid ->
                     let
-                        rawExpenses =
-                            upsertBy (ExpenseId.toString << .id) expense as_.rawExpenses
+                        key =
+                            TripId.toString tid
+
+                        withSelected =
+                            case as_.trips of
+                                TripsLoaded trips ->
+                                    { as_ | trips = TripsLoaded (Trips.selectTrip tid trips) }
+
+                                _ ->
+                                    as_
+
+                        alreadyHave =
+                            Set.member key as_.tripLoaded
+                                || Set.member key as_.loadingTrips
                     in
-                    ( AuthModel (recomputeEntries { as_ | rawExpenses = rawExpenses }), Cmd.none )
+                    if alreadyHave then
+                        ( withSelected, Cmd.none )
 
-                Err _ ->
-                    ( AuthModel as_, Cmd.none )
+                    else
+                        ( { withSelected | loadingTrips = Set.insert key as_.loadingTrips }
+                        , sendPouch (GetTripExpenses tid)
+                        )
 
-        Ok "amend" ->
-            case D.decodeValue Amendment.decoder doc of
-                Ok amend ->
+                Nothing ->
+                    ( as_, Cmd.none )
+
+        ( as2, expenseCmd ) =
+            case as1.route of
+                RouteEditEntry _ eid ->
                     let
-                        amendments =
-                            upsertBy .id amend as_.amendments
+                        key =
+                            ExpenseId.toString eid
+
+                        alreadyHave =
+                            Dict.member key as1.expenses
+                                || Set.member key as1.loadingExpenses
                     in
-                    ( AuthModel (recomputeEntries { as_ | amendments = amendments }), Cmd.none )
+                    if alreadyHave then
+                        ( as1, Cmd.none )
 
-                Err _ ->
-                    ( AuthModel as_, Cmd.none )
+                    else
+                        ( { as1 | loadingExpenses = Set.insert key as1.loadingExpenses }
+                        , sendPouch (GetExpense eid)
+                        )
 
-        Ok "void" ->
-            case D.decodeValue Void.decoder doc of
-                Ok v ->
-                    let
-                        voids =
-                            upsertBy .id v as_.voids
-                    in
-                    ( AuthModel (recomputeEntries { as_ | voids = voids }), Cmd.none )
+                _ ->
+                    ( as1, Cmd.none )
 
-                Err _ ->
-                    ( AuthModel as_, Cmd.none )
+        geoCmd =
+            if Routing.routeToTab as2.route == AddTab && not as2.geoBlocked then
+                requestGeolocation ()
 
-        _ ->
-            ( AuthModel as_, Cmd.none )
+            else
+                Cmd.none
+    in
+    ( hydrateFormForRoute as2, Cmd.batch [ tripCmd, expenseCmd, geoCmd ] )
+
+
+handleDbChange : DocChange -> AuthState -> ( Model, Cmd Msg )
+handleDbChange change as_ =
+    let
+        as1 =
+            case change of
+                AmendChanged a ->
+                    { as_ | amendments = Dict.insert a.id a as_.amendments }
+
+                ExpenseChanged e ->
+                    { as_ | expenses = Dict.insert (ExpenseId.toString e.id) e as_.expenses }
+
+                TripChanged t ->
+                    { as_ | trips = upsertTripIntoState t as_.trips }
+
+                VoidChanged v ->
+                    { as_ | voids = Dict.insert v.id v as_.voids }
+    in
+    ( AuthModel (hydrateFormForRoute as1), Cmd.none )
 
 
 handleDbDelete : String -> AuthState -> ( Model, Cmd Msg )
 handleDbDelete id as_ =
     let
-        tripId =
-            TripId.fromString id
-
-        rawExpenses =
-            List.filter (\e -> ExpenseId.toString e.id /= id) as_.rawExpenses
-
-        amendments =
-            List.filter (\a -> a.id /= id) as_.amendments
-
-        newVoids =
-            List.filter (\v -> v.id /= id) as_.voids
-    in
-    ( AuthModel
-        (recomputeEntries
+        as1 =
             { as_
-                | amendments  = amendments
-                , rawExpenses = rawExpenses
-                , trips       = removeTripFromState tripId as_.trips
-                , voids       = newVoids
+                | amendments = Dict.remove id as_.amendments
+                , expenses   = Dict.remove id as_.expenses
+                , trips      = removeTripFromState (TripId.fromString id) as_.trips
+                , voids      = Dict.remove id as_.voids
             }
-        )
-    , Cmd.none
-    )
+
+        -- If the deleted doc was the entry currently being edited, drop the
+        -- hydrated form so the page falls back to AddPageLoading and (next
+        -- nav) AddPageNew.
+        as2 =
+            case as1.form of
+                EditForm fid _ ->
+                    if ExpenseId.toString fid == id then
+                        { as1 | form = FreshForm (defaultPendingEntry as1.today) }
+
+                    else
+                        as1
+
+                FreshForm _ ->
+                    as1
+    in
+    ( AuthModel as2, Cmd.none )
 
 
 requestCode : GuestState -> ( Model, Cmd Msg )
@@ -361,43 +522,34 @@ verifyCode email gs =
         )
 
 
-handleTripsLoaded : AuthState -> ( Model, Cmd Msg )
-handleTripsLoaded as_ =
-    case as_.trips of
-        TripsLoading dict hint ->
-            let
-                intendedTrip =
-                    hint
-                        |> Maybe.andThen (\id -> Dict.get (TripId.toString id) dict)
+handleTripsFetched : Dict.Dict String Trip -> AuthState -> ( Model, Cmd Msg )
+handleTripsFetched tripsDict as_ =
+    let
+        hint =
+            Routing.routeTripId as_.route
 
-                selectedTrips =
-                    case intendedTrip of
-                        Just trip ->
-                            Just (Trips.selectTrip trip.id (Trips.fromDict dict |> Maybe.withDefault (Trips.singleton trip)))
+        intendedTrip =
+            hint |> Maybe.andThen (\id -> Dict.get (TripId.toString id) tripsDict)
 
-                        Nothing ->
-                            Trips.fromDict dict
-            in
-            case selectedTrips of
-                Just trips ->
-                    let
-                        head =
-                            Trips.selectedTrip trips
-                    in
-                    ( AuthModel { as_ | trips = TripsLoaded trips, expensesState = ExpensesLoading }
-                    , Cmd.batch
-                        [ sendPouch (GetExpenses (TripId.toString head.id))
-                        , Nav.replaceUrl as_.key (Routing.tabToPath as_.basePath head.id as_.tab)
-                        ]
-                    )
+        selectedTrips =
+            case intendedTrip of
+                Just trip ->
+                    Just (Trips.selectTrip trip.id (Trips.fromDict tripsDict |> Maybe.withDefault (Trips.singleton trip)))
 
                 Nothing ->
-                    ( AuthModel { as_ | trips = NoTripsYet, expensesState = ExpensesReady [], tab = TripsTab }
-                    , Nav.replaceUrl as_.key (as_.basePath ++ "trips")
-                    )
+                    Trips.fromDict tripsDict
+    in
+    case selectedTrips of
+        Just trips ->
+            -- Trips loaded — let fetchesForRoute decide whether the current
+            -- route needs an expenses fetch (will skip if already cached).
+            fetchesForRoute { as_ | trips = TripsLoaded trips }
+                |> (\( s, c ) -> ( AuthModel s, c ))
 
-        _ ->
-            ( AuthModel as_, Cmd.none )
+        Nothing ->
+            ( AuthModel { as_ | trips = NoTripsYet, route = RouteTrips }
+            , Nav.replaceUrl as_.key (as_.basePath ++ "trips")
+            )
 
 
 upsertTripIntoState : Trip -> TripsState -> TripsState
@@ -491,7 +643,7 @@ freshScanItem id =
 
 authPending : (PendingEntry -> PendingEntry) -> AuthState -> ( Model, Cmd Msg )
 authPending f as_ =
-    ( AuthModel { as_ | pendingEntry = f as_.pendingEntry }, Cmd.none )
+    ( AuthModel { as_ | form = mapForm f as_.form }, Cmd.none )
 
 
 
@@ -688,21 +840,15 @@ init flagsJson url key =
                 initialRoute =
                     Routing.routeFromUrl basePath url
 
-                intendedTripId =
-                    Routing.routeTripId initialRoute
-
                 as_ =
-                    toAuthState creds intendedTripId (Routing.routeToTab initialRoute) gs
-
-                pendingEdit =
-                    case initialRoute of
-                        RouteEditEntry _ entryId ->
-                            Just entryId
-
-                        _ ->
-                            Nothing
+                    toAuthState creds initialRoute gs
             in
-            ( AuthModel { as_ | pendingEntryId = pendingEdit }, Cmd.none )
+            -- Don't fire route-driven fetches here. Sync hasn't settled
+            -- yet, so PouchDB queries would race with replication and
+            -- return empty/stale. Wait for SyncStateMsg Synced, which
+            -- triggers GetAllTrips; handleTripsFetched then runs
+            -- fetchesForRoute once trip data is in hand.
+            ( AuthModel as_, Cmd.none )
 
 
 
@@ -774,7 +920,7 @@ updateGuest msg gs =
             case ( gs.session.reason, result ) of
                 ( VerifyingCode _ _, Ok creds ) ->
                     let
-                        as_ = toAuthState creds Nothing TripsTab gs
+                        as_ = toAuthState creds RouteTrips gs
                     in
                     ( AuthModel as_
                     , Cmd.batch
@@ -833,55 +979,52 @@ updateAuth : Msg -> AuthState -> ( Model, Cmd Msg )
 updateAuth msg as_ =
     case msg of
         GotPouchMsg raw ->
-            case D.decodeValue pouchInDecoder raw of
-                Ok (DbChange data) ->
-                    if data.deleted then
-                        handleDbDelete data.id as_
-                    else
-                        handleDbChange data.doc as_
+            case Debug.log "pouch" <| D.decodeValue pouchInDecoder raw of
+                Ok (DbChange change) ->
+                    handleDbChange change as_
 
-                Ok (QueryComplete "expenses") ->
-                    case as_.trips of
-                        TripsLoaded trips ->
-                            let
-                                resolved =
-                                    Entry.resolve as_.rawExpenses as_.amendments as_.voids (Trips.selectedTrip trips).id
-                            in
-                            case as_.pendingEntryId of
-                                Just entryId ->
-                                    case resolved |> List.filter (\e -> e.id == entryId) |> List.head of
-                                        Just effective ->
-                                            let
-                                                expense =
-                                                    Helpers.effectiveEntryToExpense effective
-                                            in
-                                            ( AuthModel
-                                                { as_
-                                                    | editingEntry   = Just expense
-                                                    , expensesState  = ExpensesReady resolved
-                                                    , pendingEntryId = Nothing
-                                                    , pendingEntry   = expenseToPending expense
-                                                    , tab            = AddTab
-                                                }
-                                            , Cmd.none
-                                            )
+                Ok (DbDeleted id) ->
+                    handleDbDelete id as_
+
+                Ok (TripsFetched tripsDict) ->
+                    handleTripsFetched tripsDict as_
+
+                Ok (TripExpensesFetched tripId bundle) ->
+                    let
+                        key =
+                            TripId.toString tripId
+
+                        as1 =
+                            { as_
+                                | amendments   = Dict.union bundle.amendments as_.amendments
+                                , expenses     = Dict.union bundle.expenses as_.expenses
+                                , loadingTrips = Set.remove key as_.loadingTrips
+                                , tripLoaded   = Set.insert key as_.tripLoaded
+                                , voids        = Dict.union bundle.voids as_.voids
+                            }
+                    in
+                    ( AuthModel (hydrateFormForRoute as1), Cmd.none )
+
+                Ok (ExpenseFetched eid bundle) ->
+                    let
+                        as1 =
+                            { as_
+                                | amendments      = Dict.union bundle.amendments as_.amendments
+                                , expenses        =
+                                    case bundle.expense of
+                                        Just e ->
+                                            Dict.insert (ExpenseId.toString e.id) e as_.expenses
 
                                         Nothing ->
-                                            ( AuthModel { as_ | expensesState = ExpensesReady resolved, pendingEntryId = Nothing }
-                                            , Cmd.none
-                                            )
-
-                                Nothing ->
-                                    ( AuthModel { as_ | expensesState = ExpensesReady resolved }, Cmd.none )
-
-                        _ ->
-                            ( AuthModel { as_ | expensesState = ExpensesReady [] }, Cmd.none )
-
-                Ok (QueryComplete "trips") ->
-                    handleTripsLoaded as_
-
-                Ok (QueryComplete _) ->
-                    ( AuthModel as_, Cmd.none )
+                                            as_.expenses
+                                , loadingExpenses = Set.remove (ExpenseId.toString eid) as_.loadingExpenses
+                                , voids           =
+                                    case bundle.void of
+                                        Just v  -> Dict.insert v.id v as_.voids
+                                        Nothing -> as_.voids
+                            }
+                    in
+                    ( AuthModel (hydrateFormForRoute as1), Cmd.none )
 
                 Ok (DbError msg_) ->
                     ( AuthModel { as_ | error = Just msg_ }, Cmd.none )
@@ -993,7 +1136,7 @@ updateAuth msg as_ =
         DateChanged s     -> authPending (\p -> { p | date = s }) as_
 
         SubmitEntry ->
-            case String.toFloat as_.pendingEntry.amount of
+            case String.toFloat (formPending as_.form).amount of
                 Just _ ->
                     ( AuthModel { as_ | submitting = True, error = Nothing }
                     , Task.perform GotSubmitTime Time.now
@@ -1003,118 +1146,124 @@ updateAuth msg as_ =
 
         GotSubmitTime posix ->
             let
-                p         = as_.pendingEntry
+                p         = formPending as_.form
                 timestamp = String.fromInt (Time.posixToMillis posix)
 
                 ( eLat, eLon ) =
                     case p.locationState of
                         LocationGot la lo _ -> ( Just la, Just lo )
                         _                   -> ( Nothing, Nothing )
+
+                updatedQueue =
+                    case as_.activeScanItemId of
+                        Just id -> Dict.update id (Maybe.map (\i -> { i | status = ScanSubmitted })) as_.scanQueue
+                        Nothing -> as_.scanQueue
+
+                hasRemaining =
+                    Dict.values updatedQueue |> List.any (\i -> i.status /= ScanSubmitted)
+
+                nextTab =
+                    if as_.activeScanItemId /= Nothing && hasRemaining then ScanTab else LedgerTab
             in
-            case as_.editingEntry of
-                Just original ->
-                    let
-                        amendId =
-                            "amend::" ++ ExpenseId.toString original.id ++ "::" ++ String.left 8 timestamp
+            case as_.form of
+                EditForm editId _ ->
+                    case findEffective editId as_ of
+                        Just original ->
+                            let
+                                amendId =
+                                    "amend::" ++ ExpenseId.toString original.id ++ "::" ++ String.left 8 timestamp
 
-                        amend =
-                            { id        = amendId
-                            , targetId  = original.id
-                            , amount    = if p.amount /= String.fromFloat original.amount then String.toFloat p.amount else Nothing
-                            , category  = if p.category /= original.category then Just p.category else Nothing
-                            , createdAt = posixToIso posix
-                            , date      = if p.date /= original.date then Just p.date else Nothing
-                            , longNote  = if p.longNote /= original.longNote then Just p.longNote else Nothing
-                            , merchant  = if p.merchant /= original.merchant then Just p.merchant else Nothing
-                            , note      = if p.note /= original.note then Just p.note else Nothing
-                            }
+                                amend =
+                                    { id        = amendId
+                                    , targetId  = original.id
+                                    , amount    = if p.amount /= String.fromFloat original.amount then String.toFloat p.amount else Nothing
+                                    , category  = if p.category /= original.category then Just p.category else Nothing
+                                    , createdAt = posixToIso posix
+                                    , date      = if p.date /= original.date then Just p.date else Nothing
+                                    , longNote  = if p.longNote /= original.longNote then Just p.longNote else Nothing
+                                    , merchant  = if p.merchant /= original.merchant then Just p.merchant else Nothing
+                                    , note      = if p.note /= original.note then Just p.note else Nothing
+                                    }
 
-                        updatedQueue =
-                            case as_.activeScanItemId of
-                                Just id -> Dict.update id (Maybe.map (\i -> { i | status = ScanSubmitted })) as_.scanQueue
-                                Nothing -> as_.scanQueue
-
-                        hasRemaining =
-                            Dict.values updatedQueue |> List.any (\i -> i.status /= ScanSubmitted)
-
-                        nextTab =
-                            if as_.activeScanItemId /= Nothing && hasRemaining then ScanTab else LedgerTab
-                    in
-                    ( AuthModel
-                        { as_
-                            | activeScanItemId = Nothing
-                            , editingEntry     = Nothing
-                            , pendingEntry     = defaultPendingEntry as_.today
-                            , scanQueue        = updatedQueue
-                            , submitting       = False
-                            , tab              = nextTab
-                        }
-                    , Cmd.batch
-                        [ sendPouch (SaveAmend (Amendment.encoder amend))
-                        , Nav.pushUrl as_.key (Routing.pathForCurrentTab as_ nextTab)
-                        ]
-                    )
-
-                Nothing ->
-                    case as_.trips of
-                      TripsLoaded loadedTrips ->
-                        let
-                            expenseId =
-                                "expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp
-
-                            expense =
-                                { id        = ExpenseId.fromString expenseId
-                                , tripId    = (Trips.selectedTrip loadedTrips).id
-                                , amount    = String.toFloat p.amount |> Maybe.withDefault 0
-                                , category  = p.category
-                                , createdAt = posixToIso posix
-                                , date      = p.date
-                                , lat       = eLat
-                                , lon       = eLon
-                                , longNote  = p.longNote
-                                , merchant  = p.merchant
-                                , note      = p.note
+                                nextRoute =
+                                    routeForTab nextTab original.tripId
+                            in
+                            ( AuthModel
+                                { as_
+                                    | activeScanItemId = Nothing
+                                    , form             = FreshForm (defaultPendingEntry as_.today)
+                                    , route            = nextRoute
+                                    , scanQueue        = updatedQueue
+                                    , submitting       = False
                                 }
+                            , Cmd.batch
+                                [ sendPouch (SaveAmend (Amendment.encoder amend))
+                                , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath original.tripId nextTab)
+                                ]
+                            )
 
-                            updatedQueue =
-                                case as_.activeScanItemId of
-                                    Just id -> Dict.update id (Maybe.map (\i -> { i | status = ScanSubmitted })) as_.scanQueue
-                                    Nothing -> as_.scanQueue
+                        Nothing ->
+                            ( AuthModel { as_ | submitting = False }, Cmd.none )
 
-                            hasRemaining =
-                                Dict.values updatedQueue |> List.any (\i -> i.status /= ScanSubmitted)
+                FreshForm _ ->
+                    case as_.trips of
+                        TripsLoaded loadedTrips ->
+                            let
+                                tripId =
+                                    (Trips.selectedTrip loadedTrips).id
 
-                            nextTab =
-                                if as_.activeScanItemId /= Nothing && hasRemaining then ScanTab else LedgerTab
-                        in
-                        ( AuthModel
-                            { as_
-                                | activeScanItemId = Nothing
-                                , pendingEntry     = defaultPendingEntry as_.today
-                                , scanQueue        = updatedQueue
-                                , submitting       = False
-                                , tab              = nextTab
-                            }
-                        , Cmd.batch
-                            [ sendPouch (SaveExpense (Expense.encoder expense))
-                            , Nav.pushUrl as_.key (Routing.pathForCurrentTab as_ nextTab)
-                            ]
-                        )
+                                expenseId =
+                                    "expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp
 
-                      _ ->
-                        ( AuthModel { as_ | submitting = False }, Cmd.none )
+                                expense =
+                                    { id        = ExpenseId.fromString expenseId
+                                    , tripId    = tripId
+                                    , amount    = String.toFloat p.amount |> Maybe.withDefault 0
+                                    , category  = p.category
+                                    , createdAt = posixToIso posix
+                                    , date      = p.date
+                                    , lat       = eLat
+                                    , lon       = eLon
+                                    , longNote  = p.longNote
+                                    , merchant  = p.merchant
+                                    , note      = p.note
+                                    }
+
+                                nextRoute =
+                                    routeForTab nextTab tripId
+                            in
+                            ( AuthModel
+                                { as_
+                                    | activeScanItemId = Nothing
+                                    , form             = FreshForm (defaultPendingEntry as_.today)
+                                    , route            = nextRoute
+                                    , scanQueue        = updatedQueue
+                                    , submitting       = False
+                                }
+                            , Cmd.batch
+                                [ sendPouch (SaveExpense (Expense.encoder expense))
+                                , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tripId nextTab)
+                                ]
+                            )
+
+                        _ ->
+                            ( AuthModel { as_ | submitting = False }, Cmd.none )
 
         VoidEntry expense ->
             let
                 voidId =
                     "void::" ++ ExpenseId.toString expense.id ++ "::del"
 
-                updatedState =
-                    case as_.expensesState of
-                        ExpensesReady entries -> ExpensesReady (List.filter (\e -> e.id /= expense.id) entries)
-                        other                 -> other
+                -- Optimistic: insert the void into the cache locally so
+                -- Entry.resolve filters out this expense immediately.
+                -- Sync DbChange will be a no-op (same id).
+                optimisticVoid =
+                    { id        = voidId
+                    , targetId  = ExpenseId.toString expense.id
+                    , createdAt = as_.today
+                    }
             in
-            ( AuthModel { as_ | expensesState = updatedState }
+            ( AuthModel { as_ | voids = Dict.insert voidId optimisticVoid as_.voids }
             , sendPouch
                 (SaveVoid
                     (E.object
@@ -1131,13 +1280,17 @@ updateAuth msg as_ =
             ( AuthModel { as_ | tripForm = Nothing }, Cmd.none )
 
         RefreshClicked ->
-            case as_.trips of
-                TripsLoaded trips ->
-                    ( AuthModel { as_ | expensesState = ExpensesLoading }
-                    , sendPouch (GetExpenses (TripId.toString (Trips.selectedTrip trips).id))
+            case Routing.routeTripId as_.route of
+                Just tid ->
+                    ( AuthModel
+                        { as_
+                            | loadingTrips = Set.insert (TripId.toString tid) as_.loadingTrips
+                            , tripLoaded   = Set.remove (TripId.toString tid) as_.tripLoaded
+                        }
+                    , sendPouch (GetTripExpenses tid)
                     )
 
-                _ ->
+                Nothing ->
                     ( AuthModel as_, Cmd.none )
 
         ApiKeyChanged s ->
@@ -1153,7 +1306,7 @@ updateAuth msg as_ =
             authPending (setLocation (LocationGot lat lon BrowserGeo)) as_
 
         GeolocationDenied ->
-            ( AuthModel { as_ | geoBlocked = True, pendingEntry = setLocation LocationIdle as_.pendingEntry }
+            ( AuthModel { as_ | geoBlocked = True, form = mapForm (setLocation LocationIdle) as_.form }
             , Cmd.none
             )
 
@@ -1161,7 +1314,7 @@ updateAuth msg as_ =
             ( AuthModel { as_ | showMapPicker = True }, Cmd.none )
 
         MapPickerConfirmed lat lon ->
-            ( AuthModel { as_ | pendingEntry = setLocation (LocationGot lat lon ManualPin) as_.pendingEntry, showMapPicker = False }
+            ( AuthModel { as_ | form = mapForm (setLocation (LocationGot lat lon ManualPin)) as_.form, showMapPicker = False }
             , Cmd.none
             )
 
@@ -1169,7 +1322,7 @@ updateAuth msg as_ =
             ( AuthModel { as_ | showMapPicker = False }, Cmd.none )
 
         SkipLocation ->
-            ( AuthModel { as_ | pendingEntry = setLocation LocationSkipped as_.pendingEntry, showMapPicker = False }
+            ( AuthModel { as_ | form = mapForm (setLocation LocationSkipped) as_.form, showMapPicker = False }
             , Cmd.none
             )
 
@@ -1213,25 +1366,41 @@ updateAuth msg as_ =
                             , merchant      = Maybe.withDefault "" ocr.merchant
                             , note          = Maybe.withDefault "" ocr.note
                             }
+
+                        newRoute =
+                            case Routing.routeTripId as_.route of
+                                Just tid -> RouteAdd tid
+                                Nothing  -> as_.route
                     in
                     ( AuthModel
                         { as_
                             | activeScanItemId = Just itemId
                             , error            = Nothing
-                            , pendingEntry     = newPending
-                            , tab              = AddTab
+                            , form             = FreshForm newPending
+                            , route            = newRoute
                         }
                     , Cmd.none
                     )
 
         BackToQueue ->
+            let
+                newRoute =
+                    case Routing.routeTripId as_.route of
+                        Just tid -> RouteScan tid
+                        Nothing  -> as_.route
+            in
             ( AuthModel
                 { as_
                     | activeScanItemId = Nothing
-                    , pendingEntry     = defaultPendingEntry as_.today
-                    , tab              = ScanTab
+                    , form             = FreshForm (defaultPendingEntry as_.today)
+                    , route            = newRoute
                 }
-            , Cmd.none
+            , case Routing.routeTripId as_.route of
+                Just tid ->
+                    Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tid ScanTab)
+
+                Nothing ->
+                    Cmd.none
             )
 
         ClearDoneItems ->
@@ -1348,12 +1517,11 @@ updateAuth msg as_ =
                     in
                     ( AuthModel
                         { as_
-                            | editingEntry  = Nothing
-                            , expensesState = ExpensesReady []
-                            , pendingEntry  = defaultPendingEntry as_.today
-                            , tab           = LedgerTab
-                            , tripForm      = Nothing
-                            , trips         = newTrips
+                            | form       = FreshForm (defaultPendingEntry as_.today)
+                            , route      = RouteLedger tripId
+                            , tripForm   = Nothing
+                            , tripLoaded = Set.insert (TripId.toString tripId) as_.tripLoaded
+                            , trips      = newTrips
                         }
                     , Cmd.batch
                         [ sendPouch (SaveTrip (Trip.encoder newTrip))
@@ -1393,12 +1561,11 @@ updateAuth msg as_ =
                     ( AuthModel
                         { as_
                             | confirmDeleteTrip = Nothing
-                            , expensesState     = ExpensesLoading
+                            , route             = RouteLedger nextHead.id
                             , trips             = TripsLoaded trips
                         }
                     , Cmd.batch
                         [ voidCmd
-                        , sendPouch (GetExpenses (TripId.toString nextHead.id))
                         , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath nextHead.id LedgerTab)
                         ]
                     )
@@ -1407,8 +1574,7 @@ updateAuth msg as_ =
                     ( AuthModel
                         { as_
                             | confirmDeleteTrip = Nothing
-                            , expensesState     = ExpensesReady []
-                            , tab               = TripsTab
+                            , route             = RouteTrips
                             , trips             = NoTripsYet
                         }
                     , Cmd.batch [ voidCmd, Nav.pushUrl as_.key (as_.basePath ++ "trips") ]
@@ -1426,125 +1592,14 @@ updateAuth msg as_ =
             ( AuthModel as_, Nav.load href )
 
         UrlChanged url ->
-            case Routing.routeFromUrl as_.basePath url of
-                RouteEditEntry tripId entryId ->
-                    if Maybe.map .id as_.editingEntry == Just entryId then
-                        ( AuthModel { as_ | tab = AddTab }, Cmd.none )
+            let
+                newRoute =
+                    Routing.routeFromUrl as_.basePath url
 
-                    else
-                        let
-                            maybeExpense =
-                                Entry.resolve as_.rawExpenses as_.amendments as_.voids tripId
-                                    |> List.filter (\e -> e.id == entryId)
-                                    |> List.head
-                                    |> Maybe.map Helpers.effectiveEntryToExpense
-                        in
-                        case maybeExpense of
-                            Just expense ->
-                                ( AuthModel
-                                    { as_
-                                        | editingEntry = Just expense
-                                        , pendingEntry = expenseToPending expense
-                                        , tab          = AddTab
-                                    }
-                                , Cmd.none
-                                )
-
-                            Nothing ->
-                                let
-                                    currentId =
-                                        case as_.trips of
-                                            TripsLoaded trips -> Just (Trips.selectedTrip trips).id
-                                            _                 -> Nothing
-
-                                    needsFetch =
-                                        currentId /= Just tripId
-
-                                    newTripsState =
-                                        case as_.trips of
-                                            TripsLoaded trips -> TripsLoaded (Trips.selectTrip tripId trips)
-                                            other             -> other
-
-                                    expCmd =
-                                        if needsFetch then
-                                            sendPouch (GetExpenses (TripId.toString tripId))
-                                        else
-                                            Cmd.none
-                                in
-                                ( AuthModel
-                                    { as_
-                                        | pendingEntryId = Just entryId
-                                        , tab            = AddTab
-                                        , trips          = newTripsState
-                                    }
-                                , expCmd
-                                )
-
-                route ->
-                    let
-                        tab =
-                            Routing.routeToTab route
-
-                        currentId =
-                            case as_.trips of
-                                TripsLoaded trips -> Just (Trips.selectedTrip trips).id
-                                _                 -> Nothing
-
-                        routeTripId =
-                            Routing.routeTripId route
-
-                        targetTripId =
-                            case ( routeTripId, currentId ) of
-                                ( Just rid, _ ) -> Just rid
-                                ( Nothing, Just cid ) -> Just cid
-                                ( Nothing, Nothing ) -> Nothing
-
-                        tripChanged =
-                            case ( routeTripId, currentId ) of
-                                ( Just rid, Just cid ) -> rid /= cid
-                                ( Just _, Nothing )    -> True
-                                _                      -> False
-
-                        newTripsState =
-                            case ( targetTripId, as_.trips ) of
-                                ( Just tid, TripsLoaded trips ) -> TripsLoaded (Trips.selectTrip tid trips)
-                                _                               -> as_.trips
-
-                        tripLoadCmd =
-                            case ( tripChanged, targetTripId ) of
-                                ( True, Just tid ) -> sendPouch (GetExpenses (TripId.toString tid))
-                                _                  -> Cmd.none
-
-                        geoCmd =
-                            if tab == AddTab && not as_.geoBlocked then requestGeolocation () else Cmd.none
-
-                        leavingEdit =
-                            as_.editingEntry /= Nothing
-
-                        resetPending =
-                            tripChanged || leavingEdit
-
-                        basePending =
-                            if resetPending then defaultPendingEntry as_.today else as_.pendingEntry
-
-                        newPending =
-                            if tab == AddTab && not as_.geoBlocked then
-                                setLocation LocationFetching basePending
-                            else
-                                basePending
-                    in
-                    ( AuthModel
-                        { as_
-                            | editingEntry     = Nothing
-                            , expensesState    = if tripChanged then ExpensesLoading else as_.expensesState
-                            , pendingEntryId   = Nothing
-                            , pendingEntry     = newPending
-                            , tab              = tab
-                            , tripForm         = Nothing
-                            , trips            = newTripsState
-                        }
-                    , Cmd.batch [ geoCmd, tripLoadCmd ]
-                    )
+                ( as1, cmd ) =
+                    fetchesForRoute { as_ | route = newRoute, tripForm = Nothing }
+            in
+            ( AuthModel as1, cmd )
 
         _ ->
             ( AuthModel as_, Cmd.none )

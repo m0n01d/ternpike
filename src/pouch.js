@@ -40,52 +40,114 @@ export function attachPouch(app, { creds = null } = {}) {
     emitSync('not_enabled')
   }
 
+  // ── Live changes feed: per-doc updates ─────────────────────────────────
+  // Drops _rev and forwards the doc; the Elm DocChange decoder discriminates
+  // on doc.type to produce a typed variant.
   db.changes({
     since: 'now',
     live: true,
     include_docs: true,
   }).on('change', change => {
-    const { _rev, ...doc } = change.doc || {}
-    app.ports.pouchIn.send({
-      tag:     'DbChange',
-      id:      change.id,
-      deleted: !!(change.deleted),
-      doc,
-    })
+    if (change.deleted) {
+      app.ports.pouchIn.send({ tag: 'DbDeleted', id: change.id })
+    } else if (change.doc) {
+      const { _rev, ...doc } = change.doc
+      app.ports.pouchIn.send({ tag: 'DbChange', doc })
+    }
   }).on('error', err => {
     app.ports.pouchIn.send({ tag: 'DbError', message: String(err) })
   })
 
+  // ── Outbound port: batched fetches & saves ─────────────────────────────
   app.ports.pouchOut.subscribe(async (msg) => {
     try {
       switch (msg.tag) {
 
         case 'GetAllTrips': {
+          // Group all trip docs into one dict keyed by _id; emit one message.
           const result = await db.allDocs({ include_docs: true })
-          result.rows.forEach(row => {
-            if (!row.doc || row.doc.type !== 'trip') return
-            const { _rev, ...doc } = row.doc
-            app.ports.pouchIn.send({ tag: 'DbChange', id: row.id, deleted: false, doc })
-          })
-          app.ports.pouchIn.send({ tag: 'QueryComplete', queryType: 'trips' })
+          const trips = {}
+          for (const row of result.rows) {
+            const d = row.doc
+            if (!d || d.type !== 'trip') continue
+            const { _rev, ...doc } = d
+            trips[d._id] = doc
+          }
+          app.ports.pouchIn.send({ tag: 'TripsLoaded', trips })
           break
         }
 
-        case 'GetExpenses': {
+        case 'GetTripExpenses': {
+          // Group expenses (for this trip) + amendments + voids targeting any
+          // expense into three dicts; emit one message. Elm decodes straight
+          // into Dicts via D.dict.
           const result = await db.allDocs({ include_docs: true })
-          result.rows.forEach(row => {
+          const amendments = {}
+          const expenses   = {}
+          const voids      = {}
+          for (const row of result.rows) {
             const d = row.doc
-            if (!d) return
-            if (
-              (d.type === 'expense' && d.tripId === msg.tripId) ||
-              (d.type === 'amend'   && d.targetId && d.targetId.startsWith('expense::')) ||
-              (d.type === 'void'    && d.targetId && d.targetId.startsWith('expense::'))
-            ) {
-              const { _rev, ...doc } = d
-              app.ports.pouchIn.send({ tag: 'DbChange', id: row.id, deleted: false, doc })
+            if (!d) continue
+            const { _rev, ...doc } = d
+            if (d.type === 'expense' && d.tripId === msg.tripId) {
+              expenses[d._id] = doc
+            } else if (d.type === 'amend' && d.targetId && typeof d.targetId === 'string' && d.targetId.startsWith('expense::')) {
+              amendments[d._id] = doc
+            } else if (d.type === 'void' && d.targetId && typeof d.targetId === 'string' && d.targetId.startsWith('expense::')) {
+              voids[d._id] = doc
             }
+          }
+          app.ports.pouchIn.send({
+            tag: 'TripExpensesLoaded',
+            tripId: msg.tripId,
+            amendments, expenses, voids,
           })
-          app.ports.pouchIn.send({ tag: 'QueryComplete', queryType: 'expenses' })
+          break
+        }
+
+        case 'GetExpense': {
+          // Targeted single-doc fetch + range-query amendments + lookup void.
+          // App-written amend IDs are `amend::expense::<id>::<ts>`, so the
+          // range scan finds them. (Seed data must match this scheme.)
+          const id = msg.expenseId
+          let expense = null
+          let voidDoc = null
+
+          try {
+            const exp = await db.get(id)
+            const { _rev, ...doc } = exp
+            expense = doc
+          } catch (e) {
+            if (e.status !== 404) throw e
+          }
+
+          const amendRows = await db.allDocs({
+            startkey: `amend::${id}`,
+            endkey:   `amend::${id}￰`,
+            include_docs: true,
+          })
+          const amendments = {}
+          for (const row of amendRows.rows) {
+            if (!row.doc) continue
+            const { _rev, ...doc } = row.doc
+            amendments[row.id] = doc
+          }
+
+          try {
+            const v = await db.get(`void::${id}::del`)
+            const { _rev, ...doc } = v
+            voidDoc = doc
+          } catch (e) {
+            if (e.status !== 404) throw e
+          }
+
+          app.ports.pouchIn.send({
+            tag: 'ExpenseLoaded',
+            expenseId: id,
+            amendments,
+            expense,
+            void: voidDoc,
+          })
           break
         }
 

@@ -18,6 +18,11 @@ import Url
 import Url.Parser as Parser exposing ((</>))
 
 
+-- See `effectiveRoute` below for the one piece of derived state: when the
+-- stored route is `RouteAdd _` AND a scan-queue item is being reviewed, the
+-- *effective* route is `RouteAddReviewScan` (no URL pattern for it).
+
+
 routeParser : Parser.Parser (Route -> a) a
 routeParser =
     Parser.oneOf
@@ -77,42 +82,12 @@ routeTitle route =
 
 effectiveRoute : AuthState -> Route
 effectiveRoute as_ =
-    let
-        withSelectedTrip toRoute =
-            case as_.trips of
-                TripsLoaded trips ->
-                    toRoute (Trips.selectedTrip trips).id
+    case ( as_.route, as_.activeScanItemId ) of
+        ( RouteAdd _, Just _ ) ->
+            RouteAddReviewScan
 
-                _ ->
-                    RouteTrips
-    in
-    case as_.tab of
-        AddTab ->
-            case as_.editingEntry of
-                Just expense ->
-                    RouteEditEntry expense.tripId expense.id
-
-                Nothing ->
-                    if as_.activeScanItemId /= Nothing then
-                        RouteAddReviewScan
-
-                    else
-                        withSelectedTrip RouteAdd
-
-        LedgerTab ->
-            withSelectedTrip RouteLedger
-
-        ScanTab ->
-            withSelectedTrip RouteScan
-
-        SettingsTab ->
-            RouteSettings
-
-        StatsTab ->
-            withSelectedTrip RouteStats
-
-        TripsTab ->
-            RouteTrips
+        _ ->
+            as_.route
 
 
 tabToPath : String -> TripId.TripId -> Tab -> String

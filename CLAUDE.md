@@ -60,6 +60,9 @@ all stash changes. The correct sequence when a stash pop conflicts:
 
  any style attributes (Html.Attributes.style) need to be rewritten as tailwind classes. 
  No inline styles.
+ use Html.Attributes.classList for optional classes or when you want to organize classes for things like flex, animation or translating, or responsive breakpoints
+ use semantic markup, ie only buttons have click events
+ aggressively refactor modules you touch. lets clean up tech debt
 
 ## Sheet columns
 A=id, B=date, C=amount, D=category, E=note, F=merchant, G=createdAt, H=lat, I=lon, J=longNote

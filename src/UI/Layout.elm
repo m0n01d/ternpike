@@ -28,7 +28,7 @@ viewHeader : AuthState -> Html Msg
 viewHeader as_ =
     let
         settingsHref =
-            if as_.tab == SettingsTab then
+            if Routing.routeToTab as_.route == SettingsTab then
                 Routing.pathForCurrentTab as_ LedgerTab
 
             else
@@ -55,7 +55,7 @@ viewHeader as_ =
                 [ Html.Attributes.href settingsHref
                 , Html.Attributes.class
                     ("inline-flex items-center px-2 py-1 "
-                        ++ (if as_.tab == SettingsTab then "text-rust" else "text-muted")
+                        ++ (if Routing.routeToTab as_.route == SettingsTab then "text-rust" else "text-muted")
                     )
                 ]
                 [ UI.Icons.settings "w-5 h-5" ]
@@ -134,7 +134,7 @@ viewNavTab : AuthState -> ( Tab, String -> Svg.Svg Msg, String ) -> Html Msg
 viewNavTab as_ ( tab, iconFn, label_ ) =
     let
         isActive =
-            as_.tab == tab
+            Routing.routeToTab as_.route == tab
 
         indicator =
             if isActive then

@@ -1,6 +1,7 @@
 module Pages.Add exposing (viewTab)
 
 import Data.Category as Category exposing (Category(..))
+import Data.ExpenseId as ExpenseId exposing (ExpenseId)
 import Dict
 import Helpers exposing (formatCoord)
 import Html exposing (Html)
@@ -13,30 +14,79 @@ import UI.Button
 import UI.Card
 import UI.Layout
 import UI.Rule
+import UI.Skeleton
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
 viewTab as_ =
-    { actions = viewActions as_
-    , body = viewBody as_
-    , hero = viewHero as_
-    }
+    case addPageMode as_.route as_.form of
+        AddPageLoading _ ->
+            { actions = []
+            , body    = viewLoadingBody
+            , hero    = viewLoadingHero
+            }
+
+        AddPageNew ->
+            let
+                pending = formPending as_.form
+            in
+            { actions = viewNewActions as_
+            , body    = viewBody as_ pending False
+            , hero    = viewHero pending
+            }
+
+        AddPageEditing _ ->
+            let
+                pending = formPending as_.form
+            in
+            { actions = viewEditingActions as_
+            , body    = viewBody as_ pending True
+            , hero    = viewHero pending
+            }
 
 
-viewActions : AuthState -> List (Html Msg)
-viewActions model =
+addPageMode : Route -> PendingForm -> AddPageMode
+addPageMode route form =
+    case route of
+        RouteEditEntry _ id ->
+            case form of
+                EditForm formId _ ->
+                    if formId == id then AddPageEditing id else AddPageLoading id
+
+                FreshForm _ ->
+                    AddPageLoading id
+
+        _ ->
+            AddPageNew
+
+
+formPending : PendingForm -> PendingEntry
+formPending form =
+    case form of
+        EditForm _ p -> p
+        FreshForm p  -> p
+
+
+viewNewActions : AuthState -> List (Html Msg)
+viewNewActions model =
     if model.activeScanItemId /= Nothing then
         [ UI.Button.ghost { label = "← queue", onClick = BackToQueue } ]
-
-    else if model.editingEntry /= Nothing then
-        [ UI.Button.ghostLink { href = Routing.pathForCurrentTab model LedgerTab, label = "← cancel" } ]
 
     else
         []
 
 
-viewHero : AuthState -> Html Msg
-viewHero model =
+viewEditingActions : AuthState -> List (Html Msg)
+viewEditingActions model =
+    [ UI.Button.ghostLink
+        { href = Routing.pathForCurrentTab model LedgerTab
+        , label = "← cancel"
+        }
+    ]
+
+
+viewHero : PendingEntry -> Html Msg
+viewHero pending =
     Html.div [ Html.Attributes.class "py-2" ]
         [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
             [ Html.text "AMOUNT" ]
@@ -47,7 +97,7 @@ viewHero model =
             , Html.input
                 [ Html.Attributes.type_ "number"
                 , Html.Attributes.attribute "inputmode" "decimal"
-                , Html.Attributes.value model.pendingEntry.amount
+                , Html.Attributes.value pending.amount
                 , Html.Events.onInput AmountChanged
                 , Html.Attributes.placeholder "0.00"
                 , Html.Attributes.class "h-[3.5rem] -translate-y-1 w-full bg-transparent border-0 outline-none p-0 appearance-none font-display text-5xl font-black text-forest tabular-nums tracking-tight leading-none"
@@ -57,27 +107,35 @@ viewHero model =
         ]
 
 
-viewBody : AuthState -> Html Msg
-viewBody model =
-    let
-        p =
-            model.pendingEntry
+viewLoadingHero : Html Msg
+viewLoadingHero =
+    Html.div [ Html.Attributes.class "py-2" ]
+        [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
+            [ Html.text "AMOUNT" ]
+        , Html.div [ Html.Attributes.class "h-[3rem] flex items-start gap-3" ]
+            [ Html.span
+                [ Html.Attributes.class "font-display text-5xl font-black text-forest leading-none opacity-40" ]
+                [ Html.text "$" ]
+            , Html.div [ Html.Attributes.class "flex-1 pt-2" ]
+                [ UI.Skeleton.text "w-40 h-10" ]
+            ]
+        ]
 
-        isEditing =
-            model.editingEntry /= Nothing
-    in
+
+viewBody : AuthState -> PendingEntry -> Bool -> Html Msg
+viewBody model pending isEditing =
     Html.div []
         [ viewScanPreview model
         , UI.Rule.kicker "THE BASICS"
         , UI.Card.subCard
             [ UI.Layout.formField "CATEGORY"
                 (Html.div [ Html.Attributes.class "grid grid-cols-4 gap-2" ]
-                    (List.map (viewCategoryBtn p.category) Category.all)
+                    (List.map (viewCategoryBtn pending.category) Category.all)
                 )
             , UI.Layout.formField "DATE"
                 (Html.input
                     [ Html.Attributes.type_ "date"
-                    , Html.Attributes.value p.date
+                    , Html.Attributes.value pending.date
                     , Html.Events.onInput DateChanged
                     , UI.Layout.textInputStyle
                     ]
@@ -89,21 +147,21 @@ viewBody model =
             [ UI.Layout.formField "MERCHANT"
                 (Html.input
                     [ Html.Attributes.type_ "text"
-                    , Html.Attributes.value p.merchant
+                    , Html.Attributes.value pending.merchant
                     , Html.Events.onInput MerchantChanged
                     , Html.Attributes.placeholder "optional"
                     , UI.Layout.textInputStyle
                     ]
                     []
                 )
-            , UI.Layout.formField "LOCATION" (viewLocationWidget model)
+            , UI.Layout.formField "LOCATION" (viewLocationWidget model pending)
             ]
         , UI.Rule.kicker "NOTES"
         , UI.Card.subCard
             [ UI.Layout.formField "NOTE"
                 (Html.input
                     [ Html.Attributes.type_ "text"
-                    , Html.Attributes.value p.note
+                    , Html.Attributes.value pending.note
                     , Html.Events.onInput NoteChanged
                     , Html.Attributes.placeholder "brief (50 chars)"
                     , Html.Attributes.attribute "maxlength" "50"
@@ -113,7 +171,7 @@ viewBody model =
                 )
             , UI.Layout.formField "DETAILS"
                 (Html.textarea
-                    [ Html.Attributes.value p.longNote
+                    [ Html.Attributes.value pending.longNote
                     , Html.Events.onInput LongNoteChanged
                     , Html.Attributes.placeholder "optional — what happened, where, any context (280 chars)"
                     , Html.Attributes.attribute "maxlength" "280"
@@ -141,6 +199,27 @@ viewBody model =
                  else
                     "SAVE EXPENSE"
                 )
+            ]
+        ]
+
+
+viewLoadingBody : Html Msg
+viewLoadingBody =
+    Html.div []
+        [ UI.Rule.kicker "THE BASICS"
+        , UI.Card.subCard
+            [ UI.Skeleton.card
+            , UI.Skeleton.row
+            ]
+        , UI.Rule.kicker "WHERE & WHO"
+        , UI.Card.subCard
+            [ UI.Skeleton.row
+            , UI.Skeleton.row
+            ]
+        , UI.Rule.kicker "NOTES"
+        , UI.Card.subCard
+            [ UI.Skeleton.row
+            , UI.Skeleton.row
             ]
         ]
 
@@ -189,14 +268,14 @@ viewCategoryBtn selected cat =
         ]
 
 
-viewLocationWidget : AuthState -> Html Msg
-viewLocationWidget model =
+viewLocationWidget : AuthState -> PendingEntry -> Html Msg
+viewLocationWidget model pending =
     Html.div []
-        [ viewLocationStatus model.pendingEntry.locationState
+        [ viewLocationStatus pending.locationState
         , if model.showMapPicker then
             Html.node "map-picker"
                 [ Html.Attributes.attribute "lat"
-                    (case model.pendingEntry.locationState of
+                    (case pending.locationState of
                         LocationGot la _ _ ->
                             String.fromFloat la
 
@@ -204,7 +283,7 @@ viewLocationWidget model =
                             "64.2008"
                     )
                 , Html.Attributes.attribute "lon"
-                    (case model.pendingEntry.locationState of
+                    (case pending.locationState of
                         LocationGot _ lo _ ->
                             String.fromFloat lo
 
