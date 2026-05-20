@@ -979,7 +979,7 @@ updateAuth : Msg -> AuthState -> ( Model, Cmd Msg )
 updateAuth msg as_ =
     case msg of
         GotPouchMsg raw ->
-            case Debug.log "pouch" <| D.decodeValue pouchInDecoder raw of
+            case D.decodeValue pouchInDecoder raw of
                 Ok (DbChange change) ->
                     handleDbChange change as_
 
