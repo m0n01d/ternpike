@@ -170,10 +170,10 @@ formField label_ input_ =
 
 page : { actions : List (Html Msg), body : Html Msg, hero : Html Msg, route : Route } -> Html Msg
 page { actions, body, hero, route } =
-    Html.div [ Html.Attributes.class "p-5 animate-fade-up" ]
+    Html.div [ Html.Attributes.class "p-5" ]
         [ Html.div
             [ Html.Attributes.class
-                ("relative overflow-hidden p-5 mb-5 bg-cream rounded-card shadow-card "
+                ("animate-fade-up relative overflow-hidden p-5 mb-5 bg-cream rounded-card shadow-card "
                     ++ "bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] "
                     ++ "transition-[background-position] delay-150 duration-700 ease-out "
                     ++ topoPosClass route
