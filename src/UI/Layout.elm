@@ -27,7 +27,7 @@ import UI.Mascot
 viewHeader : AuthState -> Html Msg
 viewHeader as_ =
     Html.div
-        [ Html.Attributes.class "sticky top-0 z-10 flex items-center justify-between px-5 py-3 border-b bg-cream border-moss/25" ]
+        [ Html.Attributes.class "sticky top-0 z-10 h-14 flex items-center justify-between px-5 border-b bg-cream border-moss/25" ]
         [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
             [ Html.span
                 [ Html.Attributes.class "inline-block hover:rotate-[-3deg] transition-transform duration-200" ]
