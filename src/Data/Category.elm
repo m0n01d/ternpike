@@ -19,13 +19,14 @@ type Category
     | Lodging
     | Medical
     | Misc
+    | Parks
     | Shopping
     | Transport
 
 
 all : List Category
 all =
-    [ Fuel, Food, Camp, Lodging, Ferry, Activities, Shopping, Gear, Transport, Medical, Misc ]
+    [ Fuel, Food, Camp, Lodging, Ferry, Activities, Shopping, Gear, Transport, Medical, Parks, Misc ]
 
 
 color : Category -> String
@@ -40,6 +41,7 @@ color cat =
         Lodging    -> "#40c0b0"
         Medical    -> "#ff6060"
         Misc       -> "#7a8a80"
+        Parks      -> "#5a9a50"
         Shopping   -> "#e060a0"
         Transport  -> "#a0a0e0"
 
@@ -57,6 +59,7 @@ fromString s =
         "medical"    -> Medical
         "shopping"   -> Shopping
         "transport"  -> Transport
+        "parks"      -> Parks
         _            -> Misc
 
 
@@ -72,6 +75,7 @@ fromStringMaybe s =
         "lodging"    -> Just Lodging
         "medical"    -> Just Medical
         "misc"       -> Just Misc
+        "parks"      -> Just Parks
         "shopping"   -> Just Shopping
         "transport"  -> Just Transport
         _            -> Nothing
@@ -89,6 +93,7 @@ icon cat =
         Lodging    -> "🏨"
         Medical    -> "💊"
         Misc       -> "📦"
+        Parks      -> "🏞"
         Shopping   -> "🛍"
         Transport  -> "🚌"
 
@@ -105,5 +110,6 @@ label cat =
         Lodging    -> "lodging"
         Medical    -> "medical"
         Misc       -> "misc"
+        Parks      -> "parks"
         Shopping   -> "shopping"
         Transport  -> "transport"

@@ -180,7 +180,7 @@ page { actions, body, hero, route } =
                 )
             ]
             [ Html.div
-                [ Html.Attributes.class "flex items-start justify-between mb-4 gap-3 min-h-7" ]
+                [ Html.Attributes.class "flex items-start justify-between mb-4 gap-3 min-h-9" ]
                 [ Html.h1 [ Html.Attributes.class "text-2xl font-black tracking-tight font-display text-forest" ]
                     [ Html.text (Routing.routeTitle route) ]
                 , Html.div [ Html.Attributes.class "flex items-center gap-2" ] actions
