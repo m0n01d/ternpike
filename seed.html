@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Seed Mock Data — Ternpike</title>
+  <script src="https://cdn.jsdelivr.net/npm/pouchdb@9.0.0/dist/pouchdb.min.js"></script>
+  <style>
+    body { font-family: monospace; background: #1a1a1a; color: #d4d4d4; padding: 2rem; }
+    h1 { color: #7dd3fc; }
+    #log { white-space: pre-wrap; font-size: 0.85rem; line-height: 1.6; }
+    .ok  { color: #86efac; }
+    .err { color: #f87171; }
+    .hdr { color: #fbbf24; font-weight: bold; }
+    #done { color: #7dd3fc; font-size: 1.2rem; margin-top: 1rem; display: none; }
+  </style>
+</head>
+<body>
+<h1>Ternpike — Mock Data Seeder</h1>
+<div id="log"></div>
+<div id="done">✓ Done! Close this tab and reload the app.</div>
+
+<script>
+const db = new PouchDB('ternpike', { auto_compaction: true })
+
+const logEl = document.getElementById('log')
+function log(msg, cls = '') {
+  const span = document.createElement('span')
+  span.className = cls
+  span.textContent = msg + '\n'
+  logEl.appendChild(span)
+}
+
+// ── ID helpers ──────────────────────────────────────────────────────────────
+
+let seq = 0
+function makeId(prefix, date) {
+  const iso = new Date(date).toISOString()
+  const rand = (Date.now() + seq++).toString(36).slice(-8).padStart(8, '0')
+  return `${prefix}::${iso}::${rand}`
+}
+
+// ── Data tables ─────────────────────────────────────────────────────────────
+
+const MERCHANTS = {
+  fuel:       ['Shell', 'Petro Canada', 'Tesoro', 'Chevron', 'Husky', 'Esso', 'Exxon', 'Flying J', 'Sinclair', 'BP'],
+  food:       ["McDonald's", "Tim Hortons", "Subway", "Local Diner", "Pioneer Café", "Northern Lights Rest.", "Bear Country Grill", "Fireweed Café", "Gold Rush Diner", "Moose Tooth Deli", "Klondike Kitchen", "Frontier Restaurant", "Arctic Bar & Grill", "Wendy's", "Buckshot Betty's", "Sourdough Saloon", "Salmon Bake", "Road House Kitchen"],
+  lodging:    ["Best Western", "Days Inn", "Super 8", "Holiday Inn Express", "Comfort Inn", "Northern Inn", "Frontier Lodge", "Pioneer Motel", "River View Inn", "Mountain View Motel", "Alaskan Motel", "Yukon Gold Inn"],
+  activities: ["Denali NP Bus Tour", "Glacier Bay Kayak", "Dog Sled Tour", "Gold Panning", "Northern Lights Tour", "Whale Watching", "Zip Line", "ATV Rental", "Helicopter Tour", "Flightseeing", "Ice Fishing Guide", "Bear Viewing Float"],
+  camp:       ["Tok RV Park", "Tetlin Jct Campground", "Delta Jct Campsite", "Fairbanks Kampground", "Denali Backcountry", "Kluane Lake CG", "Watson Lake CG", "Liard Hot Springs CG", "Dawson City CG", "McCarthy CG", "Haines Jct CG", "Destruction Bay CG"],
+  ferry:      ["Alaska Marine Highway", "BC Ferries", "Lynn Canal Ferry"],
+  medical:    ["Watson Lake Pharmacy", "Whitehorse Urgent Care", "Fairbanks Clinic", "Anchorage Pharmacy", "Tok First Aid"],
+  misc:       ["Laundromat", "Car Wash", "ATM Fee", "Parking", "Campfire Wood", "Propane Refill", "Tire Repair"],
+  parks:      ["Denali NP Entry", "Kluane NP Entry", "Wrangell-St. Elias", "Klondike Gold Rush NHP", "Kenai Fjords NP", "Glacier Bay NP"],
+  shopping:   ["Walmart", "Fred Meyer", "Costco", "Canadian Tire", "Local Gift Shop", "Carrs-Safeway", "Three Bears Alaska", "Dollar Tree"],
+  transport:  ["Airport Shuttle", "Lyft", "Bus Ticket", "Rental Car"],
+  gear:       ["REI", "Bass Pro Shops", "MEC", "Cabela's", "Alaska Mountaineering", "Fred Meyer Sporting"],
+}
+
+const AMOUNTS = {
+  fuel:       [58, 65, 71, 75, 78, 82, 88, 91, 95, 105, 112],
+  food:       [8, 9, 11, 12, 14, 15, 17, 18, 21, 24, 27, 32, 38, 44, 52],
+  lodging:    [79, 85, 89, 95, 99, 105, 109, 115, 119, 125, 139, 149, 159, 165],
+  activities: [35, 45, 65, 75, 85, 95, 120, 145, 165, 195, 225, 260, 295, 350],
+  camp:       [15, 18, 20, 22, 24, 25, 28, 30, 35],
+  ferry:      [175, 245, 380, 425, 520],
+  medical:    [12, 28, 42, 65, 85, 110],
+  misc:       [5, 8, 10, 12, 15, 18, 22, 28, 35],
+  parks:      [15, 20, 25, 30, 35, 45],
+  shopping:   [22, 35, 45, 58, 68, 85, 95, 115, 135, 155, 185],
+  transport:  [25, 35, 55, 75, 85, 120],
+  gear:       [35, 45, 58, 75, 85, 110, 135, 165, 210, 255, 310],
+}
+
+const NOTES = {
+  fuel:       ["Long stretch ahead", "Tank nearly empty", "Prices high this far north", "Filled up at last chance", "Topped off before the pass", "Diesel only available here"],
+  food:       ["Quick stop", "Late lunch", "Breakfast before driving", "Happy hour special", "Great local spot", "Bit pricey but worth it", "Only option in town", "All-you-can-eat salmon!", "Best pie on the highway", "Grabbed snacks for the road"],
+  lodging:    ["Nice hot shower after camping", "Had a kitchenette", "Noisy but clean", "Needed a real bed", "Pool and laundry onsite", "Free breakfast", "Pet friendly"],
+  activities: ["Incredible experience", "Worth every penny", "Kids loved it", "Bucket list item", "Saw grizzlies!", "Clear skies finally", "Booked last minute"],
+  camp:       ["Great site", "Quiet spot", "Fire ring and picnic table", "Bear box required", "No hookups", "Full hookups available", "Right on the river"],
+  ferry:      ["Overnight crossing", "Beautiful scenery", "Cabin upgrade", "Vehicle + 2 passengers"],
+  medical:    ["Altitude headache meds", "Blister supplies", "Minor sprain", "Stomach bug supplies", "Prescription refill"],
+  misc:       ["Three loads of laundry", "Quick rinse", "Forgot to bring cash", "Paid for full day", "Running low on propane", "Nail in tire"],
+  parks:      ["7-day pass", "Annual pass", "Day use fee", "Shuttle included"],
+  shopping:   ["Resupply run", "Forgot sunscreen", "Souvenir run", "Stocked up on snacks", "Warm layer needed", "Bear spray", "Local art"],
+  transport:  ["To/from trailhead", "Shuttle to ferry", "Car transport"],
+  gear:       ["Rain pants finally", "Replaced broken pole", "Camp chair upgrade", "Bear canister rental", "Waterproof boots", "Extra fuel canister"],
+}
+
+// Alaska Highway / Pacific NW waypoints [lat, lon, location name]
+const TRIP1_WAYPOINTS = [
+  [55.76, -120.24, "Dawson Creek, BC"],
+  [56.24, -121.60, "Fort St. John, BC"],
+  [57.04, -122.69, "Fort Nelson, BC"],
+  [60.06, -128.71, "Watson Lake, YT"],
+  [60.72, -135.05, "Whitehorse, YT"],
+  [61.06, -138.41, "Haines Junction, YT"],
+  [63.34, -142.99, "Tok, AK"],
+  [63.74, -145.55, "Delta Junction, AK"],
+  [64.84, -147.72, "Fairbanks, AK"],
+  [63.73, -148.91, "Denali NP, AK"],
+  [62.10, -150.02, "Talkeetna, AK"],
+  [61.22, -149.90, "Anchorage, AK"],
+  [59.55, -151.27, "Homer, AK"],
+  [60.54, -151.27, "Kenai, AK"],
+  [60.13, -149.44, "Seward, AK"],
+  [61.54, -149.57, "Wasilla, AK"],
+  [62.96, -145.58, "Glennallen, AK"],
+  [61.43, -142.91, "McCarthy, AK"],
+]
+
+const TRIP2_WAYPOINTS = [
+  [47.61, -122.33, "Seattle, WA"],
+  [47.04, -122.90, "Olympia, WA"],
+  [46.62, -123.93, "Aberdeen, WA"],
+  [46.97, -124.11, "Ocean Shores, WA"],
+  [45.52, -123.84, "Tillamook, OR"],
+  [45.52, -122.68, "Portland, OR"],
+  [44.94, -123.03, "Salem, OR"],
+  [44.05, -123.09, "Eugene, OR"],
+  [42.33, -122.87, "Medford, OR"],
+  [41.66, -124.20, "Crescent City, CA"],
+  [40.80, -124.16, "Eureka, CA"],
+  [39.75, -123.83, "Fort Bragg, CA"],
+  [38.30, -122.30, "Napa Valley, CA"],
+  [37.78, -122.42, "San Francisco, CA"],
+  [46.19, -122.19, "Mt. St. Helens, WA"],
+  [45.37, -121.70, "Mt. Hood, OR"],
+  [47.60, -120.66, "Leavenworth, WA"],
+]
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)] }
+function pickAmount(cat) { const a = AMOUNTS[cat]; return a[Math.floor(Math.random() * a.length)] }
+function maybePick(arr, prob = 0.6) { return Math.random() < prob ? pick(arr) : '' }
+
+function interpolateWaypoint(waypoints, dayIndex, totalDays) {
+  const t = dayIndex / Math.max(totalDays - 1, 1)
+  const rawIdx = t * (waypoints.length - 1)
+  const i = Math.min(Math.floor(rawIdx), waypoints.length - 2)
+  const f = rawIdx - i
+  const [lat1, lon1] = waypoints[i]
+  const [lat2, lon2] = waypoints[i + 1]
+  const jitter = () => (Math.random() - 0.5) * 0.05
+  return [lat1 + (lat2 - lat1) * f + jitter(), lon1 + (lon2 - lon1) * f + jitter()]
+}
+
+// ── Daily schedule generator ─────────────────────────────────────────────────
+
+function dailyExpenses(dateStr, dayIndex, totalDays, tripId, waypoints) {
+  const docs = []
+  const [lat, lon] = interpolateWaypoint(waypoints, dayIndex, totalDays)
+
+  function expense(cat, overrides = {}) {
+    const merchant = pick(MERCHANTS[cat])
+    const amount   = pickAmount(cat)
+    const note     = maybePick(NOTES[cat], 0.5)
+    const id = makeId('expense', dateStr)
+    return {
+      _id:       id,
+      type:      'expense',
+      tripId,
+      amount,
+      category:  cat,
+      date:      dateStr,
+      merchant,
+      note,
+      longNote:  '',
+      createdAt: new Date(dateStr).toISOString(),
+      lat,
+      lon,
+      ...overrides,
+    }
+  }
+
+  const driving = Math.random() < 0.70  // 70% of days are driving days
+
+  // Fuel every 2-3 driving days
+  if (driving && dayIndex % 2 === 0) {
+    docs.push(expense('fuel'))
+  }
+
+  // Breakfast (50% of days — sometimes skip)
+  if (Math.random() < 0.50) {
+    docs.push(expense('food'))
+  }
+
+  // Lunch (80% of days)
+  if (Math.random() < 0.80) {
+    docs.push(expense('food'))
+  }
+
+  // Dinner (90% of days)
+  if (Math.random() < 0.90) {
+    docs.push(expense('food'))
+  }
+
+  // Overnight: camp (40%) vs lodging (50%) vs nothing extra (10%)
+  const r = Math.random()
+  if (r < 0.40) {
+    docs.push(expense('camp'))
+  } else if (r < 0.90) {
+    docs.push(expense('lodging'))
+  }
+
+  // Activities: ~every 3rd day
+  if (dayIndex % 3 === 1 && Math.random() < 0.65) {
+    docs.push(expense('activities'))
+  }
+
+  // Parks: ~every 5th day
+  if (dayIndex % 5 === 2 && Math.random() < 0.7) {
+    docs.push(expense('parks'))
+  }
+
+  // Shopping resupply: ~every 4th day
+  if (dayIndex % 4 === 0 && Math.random() < 0.6) {
+    docs.push(expense('shopping'))
+  }
+
+  // Misc (laundry, propane, etc.): random
+  if (Math.random() < 0.20) {
+    docs.push(expense('misc'))
+  }
+
+  // Gear purchase: occasional
+  if (Math.random() < 0.08) {
+    docs.push(expense('gear'))
+  }
+
+  // Medical: rare
+  if (Math.random() < 0.04) {
+    docs.push(expense('medical'))
+  }
+
+  // Ferry: a few times per trip
+  if (dayIndex === 5 || dayIndex === 22 || dayIndex === 38) {
+    docs.push(expense('ferry'))
+  }
+
+  return docs
+}
+
+// ── Date range helpers ───────────────────────────────────────────────────────
+
+function dateRange(startStr, endStr) {
+  const dates = []
+  const cur = new Date(startStr)
+  const end = new Date(endStr)
+  while (cur <= end) {
+    dates.push(cur.toISOString().slice(0, 10))
+    cur.setDate(cur.getDate() + 1)
+  }
+  return dates
+}
+
+// ── Build all docs ───────────────────────────────────────────────────────────
+
+async function seed() {
+  log('── Checking existing data ──────────────────────────────────────', 'hdr')
+  const existing = await db.allDocs()
+  if (existing.rows.length > 0) {
+    log(`Found ${existing.rows.length} existing docs. Proceeding (will skip conflicts).`, 'ok')
+  } else {
+    log('Database is empty — seeding from scratch.', 'ok')
+  }
+
+  // ── Trip 1: Alaska Highway Adventure ─────────────────────────────────────
+  log('\n── Trip 1: Alaska Highway Adventure ─────────────────────────────', 'hdr')
+  const trip1Start = '2026-03-15'
+  const trip1End   = '2026-04-27'
+  const trip1Id    = makeId('trip', trip1Start)
+  const trip1 = {
+    _id:           trip1Id,
+    type:          'trip',
+    budget:        8500,
+    coverPhotoUrl: '',
+    description:   'Full run of the Alaska Highway from Dawson Creek to Anchorage, with side trips to Denali and Homer.',
+    endDate:       trip1End,
+    name:          'Alaska Highway Adventure',
+    startDate:     trip1Start,
+  }
+
+  // ── Trip 2: Pacific Northwest Coastal Loop ────────────────────────────────
+  log('── Trip 2: Pacific Northwest Coastal Loop ────────────────────────', 'hdr')
+  const trip2Start = '2026-04-28'
+  const trip2End   = '2026-05-19'
+  const trip2Id    = makeId('trip', trip2Start)
+  const trip2 = {
+    _id:           trip2Id,
+    type:          'trip',
+    budget:        4200,
+    coverPhotoUrl: '',
+    description:   'Seattle south to San Francisco along Highway 101, then back north through the Cascades.',
+    endDate:       trip2End,
+    name:          'Pacific Northwest Coastal Loop',
+    startDate:     trip2Start,
+  }
+
+  // Generate expenses
+  const allDocs = [trip1, trip2]
+
+  const trip1Dates = dateRange(trip1Start, trip1End)
+  const trip2Dates = dateRange(trip2Start, trip2End)
+
+  log(`Generating expenses for ${trip1Dates.length} days of Trip 1...`)
+  for (let i = 0; i < trip1Dates.length; i++) {
+    const expenses = dailyExpenses(trip1Dates[i], i, trip1Dates.length, trip1Id, TRIP1_WAYPOINTS)
+    allDocs.push(...expenses)
+  }
+
+  log(`Generating expenses for ${trip2Dates.length} days of Trip 2...`)
+  for (let i = 0; i < trip2Dates.length; i++) {
+    const expenses = dailyExpenses(trip2Dates[i], i, trip2Dates.length, trip2Id, TRIP2_WAYPOINTS)
+    allDocs.push(...expenses)
+  }
+
+  // ── Add a handful of amendments (edits) ──────────────────────────────────
+  const expenseDocs = allDocs.filter(d => d.type === 'expense')
+  const amendTargets = [expenseDocs[3], expenseDocs[10], expenseDocs[25], expenseDocs[60], expenseDocs[90]]
+  for (const target of amendTargets) {
+    if (!target) continue
+    const amendId = makeId('amend', target.date)
+    allDocs.push({
+      _id:       amendId,
+      type:      'amend',
+      targetId:  target._id,
+      createdAt: new Date(target.date + 'T12:00:00Z').toISOString(),
+      amount:    target.amount + 5,
+      note:      'Corrected amount',
+    })
+  }
+
+  // ── Add a handful of voids (soft deletes) ────────────────────────────────
+  const voidTargets = [expenseDocs[7], expenseDocs[40], expenseDocs[75]]
+  for (const target of voidTargets) {
+    if (!target) continue
+    allDocs.push({
+      _id:       `void::${target._id}::del`,
+      type:      'void',
+      targetId:  target._id,
+      createdAt: new Date(target.date + 'T12:00:00Z').toISOString(),
+    })
+  }
+
+  log(`\nTotal documents to insert: ${allDocs.length}`)
+
+  // ── Bulk insert with conflict handling ────────────────────────────────────
+  let inserted = 0
+  let skipped  = 0
+  let errors   = 0
+  const BATCH  = 50
+
+  for (let i = 0; i < allDocs.length; i += BATCH) {
+    const batch = allDocs.slice(i, i + BATCH)
+    const result = await db.bulkDocs(batch)
+    for (const r of result) {
+      if (r.ok)                   { inserted++ }
+      else if (r.status === 409)  { skipped++ }
+      else                        { errors++; log(`  Error: ${r.message}`, 'err') }
+    }
+    log(`  Batch ${Math.floor(i/BATCH)+1}: ${Math.min(i+BATCH, allDocs.length)} / ${allDocs.length} processed`)
+  }
+
+  log(`\n✓ Inserted: ${inserted}  Skipped (already exist): ${skipped}  Errors: ${errors}`, 'ok')
+
+  // Summary breakdown
+  const types = {}
+  for (const d of allDocs) { types[d.type] = (types[d.type] || 0) + 1 }
+  log('\nBreakdown:')
+  for (const [t, n] of Object.entries(types)) {
+    log(`  ${t.padEnd(8)} ${n}`)
+  }
+  const cats = {}
+  for (const d of allDocs.filter(d => d.type === 'expense')) {
+    cats[d.category] = (cats[d.category] || 0) + 1
+  }
+  log('\nExpense categories:')
+  for (const [c, n] of Object.entries(cats)) {
+    log(`  ${c.padEnd(12)} ${n}`)
+  }
+
+  document.getElementById('done').style.display = 'block'
+}
+
+seed().catch(err => log('Fatal: ' + err, 'err'))
+</script>
+</body>
+</html>
