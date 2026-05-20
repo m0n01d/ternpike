@@ -361,16 +361,6 @@ verifyCode email gs =
         )
 
 
-selectedTripPath : AuthState -> Tab -> String
-selectedTripPath as_ tab =
-    case as_.trips of
-        TripsLoaded trips ->
-            Routing.tabToPath as_.basePath (Trips.selectedTrip trips).id tab
-
-        _ ->
-            as_.basePath ++ "trips"
-
-
 handleTripsLoaded : AuthState -> ( Model, Cmd Msg )
 handleTripsLoaded as_ =
     case as_.trips of
@@ -1061,7 +1051,7 @@ updateAuth msg as_ =
                         }
                     , Cmd.batch
                         [ sendPouch (SaveAmend (Amendment.encoder amend))
-                        , Nav.pushUrl as_.key (selectedTripPath as_ nextTab)
+                        , Nav.pushUrl as_.key (Routing.pathForCurrentTab as_ nextTab)
                         ]
                     )
 
@@ -1107,7 +1097,7 @@ updateAuth msg as_ =
                             }
                         , Cmd.batch
                             [ sendPouch (SaveExpense (Expense.encoder expense))
-                            , Nav.pushUrl as_.key (selectedTripPath as_ nextTab)
+                            , Nav.pushUrl as_.key (Routing.pathForCurrentTab as_ nextTab)
                             ]
                         )
 
@@ -1137,55 +1127,8 @@ updateAuth msg as_ =
                 )
             )
 
-        EditEntry expense ->
-            ( AuthModel
-                { as_
-                    | editingEntry = Just expense
-                    , error        = Nothing
-                    , pendingEntry = expenseToPending expense
-                    , tab          = AddTab
-                }
-            , Nav.pushUrl as_.key (Routing.editEntryPath as_.basePath expense.tripId expense.id)
-            )
-
-        CancelEdit ->
-            ( AuthModel
-                { as_
-                    | editingEntry     = Nothing
-                    , pendingEntryId = Nothing
-                    , pendingEntry     = defaultPendingEntry as_.today
-                    , tab              = LedgerTab
-                }
-            , Nav.pushUrl as_.key (selectedTripPath as_ LedgerTab)
-            )
-
-        TabChanged tab ->
-            let
-                geoCmd =
-                    if tab == AddTab && not as_.geoBlocked then requestGeolocation () else Cmd.none
-
-                basePending =
-                    if tab == AddTab && as_.editingEntry /= Nothing then
-                        defaultPendingEntry as_.today
-                    else
-                        as_.pendingEntry
-
-                newPending =
-                    if tab == AddTab && not as_.geoBlocked then
-                        setLocation LocationFetching basePending
-                    else
-                        basePending
-            in
-            ( AuthModel
-                { as_
-                    | editingEntry     = Nothing
-                    , pendingEntryId = Nothing
-                    , pendingEntry     = newPending
-                    , tab              = tab
-                    , tripForm         = Nothing
-                }
-            , Cmd.batch [ geoCmd, Nav.pushUrl as_.key (selectedTripPath as_ tab) ]
-            )
+        CloseTripForm ->
+            ( AuthModel { as_ | tripForm = Nothing }, Cmd.none )
 
         RefreshClicked ->
             case as_.trips of
@@ -1295,31 +1238,6 @@ updateAuth msg as_ =
             ( AuthModel { as_ | scanQueue = Dict.filter (\_ i -> i.status /= ScanSubmitted) as_.scanQueue }
             , Cmd.none
             )
-
-        SelectTrip tripId ->
-            case as_.trips of
-                TripsLoaded trips ->
-                    case Trips.findTrip tripId trips of
-                        Just _ ->
-                            ( AuthModel
-                                { as_
-                                    | editingEntry  = Nothing
-                                    , expensesState = ExpensesLoading
-                                    , pendingEntry  = defaultPendingEntry as_.today
-                                    , tab           = LedgerTab
-                                    , trips         = TripsLoaded (Trips.selectTrip tripId trips)
-                                }
-                            , Cmd.batch
-                                [ sendPouch (GetExpenses (TripId.toString tripId))
-                                , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tripId LedgerTab)
-                                ]
-                            )
-
-                        Nothing ->
-                            ( AuthModel as_, Cmd.none )
-
-                _ ->
-                    ( AuthModel as_, Cmd.none )
 
         OpenNewTripForm ->
             ( AuthModel
@@ -1600,15 +1518,24 @@ updateAuth msg as_ =
                         geoCmd =
                             if tab == AddTab && not as_.geoBlocked then requestGeolocation () else Cmd.none
 
+                        leavingEdit =
+                            as_.editingEntry /= Nothing
+
+                        resetPending =
+                            tripChanged || leavingEdit
+
+                        basePending =
+                            if resetPending then defaultPendingEntry as_.today else as_.pendingEntry
+
                         newPending =
                             if tab == AddTab && not as_.geoBlocked then
-                                setLocation LocationFetching as_.pendingEntry
+                                setLocation LocationFetching basePending
                             else
-                                as_.pendingEntry
+                                basePending
                     in
                     ( AuthModel
                         { as_
-                            | editingEntry     = if tab /= AddTab then Nothing else as_.editingEntry
+                            | editingEntry     = Nothing
                             , expensesState    = if tripChanged then ExpensesLoading else as_.expensesState
                             , pendingEntryId   = Nothing
                             , pendingEntry     = newPending
@@ -1669,7 +1596,7 @@ viewAuth as_ =
                 , route   = route
                 }
             ]
-        , UI.Layout.viewBottomNav as_.tab
+        , UI.Layout.viewBottomNav as_
         , case as_.confirmDeleteTrip of
             Just trip -> UI.Layout.viewDeleteConfirmModal trip
             Nothing   -> Html.text ""

@@ -1,6 +1,7 @@
 module UI.Button exposing
     ( danger
     , ghost
+    , ghostLink
     , iconButton
     , primary
     , primaryBusy
@@ -28,6 +29,15 @@ ghost { label, onClick } =
         [ Html.Attributes.type_ "button"
         , Html.Events.onClick onClick
         , Html.Attributes.class "bg-transparent border border-tan text-moss font-mono uppercase tracking-widest text-xs px-4 py-2 rounded-lg cursor-pointer hover:text-forest hover:border-moss"
+        ]
+        [ Html.text label ]
+
+
+ghostLink : { href : String, label : String } -> Html msg
+ghostLink { href, label } =
+    Html.a
+        [ Html.Attributes.href href
+        , Html.Attributes.class "inline-block border border-tan text-moss font-mono uppercase tracking-widest text-xs px-4 py-2 rounded-lg cursor-pointer hover:text-forest hover:border-moss"
         ]
         [ Html.text label ]
 

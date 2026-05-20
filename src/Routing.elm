@@ -1,6 +1,7 @@
 module Routing exposing
     ( editEntryPath
     , effectiveRoute
+    , pathForCurrentTab
     , routeFromUrl
     , routeParser
     , routeTitle
@@ -146,3 +147,13 @@ editEntryPath basePath tripId entryId =
         ++ "/ledger/"
         ++ ExpenseId.toString entryId
         ++ "/edit"
+
+
+pathForCurrentTab : AuthState -> Tab -> String
+pathForCurrentTab as_ tab =
+    case as_.trips of
+        TripsLoaded trips ->
+            tabToPath as_.basePath (Trips.selectedTrip trips).id tab
+
+        _ ->
+            as_.basePath ++ "trips"

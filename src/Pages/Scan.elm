@@ -7,6 +7,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Json.Decode
+import Routing
 import Types exposing (AuthState, Msg(..), OcrData, ScanItem, ScanStatus(..), Tab(..))
 import UI.Button
 import UI.Icons
@@ -49,9 +50,9 @@ viewBody model =
                 [ Html.text "Stack's empty." ]
             , Html.p [ Html.Attributes.class "mt-1 text-sm text-muted" ]
                 [ Html.text "Snap a receipt to begin." ]
-            , Html.button
-                [ Html.Events.onClick (TabChanged AddTab)
-                , Html.Attributes.class "mt-4 inline-block py-2 px-4 rounded-lg border border-tan text-muted text-sm cursor-pointer bg-transparent"
+            , Html.a
+                [ Html.Attributes.href (Routing.pathForCurrentTab model AddTab)
+                , Html.Attributes.class "mt-4 inline-block py-2 px-4 rounded-lg border border-tan text-muted text-sm cursor-pointer"
                 ]
                 [ Html.text "Fill in manually \u{2192}" ]
             ]

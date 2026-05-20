@@ -9,6 +9,7 @@ import Html.Attributes
 import Html.Events
 import Html.Keyed as Keyed
 import Json.Decode
+import Routing
 import Types exposing (..)
 import UI.Button
 import UI.Icons
@@ -110,7 +111,7 @@ viewBody model =
                     viewEmptyState
 
                 ExpensesReady entries ->
-                    viewEntries entries
+                    viewEntries model.basePath entries
     in
     Html.div []
         [ case model.expensesState of
@@ -130,8 +131,8 @@ viewError err =
         [ Html.text ("Couldn't load expenses: " ++ err) ]
 
 
-viewEntries : List Entry.EffectiveEntry -> Html Msg
-viewEntries entries =
+viewEntries : String -> List Entry.EffectiveEntry -> Html Msg
+viewEntries basePath entries =
     let
         dates =
             Entry.uniqueDates entries
@@ -152,7 +153,7 @@ viewEntries entries =
                 , Keyed.node "div"
                     [ Html.Attributes.class "animate-stagger-row" ]
                     (List.map
-                        (\e -> ( ExpenseId.toString e.id, viewEntryRow e ))
+                        (\e -> ( ExpenseId.toString e.id, viewEntryRow basePath e ))
                         dayEntries
                     )
                 ]
@@ -187,8 +188,8 @@ viewLedgerMap model entries =
         Html.text ""
 
 
-viewEntryRow : Entry.EffectiveEntry -> Html Msg
-viewEntryRow entry =
+viewEntryRow : String -> Entry.EffectiveEntry -> Html Msg
+viewEntryRow basePath entry =
     let
         primaryLabel =
             if entry.merchant /= "" then
@@ -200,9 +201,9 @@ viewEntryRow entry =
             else
                 Category.label entry.category
     in
-    Html.button
-        [ Html.Events.onClick (EditEntry (effectiveEntryToExpense entry))
-        , Html.Attributes.class "w-full text-left py-3 border-b border-dashed border-tan/70 flex items-baseline gap-3 bg-transparent border-l-0 border-r-0 border-t-0 cursor-pointer"
+    Html.a
+        [ Html.Attributes.href (Routing.editEntryPath basePath entry.tripId entry.id)
+        , Html.Attributes.class "w-full text-left py-3 border-b border-dashed border-tan/70 flex items-baseline gap-3 cursor-pointer text-ink"
         ]
         [ Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
             [ Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
@@ -227,7 +228,13 @@ viewEntryRow entry =
             [ Html.Attributes.class "font-mono text-base text-forest tabular-nums shrink-0" ]
             [ Html.text (formatAmount entry.amount) ]
         , Html.span
-            [ Html.Events.stopPropagationOn "click" (Json.Decode.succeed ( VoidEntry (effectiveEntryToExpense entry), True ))
+            [ Html.Events.custom "click"
+                (Json.Decode.succeed
+                    { message = VoidEntry (effectiveEntryToExpense entry)
+                    , preventDefault = True
+                    , stopPropagation = True
+                    }
+                )
             , Html.Attributes.class "text-rust shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center cursor-pointer"
             ]
             [ UI.Icons.close "w-4 h-4" ]

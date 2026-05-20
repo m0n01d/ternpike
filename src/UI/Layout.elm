@@ -26,6 +26,14 @@ import UI.Mascot
 
 viewHeader : AuthState -> Html Msg
 viewHeader as_ =
+    let
+        settingsHref =
+            if as_.tab == SettingsTab then
+                Routing.pathForCurrentTab as_ LedgerTab
+
+            else
+                as_.basePath ++ "settings"
+    in
     Html.div
         [ Html.Attributes.class "sticky top-0 z-10 h-14 flex items-center justify-between px-5 border-b bg-cream border-moss/25" ]
         [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
@@ -43,15 +51,10 @@ viewHeader as_ =
             ]
         , Html.div [ Html.Attributes.class "flex items-center gap-3" ]
             [ viewSyncBadge as_.syncState
-            , Html.button
-                [ Html.Events.onClick
-                    (if as_.tab == SettingsTab then
-                        TabChanged LedgerTab
-                     else
-                        TabChanged SettingsTab
-                    )
+            , Html.a
+                [ Html.Attributes.href settingsHref
                 , Html.Attributes.class
-                    ("bg-transparent border-none cursor-pointer px-2 py-1 "
+                    ("inline-flex items-center px-2 py-1 "
                         ++ (if as_.tab == SettingsTab then "text-rust" else "text-muted")
                     )
                 ]
@@ -113,11 +116,11 @@ viewSyncBadge state =
                 [ Html.text "●" ]
 
 
-viewBottomNav : Tab -> Html Msg
-viewBottomNav currentTab =
+viewBottomNav : AuthState -> Html Msg
+viewBottomNav as_ =
     Html.nav
         [ Html.Attributes.class "fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10" ]
-        (List.map (viewNavTab currentTab)
+        (List.map (viewNavTab as_)
             [ ( ScanTab, UI.Icons.camera, "Scan" )
             , ( AddTab, UI.Icons.plus, "Add" )
             , ( LedgerTab, UI.Icons.journal, "Ledger" )
@@ -127,11 +130,11 @@ viewBottomNav currentTab =
         )
 
 
-viewNavTab : Tab -> ( Tab, String -> Svg.Svg Msg, String ) -> Html Msg
-viewNavTab currentTab ( tab, iconFn, label_ ) =
+viewNavTab : AuthState -> ( Tab, String -> Svg.Svg Msg, String ) -> Html Msg
+viewNavTab as_ ( tab, iconFn, label_ ) =
     let
         isActive =
-            currentTab == tab
+            as_.tab == tab
 
         indicator =
             if isActive then
@@ -142,10 +145,10 @@ viewNavTab currentTab ( tab, iconFn, label_ ) =
             else
                 []
     in
-    Html.button
-        [ Html.Events.onClick (TabChanged tab)
+    Html.a
+        [ Html.Attributes.href (Routing.pathForCurrentTab as_ tab)
         , Html.Attributes.class
-            ("relative flex-1 bg-transparent border-none py-2.5 px-1 flex flex-col items-center gap-0.5 cursor-pointer min-h-[56px] "
+            ("relative flex-1 py-2.5 px-1 flex flex-col items-center gap-0.5 cursor-pointer min-h-[56px] "
                 ++ (if isActive then "text-rust" else "text-muted")
             )
         ]

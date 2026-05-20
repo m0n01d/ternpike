@@ -211,16 +211,15 @@ type Msg
     | ApiKeyChanged String
     | BackToQueue
     | CancelDeleteTrip
-    | CancelEdit
     | CategorySelected Category
     | ClearDoneItems
+    | CloseTripForm
     | CodeInputChanged String
     | ConfirmDeleteTrip Trip
     | DateChanged String
     | DeleteTrip Trip
     | DismissError
     | DismissMapPicker
-    | EditEntry Expense
     | EmailInputChanged String
     | FilesSelected (List File)
     | GeolocationDenied
@@ -244,17 +243,15 @@ type Msg
     | ResetSettingsClicked
     | ReviewScanItem String
     | SaveTripForm
-    | SelectTrip TripId
     | ShowToast String
     | SignOutClicked
     | SkipLocation
     | SubmitCode
     | SubmitEmail
     | SubmitEntry
-    | TabChanged Tab
+    | ToastExpired
     | ToggleGuestSettings
     | ToggleLedgerMap
-    | ToastExpired
     | TripFieldChanged TripField String
     | UrlChanged Url.Url
     | VerifyCodeResult (Result Http.Error Creds)

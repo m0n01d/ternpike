@@ -7,6 +7,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Json.Decode
+import Routing
 import Types exposing (..)
 import UI.Button
 import UI.Card
@@ -28,7 +29,7 @@ viewActions model =
         [ UI.Button.ghost { label = "← queue", onClick = BackToQueue } ]
 
     else if model.editingEntry /= Nothing then
-        [ UI.Button.ghost { label = "← cancel", onClick = CancelEdit } ]
+        [ UI.Button.ghostLink { href = Routing.pathForCurrentTab model LedgerTab, label = "← cancel" } ]
 
     else
         []

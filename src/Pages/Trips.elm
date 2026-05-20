@@ -6,6 +6,7 @@ import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Routing
 import Types exposing (AuthState, ExpensesState(..), Msg(..), Tab(..), TripsState(..))
 import UI.Button
 import UI.Icons
@@ -221,7 +222,7 @@ viewBody as_ =
     Html.div []
         [ if not (List.isEmpty others) then
             Html.div [ Html.Attributes.class "mb-5" ]
-                (List.map viewOtherTripRow others)
+                (List.map (viewOtherTripRow as_.basePath) others)
 
           else
             Html.text ""
@@ -240,10 +241,10 @@ viewBody as_ =
         ]
 
 
-viewOtherTripRow : Trip -> Html Msg
-viewOtherTripRow trip =
-    Html.button
-        [ Html.Events.onClick (SelectTrip trip.id)
+viewOtherTripRow : String -> Trip -> Html Msg
+viewOtherTripRow basePath trip =
+    Html.a
+        [ Html.Attributes.href (Routing.tabToPath basePath trip.id LedgerTab)
         , Html.Attributes.class "w-full bg-cream border border-tan rounded-xl px-4 py-3.5 mb-2 flex justify-between items-center cursor-pointer text-ink hover:shadow-card-hover transition-shadow"
         ]
         [ Html.div [ Html.Attributes.class "text-left" ]
@@ -347,7 +348,7 @@ viewTripForm form =
                 ]
                 [ Html.text "Save" ]
             , Html.button
-                [ Html.Events.onClick (TabChanged TripsTab)
+                [ Html.Events.onClick CloseTripForm
                 , Html.Attributes.class "flex-1 bg-transparent text-muted border border-tan rounded-lg py-3 text-[15px] cursor-pointer"
                 ]
                 [ Html.text "Cancel" ]
