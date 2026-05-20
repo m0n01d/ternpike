@@ -8,7 +8,10 @@ import Html.Attributes
 import Html.Events
 import Json.Decode
 import Types exposing (..)
+import UI.Button
+import UI.Card
 import UI.Layout
+import UI.Rule
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -22,20 +25,10 @@ viewTab as_ =
 viewActions : AuthState -> List (Html Msg)
 viewActions model =
     if model.activeScanItemId /= Nothing then
-        [ Html.button
-            [ Html.Events.onClick BackToQueue
-            , Html.Attributes.class "bg-transparent border-none text-muted text-sm cursor-pointer p-1"
-            ]
-            [ Html.text "← queue" ]
-        ]
+        [ UI.Button.ghost { label = "← queue", onClick = BackToQueue } ]
 
     else if model.editingEntry /= Nothing then
-        [ Html.button
-            [ Html.Events.onClick CancelEdit
-            , Html.Attributes.class "bg-transparent border-none text-muted text-sm cursor-pointer p-1"
-            ]
-            [ Html.text "← cancel" ]
-        ]
+        [ UI.Button.ghost { label = "← cancel", onClick = CancelEdit } ]
 
     else
         []
@@ -43,19 +36,23 @@ viewActions model =
 
 viewHero : AuthState -> Html Msg
 viewHero model =
-    Html.div [ Html.Attributes.class "relative" ]
-        [ Html.span
-            [ Html.Attributes.class "absolute left-3.5 top-1/2 -translate-y-1/2 text-rust text-xl font-mono pointer-events-none" ]
-            [ Html.text "$" ]
-        , Html.input
-            [ Html.Attributes.type_ "number"
-            , Html.Attributes.attribute "inputmode" "decimal"
-            , Html.Attributes.value model.pendingEntry.amount
-            , Html.Events.onInput AmountChanged
-            , Html.Attributes.placeholder "0.00"
-            , Html.Attributes.class "w-full pl-9 text-2xl font-mono bg-transparent border-tan"
+    Html.div [ Html.Attributes.class "py-2" ]
+        [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
+            [ Html.text "AMOUNT" ]
+        , Html.div [ Html.Attributes.class "flex items-baseline gap-2" ]
+            [ Html.span
+                [ Html.Attributes.class "font-display text-6xl font-black text-forest leading-none" ]
+                [ Html.text "$" ]
+            , Html.input
+                [ Html.Attributes.type_ "number"
+                , Html.Attributes.attribute "inputmode" "decimal"
+                , Html.Attributes.value model.pendingEntry.amount
+                , Html.Events.onInput AmountChanged
+                , Html.Attributes.placeholder "0.00"
+                , Html.Attributes.class "w-full bg-transparent border-0 outline-none font-display text-6xl font-black text-forest tabular-nums tracking-tight leading-none"
+                ]
+                []
             ]
-            []
         ]
 
 
@@ -69,72 +66,67 @@ viewBody model =
             model.editingEntry /= Nothing
     in
     Html.div []
-        [ case model.activeScanItemId of
-            Nothing ->
-                Html.text ""
-
-            Just id ->
-                case Dict.get id model.scanQueue of
-                    Just item ->
-                        Html.img
-                            [ Html.Attributes.src item.imageUrl
-                            , Html.Attributes.class "w-full rounded-xl object-contain mb-4 max-h-60 bg-cream"
-                            ]
-                            []
-
-                    Nothing ->
-                        Html.text ""
-        , UI.Layout.formField "CATEGORY"
-            (Html.div [ Html.Attributes.class "grid grid-cols-4 gap-2" ]
-                (List.map (viewCategoryBtn p.category) Category.all)
-            )
-        , UI.Layout.formField "NOTE"
-            (Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value p.note
-                , Html.Events.onInput NoteChanged
-                , Html.Attributes.placeholder "brief (50 chars)"
-                , Html.Attributes.attribute "maxlength" "50"
-                , UI.Layout.textInputStyle
-                ]
-                []
-            )
-        , UI.Layout.formField "DETAILS"
-            (Html.textarea
-                [ Html.Attributes.value p.longNote
-                , Html.Events.onInput LongNoteChanged
-                , Html.Attributes.placeholder "optional — what happened, where, any context (280 chars)"
-                , Html.Attributes.attribute "maxlength" "280"
-                , Html.Attributes.attribute "rows" "3"
-                , Html.Attributes.class "w-full"
-                ]
-                []
-            )
-        , UI.Layout.formField "MERCHANT"
-            (Html.input
-                [ Html.Attributes.type_ "text"
-                , Html.Attributes.value p.merchant
-                , Html.Events.onInput MerchantChanged
-                , Html.Attributes.placeholder "optional"
-                , UI.Layout.textInputStyle
-                ]
-                []
-            )
-        , UI.Layout.formField "DATE"
-            (Html.input
-                [ Html.Attributes.type_ "date"
-                , Html.Attributes.value p.date
-                , Html.Events.onInput DateChanged
-                , UI.Layout.textInputStyle
-                ]
-                []
-            )
-        , viewLocationWidget model
+        [ viewScanPreview model
+        , UI.Rule.kicker "THE BASICS"
+        , UI.Card.subCard
+            [ UI.Layout.formField "CATEGORY"
+                (Html.div [ Html.Attributes.class "grid grid-cols-4 gap-2" ]
+                    (List.map (viewCategoryBtn p.category) Category.all)
+                )
+            , UI.Layout.formField "DATE"
+                (Html.input
+                    [ Html.Attributes.type_ "date"
+                    , Html.Attributes.value p.date
+                    , Html.Events.onInput DateChanged
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
+                )
+            ]
+        , UI.Rule.kicker "WHERE & WHO"
+        , UI.Card.subCard
+            [ UI.Layout.formField "MERCHANT"
+                (Html.input
+                    [ Html.Attributes.type_ "text"
+                    , Html.Attributes.value p.merchant
+                    , Html.Events.onInput MerchantChanged
+                    , Html.Attributes.placeholder "optional"
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
+                )
+            , UI.Layout.formField "LOCATION" (viewLocationWidget model)
+            ]
+        , UI.Rule.kicker "NOTES"
+        , UI.Card.subCard
+            [ UI.Layout.formField "NOTE"
+                (Html.input
+                    [ Html.Attributes.type_ "text"
+                    , Html.Attributes.value p.note
+                    , Html.Events.onInput NoteChanged
+                    , Html.Attributes.placeholder "brief (50 chars)"
+                    , Html.Attributes.attribute "maxlength" "50"
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
+                )
+            , UI.Layout.formField "DETAILS"
+                (Html.textarea
+                    [ Html.Attributes.value p.longNote
+                    , Html.Events.onInput LongNoteChanged
+                    , Html.Attributes.placeholder "optional — what happened, where, any context (280 chars)"
+                    , Html.Attributes.attribute "maxlength" "280"
+                    , Html.Attributes.attribute "rows" "3"
+                    , Html.Attributes.class "w-full"
+                    ]
+                    []
+                )
+            ]
         , Html.button
             [ Html.Events.onClick SubmitEntry
             , Html.Attributes.disabled model.submitting
             , Html.Attributes.class
-                ("w-full bg-rust text-parchment border-none rounded-lg py-[18px] text-lg font-bold tracking-wide cursor-pointer mt-2 min-h-[56px] "
+                ("w-full bg-rust hover:bg-rust-deep text-parchment border-none rounded-lg py-[18px] text-lg font-bold tracking-wide cursor-pointer mt-2 min-h-[56px] "
                     ++ (if model.submitting then "opacity-60 cursor-not-allowed" else "")
                 )
             ]
@@ -150,6 +142,29 @@ viewBody model =
                 )
             ]
         ]
+
+
+viewScanPreview : AuthState -> Html Msg
+viewScanPreview model =
+    case model.activeScanItemId of
+        Nothing ->
+            Html.text ""
+
+        Just id ->
+            case Dict.get id model.scanQueue of
+                Just item ->
+                    Html.div [ Html.Attributes.class "sticky top-0 z-10 mb-4" ]
+                        [ UI.Card.subCard
+                            [ Html.img
+                                [ Html.Attributes.src item.imageUrl
+                                , Html.Attributes.class "w-full rounded-xl object-contain max-h-60 bg-cream"
+                                ]
+                                []
+                            ]
+                        ]
+
+                Nothing ->
+                    Html.text ""
 
 
 viewCategoryBtn : Category -> Category -> Html Msg
@@ -175,7 +190,7 @@ viewCategoryBtn selected cat =
 
 viewLocationWidget : AuthState -> Html Msg
 viewLocationWidget model =
-    Html.div [ Html.Attributes.class "mb-4" ]
+    Html.div []
         [ viewLocationStatus model.pendingEntry.locationState
         , if model.showMapPicker then
             Html.node "map-picker"

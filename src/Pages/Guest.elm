@@ -3,43 +3,53 @@ module Pages.Guest exposing (viewGuest)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Types exposing (..)
 import Pages.Settings
+import Types exposing (..)
+import UI.Button
+import UI.Card
+import UI.Icons
 import UI.Mascot
+import UI.Rule
 
 
 viewGuest : GuestState -> Html Msg
 viewGuest gs =
     Html.div
-        [ Html.Attributes.class "flex flex-col items-center justify-center min-h-screen px-6 py-8 text-center" ]
-        [ UI.Mascot.ternSvg "animate-soar mb-6 w-36"
-        , Html.h1
-            [ Html.Attributes.class "text-4xl font-black font-display tracking-tight mb-2 text-forest" ]
-            [ Html.text "Tern"
-            , Html.span [ Html.Attributes.class "text-rust" ] [ Html.text "pike" ]
+        [ Html.Attributes.class "min-h-screen flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out" ]
+        [ Html.div [ Html.Attributes.class "text-center max-w-sm w-full mb-8" ]
+            [ UI.Mascot.ternSvg "w-32 mx-auto animate-soar"
+            , Html.h1
+                [ Html.Attributes.class "font-display text-5xl font-black tracking-tight mt-4 text-forest" ]
+                [ Html.text "Tern"
+                , Html.span [ Html.Attributes.class "text-rust" ] [ Html.text "pike" ]
+                ]
+            , Html.p
+                [ Html.Attributes.class "font-mono text-[11px] uppercase tracking-widest text-moss mt-3" ]
+                [ Html.text "ROAD LOG FOR THE LONG WAY NORTH" ]
             ]
-        , Html.p [ Html.Attributes.class "text-muted mb-8 text-base" ]
-            [ Html.text "Road log for the long way north" ]
-        , case gs.authError of
-            Just err ->
-                Html.div
-                    [ Html.Attributes.class "w-full max-w-xs mb-4 px-4 py-3 rounded-lg bg-rust-tint border border-rust text-rust text-sm text-left" ]
-                    [ Html.text err ]
+        , UI.Rule.dashedRule
+        , Html.div [ Html.Attributes.class "max-w-sm w-full" ]
+            [ viewFormCard gs ]
+        , viewErrorChip gs
+        , Html.div [ Html.Attributes.class "mt-6 text-center" ]
+            [ UI.Button.ghost { label = "Settings", onClick = ToggleGuestSettings }
+            , if gs.showSettings then
+                Pages.Settings.viewPanel gs.session.config False gs.version
 
-            Nothing ->
-                case gs.session.reason of
-                    SessionExpired ->
-                        Html.div
-                            [ Html.Attributes.class "w-full max-w-xs mb-4 px-4 py-3 rounded-lg bg-rust-tint border border-rust text-rust text-sm text-left" ]
-                            [ Html.text "Session expired — sign in to continue." ]
+              else
+                Html.text ""
+            ]
+        ]
 
-                    _ ->
-                        Html.text ""
-        , case gs.session.reason of
-            AwaitingCode _ ->
-                Html.form
+
+viewFormCard : GuestState -> Html Msg
+viewFormCard gs =
+    case gs.session.reason of
+        AwaitingCode _ ->
+            UI.Card.subCard
+                [ Html.form
                     [ Html.Events.onSubmit SubmitCode
-                    , Html.Attributes.class "w-full max-w-xs"
+                    , Html.Attributes.class "w-full"
                     ]
                     [ Html.p [ Html.Attributes.class "text-muted text-sm mb-4" ]
                         [ Html.text ("A code was sent to " ++ gs.emailInput ++ ". Enter it below.") ]
@@ -51,17 +61,15 @@ viewGuest gs =
                         , Html.Attributes.class "w-full mb-3"
                         ]
                         []
-                    , Html.button
-                        [ Html.Attributes.type_ "submit"
-                        , Html.Attributes.class "w-full bg-rust text-parchment border-none rounded-lg py-4 text-base font-bold cursor-pointer min-h-[52px] tracking-widest"
-                        ]
-                        [ Html.text "VERIFY CODE" ]
+                    , UI.Button.primary { label = "Verify code", onClick = SubmitCode }
                     ]
+                ]
 
-            _ ->
-                Html.form
+        _ ->
+            UI.Card.subCard
+                [ Html.form
                     [ Html.Events.onSubmit SubmitEmail
-                    , Html.Attributes.class "w-full max-w-xs"
+                    , Html.Attributes.class "w-full"
                     ]
                     [ Html.input
                         [ Html.Attributes.type_ "text"
@@ -71,22 +79,27 @@ viewGuest gs =
                         , Html.Attributes.class "w-full mb-3"
                         ]
                         []
-                    , Html.button
-                        [ Html.Attributes.type_ "submit"
-                        , Html.Attributes.class "w-full bg-rust text-parchment border-none rounded-lg py-4 text-base font-bold cursor-pointer min-h-[52px] tracking-widest"
-                        ]
-                        [ Html.text "CONTINUE" ]
+                    , UI.Button.primary { label = "Continue", onClick = SubmitEmail }
                     ]
-        , Html.div [ Html.Attributes.class "mt-12 w-full" ]
-            [ Html.button
-                [ Html.Events.onClick ToggleGuestSettings
-                , Html.Attributes.class "bg-transparent border border-tan text-muted rounded-md px-5 py-2.5 text-sm cursor-pointer"
                 ]
-                [ Html.text "⚙ Settings" ]
-            , if gs.showSettings then
-                Pages.Settings.viewPanel gs.session.config False gs.version
 
-              else
-                Html.text ""
-            ]
-        ]
+
+viewErrorChip : GuestState -> Html Msg
+viewErrorChip gs =
+    let
+        chip msg =
+            Html.div
+                [ Html.Attributes.class "mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rust-tint border border-rust/40 text-rust text-xs font-mono uppercase tracking-wide" ]
+                [ UI.Icons.close "w-3 h-3", Html.text msg ]
+    in
+    case gs.authError of
+        Just err ->
+            chip err
+
+        Nothing ->
+            case gs.session.reason of
+                SessionExpired ->
+                    chip "Session expired — sign in to continue."
+
+                _ ->
+                    Html.text ""

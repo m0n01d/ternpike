@@ -51,6 +51,45 @@
     35%      { transform: translateY(-16px) rotate(1.5deg); }
     70%      { transform: translateY(-8px) rotate(-1deg); }
   }
+
+  /* ── Polish-pass surfaces ──────────────────────────────────── */
+  --color-cream-deep:   #ebe5d4;
+  --color-rust-deep:    #9d4a2c;
+  --color-forest-deep:  #1a2412;
+
+  /* ── Editorial separators ──────────────────────────────────── */
+  --rule-tan:  1px dashed rgb(212 201 168 / 0.7);
+  --rule-moss: 1px solid  rgb(107 124 88 / 0.25);
+
+  /* ── Shadow hover step ─────────────────────────────────────── */
+  --shadow-card-hover: 0 6px 28px rgb(45 58 34 / 0.16);
+
+  /* ── Atmosphere (inline SVG data URIs) ─────────────────────── */
+  --bg-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 0.12  0 0 0 0 0.16  0 0 0 0 0.10  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+
+  /* ── Topo atlas: continuous noise field, contour-banded via feComponentTransfer ──
+     1400×800 canvas. fractalNoise generates a terrain heightmap. discrete alpha table
+     slices the heightmap into thin iso-elevation bands → contour lines that snake and
+     fork like real topographic maps, not concentric rings. Per-route bg-position
+     shows different regions of the same continuous ground. */
+  --bg-topo-atlas: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2400 2000'><defs><filter id='t' x='0%25' y='0%25' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.008 0.011' numOctaves='3' seed='11' result='n'/><feComponentTransfer in='n' result='s'><feFuncA type='discrete' tableValues='0 0 0 0 1 1 1 1 0 0 0 0 1 1 1 1 0 0 0 0 1 1 1 1 0 0 0 0 1 1 1 1'/></feComponentTransfer><feConvolveMatrix in='s' order='3' kernelMatrix='-1 -1 -1 -1 8 -1 -1 -1 -1' divisor='1' preserveAlpha='false' edgeMode='duplicate' result='e'/><feColorMatrix in='e' type='matrix' values='0 0 0 0 0.420  0 0 0 0 0.486  0 0 0 0 0.345  0 0 0 0.20 0'/></filter></defs><rect width='2400' height='2000' fill='black' filter='url(%23t)'/></svg>");
+
+  /* Back-compat alias — anything still using --bg-topo gets the atlas */
+  --bg-topo: var(--bg-topo-atlas);
+
+  /* ── Motion additions ──────────────────────────────────────── */
+  --animate-stagger-row: stagger-row 0.5s ease both;
+  --animate-pulse-soft:  pulse-soft 1.4s ease-in-out infinite;
+
+  @keyframes stagger-row {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 0.35; }
+    50%      { opacity: 0.70; }
+  }
 }
 
 @layer base {
@@ -118,5 +157,25 @@
 
   input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(0.3) sepia(0.4) hue-rotate(60deg);
+  }
+
+  /* Always-on grain over the parchment body */
+  body {
+    background-color: #faf7f0;
+    background-image: var(--bg-grain);
+    background-repeat: repeat;
+    background-size: 140px 140px;
+  }
+
+  /* Keyboard focus ring on real buttons (skip if button has an explicit focus override) */
+  button:focus-visible {
+    outline: 2px solid #b85c38;
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Smooth transitions on buttons by default */
+  button {
+    transition: background-color 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
   }
 }

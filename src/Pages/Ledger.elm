@@ -10,6 +10,10 @@ import Html.Events
 import Html.Keyed as Keyed
 import Json.Decode
 import Types exposing (..)
+import UI.Button
+import UI.Icons
+import UI.Mascot
+import UI.Skeleton
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -22,24 +26,21 @@ viewTab as_ =
 
 viewActions : AuthState -> List (Html Msg)
 viewActions model =
-    [ Html.button
-        [ Html.Events.onClick ToggleLedgerMap
-        , Html.Attributes.class
-            ("px-3 py-1.5 rounded border text-sm cursor-pointer "
-                ++ (if model.showLedgerMap then
-                        "border-forest-light bg-cream text-forest"
+    [ UI.Button.iconButton
+        { icon = UI.Icons.map "w-4 h-4"
+        , onClick = ToggleLedgerMap
+        , title =
+            if model.showLedgerMap then
+                "Hide map"
 
-                    else
-                        "border-tan bg-transparent text-muted"
-                   )
-            )
-        ]
-        [ Html.text "🗺 map" ]
-    , Html.button
-        [ Html.Events.onClick RefreshClicked
-        , Html.Attributes.class "px-3 py-1.5 rounded border border-tan bg-transparent text-muted text-sm cursor-pointer"
-        ]
-        [ Html.text "↻ refresh" ]
+            else
+                "Show map"
+        }
+    , UI.Button.iconButton
+        { icon = UI.Icons.chevronRight "w-4 h-4"
+        , onClick = RefreshClicked
+        , title = "Refresh"
+        }
     ]
 
 
@@ -47,11 +48,51 @@ viewHero : AuthState -> Html Msg
 viewHero model =
     case model.expensesState of
         Loaded entries ->
-            viewLedgerSummary entries
+            viewLedgerHero entries
 
         _ ->
             Html.div [ Html.Attributes.class "font-mono text-[22px] text-muted" ]
                 [ Html.text "—" ]
+
+
+viewLedgerHero : List Entry.EffectiveEntry -> Html Msg
+viewLedgerHero entries =
+    let
+        total =
+            List.sum (List.map .amount entries)
+
+        entryCount =
+            List.length entries
+
+        dayCount =
+            List.length (Entry.uniqueDates entries)
+
+        kickerText =
+            if dayCount > 0 then
+                String.fromInt entryCount
+                    ++ " ENTRIES · "
+                    ++ String.fromInt dayCount
+                    ++ (if dayCount == 1 then
+                            " DAY"
+
+                        else
+                            " DAYS"
+                       )
+
+            else
+                String.fromInt entryCount ++ " ENTRIES"
+    in
+    Html.div [ Html.Attributes.class "py-2" ]
+        [ Html.div
+            [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
+            [ Html.text "RUNNING TOTAL" ]
+        , Html.div
+            [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
+            [ Html.text (formatAmount total) ]
+        , Html.div
+            [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
+            [ Html.text kickerText ]
+        ]
 
 
 viewBody : AuthState -> Html Msg
@@ -66,32 +107,10 @@ viewBody model =
                     viewSkeleton
 
                 Loaded [] ->
-                    Html.p [ Html.Attributes.class "text-muted text-center py-8" ]
-                        [ Html.text "No expenses yet. Add your first one!" ]
+                    viewEmptyState
 
                 Loaded entries ->
-                    Keyed.node "div"
-                        []
-                        (Entry.uniqueDates entries
-                            |> List.map
-                                (\date ->
-                                    let
-                                        dayEntries =
-                                            List.filter (\e -> e.date == date) entries
-                                    in
-                                    ( date
-                                    , Html.div [ Html.Attributes.class "mb-6" ]
-                                        [ Html.div
-                                            [ Html.Attributes.class "text-[11px] tracking-widest text-muted mb-2 pb-1.5 border-b border-tan flex justify-between items-center" ]
-                                            [ Html.text (String.toUpper (formatDateDisplay date))
-                                            , Html.span [ Html.Attributes.class "font-mono text-rust tracking-normal" ]
-                                                [ Html.text (formatAmount (List.sum (List.map .amount dayEntries))) ]
-                                            ]
-                                        , Keyed.node "div" [] (List.map (\e -> ( ExpenseId.toString e.id, viewEntryRow e )) dayEntries)
-                                        ]
-                                    )
-                                )
-                        )
+                    viewEntries entries
     in
     Html.div []
         [ case model.expensesState of
@@ -101,6 +120,50 @@ viewBody model =
             _ ->
                 Html.text ""
         , entriesView
+        ]
+
+
+viewEntries : List Entry.EffectiveEntry -> Html Msg
+viewEntries entries =
+    let
+        dates =
+            Entry.uniqueDates entries
+
+        indexedDates =
+            List.indexedMap
+                (\i d -> ( d, List.length dates - i ))
+                dates
+
+        groupBlock ( date, dayN ) =
+            let
+                dayEntries =
+                    List.filter (\e -> e.date == date) entries
+            in
+            ( date
+            , Html.div [ Html.Attributes.class "mb-4" ]
+                [ viewDayKicker dayN date
+                , Keyed.node "div"
+                    [ Html.Attributes.class "animate-stagger-row" ]
+                    (List.map
+                        (\e -> ( ExpenseId.toString e.id, viewEntryRow e ))
+                        dayEntries
+                    )
+                ]
+            )
+    in
+    Keyed.node "div" [] (List.map groupBlock indexedDates)
+
+
+viewDayKicker : Int -> String -> Html Msg
+viewDayKicker dayN date =
+    Html.div [ Html.Attributes.class "mt-6 mb-2 flex items-center gap-3" ]
+        [ Html.span
+            [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-rust" ]
+            [ Html.text ("DAY " ++ String.fromInt dayN) ]
+        , Html.span [ Html.Attributes.class "h-px flex-1 bg-tan" ] []
+        , Html.span
+            [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
+            [ Html.text (String.toUpper (formatDateDisplay date)) ]
         ]
 
 
@@ -117,112 +180,70 @@ viewLedgerMap model entries =
         Html.text ""
 
 
-viewLedgerSummary : List Entry.EffectiveEntry -> Html Msg
-viewLedgerSummary entries =
-    let
-        total =
-            List.sum (List.map .amount entries)
-
-        catRow =
-            Category.all
-                |> List.filterMap
-                    (\cat ->
-                        let
-                            t =
-                                entries
-                                    |> List.filter (\e -> e.category == cat)
-                                    |> List.map .amount
-                                    |> List.sum
-                        in
-                        if t > 0 then
-                            Just ( cat, t )
-                        else
-                            Nothing
-                    )
-    in
-    Html.div []
-        [ Html.div [ Html.Attributes.class "font-mono text-[22px] text-rust mb-3" ]
-            [ Html.text (formatAmount total) ]
-        , Html.div [ Html.Attributes.class "flex flex-wrap gap-2.5" ]
-            (List.map
-                (\( cat, t ) ->
-                    Html.div [ Html.Attributes.class "flex items-center gap-1" ]
-                        [ Html.span [ Html.Attributes.class "text-[15px]" ] [ Html.text (Category.icon cat) ]
-                        , Html.span [ Html.Attributes.class "font-mono text-[13px] text-muted" ]
-                            [ Html.text (formatAmount t) ]
-                        ]
-                )
-                catRow
-            )
-        ]
-
-
 viewEntryRow : Entry.EffectiveEntry -> Html Msg
 viewEntryRow entry =
-    Html.div
+    let
+        primaryLabel =
+            if entry.merchant /= "" then
+                entry.merchant
+
+            else if entry.note /= "" then
+                entry.note
+
+            else
+                Category.label entry.category
+    in
+    Html.button
         [ Html.Events.onClick (EditEntry (effectiveEntryToExpense entry))
-        , Html.Attributes.class "bg-cream rounded-lg px-4 py-3.5 mb-2 flex items-center gap-3 cursor-pointer"
+        , Html.Attributes.class "w-full text-left py-3 border-b border-dashed border-tan/70 flex items-baseline gap-3 bg-transparent border-l-0 border-r-0 border-t-0 cursor-pointer"
         ]
-        [ Html.div
-            [ Html.Attributes.class "w-2.5 h-2.5 rounded-full shrink-0"
-            -- dynamic category color cannot be expressed as a Tailwind class
-            , Html.Attributes.style "background" (Category.color entry.category)
-            ]
-            []
-        , Html.span [ Html.Attributes.class "text-xl shrink-0 leading-none" ] [ Html.text (Category.icon entry.category) ]
-        , Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
-            [ Html.div [ Html.Attributes.class "text-[15px] text-ink truncate" ]
-                [ Html.text
-                    (if entry.note /= "" then
-                        entry.note
+        [ Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
+            [ Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
+                [ Html.text primaryLabel ]
+            , Html.div [ Html.Attributes.class "mt-0.5 flex items-center gap-2" ]
+                [ Html.span
+                    [ Html.Attributes.class "inline-block text-[10px] font-mono uppercase tracking-wider text-moss bg-cream-deep px-2 py-0.5 rounded" ]
+                    [ Html.text (Category.label entry.category) ]
+                , case entry.lat of
+                    Just _ ->
+                        Html.span
+                            [ Html.Attributes.class "text-moss"
+                            , Html.Attributes.title "Has GPS coordinates"
+                            ]
+                            [ UI.Icons.pin "w-3 h-3" ]
 
-                     else if entry.merchant /= "" then
-                        entry.merchant
-
-                     else
-                        Category.label entry.category
-                    )
+                    Nothing ->
+                        Html.text ""
                 ]
-            , if entry.merchant /= "" && entry.note /= "" then
-                Html.div [ Html.Attributes.class "text-xs text-moss" ] [ Html.text entry.merchant ]
-
-              else
-                Html.text ""
-            , if entry.longNote /= "" then
-                Html.div [ Html.Attributes.class "text-xs text-moss mt-0.5 leading-snug line-clamp-2" ] [ Html.text entry.longNote ]
-
-              else
-                Html.text ""
             ]
-        , Html.span [ Html.Attributes.class "font-mono text-[17px] text-ink shrink-0" ]
+        , Html.div
+            [ Html.Attributes.class "font-mono text-base text-forest tabular-nums shrink-0" ]
             [ Html.text (formatAmount entry.amount) ]
-        , case entry.lat of
-            Just _ ->
-                Html.span
-                    [ Html.Attributes.class "text-sm text-moss shrink-0"
-                    , Html.Attributes.title "Has GPS coordinates"
-                    ]
-                    [ Html.text "📍" ]
-
-            Nothing ->
-                Html.text ""
-        , Html.button
+        , Html.span
             [ Html.Events.stopPropagationOn "click" (Json.Decode.succeed ( VoidEntry (effectiveEntryToExpense entry), True ))
-            , Html.Attributes.class "bg-transparent border-none text-rust text-lg cursor-pointer px-2 py-1 shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            , Html.Attributes.class "text-rust shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center cursor-pointer"
             ]
-            [ Html.text "✕" ]
+            [ UI.Icons.close "w-4 h-4" ]
+        ]
+
+
+viewEmptyState : Html Msg
+viewEmptyState =
+    Html.div [ Html.Attributes.class "py-16 text-center" ]
+        [ UI.Mascot.ternSvg "w-16 mx-auto opacity-40"
+        , Html.p [ Html.Attributes.class "mt-4 font-display italic text-lg text-moss" ]
+            [ Html.text "No entries yet." ]
+        , Html.p [ Html.Attributes.class "mt-1 text-sm text-muted" ]
+            [ Html.text "Snap a receipt to start the log." ]
         ]
 
 
 viewSkeleton : Html Msg
 viewSkeleton =
-    Html.div []
-        (List.repeat 5
-            (Html.div
-                [ Html.Attributes.class "bg-cream rounded-lg py-[18px] px-4 mb-2 flex gap-3" ]
-                [ Html.div [ Html.Attributes.class "w-2.5 h-2.5 rounded-full bg-tan mt-1" ] []
-                , Html.div [ Html.Attributes.class "flex-1 h-4 bg-tan rounded" ] []
-                , Html.div [ Html.Attributes.class "w-14 h-4 bg-tan rounded" ] []
-                ]
-            )
-        )
+    Html.div [ Html.Attributes.class "space-y-2" ]
+        [ UI.Skeleton.row
+        , UI.Skeleton.row
+        , UI.Skeleton.row
+        , UI.Skeleton.row
+        , UI.Skeleton.row
+        ]

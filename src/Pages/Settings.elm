@@ -3,8 +3,11 @@ module Pages.Settings exposing (viewPanel, viewTab)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Types exposing (..)
+import Types exposing (AppConfig, AuthState, Msg(..))
+import UI.Button
+import UI.Card
 import UI.Layout
+import UI.Rule
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -25,41 +28,44 @@ viewPanel cfg isSignedIn version =
 
 
 viewHero : AppConfig -> Html Msg
-viewHero cfg =
-    UI.Layout.formField "ANTHROPIC API KEY"
-        (Html.input
-            [ Html.Attributes.type_ "password"
-            , Html.Attributes.value cfg.anthropicKey
-            , Html.Events.onInput ApiKeyChanged
-            , Html.Attributes.placeholder "sk-ant-..."
-            , UI.Layout.textInputStyle
-            ]
-            []
-        )
+viewHero _ =
+    Html.div [ Html.Attributes.class "text-sm text-muted" ]
+        [ Html.text "Local-first preferences. Nothing here leaves the device." ]
 
 
 viewBody : AppConfig -> Bool -> String -> Html Msg
-viewBody _ isSignedIn version =
+viewBody cfg isSignedIn version =
     Html.div []
-        [ if isSignedIn then
-            Html.button
-                [ Html.Events.onClick SignOutClicked
-                , Html.Attributes.class "w-full bg-transparent border border-rust text-rust rounded-lg py-3.5 text-[15px] cursor-pointer"
-                ]
-                [ Html.text "SIGN OUT" ]
+        [ UI.Rule.kicker "CONNECTION"
+        , UI.Card.subCard
+            [ UI.Layout.formField "Anthropic API key"
+                (Html.input
+                    [ Html.Attributes.type_ "password"
+                    , Html.Attributes.value cfg.anthropicKey
+                    , Html.Events.onInput ApiKeyChanged
+                    , Html.Attributes.placeholder "sk-ant-..."
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
+                )
+            , Html.p [ Html.Attributes.class "text-xs text-muted mt-2" ]
+                [ Html.text "Used to read receipts locally. Never sent to Ternpike servers." ]
+            ]
+        , UI.Rule.kicker "SESSION"
+        , UI.Card.subCard
+            [ Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
+                ((if isSignedIn then
+                    [ UI.Button.secondary { label = "Sign out", onClick = SignOutClicked } ]
 
-          else
-            Html.text ""
-        , Html.div [ Html.Attributes.class "mt-2" ]
-            [ Html.button
-                [ Html.Events.onClick ResetSettingsClicked
-                , Html.Attributes.class "w-full bg-transparent border border-tan text-muted rounded-lg py-3.5 text-sm cursor-pointer"
-                ]
-                [ Html.text "Reset all settings" ]
+                  else
+                    []
+                 )
+                    ++ [ UI.Button.ghost { label = "Reset local data", onClick = ResetSettingsClicked } ]
+                )
             ]
         , if version /= "" then
-            Html.p [ Html.Attributes.class "text-muted text-[11px] text-center mt-6 font-mono" ]
-                [ Html.text version ]
+            Html.div [ Html.Attributes.class "mt-6 text-center text-[10px] font-mono uppercase tracking-widest text-muted" ]
+                [ Html.text ("VERSION " ++ version) ]
 
           else
             Html.text ""

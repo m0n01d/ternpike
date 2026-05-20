@@ -17,16 +17,21 @@ import Html.Attributes
 import Html.Events
 import List.NonEmpty.Zipper as Zipper
 import Routing
+import Svg
 import Types exposing (..)
+import UI.Button
+import UI.Icons
 import UI.Mascot
 
 
 viewHeader : AuthState -> Html Msg
 viewHeader as_ =
     Html.div
-        [ Html.Attributes.class "sticky top-0 z-10 flex items-center justify-between px-5 py-3 border-b bg-cream border-tan" ]
+        [ Html.Attributes.class "sticky top-0 z-10 flex items-center justify-between px-5 py-3 border-b bg-cream border-moss/25" ]
         [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
-            [ UI.Mascot.ternSvg "w-7 shrink-0"
+            [ Html.span
+                [ Html.Attributes.class "inline-block hover:rotate-[-3deg] transition-transform duration-200" ]
+                [ UI.Mascot.ternSvg "w-7 shrink-0" ]
             , Html.div []
                 [ Html.span
                     [ Html.Attributes.class "text-xl font-black tracking-tight font-display text-forest" ]
@@ -46,40 +51,55 @@ viewHeader as_ =
                     TabChanged SettingsTab
                 )
             , Html.Attributes.class
-                ("bg-transparent border-none text-2xl cursor-pointer px-2 py-1 "
+                ("bg-transparent border-none cursor-pointer px-2 py-1 "
                     ++ (if as_.tab == SettingsTab then "text-rust" else "text-muted")
                 )
             ]
-            [ Html.text "⚙" ]
+            [ UI.Icons.settings "w-5 h-5" ]
         ]
 
 
 viewBottomNav : Tab -> Html Msg
 viewBottomNav currentTab =
     Html.nav
-        [ Html.Attributes.class "fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] bg-cream border-t border-tan flex z-10" ]
+        [ Html.Attributes.class "fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10" ]
         (List.map (viewNavTab currentTab)
-            [ ( ScanTab,   "📷", "Scan" )
-            , ( AddTab,    "+",  "Add" )
-            , ( LedgerTab, "☰",  "Ledger" )
-            , ( StatsTab,  "▦",  "Stats" )
-            , ( TripsTab,  "🗺", "Trips" )
+            [ ( ScanTab, UI.Icons.camera, "Scan" )
+            , ( AddTab, UI.Icons.plus, "Add" )
+            , ( LedgerTab, UI.Icons.journal, "Ledger" )
+            , ( StatsTab, UI.Icons.chart, "Stats" )
+            , ( TripsTab, UI.Icons.map, "Trips" )
             ]
         )
 
 
-viewNavTab : Tab -> ( Tab, String, String ) -> Html Msg
-viewNavTab currentTab ( tab, icon, label_ ) =
+viewNavTab : Tab -> ( Tab, String -> Svg.Svg Msg, String ) -> Html Msg
+viewNavTab currentTab ( tab, iconFn, label_ ) =
+    let
+        isActive =
+            currentTab == tab
+
+        indicator =
+            if isActive then
+                [ Html.span
+                    [ Html.Attributes.class "absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-rust" ]
+                    []
+                ]
+            else
+                []
+    in
     Html.button
         [ Html.Events.onClick (TabChanged tab)
         , Html.Attributes.class
-            ("flex-1 bg-transparent border-none py-2.5 px-1 flex flex-col items-center gap-0.5 cursor-pointer min-h-[56px] "
-                ++ (if currentTab == tab then "text-rust" else "text-muted")
+            ("relative flex-1 bg-transparent border-none py-2.5 px-1 flex flex-col items-center gap-0.5 cursor-pointer min-h-[56px] "
+                ++ (if isActive then "text-rust" else "text-muted")
             )
         ]
-        [ Html.span [ Html.Attributes.class "text-xl leading-none" ] [ Html.text icon ]
-        , Html.span [ Html.Attributes.class "text-[10px] tracking-wide" ] [ Html.text label_ ]
-        ]
+        (indicator
+            ++ [ Html.span [ Html.Attributes.class "leading-none" ] [ iconFn "w-6 h-6" ]
+               , Html.span [ Html.Attributes.class "text-[10px] tracking-wide font-mono uppercase" ] [ Html.text label_ ]
+               ]
+        )
 
 
 viewToast : Maybe String -> Html Msg
@@ -90,13 +110,13 @@ viewToast toast =
 
         Just message ->
             Html.div
-                [ Html.Attributes.class "fixed bottom-[72px] left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel" ]
+                [ Html.Attributes.class "fixed bottom-[72px] left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel animate-fade-up bg-[image:var(--bg-grain)]" ]
                 [ Html.span [ Html.Attributes.class "flex-1 text-sm text-ink" ] [ Html.text message ]
                 , Html.button
                     [ Html.Events.onClick ToastExpired
-                    , Html.Attributes.class "p-0 text-lg leading-none bg-transparent border-none cursor-pointer text-muted shrink-0"
+                    , Html.Attributes.class "p-0 leading-none bg-transparent border-none cursor-pointer text-muted shrink-0"
                     ]
-                    [ Html.text "✕" ]
+                    [ UI.Icons.close "w-4 h-4" ]
                 ]
 
 
@@ -108,37 +128,32 @@ viewErrorBanner maybeErr =
 
         Just err ->
             Html.div
-                [ Html.Attributes.class "flex items-center justify-between px-4 py-3 mx-5 mb-4 text-sm border-l-4 rounded-r-lg bg-rust-tint border-rust text-rust" ]
-                [ Html.text err
-                , Html.button
-                    [ Html.Events.onClick DismissError
-                    , Html.Attributes.class "p-0 pl-3 text-lg bg-transparent border-none cursor-pointer text-rust"
+                [ Html.Attributes.class "flex items-stretch mx-5 mb-4 overflow-hidden rounded-r-lg bg-rust-tint text-rust" ]
+                [ Html.span [ Html.Attributes.class "block w-1.5 self-stretch bg-rust rounded-r" ] []
+                , Html.div [ Html.Attributes.class "flex items-center justify-between flex-1 px-4 py-3 text-sm" ]
+                    [ Html.text err
+                    , Html.button
+                        [ Html.Events.onClick DismissError
+                        , Html.Attributes.class "p-0 pl-3 bg-transparent border-none cursor-pointer text-rust"
+                        ]
+                        [ UI.Icons.close "w-4 h-4" ]
                     ]
-                    [ Html.text "✕" ]
                 ]
 
 
 viewDeleteConfirmModal : Trip -> Html Msg
 viewDeleteConfirmModal trip =
     Html.div
-        [ Html.Attributes.class "fixed inset-0 bg-forest/65 z-[9998] flex items-center justify-center p-6" ]
+        [ Html.Attributes.class "fixed inset-0 bg-forest/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
         [ Html.div
-            [ Html.Attributes.class "w-full max-w-sm p-6 border bg-parchment border-tan rounded-2xl shadow-panel" ]
+            [ Html.Attributes.class "w-full max-w-sm p-6 border bg-parchment border-tan rounded-2xl shadow-panel bg-[image:var(--bg-grain)]" ]
             [ Html.p [ Html.Attributes.class "mb-2 text-lg font-bold text-ink font-display" ]
                 [ Html.text ("Delete \u{201C}" ++ trip.name ++ "\u{201D}?") ]
             , Html.p [ Html.Attributes.class "mb-6 text-sm leading-relaxed text-muted" ]
                 [ Html.text "This will permanently delete the trip and all its expense data." ]
             , Html.div [ Html.Attributes.class "flex gap-3" ]
-                [ Html.button
-                    [ Html.Events.onClick CancelDeleteTrip
-                    , Html.Attributes.class "flex-1 py-3 text-sm bg-transparent border rounded-lg cursor-pointer border-tan text-muted"
-                    ]
-                    [ Html.text "Cancel" ]
-                , Html.button
-                    [ Html.Events.onClick (DeleteTrip trip)
-                    , Html.Attributes.class "flex-1 py-3 text-sm font-bold border-none rounded-lg cursor-pointer bg-danger text-parchment"
-                    ]
-                    [ Html.text "Delete trip" ]
+                [ UI.Button.secondary { label = "Cancel", onClick = CancelDeleteTrip }
+                , UI.Button.danger { label = "Delete trip", onClick = DeleteTrip trip }
                 ]
             ]
         ]
@@ -155,12 +170,20 @@ formField label_ input_ =
 
 page : { actions : List (Html Msg), body : Html Msg, hero : Html Msg, route : Route } -> Html Msg
 page { actions, body, hero, route } =
-    Html.div [ Html.Attributes.class "p-5" ]
-        [ Html.div [ Html.Attributes.class "p-4 mb-5 bg-cream rounded-xl" ]
+    Html.div [ Html.Attributes.class "p-5 animate-fade-up" ]
+        [ Html.div
+            [ Html.Attributes.class
+                ("relative overflow-hidden p-5 mb-5 bg-cream rounded-card shadow-card "
+                    ++ "bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] "
+                    ++ "transition-[background-position] duration-700 ease-out "
+                    ++ topoPosClass route
+                )
+            ]
             [ Html.div
-                [ Html.Attributes.class "flex justify-between mb-3 gap-3 min-h-7" ]
-                [ Html.span [ sectionHead ] [ Html.text (Routing.routeTitle route) ]
-                , Html.div [ Html.Attributes.class "flex gap-2" ] actions
+                [ Html.Attributes.class "flex justify-between mb-4 gap-3 min-h-7 items-start" ]
+                [ Html.h1 [ Html.Attributes.class "font-display text-2xl tracking-tight font-black text-forest" ]
+                    [ Html.text (Routing.routeTitle route) ]
+                , Html.div [ Html.Attributes.class "flex gap-2 items-center" ] actions
                 ]
             , hero
             ]
@@ -176,3 +199,31 @@ sectionHead =
 textInputStyle : Html.Attribute Msg
 textInputStyle =
     Html.Attributes.class "w-full"
+
+
+topoPosClass : Route -> String
+topoPosClass route =
+    case route of
+        RouteAdd ->
+            "bg-[position:-1820px_-440px]"
+
+        RouteAddReviewScan ->
+            "bg-[position:-1820px_-440px]"
+
+        RouteEditEntry _ _ ->
+            "bg-[position:-1820px_-440px]"
+
+        RouteLedger ->
+            "bg-[position:-640px_-30px]"
+
+        RouteScan ->
+            "bg-[position:-40px_-60px]"
+
+        RouteSettings ->
+            "bg-[position:-1280px_-80px]"
+
+        RouteStats ->
+            "bg-[position:-1700px_-1380px]"
+
+        RouteTrips ->
+            "bg-[position:-580px_-1100px]"
