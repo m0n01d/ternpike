@@ -4,7 +4,7 @@
 - Elm 0.19.1 — split across `src/Main.elm`, `src/Pages/`, `src/UI/`, `src/Data/`, `src/Types.elm`, `src/Helpers.elm`
 - Vite 8 + vite-plugin-elm
 - Tailwind CSS v4 via `@tailwindcss/postcss` — config in `src/global.css` `@theme {}` block
-- PouchDB for local-first storage; CouchDB sync planned
+- PouchDB for local-first storage; CouchDB sync working
 - Anthropic API for OCR (receipt scanning)
 - GitHub Pages deployment from `dist/` (CI triggers on push to main)
 - Elm binary: `elm` (via asdf at `~/.asdf/shims/elm`)
@@ -54,6 +54,11 @@ Html.div [ Html.Attributes.class "tw-flex" ] [ Html.text "hello world" ]
 - Use `Html.Attributes.classList` for conditional classes or to organize flex, animation, translation, or responsive breakpoints.
 - Use semantic markup — only `<button>` elements get click handlers.
 - Aggressively refactor modules you touch; clean up tech debt as you go.
+
+## Upcoming infrastructure needs
+- **App hosting** — need a host for the main app (currently GitHub Pages, may outgrow it)
+- **Marketing page hosting** — `landing.html` needs its own host/domain
+- **Email API** — replace current email sender with a better transactional API (Resend, Postmark, etc.) for one-time auth codes
 
 ## Sheet columns
 `A=id, B=date, C=amount, D=category, E=note, F=merchant, G=createdAt, H=lat, I=lon, J=longNote` — Range: A:J
