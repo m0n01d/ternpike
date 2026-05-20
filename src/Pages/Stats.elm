@@ -7,7 +7,8 @@ import Data.Entry as Entry
 import Helpers exposing (formatAmount, isoToDayCount)
 import Html exposing (Html)
 import Html.Attributes
-import List.NonEmpty.Zipper as Zipper
+import Data.TripId as TripId
+import Dict
 import Svg
 import Svg.Attributes
 import Types exposing (..)
@@ -48,7 +49,9 @@ viewHero model =
             if numEntries > 0 then total / toFloat numEntries else 0
 
         tripStart =
-            (Zipper.current model.trips).startDate
+            Dict.get (TripId.toString model.currentTripId) model.trips
+                |> Maybe.map .startDate
+                |> Maybe.withDefault ""
 
         daysIn =
             if tripStart /= "" && model.today /= "" then
@@ -190,7 +193,9 @@ viewBody model =
                 |> List.take 5
 
         tripStart =
-            (Zipper.current model.trips).startDate
+            Dict.get (TripId.toString model.currentTripId) model.trips
+                |> Maybe.map .startDate
+                |> Maybe.withDefault ""
 
         daysIn =
             if tripStart /= "" && model.today /= "" then

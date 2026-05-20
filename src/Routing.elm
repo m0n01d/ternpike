@@ -5,6 +5,7 @@ module Routing exposing
     , routeParser
     , routeTitle
     , routeToTab
+    , routeTripId
     , tabToPath
     )
 
@@ -18,14 +19,17 @@ import Url.Parser as Parser exposing ((</>))
 routeParser : Parser.Parser (Route -> a) a
 routeParser =
     Parser.oneOf
-        [ Parser.map RouteAdd (Parser.s "add")
-        , Parser.map
-            (\t e -> RouteEditEntry (TripId.fromString t) (ExpenseId.fromString e))
+        [ Parser.map (\t e -> RouteEditEntry (TripId.fromString t) (ExpenseId.fromString e))
             (Parser.s "trip" </> Parser.string </> Parser.s "ledger" </> Parser.string </> Parser.s "edit")
-        , Parser.map RouteLedger   (Parser.s "ledger")
-        , Parser.map RouteScan     (Parser.s "scan")
+        , Parser.map (\t -> RouteAdd (TripId.fromString t))
+            (Parser.s "trip" </> Parser.string </> Parser.s "add")
+        , Parser.map (\t -> RouteLedger (TripId.fromString t))
+            (Parser.s "trip" </> Parser.string </> Parser.s "ledger")
+        , Parser.map (\t -> RouteScan (TripId.fromString t))
+            (Parser.s "trip" </> Parser.string </> Parser.s "scan")
+        , Parser.map (\t -> RouteStats (TripId.fromString t))
+            (Parser.s "trip" </> Parser.string </> Parser.s "stats")
         , Parser.map RouteSettings (Parser.s "settings")
-        , Parser.map RouteStats    (Parser.s "stats")
         , Parser.map RouteTrips    (Parser.s "trips")
         ]
 
@@ -40,32 +44,32 @@ routeFromUrl basePath url =
                 url.path
     in
     Parser.parse routeParser { url | path = stripped }
-        |> Maybe.withDefault RouteLedger
+        |> Maybe.withDefault RouteTrips
 
 
 routeToTab : Route -> Tab
 routeToTab route =
     case route of
-        RouteAdd            -> AddTab
+        RouteAdd _          -> AddTab
         RouteAddReviewScan  -> AddTab
         RouteEditEntry _ _  -> AddTab
-        RouteLedger         -> LedgerTab
-        RouteScan           -> ScanTab
+        RouteLedger _       -> LedgerTab
+        RouteScan _         -> ScanTab
         RouteSettings       -> SettingsTab
-        RouteStats          -> StatsTab
+        RouteStats _        -> StatsTab
         RouteTrips          -> TripsTab
 
 
 routeTitle : Route -> String
 routeTitle route =
     case route of
-        RouteAdd            -> "ADD EXPENSE"
+        RouteAdd _          -> "ADD EXPENSE"
         RouteAddReviewScan  -> "REVIEW SCAN"
         RouteEditEntry _ _  -> "EDIT EXPENSE"
-        RouteLedger         -> "LEDGER"
-        RouteScan           -> "SCAN RECEIPTS"
+        RouteLedger _       -> "LEDGER"
+        RouteScan _         -> "SCAN RECEIPTS"
         RouteSettings       -> "SETTINGS"
-        RouteStats          -> "STATS"
+        RouteStats _        -> "STATS"
         RouteTrips          -> "TRIPS"
 
 
@@ -82,35 +86,46 @@ effectiveRoute as_ =
                         RouteAddReviewScan
 
                     else
-                        RouteAdd
+                        RouteAdd as_.currentTripId
 
         LedgerTab ->
-            RouteLedger
+            RouteLedger as_.currentTripId
 
         ScanTab ->
-            RouteScan
+            RouteScan as_.currentTripId
 
         SettingsTab ->
             RouteSettings
 
         StatsTab ->
-            RouteStats
+            RouteStats as_.currentTripId
 
         TripsTab ->
             RouteTrips
 
 
-tabToPath : String -> Tab -> String
-tabToPath basePath tab =
+tabToPath : String -> TripId.TripId -> Tab -> String
+tabToPath basePath tripId tab =
     basePath
         ++ (case tab of
-                AddTab      -> "add"
-                LedgerTab   -> "ledger"
-                ScanTab     -> "scan"
+                AddTab      -> "trip/" ++ TripId.toString tripId ++ "/add"
+                LedgerTab   -> "trip/" ++ TripId.toString tripId ++ "/ledger"
+                ScanTab     -> "trip/" ++ TripId.toString tripId ++ "/scan"
                 SettingsTab -> "settings"
-                StatsTab    -> "stats"
+                StatsTab    -> "trip/" ++ TripId.toString tripId ++ "/stats"
                 TripsTab    -> "trips"
            )
+
+
+routeTripId : Route -> Maybe TripId.TripId
+routeTripId route =
+    case route of
+        RouteAdd tripId     -> Just tripId
+        RouteEditEntry t _  -> Just t
+        RouteLedger tripId  -> Just tripId
+        RouteScan tripId    -> Just tripId
+        RouteStats tripId   -> Just tripId
+        _                   -> Nothing
 
 
 editEntryPath : String -> TripId.TripId -> ExpenseId.ExpenseId -> String

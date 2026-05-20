@@ -12,10 +12,11 @@ module UI.Layout exposing
     )
 
 import Data.Trip exposing (Trip)
+import Data.TripId as TripId
+import Dict
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import List.NonEmpty.Zipper as Zipper
 import Routing
 import Svg
 import Types exposing (..)
@@ -40,7 +41,12 @@ viewHeader as_ =
                     ]
                 , Html.span
                     [ Html.Attributes.class "text-[11px] text-muted ml-2.5 tracking-widest" ]
-                    [ Html.text (Zipper.current as_.trips).name ]
+                    [ Html.text
+                        (Dict.get (TripId.toString as_.currentTripId) as_.trips
+                            |> Maybe.map .name
+                            |> Maybe.withDefault "Loading..."
+                        )
+                    ]
                 ]
             ]
         , Html.button
@@ -204,7 +210,7 @@ textInputStyle =
 topoPosClass : Route -> String
 topoPosClass route =
     case route of
-        RouteAdd ->
+        RouteAdd _ ->
             "bg-[position:-1820px_-440px]"
 
         RouteAddReviewScan ->
@@ -213,16 +219,16 @@ topoPosClass route =
         RouteEditEntry _ _ ->
             "bg-[position:-1820px_-440px]"
 
-        RouteLedger ->
+        RouteLedger _ ->
             "bg-[position:-640px_-30px]"
 
-        RouteScan ->
+        RouteScan _ ->
             "bg-[position:-40px_-60px]"
 
         RouteSettings ->
             "bg-[position:-1280px_-80px]"
 
-        RouteStats ->
+        RouteStats _ ->
             "bg-[position:-1700px_-1380px]"
 
         RouteTrips ->

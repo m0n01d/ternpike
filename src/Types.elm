@@ -14,7 +14,6 @@ import Dict exposing (Dict)
 import File exposing (File)
 import Http
 import Json.Decode as D
-import List.NonEmpty.Zipper exposing (Zipper)
 import Time
 import Url
 
@@ -32,13 +31,13 @@ type Tab
 
 
 type Route
-    = RouteAdd
+    = RouteAdd TripId
     | RouteAddReviewScan
     | RouteEditEntry TripId ExpenseId
-    | RouteLedger
-    | RouteScan
+    | RouteLedger TripId
+    | RouteScan TripId
     | RouteSettings
-    | RouteStats
+    | RouteStats TripId
     | RouteTrips
 
 
@@ -163,6 +162,7 @@ type alias AuthState =
     , config            : AppConfig
     , confirmDeleteTrip : Maybe Trip
     , creds             : Creds
+    , currentTripId     : TripId
     , editingEntry      : Maybe Expense
     , error             : Maybe String
     , expensesState     : ExpensesState
@@ -180,7 +180,7 @@ type alias AuthState =
     , toast             : Maybe String
     , today             : String
     , tripForm          : Maybe TripForm
-    , trips             : Zipper Trip
+    , trips             : Dict String Trip
     , version           : String
     , voids             : List Void
     }

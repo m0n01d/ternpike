@@ -19,7 +19,6 @@ import Html.Attributes
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
-import List.NonEmpty.Zipper as Zipper exposing (Zipper)
 import Pages.Add
 import Pages.Guest exposing (viewGuest)
 import Pages.Ledger
@@ -82,14 +81,15 @@ mapGuestConfig f gs =
     { gs | config = f gs.config }
 
 
-toAuthState : Creds -> Zipper Trip.Trip -> Tab -> GuestState -> AuthState
-toAuthState creds tripsZipper initialTab gs =
+toAuthState : Creds -> TripId.TripId -> Tab -> GuestState -> AuthState
+toAuthState creds initialTripId initialTab gs =
     { activeScanItemId  = Nothing
     , amendments        = []
     , basePath          = gs.basePath
     , config            = gs.session.config
     , confirmDeleteTrip = Nothing
     , creds             = creds
+    , currentTripId     = initialTripId
     , editingEntry      = Nothing
     , error             = Nothing
     , expensesState     = NotAsked
@@ -107,10 +107,15 @@ toAuthState creds tripsZipper initialTab gs =
     , toast             = Nothing
     , today             = gs.today
     , tripForm          = Nothing
-    , trips             = tripsZipper
+    , trips             = Dict.empty
     , version           = gs.version
     , voids             = []
     }
+
+
+currentTrip : AuthState -> Maybe Trip.Trip
+currentTrip as_ =
+    Dict.get (TripId.toString as_.currentTripId) as_.trips
 
 
 toGuestState : GuestReason -> AuthState -> GuestState
@@ -208,16 +213,6 @@ updateOrAddTrip trip trips =
         trips ++ [ trip ]
 
 
-focusCurrentTrip : Zipper Trip.Trip -> Zipper Trip.Trip -> Zipper Trip.Trip
-focusCurrentTrip oldZipper newZipper =
-    let
-        currentId =
-            (Zipper.current oldZipper).id
-    in
-    Zipper.focus (\t -> t.id == currentId) newZipper
-        |> Maybe.withDefault newZipper
-
-
 recomputeEntries : AuthState -> AuthState
 recomputeEntries as_ =
     case as_.expensesState of
@@ -225,7 +220,7 @@ recomputeEntries as_ =
             as_
 
         _ ->
-            { as_ | expensesState = Loaded (Entry.resolve as_.rawExpenses as_.amendments as_.voids (Zipper.current as_.trips).id) }
+            { as_ | expensesState = Loaded (Entry.resolve as_.rawExpenses as_.amendments as_.voids as_.currentTripId) }
 
 
 handleDbChange : D.Value -> AuthState -> ( Model, Cmd Msg )
@@ -234,19 +229,9 @@ handleDbChange doc as_ =
         Ok "trip" ->
             case D.decodeValue Trip.decoder doc of
                 Ok trip ->
-                    let
-                        tripList =
-                            updateOrAddTrip trip (Zipper.toList as_.trips)
-
-                        newZipper =
-                            case tripList of
-                                h :: rest ->
-                                    Zipper.fromCons h rest
-                                        |> focusCurrentTrip as_.trips
-                                [] ->
-                                    as_.trips
-                    in
-                    ( AuthModel { as_ | trips = newZipper }, Cmd.none )
+                    ( AuthModel { as_ | trips = Dict.insert (TripId.toString trip.id) trip as_.trips }
+                    , Cmd.none
+                    )
 
                 Err _ ->
                     ( AuthModel as_, Cmd.none )
@@ -297,30 +282,33 @@ handleDbDelete id as_ =
         rawExpenses =
             List.filter (\e -> ExpenseId.toString e.id /= id) as_.rawExpenses
 
-        tripList =
-            List.filter (\t -> TripId.toString t.id /= id) (Zipper.toList as_.trips)
+        newTrips =
+            Dict.remove id as_.trips
+
+        newCurrentTripId =
+            if TripId.toString as_.currentTripId == id then
+                Dict.values newTrips
+                    |> List.sortBy (TripId.toString << .id)
+                    |> List.head
+                    |> Maybe.map .id
+                    |> Maybe.withDefault as_.currentTripId
+            else
+                as_.currentTripId
 
         amendments =
             List.filter (\a -> a.id /= id) as_.amendments
 
         newVoids =
             List.filter (\v -> v.id /= id) as_.voids
-
-        newTrips =
-            case tripList of
-                h :: rest ->
-                    Zipper.fromCons h rest
-                        |> focusCurrentTrip as_.trips
-                [] ->
-                    as_.trips
     in
     ( AuthModel
         (recomputeEntries
             { as_
-                | rawExpenses = rawExpenses
-                , trips       = newTrips
-                , amendments  = amendments
-                , voids       = newVoids
+                | amendments    = amendments
+                , currentTripId = newCurrentTripId
+                , rawExpenses   = rawExpenses
+                , trips         = newTrips
+                , voids         = newVoids
             }
         )
     , Cmd.none
@@ -576,21 +564,15 @@ init flagsJson url key =
 
         Just userId ->
             let
-                defaultTrip =
-                    { id            = TripId.fromString "trip::placeholder"
-                    , budget        = 0
-                    , coverPhotoUrl = ""
-                    , description   = ""
-                    , endDate       = ""
-                    , name          = "Loading..."
-                    , startDate     = ""
-                    }
-
                 initialRoute =
                     Routing.routeFromUrl basePath url
 
+                initialTripId =
+                    Routing.routeTripId initialRoute
+                        |> Maybe.withDefault (TripId.fromString "trip::placeholder")
+
                 as_ =
-                    toAuthState { userId = userId } (Zipper.fromCons defaultTrip []) (Routing.routeToTab initialRoute) gs
+                    toAuthState { userId = userId } initialTripId (Routing.routeToTab initialRoute) gs
 
                 pendingEdit =
                     case initialRoute of
@@ -642,25 +624,13 @@ updateGuest msg gs =
             let
                 userId = gs.emailInput
                 creds  = { userId = userId }
-
-                defaultTrip =
-                    { id            = TripId.fromString "trip::placeholder"
-                    , budget        = 0
-                    , coverPhotoUrl = ""
-                    , description   = ""
-                    , endDate       = ""
-                    , name          = "Loading..."
-                    , startDate     = ""
-                    }
-
-                as_ =
-                    toAuthState creds (Zipper.fromCons defaultTrip []) LedgerTab gs
+                as_    = toAuthState creds (TripId.fromString "trip::placeholder") TripsTab gs
             in
             ( AuthModel as_
             , Cmd.batch
                 [ saveStorage { key = "session_token", value = userId }
                 , sendPouch GetAllTrips
-                , Nav.replaceUrl gs.key (Routing.tabToPath gs.basePath LedgerTab)
+                , Nav.replaceUrl gs.key (gs.basePath ++ "trips")
                 ]
             )
 
@@ -698,9 +668,14 @@ updateGuest msg gs =
                                                 _                  -> gs.emailInput
 
                                         creds = { userId = storedUserId }
-                                        as_   = toAuthState creds (Zipper.fromCons trip []) LedgerTab gs
+                                        as_   = toAuthState creds trip.id LedgerTab gs
                                     in
-                                    ( AuthModel as_, sendPouch GetAllTrips )
+                                    ( AuthModel as_
+                                    , Cmd.batch
+                                        [ sendPouch GetAllTrips
+                                        , Nav.replaceUrl gs.key (Routing.tabToPath gs.basePath trip.id LedgerTab)
+                                        ]
+                                    )
 
                                 Err _ ->
                                     ( GuestModel gs, Cmd.none )
@@ -735,7 +710,7 @@ updateAuth msg as_ =
                 Ok (QueryComplete "expenses") ->
                     let
                         resolved =
-                            Entry.resolve as_.rawExpenses as_.amendments as_.voids (Zipper.current as_.trips).id
+                            Entry.resolve as_.rawExpenses as_.amendments as_.voids as_.currentTripId
                     in
                     case as_.pendingEditEntry of
                         Just { entryId } ->
@@ -767,20 +742,18 @@ updateAuth msg as_ =
                 Ok (QueryComplete "trips") ->
                     case as_.pendingEditEntry of
                         Just { tripId } ->
-                            case Zipper.focus (\t -> t.id == tripId) as_.trips of
-                                Just focused ->
-                                    ( AuthModel { as_ | expensesState = Loading, trips = focused }
-                                    , sendPouch (GetExpenses (TripId.toString tripId))
-                                    )
-
-                                Nothing ->
-                                    ( AuthModel { as_ | expensesState = Loading, pendingEditEntry = Nothing }
-                                    , sendPouch (GetExpenses (TripId.toString (Zipper.current as_.trips).id))
-                                    )
+                            ( AuthModel
+                                { as_
+                                    | currentTripId    = tripId
+                                    , expensesState    = Loading
+                                    , pendingEditEntry = Nothing
+                                }
+                            , sendPouch (GetExpenses (TripId.toString tripId))
+                            )
 
                         Nothing ->
                             ( AuthModel { as_ | expensesState = Loading }
-                            , sendPouch (GetExpenses (TripId.toString (Zipper.current as_.trips).id))
+                            , sendPouch (GetExpenses (TripId.toString as_.currentTripId))
                             )
 
                 Ok (QueryComplete _) ->
@@ -942,7 +915,7 @@ updateAuth msg as_ =
 
                         expense =
                             { id        = ExpenseId.fromString expenseId
-                            , tripId    = (Zipper.current as_.trips).id
+                            , tripId    = as_.currentTripId
                             , amount    = String.toFloat p.amount |> Maybe.withDefault 0
                             , category  = p.category
                             , createdAt = posixToIso posix
@@ -1018,7 +991,7 @@ updateAuth msg as_ =
                     , pendingEntry     = defaultPendingEntry as_.today
                     , tab              = LedgerTab
                 }
-            , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath LedgerTab)
+            , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath as_.currentTripId LedgerTab)
             )
 
         TabChanged tab ->
@@ -1046,12 +1019,12 @@ updateAuth msg as_ =
                     , tab              = tab
                     , tripForm         = Nothing
                 }
-            , Cmd.batch [ geoCmd, Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tab) ]
+            , Cmd.batch [ geoCmd, Nav.pushUrl as_.key (Routing.tabToPath as_.basePath as_.currentTripId tab) ]
             )
 
         RefreshClicked ->
             ( AuthModel { as_ | expensesState = Loading }
-            , sendPouch (GetExpenses (TripId.toString (Zipper.current as_.trips).id))
+            , sendPouch (GetExpenses (TripId.toString as_.currentTripId))
             )
 
         ApiKeyChanged s ->
@@ -1154,21 +1127,23 @@ updateAuth msg as_ =
             )
 
         SelectTrip tripId ->
-            case Zipper.focus (\t -> t.id == tripId) as_.trips of
-                Just newZipper ->
-                    ( AuthModel
-                        { as_
-                            | editingEntry  = Nothing
-                            , expensesState = Loading
-                            , pendingEntry  = defaultPendingEntry as_.today
-                            , tab           = LedgerTab
-                            , trips         = newZipper
-                        }
-                    , sendPouch (GetExpenses (TripId.toString tripId))
-                    )
+            if Dict.member (TripId.toString tripId) as_.trips then
+                ( AuthModel
+                    { as_
+                        | currentTripId = tripId
+                        , editingEntry  = Nothing
+                        , expensesState = Loading
+                        , pendingEntry  = defaultPendingEntry as_.today
+                        , tab           = LedgerTab
+                    }
+                , Cmd.batch
+                    [ sendPouch (GetExpenses (TripId.toString tripId))
+                    , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tripId LedgerTab)
+                    ]
+                )
 
-                Nothing ->
-                    ( AuthModel as_, Cmd.none )
+            else
+                ( AuthModel as_, Cmd.none )
 
         OpenNewTripForm ->
             ( AuthModel
@@ -1242,7 +1217,7 @@ updateAuth msg as_ =
                                             }
 
                                         trips_ =
-                                            Zipper.map (\t -> if t.id == existing.id then updated else t) as_.trips
+                                            Dict.insert (TripId.toString existing.id) updated as_.trips
                                     in
                                     ( AuthModel { as_ | tripForm = Nothing, trips = trips_ }
                                     , sendPouch (SaveTrip (Trip.encoder updated))
@@ -1272,20 +1247,22 @@ updateAuth msg as_ =
                             }
 
                         trips_ =
-                            Zipper.consBefore newTrip as_.trips
-                                |> Zipper.focus (\t -> t.id == tripId)
-                                |> Maybe.withDefault as_.trips
+                            Dict.insert (TripId.toString tripId) newTrip as_.trips
                     in
                     ( AuthModel
                         { as_
-                            | editingEntry  = Nothing
+                            | currentTripId = tripId
+                            , editingEntry  = Nothing
                             , expensesState = Loading
                             , pendingEntry  = defaultPendingEntry as_.today
                             , tab           = LedgerTab
                             , tripForm      = Nothing
                             , trips         = trips_
                         }
-                    , sendPouch (SaveTrip (Trip.encoder newTrip))
+                    , Cmd.batch
+                        [ sendPouch (SaveTrip (Trip.encoder newTrip))
+                        , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tripId LedgerTab)
+                        ]
                     )
 
         ConfirmDeleteTrip trip ->
@@ -1296,25 +1273,36 @@ updateAuth msg as_ =
 
         DeleteTrip trip ->
             let
-                remaining =
-                    Zipper.toList as_.trips |> List.filter (\t -> t.id /= trip.id)
+                newTrips =
+                    Dict.remove (TripId.toString trip.id) as_.trips
             in
-            case remaining of
-                [] ->
-                    ( AuthModel { as_ | confirmDeleteTrip = Nothing }, Cmd.none )
+            if Dict.isEmpty newTrips then
+                ( AuthModel { as_ | confirmDeleteTrip = Nothing }, Cmd.none )
 
-                h :: t ->
-                    let
-                        trips_ =
-                            Zipper.fromCons h t
-                                |> Zipper.focus (\tr -> tr.id /= trip.id)
-                                |> Maybe.withDefault (Zipper.fromCons h t)
+            else
+                let
+                    newCurrentId =
+                        if as_.currentTripId == trip.id then
+                            Dict.values newTrips
+                                |> List.sortBy (TripId.toString << .id)
+                                |> List.head
+                                |> Maybe.map .id
+                                |> Maybe.withDefault as_.currentTripId
+                        else
+                            as_.currentTripId
 
-                        voidId =
-                            "void::" ++ TripId.toString trip.id ++ "::del"
-                    in
-                    ( AuthModel { as_ | confirmDeleteTrip = Nothing, trips = trips_ }
-                    , sendPouch
+                    voidId =
+                        "void::" ++ TripId.toString trip.id ++ "::del"
+                in
+                ( AuthModel
+                    { as_
+                        | confirmDeleteTrip = Nothing
+                        , currentTripId     = newCurrentId
+                        , expensesState     = Loading
+                        , trips             = newTrips
+                    }
+                , Cmd.batch
+                    [ sendPouch
                         (SaveVoid
                             (E.object
                                 [ ( "_id",      E.string voidId )
@@ -1324,7 +1312,10 @@ updateAuth msg as_ =
                                 ]
                             )
                         )
-                    )
+                    , sendPouch (GetExpenses (TripId.toString newCurrentId))
+                    , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath newCurrentId LedgerTab)
+                    ]
+                )
 
         LinkClicked (Browser.Internal url) ->
             ( AuthModel as_, Nav.pushUrl as_.key (Url.toString url) )
@@ -1359,26 +1350,17 @@ updateAuth msg as_ =
 
                             Nothing ->
                                 let
-                                    currentTripId =
-                                        (Zipper.current as_.trips).id
-
-                                    ( newTrips, expCmd ) =
-                                        if currentTripId /= tripId then
-                                            case Zipper.focus (\t -> t.id == tripId) as_.trips of
-                                                Just focused ->
-                                                    ( focused, sendPouch (GetExpenses (TripId.toString tripId)) )
-
-                                                Nothing ->
-                                                    ( as_.trips, Cmd.none )
-
+                                    expCmd =
+                                        if as_.currentTripId /= tripId then
+                                            sendPouch (GetExpenses (TripId.toString tripId))
                                         else
-                                            ( as_.trips, Cmd.none )
+                                            Cmd.none
                                 in
                                 ( AuthModel
                                     { as_
-                                        | pendingEditEntry = Just { entryId = entryId, tripId = tripId }
+                                        | currentTripId    = tripId
+                                        , pendingEditEntry = Just { entryId = entryId, tripId = tripId }
                                         , tab              = AddTab
-                                        , trips            = newTrips
                                     }
                                 , expCmd
                                 )
@@ -1387,6 +1369,19 @@ updateAuth msg as_ =
                     let
                         tab =
                             Routing.routeToTab route
+
+                        newCurrentTripId =
+                            Routing.routeTripId route
+                                |> Maybe.withDefault as_.currentTripId
+
+                        tripChanged =
+                            newCurrentTripId /= as_.currentTripId
+
+                        tripLoadCmd =
+                            if tripChanged then
+                                sendPouch (GetExpenses (TripId.toString newCurrentTripId))
+                            else
+                                Cmd.none
 
                         geoCmd =
                             if tab == AddTab && not as_.geoBlocked then requestGeolocation () else Cmd.none
@@ -1399,13 +1394,15 @@ updateAuth msg as_ =
                     in
                     ( AuthModel
                         { as_
-                            | editingEntry     = if tab /= AddTab then Nothing else as_.editingEntry
+                            | currentTripId    = newCurrentTripId
+                            , editingEntry     = if tab /= AddTab then Nothing else as_.editingEntry
+                            , expensesState    = if tripChanged then Loading else as_.expensesState
                             , pendingEditEntry = Nothing
                             , pendingEntry     = newPending
                             , tab              = tab
                             , tripForm         = Nothing
                         }
-                    , geoCmd
+                    , Cmd.batch [ geoCmd, tripLoadCmd ]
                     )
 
         _ ->
@@ -1438,14 +1435,14 @@ viewAuth as_ =
 
         tab =
             case route of
-                RouteAdd            -> Pages.Add.viewTab as_
-                RouteAddReviewScan  -> Pages.Add.viewTab as_
-                RouteEditEntry _ _  -> Pages.Add.viewTab as_
-                RouteLedger         -> Pages.Ledger.viewTab as_
-                RouteScan           -> Pages.Scan.viewTab as_
-                RouteSettings       -> Pages.Settings.viewTab as_
-                RouteStats          -> Pages.Stats.viewTab as_
-                RouteTrips          -> Pages.Trips.viewTab as_
+                RouteAdd _         -> Pages.Add.viewTab as_
+                RouteAddReviewScan -> Pages.Add.viewTab as_
+                RouteEditEntry _ _ -> Pages.Add.viewTab as_
+                RouteLedger _      -> Pages.Ledger.viewTab as_
+                RouteScan _        -> Pages.Scan.viewTab as_
+                RouteSettings      -> Pages.Settings.viewTab as_
+                RouteStats _       -> Pages.Stats.viewTab as_
+                RouteTrips         -> Pages.Trips.viewTab as_
     in
     Html.div []
         [ UI.Layout.viewHeader as_
