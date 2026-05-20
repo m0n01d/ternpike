@@ -78,28 +78,35 @@ viewBody model =
                     [ Html.Attributes.type_ "date"
                     , Html.Attributes.value p.date
                     , Html.Events.onInput DateChanged
-                    , Html.Attributes.class "w-full bg-transparent border-0 outline-none font-mono text-sm text-forest"
+                    , UI.Layout.textInputStyle
                     ]
                     []
                 )
-            , UI.Layout.formField "MERCHANT"
+            ]
+        , UI.Rule.kicker "WHERE & WHO"
+        , UI.Card.subCard
+            [ UI.Layout.formField "MERCHANT"
                 (Html.input
                     [ Html.Attributes.type_ "text"
                     , Html.Attributes.value p.merchant
                     , Html.Events.onInput MerchantChanged
-                    , Html.Attributes.placeholder "where did you spend this?"
-                    , Html.Attributes.class "w-full bg-transparent border-0 outline-none text-sm text-forest placeholder:text-muted/60"
+                    , Html.Attributes.placeholder "optional"
+                    , UI.Layout.textInputStyle
                     ]
                     []
                 )
-            , UI.Layout.formField "NOTE"
+            , UI.Layout.formField "LOCATION" (viewLocationWidget model)
+            ]
+        , UI.Rule.kicker "NOTES"
+        , UI.Card.subCard
+            [ UI.Layout.formField "NOTE"
                 (Html.input
                     [ Html.Attributes.type_ "text"
                     , Html.Attributes.value p.note
                     , Html.Events.onInput NoteChanged
-                    , Html.Attributes.placeholder "brief description (50 chars)"
-                    , Html.Attributes.maxlength 50
-                    , Html.Attributes.class "w-full bg-transparent border-0 outline-none text-sm text-forest placeholder:text-muted/60"
+                    , Html.Attributes.placeholder "brief (50 chars)"
+                    , Html.Attributes.attribute "maxlength" "50"
+                    , UI.Layout.textInputStyle
                     ]
                     []
                 )
@@ -107,15 +114,33 @@ viewBody model =
                 (Html.textarea
                     [ Html.Attributes.value p.longNote
                     , Html.Events.onInput LongNoteChanged
-                    , Html.Attributes.placeholder "longer notes, context, itemized breakdown..."
-                    , Html.Attributes.rows 3
-                    , Html.Attributes.class "w-full bg-transparent border-0 outline-none text-sm text-forest placeholder:text-muted/60 resize-none"
+                    , Html.Attributes.placeholder "optional — what happened, where, any context (280 chars)"
+                    , Html.Attributes.attribute "maxlength" "280"
+                    , Html.Attributes.attribute "rows" "3"
+                    , Html.Attributes.class "w-full"
                     ]
                     []
                 )
             ]
-        , viewLocationSection model
-        , viewSubmitSection model isEditing
+        , Html.button
+            [ Html.Events.onClick SubmitEntry
+            , Html.Attributes.disabled model.submitting
+            , Html.Attributes.class
+                ("w-full bg-rust hover:bg-rust-deep text-parchment border-none rounded-lg py-[18px] text-lg font-bold tracking-wide cursor-pointer mt-2 min-h-[56px] "
+                    ++ (if model.submitting then "opacity-60 cursor-not-allowed" else "")
+                )
+            ]
+            [ Html.text
+                (if model.submitting then
+                    "SAVING..."
+
+                 else if isEditing then
+                    "UPDATE EXPENSE"
+
+                 else
+                    "SAVE EXPENSE"
+                )
+            ]
         ]
 
 
@@ -125,156 +150,144 @@ viewScanPreview model =
         Nothing ->
             Html.text ""
 
-        Just itemId ->
-            case Dict.get itemId model.scanQueue of
+        Just id ->
+            case Dict.get id model.scanQueue of
+                Just item ->
+                    Html.div [ Html.Attributes.class "sticky top-0 z-10 mb-4" ]
+                        [ UI.Card.subCard
+                            [ Html.img
+                                [ Html.Attributes.src item.imageUrl
+                                , Html.Attributes.class "w-full rounded-xl object-contain max-h-60 bg-cream"
+                                ]
+                                []
+                            ]
+                        ]
+
                 Nothing ->
                     Html.text ""
 
-                Just item ->
-                    Html.div [ Html.Attributes.class "mb-4" ]
-                        [ Html.img
-                            [ Html.Attributes.src item.imageUrl
-                            , Html.Attributes.class "w-full max-h-48 object-contain rounded-lg border border-tan"
-                            ]
-                            []
-                        ]
 
-
-viewCategoryBtn : Category.Category -> Category.Category -> Html Msg
+viewCategoryBtn : Category -> Category -> Html Msg
 viewCategoryBtn selected cat =
     let
-        isSelected =
-            cat == selected
-
-        color =
-            Category.color cat
+        active =
+            selected == cat
     in
     Html.button
         [ Html.Events.onClick (CategorySelected cat)
         , Html.Attributes.class
-            ("flex flex-col items-center gap-1 p-2 rounded-lg border cursor-pointer text-center transition-all "
-                ++ (if isSelected then
-                        "border-transparent text-parchment"
-
-                    else
-                        "border-tan bg-transparent text-muted hover:border-moss"
-                   )
+            ("rounded-lg py-3 px-2 text-sm cursor-pointer flex flex-col items-center gap-1 min-h-[64px] text-ink "
+                ++ (if active then "font-bold" else "border border-tan bg-cream")
             )
-        , if isSelected then
-            Html.Attributes.style "background-color" color
+        -- dynamic color from data; cannot express as a Tailwind class
+        , Html.Attributes.style "background" (if active then Category.color cat else "")
+        , Html.Attributes.style "border-color" (if active then Category.color cat else "")
+        ]
+        [ Html.span [ Html.Attributes.class "text-xl leading-none" ] [ Html.text (Category.icon cat) ]
+        , Html.text (Category.label cat)
+        ]
+
+
+viewLocationWidget : AuthState -> Html Msg
+viewLocationWidget model =
+    Html.div []
+        [ viewLocationStatus model.pendingEntry.locationState
+        , if model.showMapPicker then
+            Html.node "map-picker"
+                [ Html.Attributes.attribute "lat"
+                    (case model.pendingEntry.locationState of
+                        LocationGot la _ _ ->
+                            String.fromFloat la
+
+                        _ ->
+                            "64.2008"
+                    )
+                , Html.Attributes.attribute "lon"
+                    (case model.pendingEntry.locationState of
+                        LocationGot _ lo _ ->
+                            String.fromFloat lo
+
+                        _ ->
+                            "-153.4937"
+                    )
+                , Html.Events.on "confirm"
+                    (Json.Decode.map2 MapPickerConfirmed
+                        (Json.Decode.at [ "detail", "lat" ] Json.Decode.float)
+                        (Json.Decode.at [ "detail", "lon" ] Json.Decode.float)
+                    )
+                , Html.Events.on "dismiss" (Json.Decode.succeed DismissMapPicker)
+                ]
+                []
 
           else
-            Html.Attributes.class ""
-        ]
-        [ Html.span [ Html.Attributes.class "text-lg leading-none" ] [ Html.text (Category.icon cat) ]
-        , Html.span [ Html.Attributes.class "text-[9px] font-mono uppercase tracking-wide leading-none" ] [ Html.text (Category.label cat) ]
+            Html.text ""
         ]
 
 
-viewLocationSection : AuthState -> Html Msg
-viewLocationSection model =
-    let
-        ls =
-            model.pendingEntry.locationState
-    in
-    Html.div [ Html.Attributes.class "mt-4 mb-2" ]
-        [ UI.Rule.kicker "LOCATION"
-        , UI.Card.subCard
-            [ case ls of
-                LocationIdle ->
-                    Html.div [ Html.Attributes.class "text-xs text-muted font-mono" ]
-                        [ Html.text "No location set" ]
-
-                LocationFetching ->
-                    Html.div [ Html.Attributes.class "text-xs text-muted font-mono animate-pulse" ]
-                        [ Html.text "Getting location..." ]
-
-                LocationCheckingExif ->
-                    Html.div [ Html.Attributes.class "text-xs text-muted font-mono animate-pulse" ]
-                        [ Html.text "Checking photo for GPS..." ]
-
-                LocationNoExifGps ->
-                    Html.div [ Html.Attributes.class "text-xs text-muted font-mono" ]
-                        [ Html.text "No GPS in photo" ]
-
-                LocationGot lat lon source ->
-                    Html.div [ Html.Attributes.class "flex items-center justify-between gap-2" ]
-                        [ Html.div [ Html.Attributes.class "text-xs font-mono text-forest" ]
-                            [ Html.text (locationSourceLabel source ++ " ")
-                            , Html.span [ Html.Attributes.class "text-muted" ]
-                                [ Html.text (formatCoord lat ++ ", " ++ formatCoord lon) ]
-                            ]
-                        , Html.button
-                            [ Html.Events.onClick OpenMapPicker
-                            , Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss hover:text-forest bg-transparent border-none cursor-pointer p-0"
-                            ]
-                            [ Html.text "Change" ]
-                        ]
-
-                LocationSkipped ->
-                    Html.div [ Html.Attributes.class "text-xs text-muted font-mono" ]
-                        [ Html.text "Location skipped" ]
-            , Html.div [ Html.Attributes.class "flex gap-3 mt-3" ]
-                (locationActions ls)
-            ]
-        ]
-
-
-locationSourceLabel : LocationSource -> String
-locationSourceLabel source =
-    case source of
-        ExifGps    -> "Photo GPS"
-        BrowserGeo -> "Device GPS"
-        ManualPin  -> "Pin"
-
-
-locationActions : LocationState -> List (Html Msg)
-locationActions ls =
+viewLocationStatus : LocationState -> Html Msg
+viewLocationStatus ls =
     case ls of
-        LocationGot _ _ _ ->
-            [ Html.button
-                [ Html.Events.onClick SkipLocation
-                , Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-muted hover:text-rust bg-transparent border-none cursor-pointer p-0"
+        LocationFetching ->
+            Html.div [ Html.Attributes.class "text-moss text-sm py-2" ]
+                [ Html.text "📍 Getting location…" ]
+
+        LocationCheckingExif ->
+            Html.div [ Html.Attributes.class "text-moss text-sm py-2" ]
+                [ Html.text "📍 Reading photo…" ]
+
+        LocationNoExifGps ->
+            Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
+                [ Html.span [ Html.Attributes.class "text-moss text-sm" ] [ Html.text "No GPS in photo" ]
+                , Html.button
+                    [ Html.Events.onClick OpenMapPicker
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
+                    ]
+                    [ Html.text "pin manually" ]
                 ]
-                [ Html.text "Remove" ]
-            ]
+
+        LocationGot lat lon source ->
+            let
+                sourceLabel =
+                    case source of
+                        ExifGps    -> "📍 from photo"
+                        BrowserGeo -> "📍 GPS"
+                        ManualPin  -> "📍 pinned"
+            in
+            Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
+                [ Html.span [ Html.Attributes.class "text-moss text-sm" ]
+                    [ Html.text (sourceLabel ++ " — " ++ formatCoord lat lon) ]
+                , Html.button
+                    [ Html.Events.onClick OpenMapPicker
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
+                    ]
+                    [ Html.text "adjust" ]
+                , Html.button
+                    [ Html.Events.onClick SkipLocation
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
+                    ]
+                    [ Html.text "remove" ]
+                ]
 
         LocationSkipped ->
-            []
-
-        _ ->
-            [ Html.button
-                [ Html.Events.onClick OpenMapPicker
-                , Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss hover:text-forest bg-transparent border-none cursor-pointer p-0"
+            Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
+                [ Html.span [ Html.Attributes.class "text-moss text-sm" ] [ Html.text "no location" ]
+                , Html.button
+                    [ Html.Events.onClick OpenMapPicker
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
+                    ]
+                    [ Html.text "pin manually" ]
                 ]
-                [ Html.text "Pin on map" ]
-            , Html.button
-                [ Html.Events.onClick SkipLocation
-                , Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-muted hover:text-rust bg-transparent border-none cursor-pointer p-0"
+
+        LocationIdle ->
+            Html.div [ Html.Attributes.class "flex gap-3 items-center" ]
+                [ Html.button
+                    [ Html.Events.onClick OpenMapPicker
+                    , Html.Attributes.class "flex-1 bg-cream border border-tan text-ink rounded-lg py-3 px-4 text-sm cursor-pointer"
+                    ]
+                    [ Html.text "📍 Pin manually" ]
+                , Html.button
+                    [ Html.Events.onClick SkipLocation
+                    , Html.Attributes.class "bg-transparent border-none text-moss text-sm cursor-pointer py-2"
+                    ]
+                    [ Html.text "Skip location" ]
                 ]
-                [ Html.text "Skip" ]
-            ]
-
-
-viewSubmitSection : AuthState -> Bool -> Html Msg
-viewSubmitSection model isEditing =
-    let
-        label_ =
-            if isEditing then "Save changes" else "Add expense"
-    in
-    Html.div [ Html.Attributes.class "mt-6 mb-2" ]
-        [ UI.Button.primary { label = label_, onClick = SubmitEntry }
-        ]
-
-
-decodeKey : Json.Decode.Decoder Msg
-decodeKey =
-    Json.Decode.field "key" Json.Decode.string
-        |> Json.Decode.andThen
-            (\key ->
-                if key == "Enter" then
-                    Json.Decode.succeed SubmitEntry
-
-                else
-                    Json.Decode.fail "not enter"
-            )
