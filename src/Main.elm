@@ -727,9 +727,8 @@ updateAuth msg as_ =
                         Just { tripId } ->
                             ( AuthModel
                                 { as_
-                                    | currentTripId    = tripId
-                                    , expensesState    = Loading
-                                    , pendingEditEntry = Nothing
+                                    | currentTripId = tripId
+                                    , expensesState = Loading
                                 }
                             , sendPouch (GetExpenses (TripId.toString tripId))
                             )
