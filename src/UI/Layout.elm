@@ -31,7 +31,7 @@ viewHeader as_ =
         [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
             [ Html.span
                 [ Html.Attributes.class "inline-block hover:rotate-[-3deg] transition-transform duration-200" ]
-                [ UI.Mascot.ternSvg "w-7 shrink-0" ]
+                [ UI.Mascot.ternSvg "w-7 h-auto shrink-0" ]
             , Html.div []
                 [ Html.span
                     [ Html.Attributes.class "text-xl font-black tracking-tight font-display text-forest" ]

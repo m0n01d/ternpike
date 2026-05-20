@@ -37,8 +37,8 @@
   --shadow-lift:  0 12px 48px rgb(45 58 34 / 0.20);
 
   /* ── Animations ────────────────────────────────────────────── */
-  --animate-fade-up:      fade-up 0.9s ease both;
-  --animate-fade-up-slow: fade-up 0.9s 0.3s ease both;
+  --animate-fade-up:      fade-up 0.9s ease backwards;
+  --animate-fade-up-slow: fade-up 0.9s 0.3s ease backwards;
   --animate-soar:         soar 7s ease-in-out infinite;
 
   @keyframes fade-up {
@@ -78,7 +78,7 @@
   --bg-topo: var(--bg-topo-atlas);
 
   /* ── Motion additions ──────────────────────────────────────── */
-  --animate-stagger-row: stagger-row 0.5s ease both;
+  --animate-stagger-row: stagger-row 0.5s ease backwards;
   --animate-pulse-soft:  pulse-soft 1.4s ease-in-out infinite;
 
   @keyframes stagger-row {
