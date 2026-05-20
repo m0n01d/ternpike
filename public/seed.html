@@ -11,6 +11,7 @@
     .ok  { color: #86efac; }
     .err { color: #f87171; }
     .hdr { color: #fbbf24; font-weight: bold; }
+    .dim { color: #6b7280; }
     #done { color: #7dd3fc; font-size: 1.2rem; margin-top: 1rem; display: none; }
   </style>
 </head>
@@ -30,7 +31,7 @@ function log(msg, cls = '') {
   logEl.appendChild(span)
 }
 
-// ── ID helpers ──────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 let seq = 0
 function makeId(prefix, date) {
@@ -64,7 +65,15 @@ function dateRange(startStr, endStr) {
   return dates
 }
 
-// ── Trips 1 & 2 shared data tables ─────────────────────────────────────────
+function mkExp(tripId, date, cat, merchant, amount, note, extra = {}) {
+  return {
+    _id: makeId('expense', date), type: 'expense', tripId,
+    amount, category: cat, date, merchant, note: note || '', longNote: '',
+    createdAt: new Date(date).toISOString(), lat: null, lon: null, ...extra,
+  }
+}
+
+// ── Trips 1 & 2 shared data ──────────────────────────────────────────────────
 
 const MERCHANTS = {
   fuel:       ['Shell', 'Petro Canada', 'Tesoro', 'Chevron', 'Husky', 'Esso', 'Exxon', 'Flying J', 'Sinclair', 'BP'],
@@ -127,44 +136,30 @@ const TRIP2_WAYPOINTS = [
   [47.60, -120.66],
 ]
 
-// ── Trips 1 & 2 daily generator ─────────────────────────────────────────────
-
 function dailyExpenses(dateStr, dayIndex, totalDays, tripId, waypoints) {
   const docs = []
   const [lat, lon] = interpolateWaypoint(waypoints, dayIndex, totalDays)
-
-  function expense(cat, overrides = {}) {
-    return {
-      _id:       makeId('expense', dateStr),
-      type:      'expense',
-      tripId,
-      amount:    pick(AMOUNTS[cat]),
-      category:  cat,
-      date:      dateStr,
-      merchant:  pick(MERCHANTS[cat]),
-      note:      maybePick(NOTES[cat], 0.5),
-      longNote:  '',
-      createdAt: new Date(dateStr).toISOString(),
-      lat, lon,
-      ...overrides,
-    }
-  }
-
+  const e = (cat, ov = {}) => ({
+    _id: makeId('expense', dateStr), type: 'expense', tripId,
+    amount: pick(AMOUNTS[cat]), category: cat, date: dateStr,
+    merchant: pick(MERCHANTS[cat]), note: maybePick(NOTES[cat], 0.5), longNote: '',
+    createdAt: new Date(dateStr).toISOString(), lat, lon, ...ov,
+  })
   const driving = Math.random() < 0.70
-  if (driving && dayIndex % 2 === 0) docs.push(expense('fuel'))
-  if (Math.random() < 0.50) docs.push(expense('food'))
-  if (Math.random() < 0.80) docs.push(expense('food'))
-  if (Math.random() < 0.90) docs.push(expense('food'))
+  if (driving && dayIndex % 2 === 0) docs.push(e('fuel'))
+  if (Math.random() < 0.50) docs.push(e('food'))
+  if (Math.random() < 0.80) docs.push(e('food'))
+  if (Math.random() < 0.90) docs.push(e('food'))
   const r = Math.random()
-  if (r < 0.40) docs.push(expense('camp'))
-  else if (r < 0.90) docs.push(expense('lodging'))
-  if (dayIndex % 3 === 1 && Math.random() < 0.65) docs.push(expense('activities'))
-  if (dayIndex % 5 === 2 && Math.random() < 0.70) docs.push(expense('parks'))
-  if (dayIndex % 4 === 0 && Math.random() < 0.60) docs.push(expense('shopping'))
-  if (Math.random() < 0.20) docs.push(expense('misc'))
-  if (Math.random() < 0.08) docs.push(expense('gear'))
-  if (Math.random() < 0.04) docs.push(expense('medical'))
-  if (dayIndex === 5 || dayIndex === 22 || dayIndex === 38) docs.push(expense('ferry'))
+  if (r < 0.40) docs.push(e('camp'))
+  else if (r < 0.90) docs.push(e('lodging'))
+  if (dayIndex % 3 === 1 && Math.random() < 0.65) docs.push(e('activities'))
+  if (dayIndex % 5 === 2 && Math.random() < 0.70) docs.push(e('parks'))
+  if (dayIndex % 4 === 0 && Math.random() < 0.60) docs.push(e('shopping'))
+  if (Math.random() < 0.20) docs.push(e('misc'))
+  if (Math.random() < 0.08) docs.push(e('gear'))
+  if (Math.random() < 0.04) docs.push(e('medical'))
+  if (dayIndex === 5 || dayIndex === 22 || dayIndex === 38) docs.push(e('ferry'))
   return docs
 }
 
@@ -184,165 +179,94 @@ const TRIP3_WAYPOINTS = [
 
 const REGION_DATA = {
   arctic: {
-    fuel:       { m: ['Arctic Slope Fuel', 'BP Prudhoe Bay', 'Tesoro Coldfoot', 'Yukon River Fuel Stop'],
-                  a: [88, 95, 108, 115, 125, 142, 158],
-                  n: ['$5.89/gal up here', 'Last fuel for 240 miles', 'Lucky to find diesel', 'Truckers only — squeezed in'] },
-    food:       { m: ['Coldfoot Camp Diner', 'Yukon River Camp', 'Arctic Caribou Inn', 'Deadhorse Mess Hall', 'Pipeline Cafeteria'],
-                  a: [12, 15, 18, 22, 28, 35, 42, 55],
-                  n: ['Only option for 200 miles', 'Industrial but filling', 'Fresh sourdough!', 'Caribou stew special'] },
-    lodging:    { m: ['Deadhorse Camp Hotel', 'Prudhoe Bay Hotel', 'Coldfoot Camp', 'Arctic Caribou Inn'],
-                  a: [95, 115, 135, 155, 175, 225, 285],
-                  n: ['Shared with oilfield workers', 'Heated floors — thank god', 'Best shower of the trip', 'Bunk room with 8 strangers'] },
-    camp:       { m: ['Marion Creek CG', 'Galbraith Lake CG', 'Arctic NWR Backcountry', 'Finger Mountain Dispersed'],
-                  a: [0, 0, 25, 30, 35],
-                  n: ['Caribou walked through at 3am', 'Mosquitoes biblical', 'Midnight sun — impossible to sleep', 'Saw aurora at 2am'] },
-    activities: { m: ['Arctic Ocean Dip', 'Trans-Alaska Pipeline Tour', 'Dalton Hwy Trucker Convoy', 'Brooks Range Day Hike'],
-                  a: [0, 35, 45, 65, 85, 110],
-                  n: ['Coldest water imaginable', 'Bucket list checked', 'Solo guide was amazing'] },
+    fuel:       { m: ['Arctic Slope Fuel', 'BP Prudhoe Bay', 'Tesoro Coldfoot', 'Yukon River Fuel Stop'],         a: [88, 95, 108, 115, 125, 142, 158], n: ['$5.89/gal up here', 'Last fuel for 240 miles', 'Lucky to find diesel'] },
+    food:       { m: ['Coldfoot Camp Diner', 'Yukon River Camp', 'Arctic Caribou Inn', 'Deadhorse Mess Hall'],     a: [12, 15, 18, 22, 28, 35, 42, 55],  n: ['Only option for 200 miles', 'Industrial but filling', 'Fresh sourdough!', 'Caribou stew special'] },
+    lodging:    { m: ['Deadhorse Camp Hotel', 'Prudhoe Bay Hotel', 'Coldfoot Camp', 'Arctic Caribou Inn'],         a: [95, 115, 135, 155, 175, 225, 285], n: ['Shared with oilfield workers', 'Heated floors — thank god', 'Best shower of the trip'] },
+    camp:       { m: ['Marion Creek CG', 'Galbraith Lake CG', 'Arctic NWR Backcountry', 'Finger Mountain Dispersed'], a: [0, 0, 25, 30, 35],              n: ['Caribou walked through at 3am', 'Mosquitoes biblical', 'Midnight sun — impossible to sleep', 'Saw aurora at 2am'] },
+    activities: { m: ['Arctic Ocean Dip', 'Trans-Alaska Pipeline Tour', 'Dalton Hwy Trucker Convoy', 'Brooks Range Day Hike'], a: [0, 35, 45, 65, 85, 110], n: ['Coldest water imaginable', 'Bucket list checked', 'Solo guide was amazing'] },
   },
   pnw: {
-    fuel:       { m: ['Chevron', 'Shell', 'Arco', 'Safeway Fuel', 'Costco Gas'],
-                  a: [58, 65, 71, 78, 85, 92],
-                  n: ['Back to normal prices', 'Costco cheapest in town'] },
-    food:       { m: ['Local Diner', "Denny's", 'In-N-Out Burger', 'Pike Place Chowder', 'Fish & Chips Shack', 'Starbucks', 'Burgerville', 'Poke Max'],
-                  a: [9, 12, 15, 18, 22, 28, 35, 42, 52],
-                  n: ['Best clam chowder ever', 'Fish and chips on the pier', 'Finally real coffee', 'Sourdough bread bowl'] },
-    lodging:    { m: ['Motel 6', 'Holiday Inn', 'Best Western', 'AirBnb Cottage', 'Hampton Inn'],
-                  a: [79, 89, 95, 105, 119, 139, 155, 175, 215],
-                  n: ['Ocean view!', 'City AirBnb', 'Great location', 'Quiet neighborhood'] },
-    camp:       { m: ['KOA', 'State Park CG', 'National Forest CG', 'Hipcamp Farm Stay'],
-                  a: [18, 22, 25, 28, 30],
-                  n: ['Foggy morning', 'Heard sea lions', 'Old growth forest site', 'Right on the beach'] },
-    activities: { m: ['Crater Lake Rim Drive', 'Redwoods NP Ranger Walk', 'Muir Woods Tour', 'Napa Valley Wine Tasting', 'SF Bay Cruise'],
-                  a: [25, 35, 45, 65, 85, 95, 115, 145],
-                  n: ['Stunning views', 'Worth the detour', 'Tasted 8 wines', 'Foggy but magical'] },
+    fuel:       { m: ['Chevron', 'Shell', 'Arco', 'Safeway Fuel', 'Costco Gas'],                                   a: [58, 65, 71, 78, 85, 92],           n: ['Back to normal prices', 'Costco cheapest in town'] },
+    food:       { m: ['Local Diner', "Denny's", 'In-N-Out Burger', 'Pike Place Chowder', 'Fish & Chips Shack', 'Starbucks', 'Burgerville', 'Poke Max'], a: [9, 12, 15, 18, 22, 28, 35, 42, 52], n: ['Best clam chowder ever', 'Fish and chips on the pier', 'Finally real coffee'] },
+    lodging:    { m: ['Motel 6', 'Holiday Inn', 'Best Western', 'AirBnb Cottage', 'Hampton Inn'],                  a: [79, 89, 95, 105, 119, 139, 155, 175, 215], n: ['Ocean view!', 'City AirBnb', 'Great location'] },
+    camp:       { m: ['KOA', 'State Park CG', 'National Forest CG', 'Hipcamp Farm Stay'],                          a: [18, 22, 25, 28, 30],               n: ['Foggy morning', 'Heard sea lions', 'Old growth forest site', 'Right on the beach'] },
+    activities: { m: ['Crater Lake Rim Drive', 'Redwoods NP Ranger Walk', 'Muir Woods Tour', 'Napa Valley Wine Tasting', 'SF Bay Cruise'], a: [25, 35, 45, 65, 85, 95, 115, 145], n: ['Stunning views', 'Worth the detour', 'Tasted 8 wines'] },
   },
   mexico: {
-    fuel:       { m: ['PEMEX', 'BP México', 'Orsan'],
-                  a: [42, 48, 55, 62, 68, 72],
-                  n: ['Attendant fills for you', 'Only cash accepted', 'No receipt printed'] },
-    food:       { m: ['Tacos al Pastor Stand', 'Mercado 20 de Noviembre', 'Birria Puesto', 'Café de Olla', 'Mariscos El Güero', 'Cocina Económica', 'Taquería La Güera', 'Comedor La Abuela'],
-                  a: [3, 4, 5, 6, 8, 10, 12, 15, 18, 22, 28],
-                  n: ['5 tacos for $2', 'Best mole of my life', 'Street food heaven', 'Tlayuda bigger than my head', 'Fresh agua de jamaica'] },
-    lodging:    { m: ['Hotel del Centro', 'Posada San Cristóbal', 'Casa de Huéspedes', 'Hotel Mesón', 'Hostería del Rey'],
-                  a: [25, 32, 38, 45, 55, 65, 85, 95, 115, 145],
-                  n: ['Courtyard with fountain', 'Shared bathroom but charming', 'Hammock in the garden', 'Rooftop views'] },
-    camp:       { m: ['El Faro Trailer Park', 'Playa Brujas Camp', 'Oasis Backpackers', 'Rancho Camping'],
-                  a: [5, 8, 10, 12, 15],
-                  n: ['Roosters at 4am', 'Security guard checked in', 'Hammock between palms'] },
-    activities: { m: ['Chichén Itzá Entry', 'Monte Albán Site', 'Lucha Libre CMLL', 'Mezcal Distillery Tour', 'Day of the Dead Museum'],
-                  a: [15, 22, 28, 35, 45, 65, 85, 125],
-                  n: ['Incredible ruins', 'Wrestler nearly flew into us', 'Three grades of mezcal', 'Eight hours through the canyon'] },
+    fuel:       { m: ['PEMEX', 'BP México', 'Orsan'],                                                              a: [42, 48, 55, 62, 68, 72],           n: ['Attendant fills for you', 'Only cash accepted'] },
+    food:       { m: ['Tacos al Pastor Stand', 'Mercado 20 de Noviembre', 'Birria Puesto', 'Café de Olla', 'Mariscos El Güero', 'Cocina Económica', 'Taquería La Güera', 'Comedor La Abuela'], a: [3, 4, 5, 6, 8, 10, 12, 15, 18, 22, 28], n: ['5 tacos for $2', 'Best mole of my life', 'Street food heaven', 'Tlayuda bigger than my head'] },
+    lodging:    { m: ['Hotel del Centro', 'Posada San Cristóbal', 'Casa de Huéspedes', 'Hotel Mesón', 'Hostería del Rey'], a: [25, 32, 38, 45, 55, 65, 85, 95, 115, 145], n: ['Courtyard with fountain', 'Shared bathroom but charming', 'Rooftop views'] },
+    camp:       { m: ['El Faro Trailer Park', 'Playa Brujas Camp', 'Oasis Backpackers', 'Rancho Camping'],         a: [5, 8, 10, 12, 15],                 n: ['Roosters at 4am', 'Security guard checked in', 'Hammock between palms'] },
+    activities: { m: ['Chichén Itzá Entry', 'Monte Albán Site', 'Lucha Libre CMLL', 'Mezcal Distillery Tour', 'Day of the Dead Museum'], a: [15, 22, 28, 35, 45, 65, 85, 125], n: ['Incredible ruins', 'Wrestler nearly flew into us', 'Three grades of mezcal'] },
   },
   centralamerica: {
-    fuel:       { m: ['Uno', 'Puma', 'Delta', 'Texaco Centro América', 'Shell GT'],
-                  a: [38, 42, 45, 50, 55, 58],
-                  n: ['Had to pay in quetzales', 'Attendant tried to shortchange — watched the pump'] },
-    food:       { m: ['Comedor Doña Rosa', 'Pupusería El Salvador', 'Típicos Guatemaltecos', 'Casado del Día', 'Soda Típica', 'Fritanga Nicaragüense', 'Rancho Eco Kitchen'],
-                  a: [2, 3, 4, 5, 6, 8, 10, 12, 15, 18],
-                  n: ['10 pupusas for $3', 'Casado: rice beans plantain $4', 'Freshest fruit of my life', 'Ate on the street, totally fine'] },
-    lodging:    { m: ['Hostel Quetzal', 'Posada Nativa', 'Eco Lodge Río', 'Guesthouse Colibrí', 'Hotel Backpacker'],
-                  a: [12, 15, 18, 22, 28, 35, 45, 55, 75],
-                  n: ['Cold water only — 32°C outside so fine', 'Hammock room $8/night', 'Volcano view from bed!', 'Shared dorm — met amazing travelers'] },
-    camp:       { m: ['Semuc Champey Camp', 'Lago Atitlán Shore Camp', 'Playa El Tunco Camp', 'Backpacker Hammock CG'],
-                  a: [4, 5, 6, 8, 10, 12],
-                  n: ['Howler monkeys all night', 'Fireflies in the jungle', 'Woke up to spider monkey on tent', 'Cenote right next to campsite'] },
-    activities: { m: ['Lago Atitlán Boat Tour', 'Tikal NP + Guide', 'Roatán Reef Dive', 'Arenal Volcano Hike', 'Semuc Champey Tours', 'Canal Zone Tour'],
-                  a: [12, 18, 25, 35, 45, 55, 75, 95, 120],
-                  n: ['Saw a quetzal bird!', 'Most biodiverse dive of my life', 'Ruins at sunrise — zero crowds', 'Swam inside the mountain'] },
+    fuel:       { m: ['Uno', 'Puma', 'Delta', 'Texaco Centro América', 'Shell GT'],                                a: [38, 42, 45, 50, 55, 58],           n: ['Had to pay in quetzales', 'Attendant tried to shortchange — watched the pump'] },
+    food:       { m: ['Comedor Doña Rosa', 'Pupusería El Salvador', 'Típicos Guatemaltecos', 'Casado del Día', 'Soda Típica', 'Fritanga Nicaragüense'], a: [2, 3, 4, 5, 6, 8, 10, 12, 15, 18], n: ['10 pupusas for $3', 'Casado: rice beans plantain $4', 'Freshest fruit of my life'] },
+    lodging:    { m: ['Hostel Quetzal', 'Posada Nativa', 'Eco Lodge Río', 'Guesthouse Colibrí', 'Hotel Backpacker'], a: [12, 15, 18, 22, 28, 35, 45, 55, 75], n: ['Cold water only — 32°C outside so fine', 'Hammock room $8/night', 'Volcano view from bed!'] },
+    camp:       { m: ['Semuc Champey Camp', 'Lago Atitlán Shore Camp', 'Playa El Tunco Camp', 'Backpacker Hammock CG'], a: [4, 5, 6, 8, 10, 12],          n: ['Howler monkeys all night', 'Fireflies in the jungle', 'Woke up to spider monkey on tent'] },
+    activities: { m: ['Lago Atitlán Boat Tour', 'Tikal NP + Guide', 'Roatán Reef Dive', 'Arenal Volcano Hike', 'Semuc Champey Tours'], a: [12, 18, 25, 35, 45, 55, 75, 95, 120], n: ['Saw a quetzal bird!', 'Most biodiverse dive of my life', 'Ruins at sunrise — zero crowds'] },
   },
   southamerica_north: {
-    fuel:       { m: ['Terpel', 'Biomax', 'EDS Primax', 'Petrogal Ecuador'],
-                  a: [4, 5, 6, 8, 10, 35, 42, 48],
-                  n: ['Subsidized — barely $0.50/gal in Ecuador!', 'Attendant checked oil too'] },
-    food:       { m: ['Cevichería La Mar', 'Arepas & Co', 'Menú del Día', 'Mercado Surquillo', 'Pollería El Rancho', 'Bandeja Paisa Place', 'Locro de Papa Spot'],
-                  a: [3, 4, 5, 6, 8, 10, 12, 15, 18, 22, 28, 35, 45],
-                  n: ['Best ceviche of my life', "Bandeja paisa — couldn't finish it", 'Set lunch $3: soup, main, juice', 'Anticuchos on every corner'] },
-    lodging:    { m: ['Hostal Wiracocha', 'Casa Vieja Guesthouse', 'Hotel San Agustín', 'Airbnb Bogotá', 'The Loki Hostel', 'Hotel Boutique Centro'],
-                  a: [15, 18, 22, 28, 35, 45, 55, 75, 95, 115, 145, 185],
-                  n: ['Colonial architecture everywhere', 'Rooftop with city views', 'Altitude hit hard — 3600m', 'Llamas outside the window'] },
-    camp:       { m: ['Cocora Valley Camp', 'Manu NP Base Camp', 'Sacred Valley Campsite', 'Cloud Forest Camp'],
-                  a: [5, 8, 10, 12, 15, 18],
-                  n: ['Woke up to condors overhead', 'Clouds rolled in from the Amazon', 'Stars unbelievable at altitude'] },
-    activities: { m: ['Amazon Riverboat Lodge', 'Colca Canyon Trek', 'Lake Titicaca Reed Island Tour', 'Cartagena Fortress Entry', 'Medellín Cable Car', 'Huacachina Sand Boarding'],
-                  a: [35, 45, 65, 85, 95, 125, 185, 245, 345, 485, 650],
-                  n: ['Porter José was a legend', 'Sea lions swam with me', 'Floated on a reed boat for an hour', 'Deepest canyon on Earth'] },
+    fuel:       { m: ['Terpel', 'Biomax', 'EDS Primax', 'Petrogal Ecuador'],                                       a: [4, 5, 6, 8, 10, 35, 42, 48],      n: ['Subsidized — barely $0.50/gal in Ecuador!', 'Attendant checked oil too'] },
+    food:       { m: ['Cevichería La Mar', 'Arepas & Co', 'Menú del Día', 'Mercado Surquillo', 'Pollería El Rancho', 'Bandeja Paisa Place', 'Locro de Papa Spot'], a: [3, 4, 5, 6, 8, 10, 12, 15, 18, 22, 28, 35, 45], n: ['Best ceviche of my life', "Bandeja paisa — couldn't finish it", 'Set lunch $3: soup, main, juice'] },
+    lodging:    { m: ['Hostal Wiracocha', 'Casa Vieja Guesthouse', 'Hotel San Agustín', 'Airbnb Bogotá', 'The Loki Hostel'], a: [15, 18, 22, 28, 35, 45, 55, 75, 95, 115, 145, 185], n: ['Colonial architecture everywhere', 'Altitude hit hard — 3600m', 'Llamas outside the window'] },
+    camp:       { m: ['Cocora Valley Camp', 'Manu NP Base Camp', 'Sacred Valley Campsite', 'Cloud Forest Camp'],   a: [5, 8, 10, 12, 15, 18],             n: ['Woke up to condors overhead', 'Clouds rolled in from the Amazon', 'Stars unbelievable at altitude'] },
+    activities: { m: ['Amazon Riverboat Lodge', 'Colca Canyon Trek', 'Lake Titicaca Reed Island', 'Cartagena Fortress', 'Medellín Cable Car', 'Huacachina Sand Boarding'], a: [35, 45, 65, 85, 95, 125, 185, 245, 345, 485, 650], n: ['Porter José was a legend', 'Sea lions swam with me', 'Deepest canyon on Earth'] },
   },
   southamerica_south: {
-    fuel:       { m: ['COPEC', 'YPF', 'Shell Argentina', 'Petrobras Chile'],
-                  a: [48, 55, 62, 68, 75, 82, 92],
-                  n: ['Argentina subsidy makes it cheap', 'Crossed the Andes — amazing drive', 'Border crossing added 2hrs'] },
-    food:       { m: ['Parrilla Don Mario', 'Empanadas El Hornito', 'Café Torres', 'Mercado Central Santiago', 'Asado al Palo', 'Pescado a la Plancha', 'Lomito Completo Stand'],
-                  a: [5, 8, 10, 12, 15, 18, 22, 28, 35, 45, 55, 75],
-                  n: ['Asado with strangers who invited us', 'Empanadas baked to order', 'Wine from Mendoza $4/bottle', 'Merluza fresh from the dock'] },
-    lodging:    { m: ['Hostería Patagónica', 'Refugio Los Andes', 'Hotel Diego de Almagro', 'Camping y Cabañas', 'Posada del Sur'],
-                  a: [28, 35, 42, 55, 65, 85, 95, 115, 145, 175, 225],
-                  n: ['Volcano visible from room', 'Stayed with a local family', 'Refuge hut on the trail', 'Wood stove, wool blanket, perfect'] },
-    camp:       { m: ['Atacama Desert Camp', 'Torres del Paine NP CG', 'Lago Llanquihue Shore', 'Ruta 40 Wild Camp', 'Carretera Austral Camp'],
-                  a: [8, 10, 12, 15, 18, 22, 25],
-                  n: ['Pumas in area — food hung high', 'Wind nearly took the tent', 'Most remote camp of the trip', 'Glacier reflected in the lake'] },
-    activities: { m: ['Atacama Stargazing ALMA', 'Valparaíso Street Art Tour', 'Mendoza Winery Tour', 'Ruta 40 Jeep Rental', 'Carretera Austral Kayak'],
-                  a: [45, 65, 85, 95, 115, 145, 175, 225, 285, 345],
-                  n: ['Saw Milky Way like never before', 'Wind was 80km/h on the trail', 'Best wine tasting — 9 varieties', 'Condors soaring below us'] },
+    fuel:       { m: ['COPEC', 'YPF', 'Shell Argentina', 'Petrobras Chile'],                                       a: [48, 55, 62, 68, 75, 82, 92],       n: ['Argentina subsidy makes it cheap', 'Crossed the Andes — amazing drive'] },
+    food:       { m: ['Parrilla Don Mario', 'Empanadas El Hornito', 'Café Torres', 'Mercado Central Santiago', 'Asado al Palo', 'Pescado a la Plancha'], a: [5, 8, 10, 12, 15, 18, 22, 28, 35, 45, 55, 75], n: ['Asado with strangers who invited us', 'Empanadas baked to order', 'Wine from Mendoza $4/bottle'] },
+    lodging:    { m: ['Hostería Patagónica', 'Refugio Los Andes', 'Hotel Diego de Almagro', 'Camping y Cabañas', 'Posada del Sur'], a: [28, 35, 42, 55, 65, 85, 95, 115, 145, 175, 225], n: ['Volcano visible from room', 'Stayed with a local family', 'Refuge hut on the trail'] },
+    camp:       { m: ['Atacama Desert Camp', 'Torres del Paine NP CG', 'Lago Llanquihue Shore', 'Ruta 40 Wild Camp'], a: [8, 10, 12, 15, 18, 22, 25],   n: ['Pumas in area — food hung high', 'Wind nearly took the tent', 'Most remote camp of the trip'] },
+    activities: { m: ['Atacama Stargazing ALMA', 'Valparaíso Street Art Tour', 'Mendoza Winery Tour', 'Ruta 40 Jeep Rental', 'Carretera Austral Kayak'], a: [45, 65, 85, 95, 115, 145, 175, 225, 285, 345], n: ['Saw Milky Way like never before', 'Wind was 80km/h on the trail', 'Best wine tasting — 9 varieties'] },
   },
   patagonia: {
-    fuel:       { m: ['YPF Ushuaia', 'Shell Punta Arenas', 'COPEC Fin del Mundo', 'Última Esperanza Station'],
-                  a: [65, 75, 85, 95, 105, 115, 125],
-                  n: ['$1.20/L — expensive here', 'Closest station 180km away', 'Paid in USD — no pesos available'] },
-    food:       { m: ['La Anónima Supermarket', 'Bodegón Fueguino', 'Restaurante Kaupé', 'Parrilla 1884', 'Café de la Esquina', 'Centolla King Crab Shack', 'El Viejo Club Marino'],
-                  a: [12, 15, 18, 22, 28, 35, 45, 55, 75, 95, 125, 185, 220],
-                  n: ['King crab legs — worth every cent', 'Centolla fresh off the boat', 'Celebration dinner — 6 months!', 'Lamb slow roasted over fire', 'Hot soup after 8hrs hiking'] },
-    lodging:    { m: ['Los Cauquenes Resort', 'Tierra del Fuego Hostel', 'Posada Fin del Mundo', 'Refugio Patagónico', 'Malvinas Argentinas Motel'],
-                  a: [55, 75, 95, 115, 145, 175, 225, 285, 345],
-                  n: ['End of the world vibes', 'Beagle Channel from the window', 'Wind rattled the walls all night', 'Thermal bath to recover'] },
-    camp:       { m: ['Camping Lago Roca', 'Parque Nacional TdF', 'Monte Olivia Camp', 'Bahía Lapataia Backcountry'],
-                  a: [15, 18, 22, 25, 28, 32, 35],
-                  n: ['Foxes stole my glove', 'Sub-zero night — tent held', 'Last campsite before the ocean'] },
-    activities: { m: ['Fin del Mundo Museum', 'Glaciar Martial Hike', 'Lago Fagnano Kayak', 'Cerro Castor Ski Resort'],
-                  a: [35, 45, 65, 85, 95, 115, 145, 185],
-                  n: ['Southernmost museum on Earth', 'Ice and rocks and seals', 'Roughest seas on the trip'] },
+    fuel:       { m: ['YPF Ushuaia', 'Shell Punta Arenas', 'COPEC Fin del Mundo', 'Última Esperanza Station'],     a: [65, 75, 85, 95, 105, 115, 125],   n: ['$1.20/L — expensive here', 'Closest station 180km away'] },
+    food:       { m: ['La Anónima Supermarket', 'Bodegón Fueguino', 'Restaurante Kaupé', 'Parrilla 1884', 'Café de la Esquina', 'Centolla King Crab Shack'], a: [12, 15, 18, 22, 28, 35, 45, 55, 75, 95, 125, 185, 220], n: ['King crab legs — worth every cent', 'Celebration dinner — 6 months!', 'Lamb slow roasted over fire'] },
+    lodging:    { m: ['Los Cauquenes Resort', 'Tierra del Fuego Hostel', 'Posada Fin del Mundo', 'Refugio Patagónico'], a: [55, 75, 95, 115, 145, 175, 225, 285, 345], n: ['End of the world vibes', 'Beagle Channel from the window', 'Wind rattled the walls all night'] },
+    camp:       { m: ['Camping Lago Roca', 'Parque Nacional TdF', 'Monte Olivia Camp', 'Bahía Lapataia Backcountry'], a: [15, 18, 22, 25, 28, 32, 35],   n: ['Foxes stole my glove', 'Sub-zero night — tent held', 'Last campsite before the ocean'] },
+    activities: { m: ['Fin del Mundo Museum', 'Glaciar Martial Hike', 'Lago Fagnano Kayak', 'Cerro Castor Ski Resort'], a: [35, 45, 65, 85, 95, 115, 145, 185], n: ['Southernmost museum on Earth', 'Ice and rocks and seals', 'Roughest seas on the trip'] },
   },
 }
 
-// Setpiece events: memorable one-off expenses keyed by day index
 const PANAMERICAN_SETPIECES = {
-  0:   [{ category: 'gear',       merchant: 'Arctic Expedition Outfitters Prudhoe Bay', amount: 485, note: 'Cold weather upgrades — balaclava, vapor barrier socks, hand warmers ×40, emergency bivy' }],
-  3:   [{ category: 'misc',       merchant: 'Prudhoe Bay Restricted Zone Permit Office', amount: 65,   note: 'Access permit to oilfield zone — required to reach the Arctic Ocean' }],
-  4:   [{ category: 'activities', merchant: 'Arctic Ocean Touch Ceremony',               amount: 0,    note: 'Waded into the Beaufort Sea. Water was 34°F. I screamed. A certificate was issued.' }],
-  14:  [{ category: 'misc',       merchant: 'Dalton Highway Emergency Tire Service',      amount: 285,  note: 'Rock punched through sidewall at mile 178 — unrepairable, bought a new spare' }],
-  20:  [{ category: 'ferry',      merchant: 'Alaska Marine Highway — Bellingham → Juneau', amount: 520, note: 'Overnight cabin, vehicle on deck. Woke up to Tongass rainforest.' }],
-  37:  [{ category: 'activities', merchant: 'Muir Woods Old Growth Walk',                amount: 15,   note: 'Coast redwoods older than the Roman Empire' }],
-  44:  [{ category: 'activities', merchant: 'Ferrocarril Chihuahua al Pacífico',          amount: 185,  note: 'Copper Canyon train — 8 hours through the world\'s most dramatic railway, 37 bridges, 86 tunnels' }],
-  55:  [{ category: 'activities', merchant: 'Teotihuacán Pyramids',                       amount: 22,   note: 'Climbed Pyramid of the Sun at sunrise. 248 steps. Worth it.' }],
-  58:  [{ category: 'activities', merchant: 'Lucha Libre CMLL Arena México',              amount: 28,   note: 'Front row. A masked wrestler sailed into our section. Crowd went insane. 10/10.' }],
-  65:  [{ category: 'misc',       merchant: 'Mexico–Guatemala Border Crossing',           amount: 48,   note: 'Vehicle import permit + fumigation spray + 4 stamps + 1 bribe to skip the line' }],
-  71:  [{ category: 'activities', merchant: 'Tikal National Park Sunrise Tour',           amount: 55,   note: 'Climbed Temple IV before dawn. Howler monkeys woke us at 4am. Best ruins on Earth.' }],
-  78:  [{ category: 'activities', merchant: 'Semuc Champey Natural Monument',             amount: 18,   note: 'Swam through turquoise limestone pools deep inside a cave. Completely unreal.' }],
-  85:  [{ category: 'activities', merchant: 'West Bay Dive Center — Roatán',              amount: 95,   note: '2-tank reef dive: eagle ray, nurse shark, and a sea turtle the size of a coffee table' }],
-  92:  [{ category: 'misc',       merchant: 'Costa Rica–Panama Border',                  amount: 35,   note: 'Fumigation, RITEVE inspection, MOPT permit, and a very thorough search of the vehicle' }],
+  0:   [{ category: 'gear',       merchant: 'Arctic Expedition Outfitters Prudhoe Bay',          amount: 485,  note: 'Cold weather upgrades — balaclava, vapor barrier socks, hand warmers ×40, emergency bivy' }],
+  3:   [{ category: 'misc',       merchant: 'Prudhoe Bay Restricted Zone Permit Office',          amount: 65,   note: 'Access permit to oilfield zone — required to reach the Arctic Ocean' }],
+  4:   [{ category: 'activities', merchant: 'Arctic Ocean Touch Ceremony',                        amount: 0,    note: 'Waded into the Beaufort Sea. Water was 34°F. I screamed. A certificate was issued.' }],
+  14:  [{ category: 'misc',       merchant: 'Dalton Highway Emergency Tire Service',              amount: 285,  note: 'Rock punched through sidewall at mile 178 — unrepairable, bought a new spare' }],
+  20:  [{ category: 'ferry',      merchant: 'Alaska Marine Highway — Bellingham → Juneau',        amount: 520,  note: 'Overnight cabin, vehicle on deck. Woke up to Tongass rainforest.' }],
+  37:  [{ category: 'activities', merchant: 'Muir Woods Old Growth Walk',                         amount: 0,    note: 'Free entry this week — National Public Lands Day' }],
+  44:  [{ category: 'activities', merchant: 'Ferrocarril Chihuahua al Pacífico',                  amount: 185,  note: 'Copper Canyon train — 8 hours, 37 bridges, 86 tunnels' }],
+  55:  [{ category: 'activities', merchant: 'Teotihuacán Pyramids',                               amount: 22,   note: 'Climbed Pyramid of the Sun at sunrise. 248 steps. Worth it.' }],
+  58:  [{ category: 'activities', merchant: 'Lucha Libre CMLL Arena México',                      amount: 28,   note: 'Front row. A masked wrestler sailed into our section. 10/10.' }],
+  65:  [{ category: 'misc',       merchant: 'Mexico–Guatemala Border Crossing',                   amount: 48,   note: 'Vehicle import permit + fumigation + 4 stamps + 1 bribe to skip the line' }],
+  71:  [{ category: 'activities', merchant: 'Tikal National Park Sunrise Tour',                   amount: 55,   note: 'Climbed Temple IV before dawn. Howler monkeys woke us at 4am.' }],
+  78:  [{ category: 'activities', merchant: 'Semuc Champey Natural Monument',                     amount: 18,   note: 'Swam through turquoise limestone pools inside a cave. Completely unreal.' }],
+  85:  [{ category: 'activities', merchant: 'West Bay Dive Center — Roatán',                      amount: 95,   note: '2-tank reef dive: eagle ray, nurse shark, sea turtle the size of a coffee table' }],
+  92:  [{ category: 'misc',       merchant: 'Costa Rica–Panama Border',                           amount: 35,   note: 'Fumigation, RITEVE inspection, MOPT permit, thorough search' }],
   95:  [
-    { category: 'ferry',      merchant: 'S/V Calipso — Darien Gap Passage Panama→Colombia', amount: 850,  note: '4 days at sea via the San Blas Islands. Vehicle stays in Colón. Met 12 travelers from 8 countries. Slept on deck under stars.' },
-    { category: 'transport',  merchant: 'Zona Libre Colón Vehicle Storage',              amount: 135,  note: 'Guarded lot while sailing the gap — 5 nights' },
+    { category: 'ferry',      merchant: 'S/V Calipso — Darien Gap Passage Panama→Colombia',     amount: 850,  note: '4 days at sea via the San Blas Islands. Vehicle stays in Colón. Slept on deck under stars.' },
+    { category: 'transport',  merchant: 'Zona Libre Colón Vehicle Storage',                      amount: 135,  note: 'Guarded lot while sailing the gap — 5 nights' },
   ],
-  110: [{ category: 'activities', merchant: 'Galápagos Day Cruise — MV Yolita',          amount: 650,  note: 'Flew from Guayaquil for a day. Swam with sea lions at Kicker Rock. Blue-footed boobies danced 6 feet away.' }],
+  110: [{ category: 'activities', merchant: 'Galápagos Day Cruise — MV Yolita',                  amount: 650,  note: 'Swam with sea lions at Kicker Rock. Blue-footed boobies danced 6 feet away.' }],
   119: [
-    { category: 'parks',      merchant: 'Machu Picchu Citadel Entry',                   amount: 65,   note: 'Reserved 3 months in advance. Arrived via train from Ollantaytambo at dawn.' },
-    { category: 'activities', merchant: 'Inca Trail 4-Day Trek with Porters',            amount: 345,  note: 'Porter José carried 25kg and still beat us to every campsite. Dead Woman\'s Pass at 4,215m.' },
+    { category: 'parks',      merchant: 'Machu Picchu Citadel Entry',                           amount: 65,   note: 'Reserved 3 months in advance. Arrived via train at dawn.' },
+    { category: 'activities', merchant: 'Inca Trail 4-Day Trek with Porters',                    amount: 345,  note: "Porter José carried 25kg and still beat us to every campsite. Dead Woman's Pass at 4,215m." },
   ],
-  125: [{ category: 'activities', merchant: 'Lake Titicaca Uros Reed Island Community',  amount: 28,   note: 'Floated on a man-made island that has existed for 500 years. Rowed a totora reed boat.' }],
-  130: [{ category: 'activities', merchant: 'Salar de Uyuni Jeep + Overnight',           amount: 165,  note: '3-day salt flat expedition. Stayed in a hotel made of salt. Horizon disappeared.' }],
-  138: [{ category: 'misc',       merchant: 'Antofagasta Vehicle Repair — Taller Vargas', amount: 340,  note: 'Alternator died after 4 months of hard driving. Waited 2 days for part from Santiago.' }],
-  140: [{ category: 'activities', merchant: 'ALMA Observatory Stargazing Tour',          amount: 95,   note: 'Atacama has the clearest skies on Earth. Saw 4 galaxies with naked eye. Milky Way cast shadows.' }],
+  125: [{ category: 'activities', merchant: 'Lake Titicaca Uros Reed Island Community',          amount: 28,   note: 'Floated on a man-made island that has existed for 500 years.' }],
+  130: [{ category: 'activities', merchant: 'Salar de Uyuni Jeep + Overnight',                   amount: 165,  note: '3-day salt flat expedition. Stayed in a hotel made of salt. Horizon disappeared.' }],
+  138: [{ category: 'misc',       merchant: 'Antofagasta Vehicle Repair — Taller Vargas',        amount: 340,  note: 'Alternator died after 4 months of hard driving. Waited 2 days for part.' }],
+  140: [{ category: 'activities', merchant: 'ALMA Observatory Stargazing Tour',                  amount: 95,   note: 'Atacama has the clearest skies on Earth. Saw 4 galaxies with naked eye.' }],
   152: [
-    { category: 'gear',       merchant: 'Bazar Patagónico Puerto Natales',              amount: 155,  note: 'New trekking poles (broke one on Colca Canyon), crampons, waterproof gloves, emergency whistle' },
-    { category: 'activities', merchant: 'Torres del Paine W-Trek + All Refugios',        amount: 485,  note: '5 days, 70km, 4 mountain passes, 3 glaciers. Wind hit 90km/h on Grey Glacier. Cried at the Towers.' },
+    { category: 'gear',       merchant: 'Bazar Patagónico Puerto Natales',                      amount: 155,  note: 'New trekking poles, crampons, waterproof gloves, emergency whistle' },
+    { category: 'activities', merchant: 'Torres del Paine W-Trek + All Refugios',                amount: 485,  note: '5 days, 70km, 4 mountain passes. Wind hit 90km/h on Grey Glacier. Cried at the Towers.' },
   ],
-  157: [{ category: 'activities', merchant: 'Perito Moreno Glacier Ice Walk',            amount: 145,  note: 'Crampons on 700,000-year-old ice. Heard the glacier calve twice — sound like a cannon.' }],
-  162: [{ category: 'ferry',      merchant: 'Beagle Channel Wildlife Cruise',            amount: 145,  note: 'Albatross, Magellanic penguins, sea lions, and the southernmost lighthouse on Earth' }],
-  168: [{ category: 'transport',  merchant: 'Tren del Fin del Mundo',                    amount: 38,   note: 'Southernmost railway on Earth — historically transported prisoners to their sentence' }],
-  175: [{ category: 'misc',       merchant: 'Cape Horn Navigation Permit + Stamp',       amount: 185,  note: 'Technically crossed into Drake Passage waters. Roughest seas imaginable. Earned the albatross sailor tattoo tradition.' }],
-  178: [{ category: 'food',       merchant: 'Restaurante Kaupé — Ushuaia',               amount: 220,  note: 'Celebratory dinner. King crab and centolla. 181 days, 2 continents, 17 countries, ~28,000 miles. Done.' }],
-  179: [{ category: 'transport',  merchant: 'Aerolíneas Argentinas USH → EZE → LAX',     amount: 1850, note: 'Flying home. Sold the truck to a Chilean traveler in the parking lot for $4,200. He named her Libertad.' }],
+  157: [{ category: 'activities', merchant: 'Perito Moreno Glacier Ice Walk',                    amount: 145,  note: 'Crampons on 700,000-year-old ice. Heard the glacier calve twice.' }],
+  162: [{ category: 'ferry',      merchant: 'Beagle Channel Wildlife Cruise',                    amount: 145,  note: 'Albatross, Magellanic penguins, sea lions, southernmost lighthouse on Earth' }],
+  168: [{ category: 'transport',  merchant: 'Tren del Fin del Mundo',                            amount: 38,   note: 'Southernmost railway on Earth — historically transported prisoners' }],
+  175: [{ category: 'misc',       merchant: 'Cape Horn Navigation Permit + Stamp',               amount: 185,  note: 'Crossed into Drake Passage waters. Roughest seas imaginable.' }],
+  178: [{ category: 'food',       merchant: 'Restaurante Kaupé — Ushuaia',                       amount: 220,  note: 'Celebratory dinner. King crab and centolla. 181 days, 2 continents, 17 countries. Done.' }],
+  179: [{ category: 'transport',  merchant: 'Aerolíneas Argentinas USH → EZE → LAX',             amount: 1850, note: 'Flying home. Sold the truck in the parking lot for $4,200. He named her Libertad.' }],
 }
 
 function getPanAmRegion(dayIndex) {
@@ -359,88 +283,37 @@ function dailyExpensesPanAm(dateStr, dayIndex, totalDays, tripId) {
   const docs = []
   const [lat, lon] = interpolateWaypoint(TRIP3_WAYPOINTS, dayIndex, totalDays)
   const rd = REGION_DATA[getPanAmRegion(dayIndex)]
-
-  function expense(cat, merchant, amount, note) {
-    return {
-      _id:       makeId('expense', dateStr),
-      type:      'expense',
-      tripId,
-      amount,
-      category:  cat,
-      date:      dateStr,
-      merchant,
-      note:      note || '',
-      longNote:  '',
-      createdAt: new Date(dateStr).toISOString(),
-      lat, lon,
-    }
-  }
-
-  // Setpieces first
+  const e = (cat, merchant, amount, note) => ({
+    _id: makeId('expense', dateStr), type: 'expense', tripId, amount, category: cat,
+    date: dateStr, merchant, note: note || '', longNote: '',
+    createdAt: new Date(dateStr).toISOString(), lat, lon,
+  })
   const setpieces = PANAMERICAN_SETPIECES[dayIndex] || []
-  for (const sp of setpieces) {
-    docs.push(expense(sp.category, sp.merchant, sp.amount, sp.note))
-  }
-
-  // Skip routine generation on heavy setpiece days
+  for (const sp of setpieces) docs.push(e(sp.category, sp.merchant, sp.amount, sp.note))
   if (setpieces.length >= 3) return docs
-
-  // Fuel every other driving day
-  if (Math.random() < 0.65 && dayIndex % 2 === 0) {
-    docs.push(expense('fuel', pick(rd.fuel.m), pick(rd.fuel.a), maybePick(rd.fuel.n, 0.4)))
-  }
-
-  // Food: breakfast (45%), lunch (82%), dinner (90%)
-  if (Math.random() < 0.45) docs.push(expense('food', pick(rd.food.m), pick(rd.food.a), maybePick(rd.food.n, 0.5)))
-  if (Math.random() < 0.82) docs.push(expense('food', pick(rd.food.m), pick(rd.food.a), maybePick(rd.food.n, 0.4)))
-  if (Math.random() < 0.90) docs.push(expense('food', pick(rd.food.m), pick(rd.food.a), maybePick(rd.food.n, 0.5)))
-
-  // Overnight
+  if (Math.random() < 0.65 && dayIndex % 2 === 0) docs.push(e('fuel', pick(rd.fuel.m), pick(rd.fuel.a), maybePick(rd.fuel.n, 0.4)))
+  if (Math.random() < 0.45) docs.push(e('food', pick(rd.food.m), pick(rd.food.a), maybePick(rd.food.n, 0.5)))
+  if (Math.random() < 0.82) docs.push(e('food', pick(rd.food.m), pick(rd.food.a), maybePick(rd.food.n, 0.4)))
+  if (Math.random() < 0.90) docs.push(e('food', pick(rd.food.m), pick(rd.food.a), maybePick(rd.food.n, 0.5)))
   const r = Math.random()
-  if (r < 0.38) {
-    docs.push(expense('camp', pick(rd.camp.m), pick(rd.camp.a), maybePick(rd.camp.n, 0.6)))
-  } else if (r < 0.88) {
-    docs.push(expense('lodging', pick(rd.lodging.m), pick(rd.lodging.a), maybePick(rd.lodging.n, 0.5)))
-  }
-
-  // Activities ~every 3rd day
-  if (dayIndex % 3 === 1 && Math.random() < 0.58) {
-    docs.push(expense('activities', pick(rd.activities.m), pick(rd.activities.a), maybePick(rd.activities.n, 0.65)))
-  }
-
-  // Shopping ~every 4th day
-  if (dayIndex % 4 === 0 && Math.random() < 0.50) {
-    docs.push(expense('shopping', pick(MERCHANTS.shopping), pick(AMOUNTS.shopping), maybePick(NOTES.shopping, 0.4)))
-  }
-
-  // Misc
-  if (Math.random() < 0.18) {
-    docs.push(expense('misc', pick(MERCHANTS.misc), pick(AMOUNTS.misc), maybePick(NOTES.misc, 0.4)))
-  }
-
-  // Gear: occasional
-  if (Math.random() < 0.06) {
-    docs.push(expense('gear', pick(MERCHANTS.gear), pick(AMOUNTS.gear), maybePick(NOTES.gear, 0.4)))
-  }
-
-  // Medical: rare
-  if (Math.random() < 0.05) {
-    docs.push(expense('medical', pick(MERCHANTS.medical), pick(AMOUNTS.medical), maybePick(NOTES.medical, 0.4)))
-  }
-
+  if (r < 0.38) docs.push(e('camp', pick(rd.camp.m), pick(rd.camp.a), maybePick(rd.camp.n, 0.6)))
+  else if (r < 0.88) docs.push(e('lodging', pick(rd.lodging.m), pick(rd.lodging.a), maybePick(rd.lodging.n, 0.5)))
+  if (dayIndex % 3 === 1 && Math.random() < 0.58) docs.push(e('activities', pick(rd.activities.m), pick(rd.activities.a), maybePick(rd.activities.n, 0.65)))
+  if (dayIndex % 4 === 0 && Math.random() < 0.50) docs.push(e('shopping', pick(MERCHANTS.shopping), pick(AMOUNTS.shopping), maybePick(NOTES.shopping, 0.4)))
+  if (Math.random() < 0.18) docs.push(e('misc', pick(MERCHANTS.misc), pick(AMOUNTS.misc), maybePick(NOTES.misc, 0.4)))
+  if (Math.random() < 0.06) docs.push(e('gear', pick(MERCHANTS.gear), pick(AMOUNTS.gear), maybePick(NOTES.gear, 0.4)))
+  if (Math.random() < 0.05) docs.push(e('medical', pick(MERCHANTS.medical), pick(AMOUNTS.medical), maybePick(NOTES.medical, 0.4)))
   return docs
 }
 
-// ── Build all docs ───────────────────────────────────────────────────────────
+// ── Seed ─────────────────────────────────────────────────────────────────────
 
 async function seed() {
   log('── Checking existing data ──────────────────────────────────────', 'hdr')
   const existing = await db.allDocs()
-  if (existing.rows.length > 0) {
-    log(`Found ${existing.rows.length} existing docs. Will skip conflicts.`, 'ok')
-  } else {
-    log('Database is empty — seeding from scratch.', 'ok')
-  }
+  log(existing.rows.length > 0
+    ? `Found ${existing.rows.length} existing docs. Will skip conflicts.`
+    : 'Database is empty — seeding from scratch.', 'ok')
 
   const allDocs = []
 
@@ -452,10 +325,9 @@ async function seed() {
     description: 'Full run of the Alaska Highway from Dawson Creek to Anchorage, with side trips to Denali and Homer.',
     endDate: trip1End, name: 'Alaska Highway Adventure', startDate: trip1Start })
   const trip1Dates = dateRange(trip1Start, trip1End)
-  log(`Generating expenses for ${trip1Dates.length} days...`)
-  for (let i = 0; i < trip1Dates.length; i++) {
+  log(`  Generating ${trip1Dates.length} days...`, 'dim')
+  for (let i = 0; i < trip1Dates.length; i++)
     allDocs.push(...dailyExpenses(trip1Dates[i], i, trip1Dates.length, trip1Id, TRIP1_WAYPOINTS))
-  }
 
   // ── Trip 2: Pacific Northwest Coastal Loop ────────────────────────────────
   log('\n── Trip 2: Pacific Northwest Coastal Loop ────────────────────────', 'hdr')
@@ -465,10 +337,9 @@ async function seed() {
     description: 'Seattle south to San Francisco along Highway 101, then back north through the Cascades.',
     endDate: trip2End, name: 'Pacific Northwest Coastal Loop', startDate: trip2Start })
   const trip2Dates = dateRange(trip2Start, trip2End)
-  log(`Generating expenses for ${trip2Dates.length} days...`)
-  for (let i = 0; i < trip2Dates.length; i++) {
+  log(`  Generating ${trip2Dates.length} days...`, 'dim')
+  for (let i = 0; i < trip2Dates.length; i++)
     allDocs.push(...dailyExpenses(trip2Dates[i], i, trip2Dates.length, trip2Id, TRIP2_WAYPOINTS))
-  }
 
   // ── Trip 3: Pan-American Highway ──────────────────────────────────────────
   log('\n── Trip 3: Pan-American: Prudhoe Bay → Ushuaia ──────────────────', 'hdr')
@@ -478,21 +349,194 @@ async function seed() {
     description: 'Full Pan-American Highway from Prudhoe Bay, Alaska to Ushuaia, Argentina. 17 countries, 181 days, ~28,000 miles. The whole thing.',
     endDate: trip3End, name: 'Pan-American: Prudhoe Bay → Ushuaia', startDate: trip3Start })
   const trip3Dates = dateRange(trip3Start, trip3End)
-  log(`Generating expenses for ${trip3Dates.length} days...`)
-  for (let i = 0; i < trip3Dates.length; i++) {
+  log(`  Generating ${trip3Dates.length} days...`, 'dim')
+  for (let i = 0; i < trip3Dates.length; i++)
     allDocs.push(...dailyExpensesPanAm(trip3Dates[i], i, trip3Dates.length, trip3Id))
-  }
 
-  // ── Amendments ────────────────────────────────────────────────────────────
+  // ── Trip 4: Single-day Crater Lake — over budget, free items, decimals ────
+  log('\n── Trip 4: Day Trip — Crater Lake (single day, over budget) ─────', 'hdr')
+  const trip4Date = '2026-05-10'
+  const trip4Id = makeId('trip', trip4Date)
+  allDocs.push({ _id: trip4Id, type: 'trip', budget: 150, coverPhotoUrl: '',
+    description: 'Quick day trip up to Crater Lake. Fee-free weekend. Supposed to be cheap. Was not.',
+    endDate: trip4Date, name: 'Day Trip: Crater Lake', startDate: trip4Date })
+  const [cl_lat, cl_lon] = [42.94, -122.11]
+  // Decimal amounts, $0 free items — total will be ~$207 against $150 budget
+  allDocs.push(mkExp(trip4Id, trip4Date, 'fuel',       'Chevron Medford',                                    67.40, 'Filled up before the drive',          { lat: 42.33, lon: -122.87 }))
+  allDocs.push(mkExp(trip4Id, trip4Date, 'food',       'Dutch Bros Coffee — Medford',                         0,    'Free — 10th punch on the loyalty card', { lat: 42.33, lon: -122.87, longNote: 'Been holding onto this punch card since Ashland. Finally paid off.' }))
+  allDocs.push(mkExp(trip4Id, trip4Date, 'parks',      'Crater Lake National Park',                            0,    'Fee-free weekend — NPS fee waiver day', { lat: cl_lat, lon: cl_lon, longNote: 'National Park Service fee-free day. Would normally be $35 for the vehicle pass. Arrived at 7am and had the rim road almost to ourselves until about 9.' }))
+  allDocs.push(mkExp(trip4Id, trip4Date, 'food',       'Crater Lake Lodge Dining Room',                       18.50, 'Lunch on the rim',                     { lat: cl_lat, lon: cl_lon }))
+  allDocs.push(mkExp(trip4Id, trip4Date, 'activities', 'Wizard Island Boat Tour',                             45.00, 'Snagged a cancellation spot',          { lat: cl_lat, lon: cl_lon }))
+  allDocs.push(mkExp(trip4Id, trip4Date, 'food',       'Crater Lake Lodge — Soft Serve',                       4.25, 'Ice cream at 7,100ft elevation',       { lat: cl_lat, lon: cl_lon }))
+  allDocs.push(mkExp(trip4Id, trip4Date, 'shopping',   'Crater Lake NP Bookstore',                            28.99, 'Geology book + fridge magnet',         { lat: cl_lat, lon: cl_lon }))
+  allDocs.push(mkExp(trip4Id, trip4Date, 'food',       "Beckie's Café — Union Creek",                         42.73, 'Famous pie stop. Bought 3 slices to go.',{ lat: 42.79, lon: -122.49 }))
+  log("  8 hand-crafted expenses: $0 free items, decimal amounts, ~$207 against $150 budget")
+
+  // ── Trip 5: PCT Resupply — way over budget, hiker hunger, free trail magic ─
+  log('\n── Trip 5: PCT Support Run (way over budget) ────────────────────', 'hdr')
+  const trip5Start = '2026-06-01', trip5End = '2026-06-10'
+  const trip5Id = makeId('trip', trip5Start)
+  allDocs.push({ _id: trip5Id, type: 'trip', budget: 500, coverPhotoUrl: '',
+    description: 'Supporting PCT hikers from Kennedy Meadows to Mammoth. Budgeted tight. Hiker hunger is a documented medical condition.',
+    endDate: trip5End, name: 'PCT Support: Kennedy Meadows → Mammoth', startDate: trip5Start })
+  const pctWaypoints = [[35.95, -118.00], [36.50, -118.20], [36.80, -118.35], [37.10, -118.55], [37.37, -118.72], [37.64, -118.99]]
+  const pctFood = ['Kennedy Meadows General Store', "Grumpy Bear Resort", 'Vermilion Valley Resort', 'Muir Trail Ranch Resupply', 'Mammoth Lakes Grocery', "Schat's Bakkery Mammoth", 'The Breakfast Club Mammoth', "Angel's Restaurant Bishop", 'Pizza Factory Lone Pine']
+  const pctAmounts = [4.50, 6.75, 8.25, 9.99, 12.50, 14.75, 18.00, 22.50, 28.00, 34.99, 42.50, 55.00, 67.25, 82.00]
+  const pctDates = dateRange(trip5Start, trip5End)
+  log(`  Generating ${pctDates.length} days of hiker-hunger spending...`, 'dim')
+  for (let i = 0; i < pctDates.length; i++) {
+    const [lat, lon] = interpolateWaypoint(pctWaypoints, i, pctDates.length)
+    const d = pctDates[i]
+    const p = (cat, merchant, amount, note) => ({
+      _id: makeId('expense', d), type: 'expense', tripId: trip5Id, amount, category: cat,
+      date: d, merchant, note: note || '', longNote: '',
+      createdAt: new Date(d).toISOString(), lat, lon,
+    })
+    // 4-6 food entries per day — hiker hunger
+    const meals = 3 + Math.floor(Math.random() * 3)
+    for (let f = 0; f < meals; f++)
+      allDocs.push(p('food', pick(pctFood), pick(pctAmounts), f === 0 ? 'Hiker hunger is no joke' : ''))
+    // Free trail magic ~40% of days
+    if (Math.random() < 0.40)
+      allDocs.push(p('food', 'Trail Magic — Anonymous Trail Angel', 0, 'Free food left at a road crossing. Ramen, Snickers, Pringles, a full jar of Nutella. Cried a little.'))
+    // Free hiker box score ~25% of days
+    if (Math.random() < 0.25)
+      allDocs.push(p('food', 'Hiker Box — Kennedy Meadows Store', 0, 'Unclaimed resupply packages left in the hiker box. Jackpot: 4 ProBars, dehydrated chili, instant mashed potatoes.'))
+    // Resupply every other day
+    if (i % 2 === 0)
+      allDocs.push(p('shopping', pick(['REI Mammoth', 'Mammoth Mountaineering', 'Kennedy Meadows Store', 'Vons Bishop']), pick([45.99, 67.50, 88.25, 112.00, 145.75]), 'Resupply'))
+    // Free dispersed camp ~half the nights
+    allDocs.push(p('camp', pick(['PCT Wilderness — Inyo NF', 'John Muir Wilderness', 'Golden Trout Wilderness', 'Sequoia NF Dispersed']),
+      Math.random() < 0.50 ? 0 : pick([15, 20, 25]), Math.random() < 0.5 ? 'Free dispersed camping' : ''))
+    if (i % 2 === 0)
+      allDocs.push(p('fuel', pick(['Chevron Mammoth', 'Shell Bishop', 'Arco Lone Pine']), pick([72.50, 78.25, 85.00, 91.75, 98.50]), ''))
+  }
+  log('  Budget: $500 — actual spend will be ~$1,800+')
+
+  // ── Trip 6: Canadian Maritimes — planned, zero expenses ───────────────────
+  log('\n── Trip 6: Canadian Maritimes — Planned (empty trip) ────────────', 'hdr')
+  const trip6Id = makeId('trip', '2026-07-15')
+  allDocs.push({ _id: trip6Id, type: 'trip', budget: 3500, coverPhotoUrl: '',
+    description: 'Nova Scotia, PEI, Cape Breton, New Brunswick. Lobster season. Lighthouse coast. Not happened yet.',
+    endDate: '2026-08-20', name: 'Canadian Maritimes — Lighthouse Tour', startDate: '2026-07-15' })
+  log('  0 expenses — tests the empty-trip state')
+
+  // ── Edge Cases & Bad Data ─────────────────────────────────────────────────
+  log('\n── Edge Cases & Bad Data ─────────────────────────────────────────', 'hdr')
+
+  // Negative amount: refund
+  allDocs.push(mkExp(trip1Id, '2026-03-20', 'shopping', 'REI Co-op — Annual Member Dividend',
+    -45.00, 'Dividend applied as store credit — intentionally negative',
+    { lat: 63.74, lon: -145.55 }))
+  log('  → Negative amount: -$45 REI dividend refund', 'dim')
+
+  // Expense before trip start (out-of-range date, before startDate)
+  allDocs.push(mkExp(trip1Id, '2026-03-10', 'gear', "Cabela's Edmonton — Pre-Trip Gear Run",
+    285, 'Purchased 5 days before trip start — date is outside the trip range',
+    { lat: 53.55, lon: -113.47 }))
+  log('  → Out-of-range (before start): gear purchase 5 days early', 'dim')
+
+  // Expense after trip end (out-of-range date, after endDate)
+  allDocs.push(mkExp(trip1Id, '2026-05-05', 'medical', 'Anchorage Urgent Care — Post-Trip Blister',
+    120, 'Infected blister treated 8 days after trip officially ended',
+    { lat: 61.22, lon: -149.90 }))
+  log('  → Out-of-range (after end): medical visit 8 days post-trip', 'dim')
+
+  // Future-dated expense
+  allDocs.push(mkExp(trip2Id, '2027-01-01', 'lodging', 'Hotel Time Paradox',
+    500, 'Expense dated in the future — should not crash the UI',
+    { lat: 47.61, lon: -122.33 }))
+  log('  → Future date: 2027-01-01 expense in a 2026 trip', 'dim')
+
+  // $0 free item — clearly intentional, not an accident
+  allDocs.push(mkExp(trip1Id, '2026-03-28', 'camp', 'Bureau of Land Management — Dispersed Site',
+    0, 'Free dispersed camping on BLM land — no fee required',
+    { lat: 63.34, lon: -142.99, longNote: 'Pulled off on a BLM two-track about 2 miles from the highway. Complete solitude. No permit, no fee, no neighbors. This is the good stuff.' }))
+  allDocs.push(mkExp(trip1Id, '2026-04-05', 'activities', 'Denali Visitor Center — Ranger Talk',
+    0, 'Free daily ranger program — highly recommend',
+    { lat: 63.73, lon: -148.91 }))
+  log('  → Two $0 free items: BLM dispersed camp + free ranger program', 'dim')
+
+  // Giant merchant name
+  allDocs.push(mkExp(trip1Id, '2026-03-22', 'food',
+    'Restaurante y Cantina La Guadalupana de San Miguel — Historic Downtown Flagship Location, Established 1987, Award-Winning Since 1992',
+    28.50, 'Testing very long merchant name truncation in the ledger',
+    { lat: 60.72, lon: -135.05 }))
+  log('  → Giant merchant name: 100+ chars', 'dim')
+
+  // Very long longNote
+  allDocs.push(mkExp(trip1Id, '2026-03-25', 'camp', 'Kluane Lake Research Station Campsite',
+    34, 'Longest driving day yet. Best sunset of the trip.',
+    {
+      lat: 61.06, lon: -138.41,
+      longNote: `Started the day before dawn to catch the sunrise over Kluane Lake. The sky went through every shade of orange and pink I've ever seen, reflecting perfectly in the still water. No wind at all — unusual for the Yukon.
+
+Drove the full length of Kluane National Park along the Alaska Highway, stopping at every pullout. Saw a black bear and two cubs about 400m off the road near mile marker 1083. Watched them for 20 minutes before they disappeared into the spruce.
+
+The Saint Elias Mountains were completely clear — rare this time of year. Pulled over at the Sheep Mountain Visitor Centre and talked to a ranger named Dale who has been stationed there for 22 years. He said the glacier retreat is now visible year-over-year with the naked eye. He showed me photos from 2005 vs today. It's stark.
+
+Crossed into Alaska at Beaver Creek. Border agent asked where I was going. I said Prudhoe Bay. He paused. Said 'good luck' and handed back my passport. Stopped at Tok for fuel and the cheapest wifi of the trip ($2 for 24hrs at the Tok Gateway Salmon Bakes). Downloaded offline maps for the Dalton Highway.
+
+Met a German couple on matching BMWs doing the same route in reverse. We had dinner together and they warned me about the active construction near Coldfoot — soft gravel shoulders, big trucks, go slow. They had a cracked windshield to prove it.
+
+Total driving today: 412 miles. Longest day of the trip so far. Tent up by 10:30pm but still light outside. Couldn't sleep until midnight.`,
+    }))
+  log('  → Very long longNote: ~1,100 character journal entry', 'dim')
+
+  // Amendment chain: one expense edited 5 times in sequence
+  const chainBase = mkExp(trip1Id, '2026-04-01', 'lodging', 'Pioneer Motel Tok',
+    95, 'Original entry — amended 5 times below',
+    { lat: 63.34, lon: -142.99, createdAt: '2026-04-01T08:00:00.000Z' })
+  allDocs.push(chainBase)
+  const chainAmends = [
+    { createdAt: '2026-04-01T09:15:00.000Z', amount: 105,   note: 'Receipt said $105 not $95' },
+    { createdAt: '2026-04-01T10:00:00.000Z', merchant: 'Frontier Inn Tok', note: 'Wrong name — corrected from receipt' },
+    { createdAt: '2026-04-01T11:30:00.000Z', category: 'misc', note: 'Re-categorized: it was a hostel dorm, not a motel room' },
+    { createdAt: '2026-04-01T14:00:00.000Z', category: 'lodging', note: 'Reverted — actually had a private room, lodging is correct' },
+    { createdAt: '2026-04-01T20:00:00.000Z', amount: 99, merchant: 'Frontier Inn Tok (verified)', note: 'Final: $99 confirmed against bank statement' },
+  ]
+  for (const patch of chainAmends) {
+    allDocs.push({ _id: makeId('amend', '2026-04-01'), type: 'amend', targetId: chainBase._id, ...patch })
+  }
+  log('  → Amendment chain: 1 expense edited 5 times (amount → name → category → category → amount+name)', 'dim')
+
+  // Orphaned amendment (targetId points to a non-existent expense)
+  allDocs.push({
+    _id: makeId('amend', '2026-04-10'), type: 'amend',
+    targetId: 'expense::2099-01-01T00:00:00.000Z::deadbeef',
+    createdAt: '2026-04-10T12:00:00.000Z',
+    amount: 999, note: 'Orphaned: target expense does not exist in the database',
+  })
+  log('  → Orphaned amendment: targetId points to a non-existent expense', 'dim')
+
+  // Orphaned void (same)
+  allDocs.push({
+    _id: 'void::expense::2099-01-01T00:00:00.000Z::deadbeef::del',
+    type: 'void',
+    targetId: 'expense::2099-01-01T00:00:00.000Z::deadbeef',
+    createdAt: '2026-04-10T12:00:00.000Z',
+  })
+  log('  → Orphaned void: targetId points to a non-existent expense', 'dim')
+
+  // Void targeting an already-amended expense (amendment + void on same target)
+  allDocs.push({
+    _id: `void::${chainBase._id}::del`,
+    type: 'void',
+    targetId: chainBase._id,
+    createdAt: '2026-04-02T08:00:00.000Z',
+  })
+  log('  → Void on an amended expense: the 5-amendment chain base is also voided', 'dim')
+
+  // ── Standard amendments & voids across the main trips ────────────────────
+  log('\n── Amendments & Voids (normal) ──────────────────────────────────', 'hdr')
   const expenseDocs = allDocs.filter(d => d.type === 'expense')
   for (const idx of [3, 10, 25, 60, 90, 200, 350]) {
     const target = expenseDocs[idx]
     if (!target) continue
     allDocs.push({ _id: makeId('amend', target.date), type: 'amend', targetId: target._id,
-      createdAt: new Date(target.date + 'T12:00:00Z').toISOString(), amount: target.amount + 5, note: 'Corrected amount' })
+      createdAt: new Date(target.date + 'T12:00:00Z').toISOString(),
+      amount: target.amount + 5, note: 'Corrected amount' })
   }
-
-  // ── Voids ─────────────────────────────────────────────────────────────────
   for (const idx of [7, 40, 75, 150]) {
     const target = expenseDocs[idx]
     if (!target) continue
@@ -500,9 +544,8 @@ async function seed() {
       createdAt: new Date(target.date + 'T12:00:00Z').toISOString() })
   }
 
-  log(`\nTotal documents to insert: ${allDocs.length}`)
-
   // ── Bulk insert ───────────────────────────────────────────────────────────
+  log(`\nTotal documents to insert: ${allDocs.length}`)
   let inserted = 0, skipped = 0, errors = 0
   const BATCH = 100
   for (let i = 0; i < allDocs.length; i += BATCH) {
@@ -510,20 +553,22 @@ async function seed() {
     for (const r of result) {
       if (r.ok)                  inserted++
       else if (r.status === 409) skipped++
-      else { errors++; log(`  Error: ${r.message}`, 'err') }
+      else { errors++; log(`  Error on ${r.id}: ${r.message}`, 'err') }
     }
-    log(`  ${Math.min(i + BATCH, allDocs.length)} / ${allDocs.length}`)
+    log(`  ${Math.min(i + BATCH, allDocs.length).toString().padStart(4)} / ${allDocs.length}`, 'dim')
   }
 
-  log(`\n✓ Inserted: ${inserted}  Skipped: ${skipped}  Errors: ${errors}`, 'ok')
+  log(`\n✓ Inserted: ${inserted}  Skipped (conflict): ${skipped}  Errors: ${errors}`, 'ok')
 
   const types = {}, cats = {}
   for (const d of allDocs) types[d.type] = (types[d.type] || 0) + 1
   for (const d of allDocs.filter(d => d.type === 'expense')) cats[d.category] = (cats[d.category] || 0) + 1
-  log('\nBy type:')
+  log('\nBy document type:')
   for (const [t, n] of Object.entries(types)) log(`  ${t.padEnd(10)} ${n}`)
-  log('\nBy category:')
-  for (const [c, n] of Object.entries(cats).sort((a,b) => b[1]-a[1])) log(`  ${c.padEnd(14)} ${n}`)
+  log('\nBy expense category:')
+  for (const [c, n] of Object.entries(cats).sort((a, b) => b[1] - a[1])) log(`  ${c.padEnd(14)} ${n}`)
+  const freeCount = allDocs.filter(d => d.type === 'expense' && d.amount === 0).length
+  log(`\n$0 "free" expenses: ${freeCount}`, 'ok')
 
   document.getElementById('done').style.display = 'block'
 }
