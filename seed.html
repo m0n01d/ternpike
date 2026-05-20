@@ -495,8 +495,11 @@ Total driving today: 412 miles. Longest day of the trip so far. Tent up by 10:30
     { createdAt: '2026-04-01T14:00:00.000Z', category: 'lodging', note: 'Reverted — actually had a private room, lodging is correct' },
     { createdAt: '2026-04-01T20:00:00.000Z', amount: 99, merchant: 'Frontier Inn Tok (verified)', note: 'Final: $99 confirmed against bank statement' },
   ]
+  let chainSeq = 0
   for (const patch of chainAmends) {
-    allDocs.push({ _id: makeId('amend', '2026-04-01'), type: 'amend', targetId: chainBase._id, ...patch })
+    // Match the app's `amend::<expenseId>::<seq>` scheme so targeted
+    // GetExpense range queries (`startkey: 'amend::<expenseId>'`) find them.
+    allDocs.push({ _id: `amend::${chainBase._id}::${chainSeq++}`, type: 'amend', targetId: chainBase._id, ...patch })
   }
   log('  → Amendment chain: 1 expense edited 5 times (amount → name → category → category → amount+name)', 'dim')
 
@@ -530,10 +533,12 @@ Total driving today: 412 miles. Longest day of the trip so far. Tent up by 10:30
   // ── Standard amendments & voids across the main trips ────────────────────
   log('\n── Amendments & Voids (normal) ──────────────────────────────────', 'hdr')
   const expenseDocs = allDocs.filter(d => d.type === 'expense')
+  let stdAmendSeq = 0
   for (const idx of [3, 10, 25, 60, 90, 200, 350]) {
     const target = expenseDocs[idx]
     if (!target) continue
-    allDocs.push({ _id: makeId('amend', target.date), type: 'amend', targetId: target._id,
+    // Match the app's `amend::<expenseId>::<seq>` scheme (see chain note above).
+    allDocs.push({ _id: `amend::${target._id}::${stdAmendSeq++}`, type: 'amend', targetId: target._id,
       createdAt: new Date(target.date + 'T12:00:00Z').toISOString(),
       amount: target.amount + 5, note: 'Corrected amount' })
   }
