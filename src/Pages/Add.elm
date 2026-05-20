@@ -49,7 +49,7 @@ viewHero model =
                 , Html.Attributes.value model.pendingEntry.amount
                 , Html.Events.onInput AmountChanged
                 , Html.Attributes.placeholder "0.00"
-                , Html.Attributes.class "h-[3.5rem] w-full bg-transparent border-0 outline-none p-0 appearance-none font-display text-5xl font-black text-forest tabular-nums tracking-tight leading-none"
+                , Html.Attributes.class "h-[3.5rem] -translate-y-1 w-full bg-transparent border-0 outline-none p-0 appearance-none font-display text-5xl font-black text-forest tabular-nums tracking-tight leading-none"
                 ]
                 []
             ]
