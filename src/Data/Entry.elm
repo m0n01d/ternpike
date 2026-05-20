@@ -56,14 +56,9 @@ resolve expenses amendments voids activeTripId =
                     toEffectiveEntry False expense
 
                 Just amends ->
-                    let
-                        latest =
-                            List.sortBy .createdAt amends
-                                |> List.reverse
-                                |> List.head
-                    in
-                    Maybe.map (applyAmendment expense) latest
-                        |> Maybe.withDefault (toEffectiveEntry False expense)
+                    amends
+                        |> List.sortBy .createdAt
+                        |> List.foldl (\a acc -> applyAmendment acc a) (toEffectiveEntry True expense)
     in
     expenses
         |> List.filter (\e -> e.tripId == activeTripId && not (Set.member (ExpenseId.toString e.id) voidedIds))
@@ -88,7 +83,7 @@ toEffectiveEntry isAmended e =
     }
 
 
-applyAmendment : Expense -> Amendment -> EffectiveEntry
+applyAmendment : EffectiveEntry -> Amendment -> EffectiveEntry
 applyAmendment e a =
     { amount    = Maybe.withDefault e.amount a.amount
     , category  = Maybe.withDefault e.category a.category

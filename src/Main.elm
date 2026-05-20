@@ -13,6 +13,7 @@ import Http
 import Data.Void as Void
 import Dict
 import File
+import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Json.Decode as D
@@ -738,8 +739,12 @@ updateAuth msg as_ =
                     in
                     case as_.pendingEditEntry of
                         Just { entryId } ->
-                            case as_.rawExpenses |> List.filter (\e -> e.id == entryId) |> List.head of
-                                Just expense ->
+                            case resolved |> List.filter (\e -> e.id == entryId) |> List.head of
+                                Just effective ->
+                                    let
+                                        expense =
+                                            Helpers.effectiveEntryToExpense effective
+                                    in
                                     ( AuthModel
                                         { as_
                                             | editingEntry     = Just expense
@@ -1336,9 +1341,10 @@ updateAuth msg as_ =
                     else
                         let
                             maybeExpense =
-                                as_.rawExpenses
+                                Entry.resolve as_.rawExpenses as_.amendments as_.voids tripId
                                     |> List.filter (\e -> e.id == entryId)
                                     |> List.head
+                                    |> Maybe.map Helpers.effectiveEntryToExpense
                         in
                         case maybeExpense of
                             Just expense ->
