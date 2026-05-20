@@ -140,7 +140,7 @@ viewEntries entries =
                     List.filter (\e -> e.date == date) entries
             in
             ( date
-            , Html.div [ Html.Attributes.class "mb-4" ]
+            , Html.div [ Html.Attributes.class "mt-6 mb-4" ]
                 [ viewDayKicker dayN date
                 , Keyed.node "div"
                     [ Html.Attributes.class "animate-stagger-row" ]
@@ -156,7 +156,7 @@ viewEntries entries =
 
 viewDayKicker : Int -> String -> Html Msg
 viewDayKicker dayN date =
-    Html.div [ Html.Attributes.class "mt-6 mb-2 flex items-center gap-3" ]
+    Html.div [ Html.Attributes.class "sticky top-[53px] z-[9] bg-parchment -mx-5 px-5 pb-2 flex items-center gap-3" ]
         [ Html.span
             [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-rust" ]
             [ Html.text ("DAY " ++ String.fromInt dayN) ]
