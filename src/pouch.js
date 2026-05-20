@@ -98,7 +98,7 @@ export function attachPouch(app, { creds = null } = {}) {
             }
           }
           app.ports.pouchIn.send({
-            tag: 'TripExpensesLoaded',
+            tag: 'TripExpensesFetched',
             tripId: msg.tripId,
             amendments, expenses, voids,
           })
@@ -142,7 +142,7 @@ export function attachPouch(app, { creds = null } = {}) {
           }
 
           app.ports.pouchIn.send({
-            tag: 'ExpenseLoaded',
+            tag: 'ExpenseFetched',
             expenseId: id,
             amendments,
             expense,
