@@ -175,15 +175,15 @@ page { actions, body, hero, route } =
             [ Html.Attributes.class
                 ("relative overflow-hidden p-5 mb-5 bg-cream rounded-card shadow-card "
                     ++ "bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] "
-                    ++ "transition-[background-position] duration-700 ease-out "
+                    ++ "transition-[background-position] delay-150 duration-700 ease-out "
                     ++ topoPosClass route
                 )
             ]
             [ Html.div
-                [ Html.Attributes.class "flex justify-between mb-4 gap-3 min-h-7 items-start" ]
-                [ Html.h1 [ Html.Attributes.class "font-display text-2xl tracking-tight font-black text-forest" ]
+                [ Html.Attributes.class "flex items-start justify-between mb-4 gap-3 min-h-7" ]
+                [ Html.h1 [ Html.Attributes.class "text-2xl font-black tracking-tight font-display text-forest" ]
                     [ Html.text (Routing.routeTitle route) ]
-                , Html.div [ Html.Attributes.class "flex gap-2 items-center" ] actions
+                , Html.div [ Html.Attributes.class "flex items-center gap-2" ] actions
                 ]
             , hero
             ]
