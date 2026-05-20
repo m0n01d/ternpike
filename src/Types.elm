@@ -168,7 +168,7 @@ type alias AuthState =
     , expensesState     : ExpensesState
     , geoBlocked        : Bool
     , key               : Nav.Key
-    , pendingEditEntry  : Maybe { entryId : ExpenseId, tripId : TripId }
+    , pendingEntryId    : Maybe ExpenseId
     , pendingEntry      : PendingEntry
     , rawExpenses       : List Expense
     , scanQueue         : Dict String ScanItem

@@ -95,7 +95,7 @@ toAuthState creds initialTripId initialTab gs =
     , expensesState     = NotAsked
     , geoBlocked        = False
     , key               = gs.key
-    , pendingEditEntry  = Nothing
+    , pendingEntryId    = Nothing
     , pendingEntry      = defaultPendingEntry gs.today
     , rawExpenses       = []
     , scanQueue         = Dict.empty
@@ -559,13 +559,13 @@ init flagsJson url key =
 
                 pendingEdit =
                     case initialRoute of
-                        RouteEditEntry tripId entryId ->
-                            Just { entryId = entryId, tripId = tripId }
+                        RouteEditEntry _ entryId ->
+                            Just entryId
 
                         _ ->
                             Nothing
             in
-            ( AuthModel { as_ | pendingEditEntry = pendingEdit }, sendPouch GetAllTrips )
+            ( AuthModel { as_ | pendingEntryId = pendingEdit }, sendPouch GetAllTrips )
 
 
 
@@ -695,8 +695,8 @@ updateAuth msg as_ =
                         resolved =
                             Entry.resolve as_.rawExpenses as_.amendments as_.voids as_.currentTripId
                     in
-                    case as_.pendingEditEntry of
-                        Just { entryId } ->
+                    case as_.pendingEntryId of
+                        Just entryId ->
                             case resolved |> List.filter (\e -> e.id == entryId) |> List.head of
                                 Just effective ->
                                     let
@@ -705,17 +705,17 @@ updateAuth msg as_ =
                                     in
                                     ( AuthModel
                                         { as_
-                                            | editingEntry     = Just expense
-                                            , expensesState    = Loaded resolved
-                                            , pendingEditEntry = Nothing
-                                            , pendingEntry     = expenseToPending expense
-                                            , tab              = AddTab
+                                            | editingEntry   = Just expense
+                                            , expensesState  = Loaded resolved
+                                            , pendingEntryId = Nothing
+                                            , pendingEntry   = expenseToPending expense
+                                            , tab            = AddTab
                                         }
                                     , Cmd.none
                                     )
 
                                 Nothing ->
-                                    ( AuthModel { as_ | expensesState = Loaded resolved, pendingEditEntry = Nothing }
+                                    ( AuthModel { as_ | expensesState = Loaded resolved, pendingEntryId = Nothing }
                                     , Cmd.none
                                     )
 
@@ -723,20 +723,9 @@ updateAuth msg as_ =
                             ( AuthModel { as_ | expensesState = Loaded resolved }, Cmd.none )
 
                 Ok (QueryComplete "trips") ->
-                    case as_.pendingEditEntry of
-                        Just { tripId } ->
-                            ( AuthModel
-                                { as_
-                                    | currentTripId = tripId
-                                    , expensesState = Loading
-                                }
-                            , sendPouch (GetExpenses (TripId.toString tripId))
-                            )
-
-                        Nothing ->
-                            ( AuthModel { as_ | expensesState = Loading }
-                            , sendPouch (GetExpenses (TripId.toString as_.currentTripId))
-                            )
+                    ( AuthModel { as_ | expensesState = Loading }
+                    , sendPouch (GetExpenses (TripId.toString as_.currentTripId))
+                    )
 
                 Ok (QueryComplete _) ->
                     ( AuthModel as_, Cmd.none )
@@ -969,7 +958,7 @@ updateAuth msg as_ =
             ( AuthModel
                 { as_
                     | editingEntry     = Nothing
-                    , pendingEditEntry = Nothing
+                    , pendingEntryId = Nothing
                     , pendingEntry     = defaultPendingEntry as_.today
                     , tab              = LedgerTab
                 }
@@ -996,7 +985,7 @@ updateAuth msg as_ =
             ( AuthModel
                 { as_
                     | editingEntry     = Nothing
-                    , pendingEditEntry = Nothing
+                    , pendingEntryId = Nothing
                     , pendingEntry     = newPending
                     , tab              = tab
                     , tripForm         = Nothing
@@ -1341,7 +1330,7 @@ updateAuth msg as_ =
                                 ( AuthModel
                                     { as_
                                         | currentTripId    = tripId
-                                        , pendingEditEntry = Just { entryId = entryId, tripId = tripId }
+                                        , pendingEntryId = Just entryId
                                         , tab              = AddTab
                                     }
                                 , expCmd
@@ -1379,7 +1368,7 @@ updateAuth msg as_ =
                             | currentTripId    = newCurrentTripId
                             , editingEntry     = if tab /= AddTab then Nothing else as_.editingEntry
                             , expensesState    = if tripChanged then Loading else as_.expensesState
-                            , pendingEditEntry = Nothing
+                            , pendingEntryId = Nothing
                             , pendingEntry     = newPending
                             , tab              = tab
                             , tripForm         = Nothing
