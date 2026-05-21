@@ -1,0 +1,16 @@
+name = "ternpike-auth"
+main = "index.js"
+compatibility_date = "2025-01-01"
+
+[[kv_namespaces]]
+binding = "CODES_KV"
+id = "YOUR_KV_NAMESPACE_ID"
+
+[vars]
+COUCH_URL = "https://couch.ternpike.com"
+
+# Set secrets via: wrangler secret put NAME
+#   COUCH_ADMIN_USER
+#   COUCH_ADMIN_PASS
+#   SERVER_SECRET
+#   RESEND_API_KEY
