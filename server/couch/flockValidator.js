@@ -24,6 +24,11 @@ function (newDoc, oldDoc, userCtx, secObj) {
     return;
   }
 
+  // Server admin bypass — admins are the server's own credentials, used by
+  // the auth server for provisioning and recovery. They don't need to satisfy
+  // member-level integrity checks.
+  if (isAdmin) return;
+
   var flockMeta = (secObj && secObj.flock) || null;
 
   if (flockMeta && flockMeta.billingStatus && flockMeta.billingStatus !== 'active') {
@@ -46,6 +51,14 @@ function (newDoc, oldDoc, userCtx, secObj) {
   if (!newDoc.type || typeof newDoc.type !== 'string') {
     reject('missing type');
   }
+  var allowedTypes = ['expense', 'trip', 'amend', 'void', 'flock', 'userFlocks'];
+  var typeOk = false;
+  for (var t = 0; t < allowedTypes.length; t++) {
+    if (allowedTypes[t] === newDoc.type) { typeOk = true; break; }
+  }
+  if (!typeOk) {
+    reject('unknown type: ' + newDoc.type);
+  }
   if (!newDoc.createdBy || typeof newDoc.createdBy !== 'string') {
     reject('missing createdBy');
   }
@@ -56,6 +69,9 @@ function (newDoc, oldDoc, userCtx, secObj) {
     reject('missing _id');
   }
   if (newDoc._id.indexOf('\\u0000') !== -1) {
+    reject('malformed _id');
+  }
+  if (newDoc._id.indexOf('..') !== -1 || newDoc._id.indexOf('/') !== -1) {
     reject('malformed _id');
   }
 
