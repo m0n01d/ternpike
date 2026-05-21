@@ -270,7 +270,7 @@ pouchInDecoder =
                     "DbError" ->
                         D.map DbError (D.field "message" D.string)
 
-                    "ExpenseLoaded" ->
+                    "ExpenseFetched" ->
                         D.map2 ExpenseFetched
                             (D.field "expenseId" ExpenseId.decode)
                             expenseBundleDecoder
@@ -278,7 +278,7 @@ pouchInDecoder =
                     "SyncState" ->
                         D.map SyncStateMsg (D.field "state" syncStateDecoder)
 
-                    "TripExpensesLoaded" ->
+                    "TripExpensesFetched" ->
                         D.map2 TripExpensesFetched
                             (D.field "tripId" TripId.decode)
                             tripBundleDecoder
