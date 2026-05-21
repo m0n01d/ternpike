@@ -109,9 +109,14 @@ window events. The value is inverted so the field reads naturally
 
 Transient view state (`statsHover : Data.StatsHover.Hover`,
 `statsGranularity : Maybe Data.StatsGranularity.Granularity`,
-`showDayIntensity : Bool`, `scanQueue`, `confirmDeleteTrip`, etc.)
-also lives on `AuthState`, but it never persists — these fields are
-reset on the relevant pointer-leave / submit / sign-out event.
+`showDayIntensity : Bool`, `showInstallPrompt : Bool`, `scanQueue`,
+`confirmDeleteTrip`, etc.) also lives on `AuthState`, but it never
+persists — these fields are reset on the relevant pointer-leave /
+submit / sign-out event. `showInstallPrompt` is driven by the
+`canInstall` port: `True` once the browser fires
+`beforeinstallprompt` (stashed JS-side), back to `False` after the
+user accepts/dismisses the prompt or after `appinstalled`. The
+Settings tab renders an "Install app" button only when it's `True`.
 `showDayIntensity` defaults to `True` and toggles the Ledger's
 band-tinted day rail; it's an in-memory UI pref until the
 `user:profile` PouchDB doc lands and absorbs it. The hover state for the
@@ -249,19 +254,31 @@ Because PouchDB is JavaScript-only, Elm talks to it through **ports**.
 
 ```elm
 -- Elm → JS
-port pouchOut      : Json.Encode.Value -> Cmd msg   -- send a command to PouchDB
-port startSync     : Json.Encode.Value -> Cmd msg   -- start live CouchDB sync
-port stopSync      : () -> Cmd msg
+port pouchOut             : Json.Encode.Value -> Cmd msg   -- send a command to PouchDB
+port startSync            : Json.Encode.Value -> Cmd msg   -- start live CouchDB sync
+port stopSync             : () -> Cmd msg
+port triggerInstallPrompt : () -> Cmd msg                  -- replay stashed beforeinstallprompt
 
 -- JS → Elm
 port pouchIn       : (Json.Decode.Value -> msg) -> Sub msg  -- receive a result
 port networkStatus : (Bool -> msg) -> Sub msg               -- True = online, False = offline
+port canInstall    : (Bool -> msg) -> Sub msg               -- True = home-screen install available
 ```
 
 `networkStatus` is wired in `src/main.js`: it sends `navigator.onLine` once
 immediately after Elm init (so the model has the truth from frame zero) and
 then forwards `online`/`offline` window events. The `NetworkStatusChanged`
 message updates `networkOffline` on whichever model branch is active.
+
+`canInstall` / `triggerInstallPrompt` wire up the PWA home-screen install
+flow. JS listens for `beforeinstallprompt`, calls `preventDefault`, stashes
+the deferred event, and sends `canInstall True`. When the user taps the
+"Install app" button in Settings, Elm calls `triggerInstallPrompt`, JS
+replays the stashed event, awaits `userChoice`, and sends `canInstall
+False`. Same on `appinstalled`. Browsers that never fire
+`beforeinstallprompt` (e.g. Safari) leave `showInstallPrompt` at `False`,
+so users there see no button — matching the address-bar install icon's
+behaviour.
 
 All PouchDB commands go through one `pouchOut` port. The payload is a JSON
 object with a `tag` field that `pouch.js` switches on. All PouchDB responses

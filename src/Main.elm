@@ -156,6 +156,12 @@ port gotExifResult : ({ id : String, lat : Float, lon : Float, hasGps : Bool, de
 port networkStatus : (Bool -> msg) -> Sub msg
 
 
+port triggerInstallPrompt : () -> Cmd msg
+
+
+port canInstall : (Bool -> msg) -> Sub msg
+
+
 
 -- ROUTING
 -- See src/Routing.elm
@@ -197,6 +203,7 @@ toAuthState creds initialRoute gs =
     , route = initialRoute
     , scanQueue = Dict.empty
     , showDayIntensity = True
+    , showInstallPrompt = False
     , showLedgerMap = False
     , showMapPicker = False
     , statsGranularity = Nothing
@@ -2046,6 +2053,12 @@ updateAuth msg as_ =
         NetworkStatusChanged isOnline ->
             ( AuthModel { as_ | networkOffline = not isOnline }, Cmd.none )
 
+        CanInstall canIt ->
+            ( AuthModel { as_ | showInstallPrompt = canIt }, Cmd.none )
+
+        TriggerInstallPrompt ->
+            ( AuthModel as_, triggerInstallPrompt () )
+
         _ ->
             ( AuthModel as_, Cmd.none )
 
@@ -2157,6 +2170,7 @@ main =
                                 GotExifCoords r.id Nothing Nothing r.debug
                         )
                     , networkStatus NetworkStatusChanged
+                    , canInstall CanInstall
                     ]
         , update = update
         , view = view

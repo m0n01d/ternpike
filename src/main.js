@@ -238,6 +238,30 @@ import './global.css'
     window.addEventListener('offline', () => app.ports.networkStatus.send(false))
   }
 
+  // ── PWA install prompt ─────────────────────────────────────────────────
+  let deferredInstallPrompt = null
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault()
+    deferredInstallPrompt = e
+    if (app.ports.canInstall) app.ports.canInstall.send(true)
+  })
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null
+    if (app.ports.canInstall) app.ports.canInstall.send(false)
+  })
+
+  if (app.ports.triggerInstallPrompt) {
+    app.ports.triggerInstallPrompt.subscribe(async () => {
+      if (!deferredInstallPrompt) return
+      deferredInstallPrompt.prompt()
+      try { await deferredInstallPrompt.userChoice } catch (_) {}
+      deferredInstallPrompt = null
+      if (app.ports.canInstall) app.ports.canInstall.send(false)
+    })
+  }
+
   app.ports.clearStorage.subscribe(() => idbDel('auth_creds'))
 
   app.ports.clearAllStorage.subscribe(() => idbDel(...APP_KEYS))

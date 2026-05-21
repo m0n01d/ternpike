@@ -14,7 +14,7 @@ import UI.Rule
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
 viewTab as_ =
     { actions = []
-    , body = viewBody as_.config (Just as_.showDayIntensity) as_.version
+    , body = viewBody as_.config (Just as_.showDayIntensity) as_.showInstallPrompt as_.version
     , hero = viewHero as_.config
     }
 
@@ -31,6 +31,7 @@ viewPanel cfg isSignedIn version =
                  else
                     Nothing
                 )
+                False
                 version
             ]
         ]
@@ -42,8 +43,8 @@ viewHero _ =
         [ Html.text "Local-first preferences. Nothing here leaves the device." ]
 
 
-viewBody : AppConfig -> Maybe Bool -> String -> Html Msg
-viewBody cfg maybeDayIntensity version =
+viewBody : AppConfig -> Maybe Bool -> Bool -> String -> Html Msg
+viewBody cfg maybeDayIntensity showInstallPrompt version =
     let
         isSignedIn =
             maybeDayIntensity /= Nothing
@@ -55,6 +56,11 @@ viewBody cfg maybeDayIntensity version =
 
             Nothing ->
                 Html.text ""
+        , if showInstallPrompt then
+            viewInstallSection
+
+          else
+            Html.text ""
         , UI.Rule.kicker "CONNECTION"
         , UI.Card.subCard
             [ UI.Layout.formField "Anthropic API key"
@@ -102,6 +108,18 @@ viewDisplaySection dayIntensity =
                 , msg = ToggleDayIntensity
                 , value = dayIntensity
                 }
+            ]
+        ]
+
+
+viewInstallSection : Html Msg
+viewInstallSection =
+    Html.div []
+        [ UI.Rule.kicker "INSTALL"
+        , UI.Card.subCard
+            [ Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
+                [ Html.text "Add Ternpike to your home screen for an app-like, full-screen experience." ]
+            , UI.Button.secondary { label = "Install app", onClick = TriggerInstallPrompt }
             ]
         ]
 

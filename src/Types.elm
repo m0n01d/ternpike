@@ -133,6 +133,13 @@ Ephemeral UI:
     (driven by `navigator.onLine` + `online`/`offline` events via the
     `networkStatus` port). Used to gate the layout banner, sync-dot
     state, and the Scan page's network-dependent affordances.
+  - `showInstallPrompt` — `True` once the browser has fired
+    `beforeinstallprompt` and the deferred event is stashed on the JS
+    side. Driven by the `canInstall` port; reset to `False` after the
+    user accepts/dismisses the prompt or after `appinstalled` fires.
+    The Settings page renders an "Install app" button only when this
+    is `True` — browsers that don't fire `beforeinstallprompt` (e.g.
+    Safari) never see the button.
 
 Whenever fields here change, update `docs/architecture.md` per the
 project memo.
@@ -156,6 +163,7 @@ type alias AuthState =
     , route : Route
     , scanQueue : Dict String ScanItem
     , showDayIntensity : Bool
+    , showInstallPrompt : Bool
     , showLedgerMap : Bool
     , showMapPicker : Bool
     , statsGranularity : Maybe Granularity
@@ -208,6 +216,11 @@ PouchDB / navigation / chrome: `GotPouchMsg`, `LinkClicked`,
 `ToggleDayIntensity`, `ToggleLedgerMap`, `ShowToast`, `ToastExpired`,
 `DismissError`.
 
+PWA install: `CanInstall` (JS reports the deferred
+`beforeinstallprompt` event is/isn't stashed), `TriggerInstallPrompt`
+(user tapped the Settings "Install app" button — JS replays the
+stashed event).
+
 Stats hover: `HoverDailyBars`, `HoverCumulativePoints` — UI-only,
 records the chart datapoint(s) the pointer is currently over so the
 Stats page can render a tooltip overlay.
@@ -221,6 +234,7 @@ type Msg
     = AmountChanged String
     | ApiKeyChanged String
     | BackToQueue
+    | CanInstall Bool
     | CancelDeleteTrip
     | CategorySelected Category
     | ClearDoneItems
@@ -270,6 +284,7 @@ type Msg
     | ToggleDayIntensity
     | ToggleGuestSettings
     | ToggleLedgerMap
+    | TriggerInstallPrompt
     | TripFieldChanged TripField String
     | UrlChanged Url.Url
     | VerifyCodeResult (Result Http.Error Creds)
