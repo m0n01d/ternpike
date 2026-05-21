@@ -12,60 +12,75 @@ can route incoming docs to the right decoder. `_id` is the PouchDB document
 key and comes from `ExpenseId.encode`.
 
 Unknown categories decode to `Misc` rather than failing — receipts older than
-the current category list still load.
+the current category list still load. `createdBy` is decoded with a
+`UserId.unknown` fallback so documents written before the field existed still
+load cleanly.
+
 -}
 
 import Data.Category as Category exposing (Category)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Data.TripId as TripId exposing (TripId)
+import Data.UserId as UserId exposing (UserId)
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 
 
 type alias Expense =
-    { amount        : Float
-    , category      : Category
-    , createdAt     : String
-    , date          : String
-    , id            : ExpenseId
-    , lat           : Maybe Float
-    , lon           : Maybe Float
-    , longNote      : String
-    , merchant      : String
-    , note          : String
+    { amount : Float
+    , category : Category
+    , createdAt : String
+    , createdBy : UserId
+    , date : String
+    , id : ExpenseId
+    , lat : Maybe Float
+    , lon : Maybe Float
+    , longNote : String
+    , merchant : String
+    , note : String
     , paymentMethod : Maybe PaymentMethod
-    , tripId        : TripId
+    , tripId : TripId
     }
 
 
 encoder : Expense -> E.Value
 encoder e =
     E.object
-        ([ ( "_id",       ExpenseId.encode e.id )
-         , ( "amount",    E.float e.amount )
-         , ( "category",  E.string (Category.label e.category) )
+        ([ ( "_id", ExpenseId.encode e.id )
+         , ( "amount", E.float e.amount )
+         , ( "category", E.string (Category.label e.category) )
          , ( "createdAt", E.string e.createdAt )
-         , ( "date",      E.string e.date )
-         , ( "longNote",  E.string e.longNote )
-         , ( "merchant",  E.string e.merchant )
-         , ( "note",      E.string e.note )
-         , ( "tripId",    TripId.encode e.tripId )
-         , ( "type",      E.string "expense" )
+         , ( "createdBy", UserId.encode e.createdBy )
+         , ( "date", E.string e.date )
+         , ( "longNote", E.string e.longNote )
+         , ( "merchant", E.string e.merchant )
+         , ( "note", E.string e.note )
+         , ( "tripId", TripId.encode e.tripId )
+         , ( "type", E.string "expense" )
          ]
-         ++ (case e.lat of
-                Just v  -> [ ( "lat", E.float v ) ]
-                Nothing -> []
-            )
-         ++ (case e.lon of
-                Just v  -> [ ( "lon", E.float v ) ]
-                Nothing -> []
-            )
-         ++ (case e.paymentMethod of
-                Just v  -> [ ( "paymentMethod", E.string (PaymentMethod.toString v) ) ]
-                Nothing -> []
-            )
+            ++ (case e.lat of
+                    Just v ->
+                        [ ( "lat", E.float v ) ]
+
+                    Nothing ->
+                        []
+               )
+            ++ (case e.lon of
+                    Just v ->
+                        [ ( "lon", E.float v ) ]
+
+                    Nothing ->
+                        []
+               )
+            ++ (case e.paymentMethod of
+                    Just v ->
+                        [ ( "paymentMethod", E.string (PaymentMethod.toString v) ) ]
+
+                    Nothing ->
+                        []
+               )
         )
 
 
@@ -76,6 +91,7 @@ identity. The building block for "duplicate" (new id, same trip) and
 The record-update form ensures the invariant "new identity ⇒ new
 (id, createdAt) ⇒ same date/amount/category/merchant/note/longNote/
 paymentMethod/lat/lon" stays stated in one place.
+
 -}
 snapshotWith : { id : ExpenseId, createdAt : String, tripId : TripId } -> Expense -> Expense
 snapshotWith fields source =
@@ -89,34 +105,41 @@ snapshotWith fields source =
 decoder : D.Decoder Expense
 decoder =
     D.succeed Expense
-        |> Pipeline.required "amount"    D.float
+        |> Pipeline.required "amount" D.float
         |> Pipeline.required "category"
             (D.string
                 |> D.andThen
                     (\s ->
                         case Category.fromStringMaybe s of
-                            Just c  -> D.succeed c
-                            Nothing -> D.succeed Category.Misc
+                            Just c ->
+                                D.succeed c
+
+                            Nothing ->
+                                D.succeed Category.Misc
                     )
             )
         |> Pipeline.required "createdAt" D.string
-        |> Pipeline.required "date"      D.string
-        |> Pipeline.required "_id"       ExpenseId.decode
-        |> Pipeline.optional "lat"           (D.nullable D.float) Nothing
-        |> Pipeline.optional "lon"           (D.nullable D.float) Nothing
-        |> Pipeline.optional "longNote"      D.string ""
-        |> Pipeline.required "merchant"      D.string
-        |> Pipeline.required "note"          D.string
+        |> Pipeline.optional "createdBy" UserId.decoder UserId.unknown
+        |> Pipeline.required "date" D.string
+        |> Pipeline.required "_id" ExpenseId.decode
+        |> Pipeline.optional "lat" (D.nullable D.float) Nothing
+        |> Pipeline.optional "lon" (D.nullable D.float) Nothing
+        |> Pipeline.optional "longNote" D.string ""
+        |> Pipeline.required "merchant" D.string
+        |> Pipeline.required "note" D.string
         |> Pipeline.optional "paymentMethod"
             (D.nullable
                 (D.string
                     |> D.andThen
                         (\s ->
                             case PaymentMethod.fromString s of
-                                Just pm -> D.succeed pm
-                                Nothing -> D.fail ("Unknown paymentMethod: " ++ s)
+                                Just pm ->
+                                    D.succeed pm
+
+                                Nothing ->
+                                    D.fail ("Unknown paymentMethod: " ++ s)
                         )
                 )
             )
             Nothing
-        |> Pipeline.required "tripId"        TripId.decode
+        |> Pipeline.required "tripId" TripId.decode

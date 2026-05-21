@@ -18,6 +18,7 @@ effectiveEntryToExpense e =
     { amount = e.amount
     , category = e.category
     , createdAt = e.createdAt
+    , createdBy = e.createdBy
     , date = e.date
     , id = e.id
     , lat = e.lat

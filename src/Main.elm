@@ -88,6 +88,7 @@ import Data.Sync exposing (SyncState(..))
 import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
+import Data.UserId as UserId
 import Data.Void as Void
 import Dict
 import File
@@ -1558,6 +1559,7 @@ updateAuth msg as_ =
                                         else
                                             Nothing
                                     , createdAt = posixToIso posix
+                                    , createdBy = UserId.fromString as_.creds.email
                                     , date =
                                         if p.date /= original.date then
                                             Just p.date
@@ -1626,6 +1628,7 @@ updateAuth msg as_ =
                                     , amount = String.toFloat p.amount |> Maybe.withDefault 0
                                     , category = p.category
                                     , createdAt = posixToIso posix
+                                    , createdBy = UserId.fromString as_.creds.email
                                     , date = p.date
                                     , lat = eLat
                                     , lon = eLon
@@ -1660,6 +1663,9 @@ updateAuth msg as_ =
                 voidId =
                     "void::" ++ ExpenseId.toString expense.id ++ "::del"
 
+                createdBy =
+                    UserId.fromString as_.creds.email
+
                 -- Optimistic: insert the void into the cache locally so
                 -- Entry.resolve filters out this expense immediately.
                 -- Sync DbChange will be a no-op (same id).
@@ -1667,6 +1673,7 @@ updateAuth msg as_ =
                     { id = voidId
                     , targetId = ExpenseId.toString expense.id
                     , createdAt = as_.today
+                    , createdBy = createdBy
                     }
             in
             ( AuthModel
@@ -1680,6 +1687,7 @@ updateAuth msg as_ =
                         [ ( "_id", E.string voidId )
                         , ( "targetId", E.string (ExpenseId.toString expense.id) )
                         , ( "createdAt", E.string as_.today )
+                        , ( "createdBy", UserId.encode createdBy )
                         , ( "type", E.string "void" )
                         ]
                     )
@@ -1777,10 +1785,14 @@ updateAuth msg as_ =
                 voidId =
                     "void::" ++ ExpenseId.toString expense.id ++ "::del"
 
+                createdBy =
+                    UserId.fromString as_.creds.email
+
                 optimisticVoid =
                     { id = voidId
                     , targetId = ExpenseId.toString expense.id
                     , createdAt = as_.today
+                    , createdBy = createdBy
                     }
 
                 destKey =
@@ -1810,6 +1822,7 @@ updateAuth msg as_ =
                             [ ( "_id", E.string voidId )
                             , ( "targetId", E.string (ExpenseId.toString expense.id) )
                             , ( "createdAt", E.string as_.today )
+                            , ( "createdBy", UserId.encode createdBy )
                             , ( "type", E.string "void" )
                             ]
                         )
@@ -2127,6 +2140,7 @@ updateAuth msg as_ =
                                 [ ( "_id", E.string voidId )
                                 , ( "targetId", E.string (TripId.toString trip.id) )
                                 , ( "createdAt", E.string as_.today )
+                                , ( "createdBy", UserId.encode (UserId.fromString as_.creds.email) )
                                 , ( "type", E.string "void" )
                                 ]
                             )
