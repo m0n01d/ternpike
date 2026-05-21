@@ -50,9 +50,21 @@ routeParser =
             (Parser.s "trip" </> Parser.s "scan" <?> Query.string "tripId")
         , Parser.map (withTrip RouteStats)
             (Parser.s "trip" </> Parser.s "stats" <?> Query.string "tripId")
+        , Parser.map withJoinToken
+            (Parser.s "flocks" </> Parser.s "join" <?> Query.string "token")
         , Parser.map RouteSettings (Parser.s "settings")
         , Parser.map RouteTrips (Parser.s "trips")
         ]
+
+
+withJoinToken : Maybe String -> Route
+withJoinToken maybeToken =
+    case maybeToken of
+        Just token ->
+            RouteJoinFlock token
+
+        Nothing ->
+            RouteTrips
 
 
 withTrip : (TripId.TripId -> Route) -> Maybe String -> Route
@@ -104,6 +116,9 @@ routeToTab route =
         RouteEditEntry _ _ ->
             AddTab
 
+        RouteJoinFlock _ ->
+            SettingsTab
+
         RouteLedger _ ->
             LedgerTab
 
@@ -131,6 +146,9 @@ routeTitle route =
 
         RouteEditEntry _ _ ->
             "EDIT EXPENSE"
+
+        RouteJoinFlock _ ->
+            "JOIN FLOCK"
 
         RouteLedger _ ->
             "LEDGER"
