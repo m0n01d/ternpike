@@ -11,3 +11,4 @@ e2e/.state/
 e2e/.results/
 e2e/screenshots/**/*-actual.png
 e2e/screenshots/**/*-diff.png
+server/.wrangler/
