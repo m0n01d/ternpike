@@ -112,6 +112,7 @@ import Task
 import Time
 import Types exposing (AuthState, GuestState, Model(..), Msg(..))
 import UI.Layout
+import UI.TripPicker
 import Url
 import Validate
 
@@ -199,6 +200,7 @@ toAuthState creds initialRoute gs =
     , key = gs.key
     , loadingExpenses = Set.empty
     , loadingTrips = Set.empty
+    , movePicker = Nothing
     , networkOffline = gs.networkOffline
     , openLedgerMenu = Nothing
     , route = initialRoute
@@ -1734,6 +1736,90 @@ updateAuth msg as_ =
         CloseLedgerMenu ->
             ( AuthModel { as_ | openLedgerMenu = Nothing }, Cmd.none )
 
+        OpenMovePicker expense ->
+            ( AuthModel
+                { as_
+                    | movePicker = Just expense
+                    , openLedgerMenu = Nothing
+                }
+            , Cmd.none
+            )
+
+        CloseMovePicker ->
+            ( AuthModel { as_ | movePicker = Nothing }, Cmd.none )
+
+        MoveEntry expense newTripId ->
+            if newTripId == expense.tripId then
+                ( AuthModel { as_ | movePicker = Nothing }, Cmd.none )
+
+            else
+                ( AuthModel { as_ | movePicker = Nothing }
+                , Task.perform (GotMoveTime expense newTripId) Time.now
+                )
+
+        GotMoveTime expense newTripId posix ->
+            let
+                timestamp =
+                    String.fromInt (Time.posixToMillis posix)
+
+                newExpenseId =
+                    ExpenseId.fromString
+                        ("expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp)
+
+                moved =
+                    Expense.snapshotWith
+                        { id = newExpenseId
+                        , createdAt = posixToIso posix
+                        , tripId = newTripId
+                        }
+                        expense
+
+                voidId =
+                    "void::" ++ ExpenseId.toString expense.id ++ "::del"
+
+                optimisticVoid =
+                    { id = voidId
+                    , targetId = ExpenseId.toString expense.id
+                    , createdAt = as_.today
+                    }
+
+                destKey =
+                    TripId.toString newTripId
+
+                destBucket =
+                    Dict.get destKey as_.expenses |> Maybe.withDefault Dict.empty
+
+                updatedExpenses =
+                    Dict.insert destKey
+                        (Dict.insert (ExpenseId.toString newExpenseId) moved destBucket)
+                        as_.expenses
+
+                destPath =
+                    Routing.tabToPath as_.basePath newTripId LedgerTab
+            in
+            ( AuthModel
+                { as_
+                    | expenses = updatedExpenses
+                    , toast = Just "Moved"
+                    , voids = Dict.insert voidId optimisticVoid as_.voids
+                }
+            , Cmd.batch
+                [ sendPouch
+                    (SaveVoid
+                        (E.object
+                            [ ( "_id", E.string voidId )
+                            , ( "targetId", E.string (ExpenseId.toString expense.id) )
+                            , ( "createdAt", E.string as_.today )
+                            , ( "type", E.string "void" )
+                            ]
+                        )
+                    )
+                , sendPouch (SaveExpense (Expense.encoder moved))
+                , Nav.pushUrl as_.key destPath
+                , toastFor "Moved"
+                ]
+            )
+
         CloseTripForm ->
             ( AuthModel { as_ | tripForm = Nothing }, Cmd.none )
 
@@ -2189,6 +2275,15 @@ viewAuth as_ =
                 UI.Layout.viewDeleteConfirmModal trip
 
             Nothing ->
+                Html.text ""
+        , case ( as_.movePicker, as_.trips ) of
+            ( Just expense, TripsLoaded loadedTrips ) ->
+                UI.TripPicker.viewMove
+                    { expense = expense
+                    , trips = Trips.allTrips loadedTrips
+                    }
+
+            _ ->
                 Html.text ""
         , UI.Layout.viewToast as_.toast
         ]

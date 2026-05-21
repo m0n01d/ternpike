@@ -7,6 +7,7 @@ module UI.Icons exposing
     , journal
     , kebab
     , map
+    , move
     , pencil
     , pin
     , plus
@@ -135,6 +136,15 @@ map classes =
             , Svg.Attributes.fill "currentColor"
             ]
             []
+        ]
+
+
+move : String -> Svg.Svg msg
+move classes =
+    Svg.svg (common classes)
+        [ Svg.path [ Svg.Attributes.d "M4 12 H20" ] []
+        , Svg.path [ Svg.Attributes.d "M15 7 L20 12 L15 17" ] []
+        , Svg.path [ Svg.Attributes.d "M4 6 V18" ] []
         ]
 
 

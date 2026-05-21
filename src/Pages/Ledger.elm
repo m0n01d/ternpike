@@ -159,12 +159,31 @@ viewBody model mode =
         LedgerReady entries ->
             Html.div []
                 [ viewLedgerMap model entries
-                , viewEntries model.basePath model.openLedgerMenu model.showDayIntensity entries
+                , viewEntries
+                    { basePath = model.basePath
+                    , canMove = hasOtherTrips model
+                    , openMenu = model.openLedgerMenu
+                    , showIntensity = model.showDayIntensity
+                    }
+                    entries
                 ]
 
 
-viewEntries : String -> Maybe ExpenseId.ExpenseId -> Bool -> List Entry.EffectiveEntry -> Html Msg
-viewEntries basePath openMenu showIntensity entries =
+hasOtherTrips : AuthState -> Bool
+hasOtherTrips model =
+    case model.trips of
+        Data.Trips.TripsLoaded loadedTrips ->
+            not (List.isEmpty (Data.Trips.otherTrips loadedTrips))
+
+        _ ->
+            False
+
+
+viewEntries :
+    { basePath : String, canMove : Bool, openMenu : Maybe ExpenseId.ExpenseId, showIntensity : Bool }
+    -> List Entry.EffectiveEntry
+    -> Html Msg
+viewEntries opts entries =
     let
         dates =
             Entry.uniqueDates entries
@@ -181,7 +200,7 @@ viewEntries basePath openMenu showIntensity entries =
             Entry.tripMedian totals
 
         bandFor date =
-            if showIntensity then
+            if opts.showIntensity then
                 Just (Entry.spendBand median (Dict.get date totals |> Maybe.withDefault 0))
 
             else
@@ -198,7 +217,7 @@ viewEntries basePath openMenu showIntensity entries =
                 , Keyed.node "div"
                     [ Html.Attributes.class "animate-stagger-row" ]
                     (List.map
-                        (\e -> ( ExpenseId.toString e.id, viewEntryRow basePath openMenu e ))
+                        (\e -> ( ExpenseId.toString e.id, viewEntryRow opts e ))
                         dayEntries
                     )
                 ]
@@ -262,8 +281,11 @@ viewLedgerMap model entries =
         Html.text ""
 
 
-viewEntryRow : String -> Maybe ExpenseId.ExpenseId -> Entry.EffectiveEntry -> Html Msg
-viewEntryRow basePath openMenu entry =
+viewEntryRow :
+    { basePath : String, canMove : Bool, openMenu : Maybe ExpenseId.ExpenseId, showIntensity : Bool }
+    -> Entry.EffectiveEntry
+    -> Html Msg
+viewEntryRow opts entry =
     let
         primaryLabel =
             if entry.merchant /= "" then
@@ -276,12 +298,12 @@ viewEntryRow basePath openMenu entry =
                 Category.label entry.category
 
         isOpen =
-            openMenu == Just entry.id
+            opts.openMenu == Just entry.id
     in
     Html.div
         [ Html.Attributes.class "relative border-b border-dashed border-tan/70 flex items-baseline gap-1" ]
         [ Html.a
-            [ Html.Attributes.href (Routing.editEntryPath basePath entry.tripId entry.id)
+            [ Html.Attributes.href (Routing.editEntryPath opts.basePath entry.tripId entry.id)
             , Html.Attributes.class "flex-1 min-w-0 text-left py-3 flex items-baseline gap-3 cursor-pointer text-ink"
             ]
             [ Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
@@ -314,7 +336,7 @@ viewEntryRow basePath openMenu entry =
             ]
         , viewRowMenuButton entry
         , if isOpen then
-            viewRowMenu entry
+            viewRowMenu opts.canMove entry
 
           else
             Html.text ""
@@ -332,11 +354,41 @@ viewRowMenuButton entry =
         [ UI.Icons.kebab "w-4 h-4" ]
 
 
-viewRowMenu : Entry.EffectiveEntry -> Html Msg
-viewRowMenu entry =
+viewRowMenu : Bool -> Entry.EffectiveEntry -> Html Msg
+viewRowMenu canMove entry =
     let
         expense =
             effectiveEntryToExpense entry
+
+        moveItem =
+            if canMove then
+                [ menuItem
+                    { icon = UI.Icons.move "w-4 h-4"
+                    , label = "Move to trip…"
+                    , onClick = OpenMovePicker expense
+                    , danger = False
+                    }
+                ]
+
+            else
+                []
+    in
+    let
+        duplicate =
+            menuItem
+                { icon = UI.Icons.copy "w-4 h-4"
+                , label = "Duplicate"
+                , onClick = DuplicateEntry expense
+                , danger = False
+                }
+
+        delete =
+            menuItem
+                { icon = UI.Icons.trash "w-4 h-4"
+                , label = "Delete"
+                , onClick = VoidEntry expense
+                , danger = True
+                }
     in
     Html.div []
         [ Html.button
@@ -348,19 +400,7 @@ viewRowMenu entry =
             []
         , Html.div
             [ Html.Attributes.class "absolute right-0 top-10 z-20 w-44 bg-cream rounded-card shadow-panel border border-tan/60 py-1" ]
-            [ menuItem
-                { icon = UI.Icons.copy "w-4 h-4"
-                , label = "Duplicate"
-                , onClick = DuplicateEntry expense
-                , danger = False
-                }
-            , menuItem
-                { icon = UI.Icons.trash "w-4 h-4"
-                , label = "Delete"
-                , onClick = VoidEntry expense
-                , danger = True
-                }
-            ]
+            (duplicate :: moveItem ++ [ delete ])
         ]
 
 

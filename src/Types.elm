@@ -48,6 +48,7 @@ import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
 import Data.Sync exposing (SyncState)
 import Data.Trip exposing (Trip, TripField, TripForm)
+import Data.TripId exposing (TripId)
 import Data.Trips exposing (TripsState)
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
@@ -160,6 +161,7 @@ type alias AuthState =
     , key : Nav.Key
     , loadingExpenses : Set String
     , loadingTrips : Set String
+    , movePicker : Maybe Expense
     , networkOffline : Bool
     , openLedgerMenu : Maybe ExpenseId
     , route : Route
@@ -210,8 +212,13 @@ Expense submit/void: `SubmitEntry`, `GotSubmitTime`, `VoidEntry`.
 Expense duplicate: `DuplicateEntry`, `GotDuplicateTime` — snapshot the
 effective state into a brand-new expense doc in the same trip.
 
+Expense move: `OpenMovePicker`, `CloseMovePicker`, `MoveEntry`,
+`GotMoveTime` — snapshot the effective state into a new expense in the
+destination trip and void the original. The expense's ID changes.
+
 Ledger row menu: `OpenLedgerMenu`, `CloseLedgerMenu` — toggle the kebab
-popover holding secondary row actions (Duplicate, Delete).
+popover holding secondary row actions (Duplicate, Move to trip…,
+Delete).
 
 Guest auth: `EmailInputChanged`, `SubmitEmail`, `CodeInputChanged`,
 `SubmitCode`, `RequestCodeResult`, `VerifyCodeResult`,
@@ -247,6 +254,7 @@ type Msg
     | CategorySelected Category
     | ClearDoneItems
     | CloseLedgerMenu
+    | CloseMovePicker
     | CloseTripForm
     | CodeInputChanged String
     | ConfirmDeleteTrip Trip
@@ -263,6 +271,7 @@ type Msg
     | GotGpsCoords Float Float
     | GotOcrResult String (Result Http.Error String)
     | GotDuplicateTime Expense Time.Posix
+    | GotMoveTime Expense TripId Time.Posix
     | GotPouchMsg Json.Decode.Value
     | GotSaveTripTime Time.Posix
     | GotSubmitTime Time.Posix
@@ -272,11 +281,13 @@ type Msg
     | LongNoteChanged String
     | MapPickerConfirmed Float Float
     | MerchantChanged String
+    | MoveEntry Expense TripId
     | NetworkStatusChanged Bool
     | NoteChanged String
     | OpenEditTripForm Trip
     | OpenLedgerMenu ExpenseId
     | OpenMapPicker
+    | OpenMovePicker Expense
     | OpenNewTripForm
     | PaymentMethodChanged (Maybe PaymentMethod)
     | RefreshClicked

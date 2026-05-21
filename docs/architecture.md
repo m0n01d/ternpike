@@ -130,9 +130,15 @@ Monthly). In-memory only; never syncs to PouchDB.
 
 `openLedgerMenu : Maybe ExpenseId` tracks which ledger row currently has its
 kebab popover open. The popover holds secondary row actions (Duplicate,
-Delete); a full-screen transparent `<button aria-label="Close menu">`
-backdrop closes it. In-memory only; reset by `OpenLedgerMenu` /
-`CloseLedgerMenu` and cleared whenever a row action fires.
+Move to trip…, Delete); a full-screen transparent
+`<button aria-label="Close menu">` backdrop closes it. In-memory only;
+reset by `OpenLedgerMenu` / `CloseLedgerMenu` and cleared whenever a row
+action fires.
+
+`movePicker : Maybe Expense` is `Just` while the move-to-trip modal is open;
+the `Expense` payload is the source row's effective snapshot, used by
+`UI.TripPicker.viewMove` to render the picker header and by `MoveEntry`
+when the user picks a destination. In-memory only.
 
 ---
 
@@ -482,6 +488,44 @@ This pattern means:
 - Full edit history is preserved in the database.
 - Sync conflicts are far less likely (amendments rarely clash).
 - You can reconstruct what an expense looked like at any point in time.
+
+One thing amendments **cannot** do: change `tripId`. The outer dict in
+`as_.expenses` is keyed by `TripId.toString` and `Entry.resolve` filters by
+`expense.tripId == activeTripId` on the *base* expense before folding
+amendments. To move an expense to another trip, see the next section.
+
+---
+
+## Moving an expense between trips
+
+Moving is "void the original + write a new expense in the destination trip"
+because amendments can't change `tripId` (see above) and the outer
+`as_.expenses` dict is keyed by trip. Triggered from the ledger row kebab
+("Move to trip…") which opens `UI.TripPicker.viewMove`. Tapping a destination
+fires `MoveEntry expense newTripId`, which `Task.perform Time.now`s into
+`GotMoveTime` and runs the compound write:
+
+1. Snapshot the source row's effective state via `Helpers.effectiveEntryToExpense`.
+2. Mint a fresh `ExpenseId` and `createdAt`; override `tripId` to the destination.
+3. `Cmd.batch` two `sendPouch` calls — `SaveVoid` on the old ID and
+   `SaveExpense` for the new doc — plus `Nav.pushUrl` to the destination
+   trip's ledger so the moved row is immediately visible.
+4. Optimistically insert the void into `as_.voids` and the new expense into
+   the destination's inner dict so the UI updates before the live-changes
+   feed confirms.
+
+Trade-offs:
+
+- The expense gets a new `id`. Any deep link to the old id (`RouteEditEntry`)
+  will `findEffective` to `Nothing` because the original is voided.
+- The pre-move amendment chain is *orphaned*: it still exists in PouchDB, but
+  the base expense it targets is voided, so `Entry.resolve` never folds it.
+  No "edited" badge survives a move.
+- On other devices, the void may replicate slightly before the new expense →
+  a brief disappearance, then reappearance under the new trip. Acceptable.
+
+The picker is only offered when the user has more than one trip; the
+"Move to trip…" menu item is hidden otherwise.
 
 ---
 
