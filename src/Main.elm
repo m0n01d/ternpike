@@ -68,6 +68,7 @@ For the full narrative and document ID conventions, see `docs/architecture.md`.
 -}
 
 import Browser
+import Browser.Dom
 import Browser.Navigation as Nav
 import Data.Amendment as Amendment
 import Data.Auth exposing (AppConfig, Creds)
@@ -1138,12 +1139,26 @@ init flagsJson url key =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case model of
-        GuestModel gs ->
-            updateGuest msg gs
+    let
+        ( nextModel, cmd ) =
+            case model of
+                GuestModel gs ->
+                    updateGuest msg gs
 
-        AuthModel as_ ->
-            updateAuth msg as_
+                AuthModel as_ ->
+                    updateAuth msg as_
+    in
+    case msg of
+        UrlChanged _ ->
+            ( nextModel, Cmd.batch [ cmd, scrollToTop ] )
+
+        _ ->
+            ( nextModel, cmd )
+
+
+scrollToTop : Cmd Msg
+scrollToTop =
+    Task.perform (\_ -> ScrolledToTop) (Browser.Dom.setViewport 0 0)
 
 
 updateGuest : Msg -> GuestState -> ( Model, Cmd Msg )

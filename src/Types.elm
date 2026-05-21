@@ -233,6 +233,7 @@ type Msg
     | ResetSettingsClicked
     | ReviewScanItem String
     | SaveTripForm
+    | ScrolledToTop
     | ShowToast String
     | SignOutClicked
     | SkipLocation
