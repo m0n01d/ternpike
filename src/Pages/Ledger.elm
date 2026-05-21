@@ -279,10 +279,10 @@ viewEntryRow basePath openMenu entry =
             openMenu == Just entry.id
     in
     Html.div
-        [ Html.Attributes.class "relative border-b border-dashed border-tan/70" ]
+        [ Html.Attributes.class "relative border-b border-dashed border-tan/70 flex items-baseline gap-1" ]
         [ Html.a
             [ Html.Attributes.href (Routing.editEntryPath basePath entry.tripId entry.id)
-            , Html.Attributes.class "w-full text-left py-3 flex items-baseline gap-3 cursor-pointer text-ink"
+            , Html.Attributes.class "flex-1 min-w-0 text-left py-3 flex items-baseline gap-3 cursor-pointer text-ink"
             ]
             [ Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
                 [ Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
@@ -326,7 +326,7 @@ viewRowMenuButton entry =
     Html.button
         [ Html.Attributes.type_ "button"
         , Html.Attributes.attribute "aria-label" "Row actions"
-        , Html.Attributes.class "absolute right-0 top-1/2 -translate-y-1/2 text-muted shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
+        , Html.Attributes.class "text-muted shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
         , Html.Events.onClick (OpenLedgerMenu entry.id)
         ]
         [ UI.Icons.kebab "w-4 h-4" ]
@@ -347,7 +347,7 @@ viewRowMenu entry =
             ]
             []
         , Html.div
-            [ Html.Attributes.class "absolute right-2 top-10 z-20 w-44 bg-cream rounded-card shadow-panel border border-tan/60 py-1" ]
+            [ Html.Attributes.class "absolute right-0 top-10 z-20 w-44 bg-cream rounded-card shadow-panel border border-tan/60 py-1" ]
             [ menuItem
                 { icon = UI.Icons.copy "w-4 h-4"
                 , label = "Duplicate"
