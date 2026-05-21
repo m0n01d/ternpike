@@ -269,8 +269,20 @@ import './global.css'
 
   // ── PWA service worker ─────────────────────────────────────────────────
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations()
-      .then(regs => regs.forEach(r => r.unregister()))
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => {
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing
+          if (!newWorker) return
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // New SW ready — tell it to activate immediately.
+              newWorker.postMessage({ type: 'SKIP_WAITING' })
+            }
+          })
+        })
+      })
+      .catch(err => console.error('[sw] registration failed:', err))
   }
 
 })()
