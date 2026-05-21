@@ -48,6 +48,7 @@ import Data.Scan exposing (ScanItem)
 import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
 import Data.Sync exposing (SyncState)
+import Data.Tier exposing (Tier)
 import Data.Trip exposing (Trip, TripField, TripForm)
 import Data.TripId exposing (TripId)
 import Data.Trips exposing (TripsState)
@@ -176,6 +177,7 @@ type alias AuthState =
     , statsHover : Hover
     , submitting : Bool
     , syncState : SyncState
+    , tier : Tier
     , toast : Maybe String
     , today : String
     , tripForm : Maybe TripForm

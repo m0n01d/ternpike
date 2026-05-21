@@ -91,9 +91,11 @@ type Tier
     | Trailblazer   -- $79 one-time, capped at 500
 ```
 
-> **Status:** The `Tier` type and `Data.Tier` module are **planned but not yet implemented**
-> in the Elm codebase. `AuthState` does not yet carry a `tier` field. When implementing,
-> follow the patterns below.
+> **Status:** `Data.Tier` exists as a minimal stub (`Tier(..)`, `isPaid`,
+> `fromString`, `toString`) and `AuthState.tier : Tier` is wired up — see
+> #61. JSON codecs and the `/me` refresh path land with the broader
+> subscription-tier track (#16–#22). New `tier` is currently initialised
+> to `Fledgling` on sign-in; the server hand-off is the next piece.
 
 Tier is server-authoritative — populated from the session at login + refreshed via `/me`, never trusted from the client. BYO keys (Anthropic / OpenAI / Gemini) are available on **all** tiers — paid does not take that away. Paid is purely additive.
 
