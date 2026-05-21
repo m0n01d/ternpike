@@ -190,7 +190,7 @@ type alias AuthState =
     , confirmDeleteTrip : Maybe Trip
     , creds             : Creds
     , error             : Maybe String
-    , expenses          : Dict String Expense
+    , expenses          : Dict String (Dict String Expense)
     , form              : PendingForm
     , geoBlocked        : Bool
     , key               : Nav.Key

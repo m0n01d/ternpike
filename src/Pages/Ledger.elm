@@ -41,7 +41,7 @@ ledgerMode as_ =
             if Set.member (TripId.toString tripId) as_.tripLoaded then
                 LedgerReady
                     (Entry.resolve
-                        (Dict.values as_.expenses)
+                        (as_.expenses |> Dict.get (TripId.toString tripId) |> Maybe.withDefault Dict.empty |> Dict.values)
                         (Dict.values as_.amendments)
                         (Dict.values as_.voids)
                         tripId

@@ -275,7 +275,7 @@ syncStateDecoder =
 resolveForTrip : TripId.TripId -> AuthState -> List Entry.EffectiveEntry
 resolveForTrip tripId as_ =
     Entry.resolve
-        (Dict.values as_.expenses)
+        (as_.expenses |> Dict.get (TripId.toString tripId) |> Maybe.withDefault Dict.empty |> Dict.values)
         (Dict.values as_.amendments)
         (Dict.values as_.voids)
         tripId
@@ -283,7 +283,10 @@ resolveForTrip tripId as_ =
 
 findEffective : ExpenseId.ExpenseId -> AuthState -> Maybe Expense.Expense
 findEffective id as_ =
-    Dict.get (ExpenseId.toString id) as_.expenses
+    as_.expenses
+        |> Dict.values
+        |> List.filterMap (Dict.get (ExpenseId.toString id))
+        |> List.head
         |> Maybe.andThen
             (\raw ->
                 Entry.resolve
@@ -439,7 +442,12 @@ handleDbChange change as_ =
                     { as_ | amendments = Dict.insert a.id a as_.amendments }
 
                 ExpenseChanged e ->
-                    { as_ | expenses = Dict.insert (ExpenseId.toString e.id) e as_.expenses }
+                    { as_
+                        | expenses =
+                            Dict.update (TripId.toString e.tripId)
+                                (Just << Dict.insert (ExpenseId.toString e.id) e << Maybe.withDefault Dict.empty)
+                                as_.expenses
+                    }
 
                 TripChanged t ->
                     { as_ | trips = upsertTripIntoState t as_.trips }
@@ -456,7 +464,7 @@ handleDbDelete id as_ =
         as1 =
             { as_
                 | amendments = Dict.remove id as_.amendments
-                , expenses   = Dict.remove id as_.expenses
+                , expenses   = Dict.map (\_ inner -> Dict.remove id inner) as_.expenses
                 , trips      = removeTripFromState (TripId.fromString id) as_.trips
                 , voids      = Dict.remove id as_.voids
             }
@@ -1012,7 +1020,7 @@ updateAuth msg as_ =
                         as1 =
                             { as_
                                 | amendments   = Dict.union bundle.amendments as_.amendments
-                                , expenses     = Dict.union bundle.expenses as_.expenses
+                                , expenses     = Dict.insert key bundle.expenses as_.expenses
                                 , loadingTrips = Set.remove key as_.loadingTrips
                                 , tripLoaded   = Set.insert key as_.tripLoaded
                                 , voids        = Dict.union bundle.voids as_.voids
@@ -1028,7 +1036,9 @@ updateAuth msg as_ =
                                 , expenses        =
                                     case bundle.expense of
                                         Just e ->
-                                            Dict.insert (ExpenseId.toString e.id) e as_.expenses
+                                            Dict.update (TripId.toString e.tripId)
+                                                (Just << Dict.insert (ExpenseId.toString e.id) e << Maybe.withDefault Dict.empty)
+                                                as_.expenses
 
                                         Nothing ->
                                             as_.expenses
