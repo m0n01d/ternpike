@@ -43,6 +43,7 @@ import Data.Navigation exposing (Route)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PendingEntry exposing (PendingForm)
 import Data.Scan exposing (ScanItem)
+import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
 import Data.Sync exposing (SyncState)
 import Data.Trip exposing (Trip, TripField, TripForm)
@@ -149,6 +150,7 @@ type alias AuthState =
     , scanQueue : Dict String ScanItem
     , showLedgerMap : Bool
     , showMapPicker : Bool
+    , statsGranularity : Granularity
     , statsHover : Hover
     , submitting : Bool
     , syncState : SyncState
@@ -201,6 +203,10 @@ Stats hover: `HoverDailyBars`, `HoverCumulativePoints` — UI-only,
 records the chart datapoint(s) the pointer is currently over so the
 Stats page can render a tooltip overlay.
 
+Stats granularity: `SetStatsGranularity` — switches the Daily Spending
+chart between `Auto`, `Daily`, `Weekly`, and `Monthly` bins from the
+chip selector.
+
 -}
 type Msg
     = AmountChanged String
@@ -243,6 +249,7 @@ type Msg
     | ReviewScanItem String
     | SaveTripForm
     | ScrolledToTop
+    | SetStatsGranularity Granularity
     | ShowToast String
     | SignOutClicked
     | SkipLocation
