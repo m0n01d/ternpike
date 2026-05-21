@@ -1,4 +1,4 @@
-module UI.Avatar exposing (viewInitial, viewStack)
+module UI.Avatar exposing (colourClass, viewInitial, viewStack)
 
 {-| Tiny circular avatars for flock-member attribution.
 
@@ -26,7 +26,7 @@ substring left of `@`), upper-cased. This works for both `UserId`s
 that wrap an email and the empty `unknown` sentinel (which falls
 through to `?`).
 
-@docs viewInitial, viewStack
+@docs colourClass, viewInitial, viewStack
 
 -}
 
@@ -164,14 +164,11 @@ raw `UserId` string. Five-slot palette mapped via sum-of-char-codes mod
 5 — small, stable, and dependency-free. Exposed so tests and the
 overflow chip can pin the algorithm down.
 
-    colourClass (Data.UserId.fromString "alice@example.com")
-    --> "bg-moss text-parchment"
+The pinned-by-test cases (see `tests/UIAvatarTests.elm`):
 
-    colourClass (Data.UserId.fromString "bob@example.com")
-    --> "bg-tan text-forest"
-
-    colourClass (Data.UserId.fromString "")
-    --> "bg-rust text-parchment"
+  - `""` hashes to slot 0 → `bg-rust text-parchment`.
+  - `"alice@example.com"` hashes to slot 2 → `bg-moss text-parchment`.
+  - `"bob@example.com"` hashes to slot 4 → `bg-tan text-forest`.
 
 -}
 colourClass : UserId -> String

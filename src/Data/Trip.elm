@@ -1,18 +1,22 @@
 module Data.Trip exposing
-    ( Trip
+    ( TierContext
+    , Trip
     , TripField(..)
     , TripForm
+    , TripTarget(..)
     , canBatchScan
     , canUseProxiedOCR
     , decoder
     , effectiveTier
+    , encodeTarget
     , encoder
+    , targetForTrip
     , validator
     )
 
 {-| A trip — the top-level container that expenses belong to.
 
-Three types live here:
+Four types live here:
 
   - `Trip` — the saved document (immutable in practice; we overwrite the
     whole doc on edit rather than using amendments, because trips are
@@ -22,6 +26,11 @@ Three types live here:
     `validator` is what gates submission.
   - `TripField` — the tag passed to `TripFieldChanged` so one `Msg`
     handler can route updates to the right field on `TripForm`.
+  - `TripTarget` — the routing tag carried on every outbound `Save*`
+    PouchDB command so `pouch.js` knows which local DB to write the
+    doc to. `Personal` writes to the user's solo handle; `InFlock`
+    writes to the flock's handle. Derived from a trip's `flockId` via
+    `targetForTrip`.
 
 
 # Asymmetry: `flockId`
@@ -36,13 +45,32 @@ PouchDB handle a doc arrived on, decorated by `src/pouch.js` —
 storing it inside the doc would let it diverge from the database it
 actually lives in.
 
+
+# Tier helpers
+
+`effectiveTier` answers "what tier should this trip's paid features
+behave under?" For personal trips it's the user's own tier; for flock
+trips it's the **billing owner's** tier. Inside a flock owned by a
+paid user, every member's writes get paid features regardless of the
+member's personal tier — that's the whole point of pooling under one
+billing relationship. `canUseProxiedOCR` and `canBatchScan` are
+convenience predicates on top of `effectiveTier` so call sites don't
+have to know whether a particular capability is paid-only or not.
+
+The flock's tier today is read off the **billing owner's** tier on
+the active session — the simplification works because the owner is
+who pays, and the only way to lose a paid feature inside a flock is
+for the owner to downgrade. A future refresh round (#19) will fold
+in `billingStatus` for the lapsed / frozen edge cases (#64).
+
 -}
 
-import Data.Flock
+import Data.Flock exposing (Flock)
 import Data.FlockId
 import Data.Flocks exposing (Flocks)
-import Data.Tier exposing (Tier)
+import Data.Tier exposing (Tier(..))
 import Data.TripId as TripId exposing (TripId)
+import Data.UserId exposing (UserId)
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
@@ -70,6 +98,7 @@ type alias TripForm =
     , errors : List String
     , name : String
     , startDate : String
+    , target : TripTarget
     }
 
 
@@ -80,6 +109,19 @@ type TripField
     | TripEndDate
     | TripName
     | TripStartDate
+
+
+{-| Where a save goes: the personal DB or a specific flock DB.
+
+`pouch.js` keys handles by this tag — `Personal` resolves to the
+user's solo handle, `InFlock` looks up the matching flock handle.
+Missing target on a port message defaults to `Personal` on the JS
+side so legacy / not-yet-targeted call sites keep working.
+
+-}
+type TripTarget
+    = InFlock Data.FlockId.FlockId
+    | Personal
 
 
 validator : Validate.Validator String TripForm
@@ -119,69 +161,116 @@ decoder =
 
 
 
--- TIER GATING
+-- TARGET
 
 
-{-| Tier to consult when asking "can this user do X on THIS TRIP?"
+{-| Derive the JS-side routing tag from a trip's `flockId`. Trips with
+no flock route to `Personal`; trips with a flock route to that flock.
+-}
+targetForTrip : Trip -> TripTarget
+targetForTrip trip =
+    case trip.flockId of
+        Just fid ->
+            InFlock fid
 
-For a personal trip (`flockId == Nothing`) the answer is the user's own
-`tier`. For a flock trip, the answer is the flock's billing-owner tier,
-which we don't carry locally — but `billingStatus = Active` is sufficient
-evidence that the owner is at least `Fly`, so any active flock counts as
-`Fly` for capability. `Grace` and `Frozen` flocks fall back to the user's
-own tier (the lapsed-billing banner from #64 mostly disables writes in
-those cases anyway). A trip referencing a flock we don't have data for
-(stale sync, mid-load) defensively falls back to the user's tier rather
-than crashing.
+        Nothing ->
+            Personal
 
-`Trailblazer` is a billing distinction, not a feature distinction (see
-`CLAUDE.md`), so collapsing "active flock" to `Fly` does not lose
-capability — it just means we don't pretend the owner is `Trailblazer`
-when we can't actually tell.
 
-Takes an extensible record so it can be called with either an `AuthState`
-or a smaller record carrying just `tier` and `flocks` (avoids the
-`Data.Trip -> Types -> Data.Trip` import cycle that a literal `AuthState`
-parameter would create).
+{-| Encode a `TripTarget` for `pouch.js`. Shape matches the
+`targetHandle` reader in `src/pouch.js`:
+
+  - `{ "kind": "Personal" }` for personal trips.
+  - `{ "kind": "InFlock", "flockId": "<hex>" }` for flock trips.
 
 -}
-effectiveTier : Trip -> { a | flocks : Flocks, tier : Tier } -> Tier
-effectiveTier trip as_ =
+encodeTarget : TripTarget -> E.Value
+encodeTarget target =
+    case target of
+        InFlock fid ->
+            E.object
+                [ ( "kind", E.string "InFlock" )
+                , ( "flockId", Data.FlockId.encode fid )
+                ]
+
+        Personal ->
+            E.object [ ( "kind", E.string "Personal" ) ]
+
+
+
+-- TIER
+
+
+{-| Context bundle: everything the tier helpers need to answer "what
+tier governs this trip's paid features?"
+
+  - `currentUser` — the session's `UserId`, derived in `Main.elm` from
+    `as_.creds.email`. Used to detect the owner-is-me case so the
+    session's tier is preferred over the optimistic Fly fallback.
+  - `flocks` — the loaded flock cache, looked up by `trip.flockId`.
+  - `tier` — the session's tier, used both as the personal-trip
+    answer and as the owner-is-me answer.
+
+-}
+type alias TierContext a =
+    { a | currentUser : UserId, flocks : Flocks, tier : Tier }
+
+
+{-| The tier that gates paid features on this trip.
+
+For personal trips this is the user's own tier. For flock trips this
+is the **billing owner's** tier — so a free Fledgling member of a
+flock owned by a Fly user gets paid features inside that flock's
+trips. If the trip claims a `flockId` we don't recognise (transient
+race during sync, stale doc), we conservatively fall back to the
+caller's own tier.
+
+-}
+effectiveTier : Trip -> TierContext a -> Tier
+effectiveTier trip ctx =
     case trip.flockId of
-        Nothing ->
-            as_.tier
-
         Just fid ->
-            case Data.Flocks.get fid as_.flocks of
+            case Data.Flocks.get fid ctx.flocks of
                 Just flock ->
-                    case flock.billingStatus of
-                        Data.Flock.Active ->
-                            Data.Tier.Fly
-
-                        Data.Flock.Frozen ->
-                            as_.tier
-
-                        Data.Flock.Grace ->
-                            as_.tier
+                    ownerTier flock ctx
 
                 Nothing ->
-                    as_.tier
+                    ctx.tier
+
+        Nothing ->
+            ctx.tier
 
 
-{-| True when the user can route OCR through the Ternpike-hosted Anthropic
-proxy on this trip. Equivalent to `Tier.isPaid (effectiveTier trip as_)` —
-a Fledgling user on an active flock trip gets `True` because the flock's
-billing owner is paying.
+{-| The owner's tier for a flock. When the owner is the session user
+we use the session's tier directly; otherwise we optimistically treat
+the flock as paid — the owner must have been paid to create it, and
+billing-lapsed flocks are surfaced separately via `billingStatus`
+(handled by #64).
 -}
-canUseProxiedOCR : Trip -> { a | flocks : Flocks, tier : Tier } -> Bool
-canUseProxiedOCR trip as_ =
-    Data.Tier.isPaid (effectiveTier trip as_)
+ownerTier : Flock -> TierContext a -> Tier
+ownerTier flock ctx =
+    if flock.billingOwner == ctx.currentUser then
+        ctx.tier
+
+    else
+        Fly
 
 
-{-| True when the user can use batch scanning on this trip. Same predicate
-as `canUseProxiedOCR` today; kept distinct so future feature gating can
-diverge without churning call sites.
+{-| True if the trip can use the Ternpike-hosted Anthropic proxy for
+OCR scanning (paid-tier feature). Equivalent to `Tier.isPaid` on the
+effective tier; named for the capability so call sites read like
+`if Trip.canUseProxiedOCR trip ctx then ...`.
 -}
-canBatchScan : Trip -> { a | flocks : Flocks, tier : Tier } -> Bool
-canBatchScan trip as_ =
-    Data.Tier.isPaid (effectiveTier trip as_)
+canUseProxiedOCR : Trip -> TierContext a -> Bool
+canUseProxiedOCR trip ctx =
+    Data.Tier.isPaid (effectiveTier trip ctx)
+
+
+{-| True if the trip can run batch (parallel) receipt scanning
+(paid-tier feature). Equivalent to `Tier.isPaid` on the effective
+tier; named for the capability for the same reason as
+`canUseProxiedOCR`.
+-}
+canBatchScan : Trip -> TierContext a -> Bool
+canBatchScan trip ctx =
+    Data.Tier.isPaid (effectiveTier trip ctx)

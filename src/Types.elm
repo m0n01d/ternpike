@@ -54,6 +54,7 @@ import Data.Tier exposing (Tier)
 import Data.Trip exposing (Trip, TripField, TripForm)
 import Data.TripId exposing (TripId)
 import Data.Trips exposing (TripsState)
+import Data.UserId
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import File exposing (File)
@@ -160,6 +161,7 @@ type alias AuthState =
     , config : AppConfig
     , confirmDeleteTrip : Maybe Trip
     , creds : Creds
+    , currentUser : Data.UserId.UserId
     , error : Maybe String
     , expenses : Dict String (Dict String Expense)
     , flockUi : FlockUiState
@@ -338,6 +340,7 @@ type Msg
     | TransferToFlockResult (Result Http.Error ())
     | TriggerInstallPrompt
     | TripFieldChanged TripField String
+    | TripTargetSelected Data.Trip.TripTarget
     | UrlChanged Url.Url
     | VerifyCodeResult (Result Http.Error Creds)
     | VoidEntry Expense

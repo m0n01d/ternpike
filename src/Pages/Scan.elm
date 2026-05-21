@@ -1,8 +1,13 @@
 module Pages.Scan exposing (viewTab)
 
 import Data.Category as Category
+import Data.Flock exposing (Flock)
+import Data.Flocks
 import Data.Navigation exposing (Tab(..))
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.Tier
+import Data.Trip as Trip exposing (Trip)
+import Data.Trips
 import Dict
 import File exposing (File)
 import Html exposing (Html)
@@ -12,15 +17,125 @@ import Json.Decode
 import Routing
 import Types exposing (AuthState, Msg(..))
 import UI.Button
+import UI.FlockBadge
 import UI.Icons
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
 viewTab as_ =
     { actions = []
-    , body = viewBody as_
+    , body = viewBodyWithContext as_
     , hero = viewHero as_
     }
+
+
+viewBodyWithContext : AuthState -> Html Msg
+viewBodyWithContext as_ =
+    Html.div []
+        [ viewFlockContextStrip (activeFlockContext as_)
+        , viewBody as_
+        , viewTierAffordances as_
+        ]
+
+
+{-| Tier-derived footnote under the scan body — surfaces whether the
+trip's scans go through the Ternpike-hosted proxy (paid) or the
+user's BYO Anthropic key (Fledgling). Inside a flock owned by a paid
+member, free members see the paid footnote because
+`Trip.effectiveTier` resolves to the owner's tier (#61).
+-}
+viewTierAffordances : AuthState -> Html Msg
+viewTierAffordances as_ =
+    case ( Routing.routeTripId as_.route, as_.trips ) of
+        ( Just tripId, Data.Trips.TripsLoaded loadedTrips ) ->
+            case Data.Trips.findTrip tripId loadedTrips of
+                Just trip ->
+                    viewTierLabel trip as_
+
+                Nothing ->
+                    Html.text ""
+
+        _ ->
+            Html.text ""
+
+
+viewTierLabel : Trip -> AuthState -> Html Msg
+viewTierLabel trip as_ =
+    let
+        label =
+            -- `effectiveTier` is the source of truth for "how does this
+            -- trip route OCR?"; the boolean wrappers below are cheap
+            -- predicates over the same answer. Spelling out the case
+            -- match (rather than collapsing to `if canUseProxiedOCR …`)
+            -- forces the compiler to flag missing tiers when #19 adds
+            -- more, and keeps the per-tier label easy to evolve.
+            case Trip.effectiveTier trip as_ of
+                Data.Tier.Fledgling ->
+                    "BYO key"
+
+                Data.Tier.Fly ->
+                    paidOcrLabel trip as_
+
+                Data.Tier.Trailblazer ->
+                    paidOcrLabel trip as_
+    in
+    Html.p
+        [ Html.Attributes.class "mt-4 text-center text-[11px] font-mono uppercase tracking-widest text-moss" ]
+        [ Html.text label ]
+
+
+paidOcrLabel : Trip -> AuthState -> String
+paidOcrLabel trip as_ =
+    if Trip.canUseProxiedOCR trip as_ && Trip.canBatchScan trip as_ then
+        "Hosted OCR · parallel"
+
+    else
+        "Hosted OCR"
+
+
+{-| The active trip's flock context, if any. `Nothing` for personal
+trips and for trips whose flock meta hasn't synced yet.
+-}
+activeFlockContext : AuthState -> Maybe ( Trip, Flock )
+activeFlockContext model =
+    case ( Routing.routeTripId model.route, model.trips ) of
+        ( Just tripId, Data.Trips.TripsLoaded loadedTrips ) ->
+            case Data.Trips.findTrip tripId loadedTrips of
+                Just trip ->
+                    trip.flockId
+                        |> Maybe.andThen (\fid -> Data.Flocks.get fid model.flocks)
+                        |> Maybe.map (\flock -> ( trip, flock ))
+
+                Nothing ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+{-| The "ADDING TO / Trip Name" strip at the top of the Scan screen.
+Same pattern as `Pages.Add`; on personal trips the screen renders
+without flock chrome.
+-}
+viewFlockContextStrip : Maybe ( Trip, Flock ) -> Html Msg
+viewFlockContextStrip ctx =
+    case ctx of
+        Just ( trip, flock ) ->
+            Html.div
+                [ Html.Attributes.class "mb-4 flex items-center gap-3 bg-cream-deep border border-tan rounded-card px-4 py-3" ]
+                [ UI.FlockBadge.view flock
+                , Html.div [ Html.Attributes.class "flex flex-col leading-tight min-w-0" ]
+                    [ Html.span
+                        [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
+                        [ Html.text "Scanning into" ]
+                    , Html.span
+                        [ Html.Attributes.class "text-sm font-semibold text-forest truncate" ]
+                        [ Html.text trip.name ]
+                    ]
+                ]
+
+        Nothing ->
+            Html.text ""
 
 
 viewHero : AuthState -> Html Msg

@@ -3,10 +3,13 @@ module Pages.Ledger exposing (viewTab)
 import Data.Category as Category
 import Data.Entry as Entry
 import Data.ExpenseId as ExpenseId
+import Data.Flock
+import Data.Flocks
 import Data.Ledger exposing (LedgerMode(..))
 import Data.TripId as TripId
 import Data.Trips
-import Dict
+import Data.UserId as UserId exposing (UserId)
+import Dict exposing (Dict)
 import Helpers exposing (effectiveEntryToExpense, encodeWaypoints, formatAmount, formatDateDisplay)
 import Html exposing (Html)
 import Html.Attributes
@@ -15,6 +18,7 @@ import Html.Keyed as Keyed
 import Routing
 import Set
 import Types exposing (AuthState, Msg(..))
+import UI.Avatar
 import UI.BudgetBar
 import UI.Button
 import UI.Icons
@@ -162,6 +166,7 @@ viewBody model mode =
                 , viewEntries
                     { basePath = model.basePath
                     , canMove = hasOtherTrips model
+                    , members = membersForActiveTrip model
                     , openMenu = model.openLedgerMenu
                     , showIntensity = model.showDayIntensity
                     }
@@ -179,8 +184,82 @@ hasOtherTrips model =
             False
 
 
+{-| One member of the active flock, indexed by stringified `UserId`.
+
+`displayName` is the email's local-part (everything left of `@`) so
+the author chip stays short on narrow rows. The full email is still
+the source of truth in `userId`.
+
+-}
+type alias FlockMember =
+    { displayName : String
+    , userId : UserId
+    }
+
+
+{-| The member dictionary the ledger rows look up `entry.createdBy`
+in. Empty on personal trips so the author chip never renders. Populated
+from the active trip's flock when present.
+-}
+membersForActiveTrip : AuthState -> Dict String FlockMember
+membersForActiveTrip model =
+    case ( Routing.routeTripId model.route, model.trips ) of
+        ( Just tripId, Data.Trips.TripsLoaded loadedTrips ) ->
+            case Data.Trips.findTrip tripId loadedTrips of
+                Just trip ->
+                    case trip.flockId of
+                        Just fid ->
+                            case Data.Flocks.get fid model.flocks of
+                                Just flock ->
+                                    membersDict (Data.Flock.members flock)
+
+                                Nothing ->
+                                    Dict.empty
+
+                        Nothing ->
+                            Dict.empty
+
+                Nothing ->
+                    Dict.empty
+
+        _ ->
+            Dict.empty
+
+
+membersDict : List UserId -> Dict String FlockMember
+membersDict users =
+    users
+        |> List.map
+            (\u ->
+                ( UserId.toString u
+                , { displayName = displayNameFor u
+                  , userId = u
+                  }
+                )
+            )
+        |> Dict.fromList
+
+
+{-| The local-part of an email-shaped `UserId`. Falls back to the full
+string for non-email `UserId`s.
+-}
+displayNameFor : UserId -> String
+displayNameFor user =
+    case String.split "@" (UserId.toString user) of
+        head :: _ ->
+            head
+
+        [] ->
+            UserId.toString user
+
+
 viewEntries :
-    { basePath : String, canMove : Bool, openMenu : Maybe ExpenseId.ExpenseId, showIntensity : Bool }
+    { basePath : String
+    , canMove : Bool
+    , members : Dict String FlockMember
+    , openMenu : Maybe ExpenseId.ExpenseId
+    , showIntensity : Bool
+    }
     -> List Entry.EffectiveEntry
     -> Html Msg
 viewEntries opts entries =
@@ -296,7 +375,12 @@ viewLedgerMap model entries =
 
 
 viewEntryRow :
-    { basePath : String, canMove : Bool, openMenu : Maybe ExpenseId.ExpenseId, showIntensity : Bool }
+    { basePath : String
+    , canMove : Bool
+    , members : Dict String FlockMember
+    , openMenu : Maybe ExpenseId.ExpenseId
+    , showIntensity : Bool
+    }
     -> Entry.EffectiveEntry
     -> Html Msg
 viewEntryRow opts entry =
@@ -342,6 +426,7 @@ viewEntryRow opts entry =
 
                         Nothing ->
                             Html.text ""
+                    , viewAuthorChip opts.members entry.createdBy
                     ]
                 ]
             , Html.div
@@ -355,6 +440,26 @@ viewEntryRow opts entry =
           else
             Html.text ""
         ]
+
+
+{-| Variant A author chip — a circle avatar followed by the author's
+first name, sitting inside the existing meta row band. Renders to an
+empty node on personal trips (members dict is empty) and on flock
+trips when the author isn't in the cached membership (e.g. a former
+member whose entry survives them).
+-}
+viewAuthorChip : Dict String FlockMember -> UserId -> Html Msg
+viewAuthorChip members userId =
+    case Dict.get (UserId.toString userId) members of
+        Just member ->
+            Html.span
+                [ Html.Attributes.class "inline-flex items-center gap-1 text-xs text-moss italic" ]
+                [ UI.Avatar.viewInitial member.userId
+                , Html.text member.displayName
+                ]
+
+        Nothing ->
+            Html.text ""
 
 
 viewRowMenuButton : Entry.EffectiveEntry -> Html Msg
