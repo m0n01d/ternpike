@@ -30,6 +30,23 @@ Correct sequence when a stash pop conflicts:
 - 401 from any HTTP call → `GuestModel (toGuestState SessionExpired as_) + clearStorage ()`. No silent re-auth — the app is unverified by Google so tokens expire aggressively.
 - Auth error messages live in `GuestReason` (FreshGuest | SessionExpired | MissingConfig), NOT in `model.error`.
 
+## Subscription tiers
+
+The app is moving toward a two-tier model. Track this on `AuthState` (planned field: `tier : Tier` where `type Tier = Free | Paid { quotaUsed : Int, quotaLimit : Int }`). Tier is server-authoritative — populated from the session/JWT at login, never trusted from the client.
+
+- **Free** — bring-your-own API key (Anthropic / OpenAI / Gemini). OCR calls go browser → provider directly. One scan in flight at a time (client-side gate via `model.scanInFlight : Maybe ItemId`). No access to Ternpike-hosted models.
+- **Paid** — no key required. OCR is proxied through `api.ternpike.com/scan` (Cloudflare Worker) using Ternpike's Anthropic key. Batch scanning unlocked. Monthly quota enforced server-side in KV.
+
+**Critical rule:** Ternpike's Anthropic key NEVER ships to the browser. Any feature that uses it must call through the Worker proxy. If you find yourself wanting a Ternpike-owned secret in Elm/JS, you're doing it wrong — add a Worker endpoint instead.
+
+**Feature gating pattern.** When adding a paid-only feature:
+1. Branch in `Main.elm` / page modules on `as_.tier` — render a different UI for `Free` vs `Paid`. The compiler will force you to handle both.
+2. Free fallback for paid features should be either (a) a "Upgrade to use this" prompt, or (b) the BYO-key path if one exists for that feature.
+3. Never hide the feature entirely — free users should know what paid unlocks.
+4. Server endpoints back paid features must re-check tier on every request. Client-side gating is UX, not security.
+
+Tracking issues: #13 (BYO-key infrastructure, foundation for Free tier), #14 (paid-tier proxy + batch scanning), #4 (Cloudflare Worker rewrite, required for #14).
+
 ## Architecture doc
 
 `docs/architecture.md` explains the app for a new developer: PouchDB wiring, port protocol, Dict-based data modeling, document ID conventions, startup/sync sequence, lazy loading, amendments, and soft deletes.
