@@ -113,14 +113,24 @@ async function ensureDb(env, dbName, email) {
 
 const app = new Hono()
 
+const STATIC_ORIGINS = new Set([
+  'https://app.ternpike.com',
+  'https://ternpike.com',
+  'http://localhost:5173',
+])
+
+const PREVIEW_ORIGIN =
+  /^https:\/\/[a-z0-9-]+-ternpike\.dwightdoane\.workers\.dev$/
+
 app.use(
   '/auth/*',
   cors({
-    origin: [
-      'https://app.ternpike.com',
-      'https://ternpike.com',
-      'http://localhost:5173',
-    ],
+    origin: (origin) => {
+      if (!origin) return null
+      if (STATIC_ORIGINS.has(origin)) return origin
+      if (PREVIEW_ORIGIN.test(origin)) return origin
+      return null
+    },
     allowMethods: ['POST', 'OPTIONS'],
     allowHeaders: ['Content-Type'],
     maxAge: 86400,

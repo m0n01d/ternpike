@@ -22,6 +22,7 @@ export function attachPouch(app, { creds = null } = {}) {
         const o = { ...opts }
         o.headers = new Headers(o.headers || {})
         o.headers.set('Authorization', basic)
+        o.credentials = 'omit'
         return PouchDB.fetch(u, o)
       },
     })
