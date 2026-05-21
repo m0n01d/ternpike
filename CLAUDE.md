@@ -6,15 +6,27 @@
 - Tailwind CSS v4 via `@tailwindcss/postcss` — config in `src/global.css` `@theme {}` block
 - PouchDB for local-first storage; CouchDB sync working
 - Anthropic API for OCR (receipt scanning)
-- GitHub Pages deployment from `dist/` (CI triggers on push to main)
+- Cloudflare Pages deployment from `dist/` via `wrangler.jsonc` at project root
 - Elm binary: `elm` (via asdf at `~/.asdf/shims/elm`)
 - Node.js 22 required (set via `.tool-versions`)
 
-## Build
+## Build and toolchain
+
 ```
-npm run dev      # Vite dev server
-npm run build    # produces dist/
+npm run dev           # Vite dev server (port 3000) + local auth server (port 4000) via concurrently
+npm run dev:vite      # Vite only
+npm run dev:server    # Auth server only (Hono + Wrangler dev)
+npm run build         # produces dist/
+npm test              # elm-verify-examples && elm-test
+npm run format        # elm-format src --yes
+npm run format:check  # validates formatting without writing
+npm run review        # elm-review (strict rules — see review/src/ReviewConfig.elm)
+npm run review:fix    # elm-review --fix-all
 ```
+
+`vite.config.js` proxies `/auth` to `http://localhost:4000` during development.
+The build injects `__BUILD_SHA__` from `WORKERS_CI_COMMIT_SHA`, `CF_PAGES_COMMIT_SHA`, or
+`GITHUB_SHA` (in that precedence order) so the settings screen can show a commit hash.
 
 ## Git discipline
 Never use `git checkout <branch> -- <file>` to resolve a stash conflict — it silently replaces the file with the committed version, discarding all stash changes.
@@ -30,6 +42,12 @@ Correct sequence when a stash pop conflicts:
 - 401 from any HTTP call → `GuestModel (toGuestState SessionExpired as_) + clearStorage ()`. No silent re-auth — the app is unverified by Google so tokens expire aggressively.
 - Auth error messages live in `GuestReason` (FreshGuest | SessionExpired | MissingConfig), NOT in `model.error`.
 
+### AuthState expenses shape
+
+`expenses : Dict String (Dict String Expense)` — **nested** by trip. Outer key is
+`TripId.toString`, inner key is `ExpenseId.toString`. Single-trip lookup is one `Dict.get`
+on the outer dict; cross-trip scan (e.g. `findEffective`) iterates only loaded trips.
+
 ## Subscription tiers
 
 Three tiers. Tracked on `AuthState` via `tier : Tier` where:
@@ -40,6 +58,10 @@ type Tier
     | Fly           -- $2.99/mo or $24/yr
     | Trailblazer   -- $79 one-time, capped at 500
 ```
+
+> **Status:** The `Tier` type and `Data.Tier` module are **planned but not yet implemented**
+> in the Elm codebase. `AuthState` does not yet carry a `tier` field. When implementing,
+> follow the patterns below.
 
 Tier is server-authoritative — populated from the session at login + refreshed via `/me`, never trusted from the client. BYO keys (Anthropic / OpenAI / Gemini) are available on **all** tiers — paid does not take that away. Paid is purely additive.
 
@@ -118,9 +140,15 @@ are listed in `tests/elm-verify-examples.json`. Generated test files land in
 `tests/VerifyExamples/` (gitignored). Add new modules to that list as you add
 examples. Run with `npm test`.
 
-**What qualifies for examples:** `Data.Category`, `Data.PaymentMethod`, and
-any future pure helpers. Opaque ID types (constructors not exposed), encoders,
-decoders, and HTML-returning functions don't need examples.
+**Current modules with examples** (keep `tests/elm-verify-examples.json` in sync):
+- `Data.Category`
+- `Data.Entry`
+- `Data.PaymentMethod`
+- `Data.StatsGranularity`
+
+**What qualifies for examples:** Pure helpers (`a -> b`) with no JSON codecs,
+opaque constructors, or effects. Opaque ID types (constructors not exposed),
+encoders, decoders, and HTML-returning functions don't need examples.
 
 ## Elm style guide
 - **Alphabetize** all record fields and all type constructor lists. Apply to every new type and every edit of an existing type.
@@ -147,6 +175,40 @@ Html.div [ Html.Attributes.class "tw-flex" ] [ Html.text "hello world" ]
 - Use semantic markup — only `<button>` elements get click handlers.
 - Aggressively refactor modules you touch; clean up tech debt as you go.
 
+## elm-review
+
+`review/src/ReviewConfig.elm` enforces strict rules via `elm-review`:
+- `NoExposingEverything`, `NoImportingEverything` — no wildcard imports or `(..)` exposing
+- `NoMissingTypeAnnotation`, `NoMissingTypeExpose`
+- Full `NoUnused.*` suite (variables, exports, modules, patterns, dependencies, custom type constructors/args)
+- `Simplify`
+
+Rules apply to `src/` only; `vendor/` is ignored. Run `npm run review:fix` for
+auto-fixable violations; manual fixes are needed for unused exports and missing
+type annotations.
+
+## Routing conventions
+
+Routes live in `src/Data/Navigation.elm` (`Route`, `Tab`) and `src/Routing.elm`.
+
+**IDs live in query strings, not path segments.** `trip::2024-05-21T...::abc` contains
+colons; Cloudflare URL Normalization percent-encodes `:` in path segments but leaves
+query values alone. `Url.Parser.Query.string` percent-decodes either way.
+
+Route patterns:
+```
+/trips                        → RouteTrips
+/trip/add?tripId=...          → RouteAdd TripId
+/trip/ledger?tripId=...       → RouteLedger TripId
+/trip/scan?tripId=...         → RouteScan TripId
+/trip/stats?tripId=...        → RouteStats TripId
+/trip/ledger/edit?tripId=...&expenseId=...  → RouteEditEntry TripId ExpenseId
+/settings                     → RouteSettings
+```
+
+`RouteAddReviewScan` is a derived route — `Routing.effectiveRoute` returns it when
+`as_.route == RouteAdd _` and `as_.activeScanItemId /= Nothing`. It has no URL.
+
 ## Infrastructure
 
 ### Domain
@@ -154,20 +216,23 @@ Html.div [ Html.Attributes.class "tw-flex" ] [ Html.text "hello world" ]
 - Nameservers need to be pointed to Cloudflare to enable Pages/Workers/Analytics
 
 ### Hosting plan (Cloudflare)
-- `app.ternpike.com` → Cloudflare Pages (Elm SPA, `dist/`)
+- `app.ternpike.com` → Cloudflare Pages (Elm SPA, `dist/`) — deployed via root `wrangler.jsonc`
 - `ternpike.com` → Cloudflare Pages (marketing page, `marketing/index.html`)
-- `api.ternpike.com` → Cloudflare Worker (auth server, replaces `server/`)
+- `api.ternpike.com` → Cloudflare Worker (auth server, `server/`) — deployed via `server/wrangler.toml`
 - `couch.ternpike.com` → CouchDB (already live)
 - Analytics: Cloudflare Web Analytics (cookie-free, non-Google)
 
-### Auth server
-- Currently Express + Gmail/Nodemailer in `server/` — not yet deployed
-- Migrating to Cloudflare Worker + Cloudflare KV (for code storage) + Resend (email)
-- In-memory `Map` for verification codes is a bug — KV fixes it
-- GitHub issues: #4 (Worker rewrite), #5 (analytics)
+### Auth server (`server/`)
+- **Stack:** Hono + Resend + Cloudflare Worker KV (`CODES_KV`) — migration from Express/Gmail is complete
+- **Deploy:** `wrangler deploy` from `server/` — routes to `api.ternpike.com`
+- **Email:** Resend (`RESEND_API_KEY` secret), 3k emails/mo free; DKIM/SPF via Cloudflare DNS
+- **Secrets** (set via `wrangler secret put`): `COUCH_ADMIN_USER`, `COUCH_ADMIN_PASS`, `SERVER_SECRET`, `RESEND_API_KEY`
+- **KV:** `CODES_KV` stores hashed verification codes with 600-second TTL
+- **Auth flow:** email → 6-digit code stored in KV → code verified → CouchDB per-user DB credentials returned
+- **Password derivation:** HMAC-SHA256 of `"couch:" + email.toLowerCase()` using `SERVER_SECRET`, hex-encoded, first 32 chars
 
 ### Email
-- Replacing Gmail/Nodemailer with Resend (resend.com) — 3k emails/mo free
+- Resend (`resend.com`) — 3k emails/mo free
 - Domain verification via Cloudflare DNS (DKIM/SPF records)
 
 ## Sheet columns
