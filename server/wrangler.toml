@@ -6,6 +6,14 @@ compatibility_date = "2025-01-01"
 binding = "CODES_KV"
 id = "a3818441349d4138b8898fac4480bf1a"
 
+# Subscription tier source of truth (server-authoritative — see CLAUDE.md
+# "Storage tiers"). Provision with:
+#   wrangler kv:namespace create TIERS_KV
+# Then paste the returned id below.
+[[kv_namespaces]]
+binding = "TIERS_KV"
+id = "REPLACE_ME_TIERS_KV_ID"
+
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
 
@@ -14,8 +22,14 @@ COUCH_URL = "https://couch.ternpike.com"
 pattern = "api.ternpike.com"
 custom_domain = true
 
+# Hourly sweep of flocks in `grace` whose 14-day window has elapsed; flips
+# them to `frozen`. See server/flocks.js `runGraceFreezeSweep`.
+[triggers]
+crons = ["0 * * * *"]
+
 # Set secrets via: wrangler secret put NAME
 #   COUCH_ADMIN_USER
 #   COUCH_ADMIN_PASS
 #   SERVER_SECRET
 #   RESEND_API_KEY
+#   TIER_WEBHOOK_SECRET   (shared with the future Stripe webhook + test hook)

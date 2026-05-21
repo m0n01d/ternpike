@@ -180,6 +180,11 @@ Before reporting a UI task done — or when planning a visual change and want th
 
 Send the screenshot with `SendUserFile`. Don't describe pixels in prose when you can show them. Delete the generated `scripts/` folder before ending the turn (see the untracked-files note in Git discipline above).
 
+### E2E harness vs. `playwright-ui`
+
+- The `playwright-ui` skill is for **one-off screenshots** (UI vetting in a single browser context). Files it generates under `scripts/` are throwaway and must be deleted before the turn ends.
+- The `e2e/` directory is the **automated regression suite** (two-user Flock flows, asserted behavior, CI). It's git-tracked, has a real `npm run e2e` script, and boots a disposable CouchDB + mock Resend + auth server via `globalSetup`. See `e2e/README.md` for the fixture API and how to add a spec.
+
 ## Styling
 
 **All styling in this repo goes through Tailwind v4 utilities backed by the tokens in `src/theme.css`.** This applies everywhere: Elm view code in `src/`, Nunjucks partials in `marketing/src/partials/`, anything new.

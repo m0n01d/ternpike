@@ -1,0 +1,46 @@
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Playwright (mobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Install server deps
+        run: npm --prefix server ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # Only run the mobile project on CI — desktop doubles runtime for
+      # negligible coverage gain at this stage. Re-enable both locally with
+      # `npm run e2e` (no project filter).
+      - name: Run E2E
+        run: npx playwright test --config=e2e/playwright.config.ts --project=mobile
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/.results
+          retention-days: 14
