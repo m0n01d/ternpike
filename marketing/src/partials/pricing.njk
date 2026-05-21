@@ -1,17 +1,39 @@
-{# Stub: pricing section is filled in by issue #31. Renders nothing until plans are populated. #}
-{% if pricing.plans and pricing.plans.length %}
-<section class="pricing" id="pricing">
-  <div class="section-eyebrow">{{ pricing.eyebrow }}</div>
-  <h2 class="section-h2">{{ pricing.headline }}</h2>
-  <p class="pricing-intro">{{ pricing.intro }}</p>
-  <div class="pricing-grid">
-    {% for plan in pricing.plans %}
-    <div class="pricing-plan">
-      <div class="pricing-plan-name">{{ plan.name }}</div>
-      <div class="pricing-plan-price">{{ plan.price }}</div>
-      <div class="pricing-plan-body">{{ plan.body }}</div>
+<section class="pricing topo topo-pricing" id="pricing">
+  <div class="pricing-inner">
+    <div class="section-eyebrow pricing-eyebrow">{{ pricing.sectionLabel }}</div>
+    <h2 class="section-h2 pricing-headline">{{ pricing.headline | replace("\n", "<br>") | safe }}</h2>
+
+    <div class="pricing-grid">
+      {% for tier in pricing.tiers %}
+      <div class="pricing-card{% if tier.featured %} pricing-card-featured{% endif %}" data-tier="{{ tier.id }}">
+        {% if tier.featured and tier.badge %}
+        <div class="pricing-badge">{{ tier.badge }}</div>
+        {% endif %}
+
+        <div class="pricing-name">{{ tier.name }}</div>
+        <div class="pricing-tagline">{{ tier.tagline }}</div>
+
+        <div class="pricing-price-row">
+          <div class="pricing-price">{{ tier.price }}</div>
+          <div class="pricing-price-note">{{ tier.priceNote }}</div>
+        </div>
+
+        <ul class="pricing-features">
+          {% for feature in tier.features %}
+          <li class="pricing-feature">
+            <span class="pricing-check" aria-hidden="true">✓</span>
+            <span class="pricing-feature-text">{{ feature }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+
+        <a class="pricing-cta pricing-cta-{{ tier.cta.style }}" href="{{ tier.cta.href }}">
+          {{ tier.cta.label }}{% if tier.cta.arrow %} <span class="pricing-cta-arrow" aria-hidden="true">→</span>{% endif %}
+        </a>
+      </div>
+      {% endfor %}
     </div>
-    {% endfor %}
+
+    <p class="pricing-fine">{{ pricing.finePrint }}</p>
   </div>
 </section>
-{% endif %}
