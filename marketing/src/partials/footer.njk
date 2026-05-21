@@ -1,5 +1,5 @@
 <footer>
-  <div>
+  <div class="footer-brand">
     <div class="footer-logo">
       <span class="footer-tern">
         <svg width="28" height="18" viewBox="0 0 120 80" fill="none" class="footer-tern-svg">
@@ -12,7 +12,7 @@
         </svg>
       </span>{{ brand.namePrefix }}<span>{{ brand.nameSuffix }}</span>
     </div>
-    <div class="footer-tagline">{{ brand.tagline }}</div>
+    <div class="footer-tagline">{{ footer.tagline }}</div>
   </div>
 
   <div class="footer-links">
@@ -20,4 +20,6 @@
     <a href="{{ link.href }}" class="footer-link">{{ link.label }}</a>
     {% endfor %}
   </div>
+
+  <div class="footer-legal">{{ footer.legal }}</div>
 </footer>

@@ -13,28 +13,32 @@ nav:
   links:
     - label: "How it works"
       href: "#how"
-    - label: "Features"
-      href: "#features"
+    - label: "Pricing"
+      href: "#pricing"
     - label: "Open Source"
       href: "#oss"
   cta:
-    label: "Get Early Access"
+    label: "Get Started"
     href: "#signup"
 
 hero:
-  eyebrow: "Road Trip Expense Tracker"
   headline:
-    prefix: "Tern"
-    suffix: "pike"
-  sub: "Snap a photo of your receipt at camp. We read it, log your GPS, and show exactly where your budget stands before you pull out tomorrow morning."
+    lines:
+      - "Know where your money went"
+      - "before you break camp."
+  sub:
+    - "Ternpike is a trip expense tracker built for life on the road."
+    - "Snap a receipt at camp. Your budget updates instantly."
+    - "No spreadsheets. No subscription. Your data stays yours."
   actions:
     - kind: "primary"
-      label: "Get Early Access →"
+      label: "Start for free"
+      arrow: true
       href: "#signup"
     - kind: "ghost"
-      label: "See How It Works"
+      label: "See how it works"
       href: "#how"
-  proof: "Built on the Alaska Highway · Zero subscription · Your data, your Google Sheet"
+  proof: "Built on the Alaska Highway. Used in the real world."
 
 howItWorks:
   eyebrow: "How it works"
@@ -185,6 +189,7 @@ emailCapture:
   fine: "No spam. Unsubscribe anytime. We're building this in public."
 
 footer:
+  tagline: "Track every turn of the road."
   links:
     - label: "GitHub"
       href: "#"
@@ -194,6 +199,7 @@ footer:
       href: "#"
     - label: "Contact"
       href: "#"
+  legal: "© 2026 Ternpike. Made on the Alaska Highway."
 
 analytics:
   cloudflareBeaconToken: "REPLACE_WITH_CF_ANALYTICS_TOKEN"

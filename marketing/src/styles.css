@@ -34,7 +34,7 @@
     background-repeat: no-repeat;
     background-size: 2400px 2000px;
   }
-  .topo-hero     { background-position: -580px -1100px; }
+  .topo-hero     { background-position: -880px -640px; }
   .topo-how      { background-position: -240px -260px; }
   .topo-features { background-position: -1700px -1380px; }
   .topo-oss      { background-position: -1280px -80px; }
@@ -147,43 +147,36 @@
     to   { opacity: 1; transform: translateY(0); }
   }
 
-  .hero-eyebrow {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.25em;
-    text-transform: uppercase;
-    color: var(--color-rust);
-    margin-bottom: 24px;
-    animation: hero-fade-up 0.9s 0.1s ease both;
-  }
-
   .hero-tern {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     animation: soar 7s ease-in-out infinite, hero-fade-up 0.9s 0.05s ease both;
   }
 
   .hero-h1 {
     font-family: var(--font-display);
     font-weight: 900;
-    font-size: clamp(56px, 11vw, 116px);
-    letter-spacing: -0.03em;
-    line-height: 0.93;
+    font-size: clamp(40px, 7vw, 76px);
+    letter-spacing: -0.025em;
+    line-height: 1.02;
     color: var(--color-forest);
     animation: hero-fade-up 0.9s 0.15s ease both;
+    max-width: 880px;
   }
-  .hero-h1 span { color: var(--color-rust); }
+  .hero-h1-line { display: block; }
+  .hero-h1-line + .hero-h1-line { color: var(--color-rust); }
 
   .hero-sub {
-    font-family: var(--font-display);
-    font-style: italic;
-    font-weight: 500;
-    font-size: clamp(20px, 3.5vw, 28px);
-    color: var(--color-muted);
-    margin-top: 20px;
-    line-height: 1.35;
-    max-width: 580px;
+    margin-top: 24px;
+    max-width: 620px;
     animation: hero-fade-up 0.9s 0.25s ease both;
   }
+  .hero-sub p {
+    font-family: var(--font-body);
+    font-size: clamp(17px, 2.2vw, 20px);
+    color: var(--color-moss);
+    line-height: 1.5;
+  }
+  .hero-sub p + p { margin-top: 8px; }
 
   .hero-actions {
     display: flex;
@@ -199,18 +192,25 @@
     font-size: 11px;
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    background: var(--color-forest);
-    color: var(--color-tan);
+    background: var(--color-rust);
+    color: var(--color-parchment);
     padding: 16px 32px;
     border-radius: 8px;
     text-decoration: none;
     transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-    box-shadow: 0 4px 16px rgba(45,58,34,0.2);
+    box-shadow: 0 4px 16px rgba(184,92,56,0.25);
+    display: inline-flex;
+    align-items: center;
   }
   .btn-primary:hover {
-    background: var(--color-ink);
+    background: var(--color-rust-deep);
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(45,58,34,0.25);
+    box-shadow: 0 8px 24px rgba(184,92,56,0.3);
+  }
+  .btn-arrow {
+    margin-left: 10px;
+    display: inline-block;
+    line-height: 1;
   }
 
   .btn-ghost {
@@ -234,10 +234,10 @@
   .hero-proof {
     margin-top: 48px;
     font-family: var(--font-mono);
-    font-size: 9px;
-    letter-spacing: 0.18em;
+    font-size: 10px;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: var(--color-muted);
+    color: var(--color-moss);
     animation: hero-fade-up 0.9s 0.45s ease both;
   }
 
@@ -951,16 +951,22 @@
 
   /* ─── FOOTER ─── */
   footer {
-    border-top: 1px solid var(--color-tan);
-    padding: 48px 32px;
-    display: flex;
-    justify-content: space-between;
+    border-top: var(--rule-tan);
+    padding: 40px 32px 48px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "brand links"
+      "legal legal";
     align-items: center;
-    flex-wrap: wrap;
-    gap: 20px;
+    gap: 24px 40px;
     max-width: 1000px;
     margin: 0 auto;
   }
+
+  .footer-brand { grid-area: brand; }
+  .footer-links { grid-area: links; }
+  .footer-legal { grid-area: legal; }
 
   .footer-logo {
     font-family: var(--font-display);
@@ -995,6 +1001,26 @@
     transition: color 0.2s;
   }
   .footer-link:hover { color: var(--color-forest); }
+
+  .footer-legal {
+    padding-top: 20px;
+    border-top: var(--rule-tan);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  @media (max-width: 600px) {
+    footer {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "brand"
+        "links"
+        "legal";
+    }
+  }
 
   .footer-tern {
     animation: soar 6s ease-in-out infinite;
