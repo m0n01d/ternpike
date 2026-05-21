@@ -1,18 +1,23 @@
-<section class="oss open-source" id="oss">
-  <div class="oss-card open-source-card topo topo-oss">
-    <div class="oss-inner open-source-inner">
+<section id="oss" class="px-6 py-25 mx-auto max-w-[800px] text-center">
+  <div class="topo topo-oss relative overflow-hidden rounded-panel bg-forest px-12 py-15">
+    <div class="relative z-10">
 
-      <div class="oss-eyebrow open-source-eyebrow">{{ openSource.eyebrow }}</div>
-      <h2 class="oss-h2 open-source-h2">{{ openSource.headlineHtml | safe }}</h2>
-      <div class="open-source-body">
+      <div class="mb-4 font-mono text-[10px] uppercase tracking-[0.25em] text-rust-light">{{ openSource.eyebrow }}</div>
+      <h2 class="mb-5 font-display text-[clamp(32px,5vw,52px)] font-black leading-[1.05] tracking-[-0.02em] text-tan">{{ openSource.headlineHtml | safe }}</h2>
+
+      <div class="mx-auto mb-9 max-w-[540px]">
         {% for p in openSource.paragraphs %}
-        <p class="oss-body open-source-p">{{ p }}</p>
+        <p class="font-body text-xl italic leading-[1.55] text-moss">{{ p }}</p>
         {% endfor %}
       </div>
 
-      <div class="oss-links open-source-links">
+      <div class="flex flex-wrap justify-center gap-4">
         {% for link in openSource.links %}
-        <a href="{{ link.href }}" class="oss-btn open-source-btn open-source-btn-{{ link.kind }} {{ link.kind }}">{{ link.label }}</a>
+        <a href="{{ link.href }}"
+           class="rounded-md px-7 py-3.5 font-mono text-[10px] uppercase tracking-[0.15em] no-underline transition-transform duration-150 hover:-translate-y-0.5
+                  {{ 'bg-tan text-forest shadow-[0_4px_16px_rgb(0_0_0_/_0.2)] hover:shadow-[0_8px_24px_rgb(0_0_0_/_0.25)]' if link.kind == 'gh' else 'border border-tan/35 text-tan' }}">
+          {{ link.label }}
+        </a>
         {% endfor %}
       </div>
 
