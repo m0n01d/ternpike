@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import { Resend } from 'resend'
 
 const CODE_TTL_SECONDS = 600
@@ -111,6 +112,20 @@ async function ensureDb(env, dbName, email) {
 }
 
 const app = new Hono()
+
+app.use(
+  '/auth/*',
+  cors({
+    origin: [
+      'https://app.ternpike.com',
+      'https://ternpike.com',
+      'http://localhost:5173',
+    ],
+    allowMethods: ['POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type'],
+    maxAge: 86400,
+  }),
+)
 
 app.post('/auth/request-code', async (c) => {
   const env = c.env

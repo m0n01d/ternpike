@@ -642,7 +642,7 @@ requestCode gs =
                 , session   = { config = gs.session.config, reason = RequestingCode email }
             }
         , Http.post
-            { url    = "/auth/request-code"
+            { url    = gs.session.config.backendUrl ++ "/auth/request-code"
             , body   = Http.jsonBody (E.object [ ( "email", E.string email ) ])
             , expect = Http.expectWhatever RequestCodeResult
             }
@@ -664,7 +664,7 @@ verifyCode email gs =
                 , session   = { config = gs.session.config, reason = VerifyingCode email code }
             }
         , Http.post
-            { url    = "/auth/verify-code"
+            { url    = gs.session.config.backendUrl ++ "/auth/verify-code"
             , body   = Http.jsonBody (E.object [ ( "email", E.string email ), ( "code", E.string code ) ])
             , expect = Http.expectJson VerifyCodeResult credsDecoder
             }
