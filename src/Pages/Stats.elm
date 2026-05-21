@@ -6,6 +6,7 @@ import Chart.Events as CE
 import Chart.Item as CI
 import Data.Category as Category
 import Data.Entry as Entry
+import Data.Stats exposing (StatsMode(..))
 import Data.StatsGranularity as StatsGranularity exposing (Granularity(..))
 import Data.StatsHover exposing (CumulativePoint, DailyDay)
 import Data.TripId as TripId
@@ -22,46 +23,84 @@ import Svg.Attributes
 import Types exposing (AuthState, Msg(..))
 import UI.BudgetBar
 import UI.Card
+import UI.Mascot
 import UI.Rule
+import UI.Skeleton
 import UI.Theme
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
 viewTab as_ =
     let
-        entries =
-            entriesForCurrentTrip as_
+        mode =
+            statsMode as_
     in
     { actions = []
-    , body = viewBody as_ entries
-    , hero = viewHero as_ entries
+    , body = viewBody as_ mode
+    , hero = viewHero as_ mode
     }
 
 
 
--- Resolved entries for the route's trip, or [] if not loaded yet.
+-- StatsLoading until the current trip's bulk fetch has completed; then
+-- StatsReady with the resolved entries derived from the cache.
 
 
-entriesForCurrentTrip : AuthState -> List Entry.EffectiveEntry
-entriesForCurrentTrip as_ =
+statsMode : AuthState -> StatsMode
+statsMode as_ =
     case Routing.routeTripId as_.route of
         Just tripId ->
             if Set.member (TripId.toString tripId) as_.tripLoaded then
-                Entry.resolve
-                    (as_.expenses |> Dict.get (TripId.toString tripId) |> Maybe.withDefault Dict.empty |> Dict.values)
-                    (Dict.values as_.amendments)
-                    (Dict.values as_.voids)
-                    tripId
+                StatsReady
+                    (Entry.resolve
+                        (as_.expenses |> Dict.get (TripId.toString tripId) |> Maybe.withDefault Dict.empty |> Dict.values)
+                        (Dict.values as_.amendments)
+                        (Dict.values as_.voids)
+                        tripId
+                    )
 
             else
-                []
+                StatsLoading
 
         Nothing ->
-            []
+            StatsLoading
 
 
-viewHero : AuthState -> List Entry.EffectiveEntry -> Html Msg
-viewHero model entries =
+viewHero : AuthState -> StatsMode -> Html Msg
+viewHero model mode =
+    case mode of
+        StatsLoading ->
+            viewSkeletonHero
+
+        StatsReady entries ->
+            viewHeroReady model entries
+
+
+viewSkeletonHero : Html Msg
+viewSkeletonHero =
+    Html.div [ Html.Attributes.class "py-2" ]
+        [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
+            [ Html.text "TOTAL SPENT" ]
+        , UI.Skeleton.text "h-12 w-40"
+        , UI.Skeleton.text "h-3 w-32 mt-2"
+        , UI.Rule.dashedRule
+        , Html.div [ Html.Attributes.class "flex gap-6" ]
+            [ skeletonStatBlock
+            , skeletonStatBlock
+            ]
+        ]
+
+
+skeletonStatBlock : Html Msg
+skeletonStatBlock =
+    Html.div [ Html.Attributes.class "flex-1" ]
+        [ UI.Skeleton.text "h-3 w-16 mb-2"
+        , UI.Skeleton.text "h-5 w-20"
+        ]
+
+
+viewHeroReady : AuthState -> List Entry.EffectiveEntry -> Html Msg
+viewHeroReady model entries =
     let
         total =
             List.sum (List.map .amount entries)
@@ -226,8 +265,51 @@ sparkline values =
         bars
 
 
-viewBody : AuthState -> List Entry.EffectiveEntry -> Html Msg
-viewBody model entries =
+viewBody : AuthState -> StatsMode -> Html Msg
+viewBody model mode =
+    case mode of
+        StatsLoading ->
+            viewSkeletonBody
+
+        StatsReady [] ->
+            viewEmptyState
+
+        StatsReady entries ->
+            viewBodyReady model entries
+
+
+viewSkeletonBody : Html Msg
+viewSkeletonBody =
+    Html.div []
+        [ UI.Rule.kicker "AT A GLANCE"
+        , UI.Card.subCard
+            [ Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3" ]
+                (List.repeat 5 skeletonStatCard)
+            ]
+        ]
+
+
+skeletonStatCard : Html Msg
+skeletonStatCard =
+    Html.div []
+        [ UI.Skeleton.text "h-3 w-20 mb-2"
+        , UI.Skeleton.text "h-6 w-24"
+        ]
+
+
+viewEmptyState : Html Msg
+viewEmptyState =
+    Html.div [ Html.Attributes.class "py-16 text-center" ]
+        [ UI.Mascot.ternSvg "w-16 mx-auto opacity-40"
+        , Html.p [ Html.Attributes.class "mt-4 font-display italic text-lg text-moss" ]
+            [ Html.text "No entries yet." ]
+        , Html.p [ Html.Attributes.class "mt-1 text-sm text-muted" ]
+            [ Html.text "Snap a receipt to start the log." ]
+        ]
+
+
+viewBodyReady : AuthState -> List Entry.EffectiveEntry -> Html Msg
+viewBodyReady model entries =
     let
         total =
             List.sum (List.map .amount entries)
