@@ -178,6 +178,17 @@ Before reporting a UI task done — or when planning a visual change and want th
 
 Send the screenshot with `SendUserFile`. Don't describe pixels in prose when you can show them. Delete the generated `scripts/` folder before ending the turn (see the untracked-files note in Git discipline above).
 
+## Styling
+
+**All styling in this repo goes through Tailwind v4 utilities backed by the tokens in `src/theme.css`.** This applies everywhere: Elm view code in `src/`, Nunjucks partials in `marketing/src/partials/`, anything new.
+
+- No inline styles. No `Html.Attributes.style`, no `style="..."` in `.njk`, no `<style>` blocks in templates.
+- No hand-written component CSS (`.hero-h1`, `.btn-primary`, `.pricing-card`). Put the utilities on the element instead.
+- No arbitrary values for things `theme.css` defines — don't write `bg-[#4a5e3a]` when `bg-forest` exists, don't write `rounded-[12px]` when `rounded-card` exists. If a token is missing, add it to the `@theme {}` block in `src/theme.css`, then use the generated utility.
+- Conditional classes via `Html.Attributes.classList` (Elm) or Nunjucks ternaries (marketing). No string concatenation in view code.
+- **One escape hatch:** `@layer components` with `@apply` is allowed when the same multi-utility chain repeats across N>1 rows of structurally identical markup (the Ledger row is the canonical example). Name the class after what it is (`.ledger-row`, not `.row`). One use = inline the utilities.
+- `src/theme.css` is the single source of truth. Both `src/global.css` (app) and `marketing/src/styles.css` (marketing) `@import` it. Don't redeclare tokens anywhere else.
+
 ## Elm style guide
 - **Alphabetize** all record fields and all type constructor lists. Apply to every new type and every edit of an existing type.
 - Always fully qualify imports. If you touch a module or function whose imports are not fully qualified, refactor them. You can expose the type, but not `(..)`.
@@ -198,8 +209,6 @@ import Html.Attributes
 Html.div [ Html.Attributes.class "tw-flex" ] [ Html.text "hello world" ]
 ```
 
-- No inline styles — rewrite any `Html.Attributes.style` calls as Tailwind classes.
-- Use `Html.Attributes.classList` for conditional classes or to organize flex, animation, translation, or responsive breakpoints.
 - Use semantic markup — only `<button>` elements get click handlers.
 - Aggressively refactor modules you touch; clean up tech debt as you go.
 
