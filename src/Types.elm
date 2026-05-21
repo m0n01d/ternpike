@@ -77,7 +77,8 @@ Holds the email/code form inputs plus the pre-login `GuestSession`
 (config + flow step). `authError` carries transient error chips that
 clear on the next transition. `showSettings` lets the user open the
 settings panel from the guest screen to set their Anthropic key
-before signing in.
+before signing in. `networkOffline` mirrors `navigator.onLine`
+(inverted) so the guest UI can surface a disconnected banner.
 
 -}
 type alias GuestState =
@@ -86,6 +87,7 @@ type alias GuestState =
     , codeInput : String
     , emailInput : String
     , key : Nav.Key
+    , networkOffline : Bool
     , session : GuestSession
     , showSettings : Bool
     , today : String
@@ -127,6 +129,10 @@ Ephemeral UI:
     `RouteAddReviewScan`.
   - `error`, `toast`, `submitting` — banner, transient toast, submit
     spinner.
+  - `networkOffline` — `True` while the browser reports no connection
+    (driven by `navigator.onLine` + `online`/`offline` events via the
+    `networkStatus` port). Used to gate the layout banner, sync-dot
+    state, and the Scan page's network-dependent affordances.
 
 Whenever fields here change, update `docs/architecture.md` per the
 project memo.
@@ -146,6 +152,7 @@ type alias AuthState =
     , key : Nav.Key
     , loadingExpenses : Set String
     , loadingTrips : Set String
+    , networkOffline : Bool
     , route : Route
     , scanQueue : Dict String ScanItem
     , showDayIntensity : Bool
@@ -197,8 +204,9 @@ Guest auth: `EmailInputChanged`, `SubmitEmail`, `CodeInputChanged`,
 Session: `SignOutClicked`, `ResetSettingsClicked`, `ApiKeyChanged`.
 
 PouchDB / navigation / chrome: `GotPouchMsg`, `LinkClicked`,
-`UrlChanged`, `RefreshClicked`, `ToggleDayIntensity`, `ToggleLedgerMap`,
-`ShowToast`, `ToastExpired`, `DismissError`.
+`NetworkStatusChanged`, `UrlChanged`, `RefreshClicked`,
+`ToggleDayIntensity`, `ToggleLedgerMap`, `ShowToast`, `ToastExpired`,
+`DismissError`.
 
 Stats hover: `HoverDailyBars`, `HoverCumulativePoints` — UI-only,
 records the chart datapoint(s) the pointer is currently over so the
@@ -239,6 +247,7 @@ type Msg
     | LongNoteChanged String
     | MapPickerConfirmed Float Float
     | MerchantChanged String
+    | NetworkStatusChanged Bool
     | NoteChanged String
     | OpenEditTripForm Trip
     | OpenMapPicker

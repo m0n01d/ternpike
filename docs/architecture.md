@@ -90,6 +90,7 @@ type alias AuthState =
     , expenses      : Dict String Expense
     , loadingExpenses : Set String
     , loadingTrips  : Set String
+    , networkOffline : Bool
     , page          : Page
     , route         : Route
     , syncState     : SyncState
@@ -99,6 +100,12 @@ type alias AuthState =
     -- ... form fields, UI state, etc.
     }
 ```
+
+`networkOffline` is also tracked on `GuestState` so the disconnected-banner
+UI works before sign-in. Both fields are kept in sync via the `networkStatus`
+port (see below) which forwards `navigator.onLine` plus `online`/`offline`
+window events. The value is inverted so the field reads naturally
+(`if as_.networkOffline then ...`).
 
 Transient view state (`statsHover : Data.StatsHover.Hover`,
 `statsGranularity : Maybe Data.StatsGranularity.Granularity`,
@@ -248,7 +255,13 @@ port stopSync      : () -> Cmd msg
 
 -- JS → Elm
 port pouchIn       : (Json.Decode.Value -> msg) -> Sub msg  -- receive a result
+port networkStatus : (Bool -> msg) -> Sub msg               -- True = online, False = offline
 ```
+
+`networkStatus` is wired in `src/main.js`: it sends `navigator.onLine` once
+immediately after Elm init (so the model has the truth from frame zero) and
+then forwards `online`/`offline` window events. The `NetworkStatusChanged`
+message updates `networkOffline` on whichever model branch is active.
 
 All PouchDB commands go through one `pouchOut` port. The payload is a JSON
 object with a `tag` field that `pouch.js` switches on. All PouchDB responses

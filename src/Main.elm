@@ -153,6 +153,9 @@ port gotGpsCoords : ({ lat : Float, lon : Float, denied : Bool } -> msg) -> Sub 
 port gotExifResult : ({ id : String, lat : Float, lon : Float, hasGps : Bool, debug : String } -> msg) -> Sub msg
 
 
+port networkStatus : (Bool -> msg) -> Sub msg
+
+
 
 -- ROUTING
 -- See src/Routing.elm
@@ -190,6 +193,7 @@ toAuthState creds initialRoute gs =
     , key = gs.key
     , loadingExpenses = Set.empty
     , loadingTrips = Set.empty
+    , networkOffline = gs.networkOffline
     , route = initialRoute
     , scanQueue = Dict.empty
     , showDayIntensity = True
@@ -216,6 +220,7 @@ toGuestState reason as_ =
     , codeInput = ""
     , emailInput = ""
     , key = as_.key
+    , networkOffline = as_.networkOffline
     , session = { config = as_.config, reason = reason }
     , showSettings = reason == SessionExpired
     , today = as_.today
@@ -1111,6 +1116,7 @@ init flagsJson url key =
             , codeInput = ""
             , emailInput = ""
             , key = key
+            , networkOffline = False
             , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
             , today = dec "today"
@@ -1272,6 +1278,9 @@ updateGuest msg gs =
         LinkClicked (Browser.External href) ->
             ( GuestModel gs, Nav.load href )
 
+        NetworkStatusChanged isOnline ->
+            ( GuestModel { gs | networkOffline = not isOnline }, Cmd.none )
+
         _ ->
             ( GuestModel gs, Cmd.none )
 
@@ -1377,6 +1386,7 @@ updateAuth msg as_ =
                 , codeInput = ""
                 , emailInput = ""
                 , key = as_.key
+                , networkOffline = as_.networkOffline
                 , session = { config = { anthropicKey = "", backendUrl = "" }, reason = NotLoggedIn }
                 , showSettings = False
                 , today = as_.today
@@ -2033,6 +2043,9 @@ updateAuth msg as_ =
             in
             ( AuthModel as1, cmd )
 
+        NetworkStatusChanged isOnline ->
+            ( AuthModel { as_ | networkOffline = not isOnline }, Cmd.none )
+
         _ ->
             ( AuthModel as_, Cmd.none )
 
@@ -2142,6 +2155,7 @@ main =
                             else
                                 GotExifCoords r.id Nothing Nothing r.debug
                         )
+                    , networkStatus NetworkStatusChanged
                     ]
         , update = update
         , view = view

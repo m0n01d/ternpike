@@ -230,6 +230,14 @@ import './global.css'
     await idbSet(key, value)
   })
 
+  // ── Network status ─────────────────────────────────────────────────────
+  if (app.ports.networkStatus) {
+    // Send initial state (before the listeners are attached, so Elm has the truth from frame zero)
+    app.ports.networkStatus.send(navigator.onLine)
+    window.addEventListener('online',  () => app.ports.networkStatus.send(true))
+    window.addEventListener('offline', () => app.ports.networkStatus.send(false))
+  }
+
   app.ports.clearStorage.subscribe(() => idbDel('auth_creds'))
 
   app.ports.clearAllStorage.subscribe(() => idbDel(...APP_KEYS))
