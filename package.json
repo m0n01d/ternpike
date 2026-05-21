@@ -19,6 +19,7 @@
     "e2e:update-snapshots": "playwright test --config=e2e/playwright.config.ts --update-snapshots"
   },
   "devDependencies": {
+    "@caseywebb/elmq": "^0.8.0",
     "@playwright/test": "1.60.0",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/node": "^22.10.0",
