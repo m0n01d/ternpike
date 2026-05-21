@@ -1,14 +1,14 @@
-<section class="features topo topo-features" id="features">
-  <div class="features-inner">
-    <div class="section-eyebrow">{{ features.eyebrow }}</div>
-    <h2 class="section-h2">{{ features.headlineHtml | safe }}</h2>
+<section class="topo topo-features bg-parchment px-6 py-25" id="features">
+  <div class="mx-auto max-w-[1100px]">
+    <div class="mb-3 font-mono text-[10px] uppercase tracking-[0.22em] text-rust [font-variant-caps:all-small-caps]">{{ features.eyebrow }}</div>
+    <h2 class="mb-14 font-display text-[clamp(36px,6vw,60px)] font-black leading-[1.05] tracking-[-0.02em] text-forest">{{ features.headlineHtml | safe }}</h2>
 
-    <div class="feat-grid">
+    <div class="grid grid-cols-1 gap-6 min-[600px]:grid-cols-2 min-[900px]:grid-cols-3">
       {% for item in features.items %}
-      <div class="feat-card">
-        <div class="feat-icon">{{ item.icon }}</div>
-        <div class="feat-title">{{ item.title }}</div>
-        <div class="feat-body">{{ item.body }}</div>
+      <div class="flex flex-col rounded-card bg-cream-deep px-7 py-8 shadow-card transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
+        <div class="mb-[14px] text-[26px] leading-none">{{ item.icon }}</div>
+        <div class="mb-2 font-display text-[22px] font-bold leading-[1.2] tracking-[-0.01em] text-forest">{{ item.title }}</div>
+        <div class="font-body text-[17px] leading-[1.6] text-forest-mid">{{ item.body }}</div>
       </div>
       {% endfor %}
     </div>
