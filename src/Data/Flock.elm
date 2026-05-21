@@ -6,6 +6,7 @@ module Data.Flock exposing
     , encode
     , isMember
     , isOwner
+    , isReadOnly
     , members
     , removeMember
     , transferOwnership
@@ -87,6 +88,30 @@ isOwner user flock =
 isMember : UserId -> Flock -> Bool
 isMember user flock =
     flock.billingOwner == user || List.member user flock.otherMembers
+
+
+{-| True when the flock's billing lapse means writes should be
+pre-disabled in the UI. `Grace` and `Frozen` are both read-only on the
+client; `Active` is writable. Single source of truth for the predicate
+— every disable site (Add submit, Ledger row menu, Scan trigger)
+consults this so the rule stays in one place.
+
+The server enforces the same gate at the CouchDB `validate_doc_update`
+layer (#57); this is purely the UX side so users don't submit and then
+see a 403.
+
+-}
+isReadOnly : Flock -> Bool
+isReadOnly flock =
+    case flock.billingStatus of
+        Active ->
+            False
+
+        Grace ->
+            True
+
+        Frozen ->
+            True
 
 
 

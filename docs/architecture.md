@@ -795,6 +795,51 @@ call sites stay safe. The encoder produces
 `{ "kind": "Personal" }` or `{ "kind": "InFlock", "flockId": "..." }`,
 matching the `targetHandle` reader in `src/pouch.js`.
 
+### Billing-status UX contract
+
+Every flock carries `billingStatus : BillingStatus` from
+`flock:meta` (one of `Active`, `Grace`, `Frozen`) plus an optional
+`billingLapsedAt : Maybe String` ISO timestamp. The server enforces
+the same gate at the CouchDB `validate_doc_update` layer (#57); the
+client gates the UI so users don't submit and then see a 403.
+
+  - `Active` — flock is writable. No banner, no disable.
+  - `Grace` — billing has lapsed but writes are still allowed for the
+    14-day grace window (mirrored by `UI.BillingBanner.graceWindowDays`).
+    The full-bleed `UI.BillingBanner` shows on every flock-scoped trip
+    page (Ledger / Stats / Add / Scan) with status-specific copy and a
+    days-remaining countdown derived from
+    `(billingLapsedAt + 14 days) - today`. **Writes are pre-disabled**
+    even during the grace window — the UX rule is "you can see what's
+    coming but not pile on more entries while billing is sorted out."
+  - `Frozen` — read-only indefinitely. Same banner, no countdown.
+
+`Data.Flock.isReadOnly : Flock -> Bool` is the single source of truth
+for the predicate (`True` for `Grace`/`Frozen`, `False` for `Active`).
+Every disable site consults it: the Add submit button, the Ledger row
+menu items (Duplicate / Move / Delete), and the Scan-tab dropzone. Do
+not inline the predicate at call sites — go through `isReadOnly` so
+the rule stays in one place.
+
+The banner is inserted once in `Main.viewAuth` between the error
+banner and the page content, so all four flock-scoped tabs render it
+identically without each page reproducing the chrome.
+
+The role-aware copy matrix (owner / paid member / Fledgling member ×
+Grace / Frozen) lives in `UI.BillingBanner.graceCopy` and `frozenCopy`
+— the matrix is in the #64 issue body and transcribed verbatim into
+those two functions. The "Transfer billing to me" CTA fires
+`TakeOverBilling FlockId`, which calls
+`Http.FlockApi.transferOwnership` with the calling user's email; the
+button is hidden (not disabled) for Fledgling members since the
+server would 403 their request anyway. The "Renew" CTA is a deep
+link to `/settings#billing` — a placeholder until the dedicated
+billing screen lands.
+
+Settings/Flocks renders the smaller `UI.BillingBanner.viewInline`
+chrome inside each flock card so the status is also visible without
+opening the flock's trip.
+
 ---
 
 ## Encoders and decoders

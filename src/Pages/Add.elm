@@ -145,6 +145,9 @@ viewBody model pending isEditing =
     let
         flockContext =
             activeFlockContext model
+
+        readOnly =
+            isActiveTripReadOnly model
     in
     Html.div []
         [ viewFlockContextStrip flockContext
@@ -209,10 +212,17 @@ viewBody model pending isEditing =
             ]
         , Html.button
             [ Html.Events.onClick SubmitEntry
-            , Html.Attributes.disabled model.submitting
+            , Html.Attributes.disabled (model.submitting || readOnly)
+            , Html.Attributes.title
+                (if readOnly then
+                    "This flock is read-only."
+
+                 else
+                    ""
+                )
             , Html.Attributes.class
                 ("w-full bg-rust hover:bg-rust-deep text-parchment border-none rounded-lg py-[18px] text-lg font-bold tracking-wide cursor-pointer mt-2 min-h-[56px] "
-                    ++ (if model.submitting then
+                    ++ (if model.submitting || readOnly then
                             "opacity-60 cursor-not-allowed"
 
                         else
@@ -253,6 +263,20 @@ activeFlockContext model =
 
         _ ->
             Nothing
+
+
+{-| `True` when the route's active trip belongs to a flock whose
+billing status is `Grace` or `Frozen`. Personal trips, unloaded
+trips, and active flocks all return `False`.
+-}
+isActiveTripReadOnly : AuthState -> Bool
+isActiveTripReadOnly model =
+    case activeFlockContext model of
+        Just ( _, flock ) ->
+            Data.Flock.isReadOnly flock
+
+        Nothing ->
+            False
 
 
 {-| The "ADDING TO / Trip Name" strip at the top of the Add screen.

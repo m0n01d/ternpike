@@ -168,6 +168,7 @@ viewBody model mode =
                     , canMove = hasOtherTrips model
                     , members = membersForActiveTrip model
                     , openMenu = model.openLedgerMenu
+                    , readOnly = isActiveTripReadOnly model
                     , showIntensity = model.showDayIntensity
                     }
                     entries
@@ -253,11 +254,31 @@ displayNameFor user =
             UserId.toString user
 
 
+{-| `True` when the route's active trip belongs to a flock whose
+billing status is `Grace` or `Frozen`. Personal trips, unloaded
+trips, and active flocks all return `False`. Mirrors the predicate
+used on the Add page so the disable rules stay aligned.
+-}
+isActiveTripReadOnly : AuthState -> Bool
+isActiveTripReadOnly model =
+    case ( Routing.routeTripId model.route, model.trips ) of
+        ( Just tripId, Data.Trips.TripsLoaded trips ) ->
+            Data.Trips.findTrip tripId trips
+                |> Maybe.andThen .flockId
+                |> Maybe.andThen (\fid -> Data.Flocks.get fid model.flocks)
+                |> Maybe.map Data.Flock.isReadOnly
+                |> Maybe.withDefault False
+
+        _ ->
+            False
+
+
 viewEntries :
     { basePath : String
     , canMove : Bool
     , members : Dict String FlockMember
     , openMenu : Maybe ExpenseId.ExpenseId
+    , readOnly : Bool
     , showIntensity : Bool
     }
     -> List Entry.EffectiveEntry
@@ -379,6 +400,7 @@ viewEntryRow :
     , canMove : Bool
     , members : Dict String FlockMember
     , openMenu : Maybe ExpenseId.ExpenseId
+    , readOnly : Bool
     , showIntensity : Bool
     }
     -> Entry.EffectiveEntry
@@ -435,7 +457,7 @@ viewEntryRow opts entry =
             ]
         , viewRowMenuButton entry
         , if isOpen then
-            viewRowMenu opts.canMove entry
+            viewRowMenu opts.canMove opts.readOnly entry
 
           else
             Html.text ""
@@ -473,8 +495,8 @@ viewRowMenuButton entry =
         [ UI.Icons.kebab "w-4 h-4" ]
 
 
-viewRowMenu : Bool -> Entry.EffectiveEntry -> Html Msg
-viewRowMenu canMove entry =
+viewRowMenu : Bool -> Bool -> Entry.EffectiveEntry -> Html Msg
+viewRowMenu canMove readOnly entry =
     let
         expense =
             effectiveEntryToExpense entry
@@ -482,10 +504,11 @@ viewRowMenu canMove entry =
         moveItem =
             if canMove then
                 [ menuItem
-                    { icon = UI.Icons.move "w-4 h-4"
+                    { danger = False
+                    , disabled = readOnly
+                    , icon = UI.Icons.move "w-4 h-4"
                     , label = "Move to trip…"
                     , onClick = OpenMovePicker expense
-                    , danger = False
                     }
                 ]
 
@@ -495,18 +518,20 @@ viewRowMenu canMove entry =
     let
         duplicate =
             menuItem
-                { icon = UI.Icons.copy "w-4 h-4"
+                { danger = False
+                , disabled = readOnly
+                , icon = UI.Icons.copy "w-4 h-4"
                 , label = "Duplicate"
                 , onClick = DuplicateEntry expense
-                , danger = False
                 }
 
         delete =
             menuItem
-                { icon = UI.Icons.trash "w-4 h-4"
+                { danger = True
+                , disabled = readOnly
+                , icon = UI.Icons.trash "w-4 h-4"
                 , label = "Delete"
                 , onClick = VoidEntry expense
-                , danger = True
                 }
     in
     Html.div []
@@ -524,19 +549,29 @@ viewRowMenu canMove entry =
 
 
 menuItem :
-    { icon : Html Msg
+    { danger : Bool
+    , disabled : Bool
+    , icon : Html Msg
     , label : String
     , onClick : Msg
-    , danger : Bool
     }
     -> Html Msg
 menuItem item =
     Html.button
         [ Html.Attributes.type_ "button"
+        , Html.Attributes.disabled item.disabled
+        , Html.Attributes.title
+            (if item.disabled then
+                "This flock is read-only."
+
+             else
+                ""
+            )
         , Html.Attributes.classList
             [ ( "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-cream-deep", True )
-            , ( "text-rust", item.danger )
-            , ( "text-ink", not item.danger )
+            , ( "text-rust", item.danger && not item.disabled )
+            , ( "text-ink", not item.danger && not item.disabled )
+            , ( "text-muted opacity-60 cursor-not-allowed", item.disabled )
             ]
         , Html.Events.onClick item.onClick
         ]
