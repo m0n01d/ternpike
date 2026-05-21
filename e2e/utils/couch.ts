@@ -1,6 +1,11 @@
 import { spawn, spawnSync } from 'node:child_process'
 
-const CONTAINER_NAME = 'ternpike-e2e-couch'
+// The container name is suffixed with this process's PID so that
+// multiple worktrees on the same host (one per concurrent agent)
+// don't fight over a single `ternpike-e2e-couch` name. Without the
+// suffix, peer global-teardowns `docker rm -f` each other's
+// containers mid-run, producing ECONNREFUSED flakes.
+const CONTAINER_NAME = `ternpike-e2e-couch-${process.pid}`
 const IMAGE = 'couchdb:3.3'
 
 export type CouchHandle = {

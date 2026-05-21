@@ -438,7 +438,7 @@ export function registerFlockRoutes(app) {
         name: meta.name,
         dbName,
       })
-      return c.json({ ok: true, flockId, dbName })
+      return c.json({ ok: true, flockId, dbName, name: meta.name })
     } catch (err) {
       console.error('flocks/join:', err)
       return c.json({ ok: false, error: 'join_failed' }, 500)

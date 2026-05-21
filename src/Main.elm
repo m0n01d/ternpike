@@ -2590,6 +2590,9 @@ flockErrorMessage err =
 joinErrorMessage : Http.Error -> String
 joinErrorMessage err =
     case err of
+        Http.BadStatus 401 ->
+            "This invite is no longer valid. Ask the inviter for a fresh link."
+
         Http.BadStatus 403 ->
             "This invite is for someone else."
 
@@ -2598,6 +2601,9 @@ joinErrorMessage err =
 
         Http.BadStatus 409 ->
             "You're already a member of that flock."
+
+        Http.BadStatus 410 ->
+            "This invite has expired. Ask the inviter for a fresh link."
 
         _ ->
             flockErrorMessage err
