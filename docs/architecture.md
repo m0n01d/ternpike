@@ -140,6 +140,65 @@ starts with `amend::<expenseId>::`.
 
 ---
 
+## Storage tiers: PouchDB vs IndexedDB vs Server
+
+Not everything goes in PouchDB. The app spreads persistent state across three
+deliberately separate places:
+
+| Tier | Examples | Why this tier |
+|---|---|---|
+| **Server** (Worker KV) | Subscription tier, `stripeCustomerId`, identity | Source of truth. Re-checked on every gated request — never trusted from the client. |
+| **IndexedDB** (outside PouchDB) | JWT (`auth_creds`), BYO API keys (`ai_config`) | Device-local. Must not sync — keys would land on CouchDB. |
+| **PouchDB** | Expenses, trips, amendments, voids, `user:profile` | Things that should sync across the user's devices, that aren't secret and aren't server-authoritative. |
+
+The trap to avoid: don't put `tier` or `stripeCustomerId` in PouchDB even as a
+cache. If a user upgrades on Device A, PouchDB sync won't propagate that until
+the next push — and the source of truth is Stripe → Worker KV anyway. The
+client refresh path is the `/me` endpoint, called on startup and after
+returning from Stripe Checkout.
+
+### The user profile doc
+
+There's exactly one profile doc per user (per-user remote DB scopes it, so no
+namespace is needed in the `_id`):
+
+```json
+{
+  "_id": "user:profile",
+  "_rev": "...",
+  "createdAt": "2026-05-21T...",
+  "defaultCurrency": "USD",
+  "favoriteCategories": ["fuel", "lodging"],
+  "preferredScanSource": "hosted",
+  "type": "userProfile",
+  "ui": {
+    "denseTables": false,
+    "theme": "system"
+  },
+  "updatedAt": "2026-05-21T..."
+}
+```
+
+- Fixed `_id = "user:profile"` (not a ULID) — there's only ever one, and a
+  known ID makes startup fetch trivial: `db.get("user:profile")`. On 404,
+  create with defaults.
+- `type: "userProfile"` follows the same convention other docs use for view
+  filters.
+- `preferredScanSource` is a *preference*, not a *capability*. Capability
+  (is the user actually Paid?) comes from the server. Free users may still
+  have `"hosted"` saved — it just won't render the hosted option until they
+  upgrade.
+
+### What does NOT go in `user:profile`
+
+- `tier`, `subscriptionStatus`, `stripeCustomerId` — server-authoritative
+  (see above).
+- API keys — IndexedDB only, never PouchDB.
+- `email`, `googleSub` — already in `AuthState` from the auth flow, no need
+  to duplicate.
+
+---
+
 ## PouchDB: what it is and how it plugs in
 
 PouchDB is a client-side database that stores documents in IndexedDB (the

@@ -47,7 +47,27 @@ BYO keys (Anthropic / OpenAI / Gemini) are available on **both** tiers — paid 
 3. Never hide the feature entirely — free users should know what paid unlocks.
 4. Server endpoints back paid features must re-check tier on every request. Client-side gating is UX, not security.
 
-Tracking issues: #13 (BYO-key infrastructure, foundation for Free tier), #14 (paid-tier proxy + batch scanning), #4 (Cloudflare Worker rewrite, required for #14).
+Tracking issues: #13 (BYO-key infrastructure, foundation for Free tier), #14 (paid-tier proxy + batch scanning), #4 (Cloudflare Worker rewrite, required for #14). Subscription infrastructure breakdown: #16–#22.
+
+## Storage tiers — where data lives
+
+Three places, picked deliberately. Misplacing data here causes real problems: secrets leak via sync, tier gets stale across devices, etc.
+
+| What | Where | Why |
+|---|---|---|
+| JWT / session token | IndexedDB (`auth_creds`) | Device-local. Never sync. |
+| BYO API keys (Anthropic/OpenAI/Gemini) | IndexedDB (`ai_config`, see #13) | PouchDB syncs to CouchDB — keys would land on the server. **Hard no.** |
+| Subscription tier / status / `stripeCustomerId` | Server (Worker KV), hydrated into `AuthState` in memory at login + via `/me` | Server is source of truth. Re-checked on every gated endpoint. |
+| Identity (email, googleSub) | Server, hydrated into `AuthState` | Same as tier. |
+| User preferences (default currency, fav categories, UI prefs, preferred scan source) | PouchDB doc `_id = "user:profile"` | Syncs across the user's devices. Not secret. Not server-authoritative. |
+| Expense / Trip / Amendment / Void | PouchDB (existing) | Domain data. |
+
+**Rules:**
+1. **PouchDB** = things the user wants synced across their own devices, that aren't secret and aren't server-authoritative.
+2. **IndexedDB** = device-local secrets and caches (JWT, API keys, ephemeral state).
+3. **Server** = identity, tier, billing. Anything that gates a paid feature must be re-checked server-side on every request.
+
+Never cache `tier` in PouchDB — it'd sync stale state across devices when a user upgrades. The `/me` call on startup (#19) is the refresh path.
 
 ## Architecture doc
 
@@ -56,7 +76,7 @@ Tracking issues: #13 (BYO-key infrastructure, foundation for Free tier), #14 (pa
 **Keep it current.** Whenever you change any of the following, update `docs/architecture.md` in the same commit:
 - `AuthState` fields or types in `Types.elm`
 - Port definitions or the `pouchOut`/`pouchIn` message protocol
-- Document ID schemes (`ExpenseId`, `TripId`, amendment/void ID formats)
+- Document ID schemes (`ExpenseId`, `TripId`, amendment/void ID formats, `user:profile`)
 - Any `Data/*.elm` type, encoder, or decoder
 - Startup/sync sequencing logic in `Main.elm`
 - Route-driven fetch logic (`fetchesForRoute`)
