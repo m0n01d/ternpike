@@ -101,17 +101,17 @@ type alias AuthState =
 ```
 
 Transient view state (`statsHover : Data.StatsHover.Hover`,
-`statsGranularity : Data.StatsGranularity.Granularity`,
+`statsGranularity : Maybe Data.StatsGranularity.Granularity`,
 `scanQueue`, `confirmDeleteTrip`, etc.) also lives on `AuthState`,
 but it never persists — these fields are reset on the relevant
 pointer-leave / submit / sign-out event. The hover state for the
 Stats charts records the elm-charts `CI.One` handle(s) the user is
 currently touching so the page can render anchored `C.tooltip`
 overlays; pointer leave clears them back to `StatsHover.empty`.
-`statsGranularity` defaults to `Auto` and is set by the chip
-selector on the Stats tab — it controls Daily-Spending bin width
-(daily / weekly / monthly), but is purely view state and never
-syncs to PouchDB.
+`statsGranularity` is `Nothing` on initial load — the chart picks
+a default per trip via `StatsGranularity.fromSpan` — and becomes
+`Just g` after the user touches the chip selector (Daily / Weekly /
+Monthly). In-memory only; never syncs to PouchDB.
 
 ---
 

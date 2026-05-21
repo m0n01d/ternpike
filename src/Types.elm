@@ -150,7 +150,7 @@ type alias AuthState =
     , scanQueue : Dict String ScanItem
     , showLedgerMap : Bool
     , showMapPicker : Bool
-    , statsGranularity : Granularity
+    , statsGranularity : Maybe Granularity
     , statsHover : Hover
     , submitting : Bool
     , syncState : SyncState

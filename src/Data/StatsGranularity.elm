@@ -1,23 +1,24 @@
-module Data.StatsGranularity exposing (Granularity(..), all, default, kicker, label, resolve)
+module Data.StatsGranularity exposing (Granularity(..), all, fromSpan, kicker, label)
 
 {-| The user-facing time-binning choice for the Daily Spending chart.
 
 The chart picks a bin size — daily, weekly, or monthly — so that long trips
-don't collapse into a smear of hair-thin bars. `Auto` is the default and
-chooses based on trip length; `Daily`/`Weekly`/`Monthly` are explicit
-overrides surfaced by a chip selector on the Stats tab.
+don't collapse into a smear of hair-thin bars. On first render of a trip,
+`fromSpan` picks a sensible default based on trip length. After that, the
+chip selector on the Stats tab lets the user switch between the three
+explicit choices, and the pick sticks for the rest of the session.
 
-Lives on `AuthState.statsGranularity`. In-memory only — resets on sign-out
-or refresh. No persistence.
+Lives on `AuthState.statsGranularity : Maybe Granularity` — `Nothing`
+means "use `fromSpan` for the current trip"; `Just g` means "the user
+picked `g`." In-memory only; no persistence.
 
-@docs Granularity, all, default, kicker, label, resolve
+@docs Granularity, all, fromSpan, kicker, label
 
 -}
 
 
 type Granularity
-    = Auto
-    | Daily
+    = Daily
     | Monthly
     | Weekly
 
@@ -26,19 +27,38 @@ type Granularity
 -}
 all : List Granularity
 all =
-    [ Auto, Daily, Weekly, Monthly ]
+    [ Daily, Weekly, Monthly ]
 
 
-{-| Initial state — let the chart decide based on trip length.
+{-| Pick the default granularity for a trip given the inclusive span in
+days between the first and last day with spend.
+
+  - ≤ 35 days → daily (a month-long trip still reads as ~30 narrow bars).
+  - ≤ 210 days → weekly (≈30 weekly bars for a 7-month trip).
+  - otherwise → monthly.
+
+```
+fromSpan 22 --> Daily
+
+fromSpan 100 --> Weekly
+
+fromSpan 400 --> Monthly
+```
+
 -}
-default : Granularity
-default =
-    Auto
+fromSpan : Int -> Granularity
+fromSpan spanDays =
+    if spanDays <= 35 then
+        Daily
+
+    else if spanDays <= 210 then
+        Weekly
+
+    else
+        Monthly
 
 
-{-| Human-readable label for chip text and kicker derivations.
-
-    label Auto --> "Auto"
+{-| Human-readable label for the chip selector.
 
     label Daily --> "Daily"
 
@@ -50,9 +70,6 @@ default =
 label : Granularity -> String
 label g =
     case g of
-        Auto ->
-            "Auto"
-
         Daily ->
             "Daily"
 
@@ -63,8 +80,7 @@ label g =
             "Weekly"
 
 
-{-| The kicker text shown above the chart for a resolved (never `Auto`)
-granularity.
+{-| The kicker text shown above the chart for a resolved granularity.
 
     kicker Daily --> "DAILY SPENDING"
 
@@ -72,17 +88,10 @@ granularity.
 
     kicker Monthly --> "MONTHLY SPENDING"
 
-`Auto` falls back to the daily kicker — `resolve` will have replaced it
-with a concrete granularity before this is called, but the case is
-exhaustive to keep the compiler happy.
-
 -}
 kicker : Granularity -> String
 kicker g =
     case g of
-        Auto ->
-            "DAILY SPENDING"
-
         Daily ->
             "DAILY SPENDING"
 
@@ -91,38 +100,3 @@ kicker g =
 
         Weekly ->
             "WEEKLY SPENDING"
-
-
-{-| Resolve `Auto` to a concrete granularity based on the inclusive span
-in days between the trip's first and last day with spend.
-
-  - ≤ 35 days → daily (a month-long trip still reads as ~30 narrow bars).
-  - ≤ 210 days → weekly (≈30 weekly bars for a 7-month trip).
-  - otherwise → monthly.
-
-Explicit choices pass through unchanged.
-
-    resolve Auto 22 --> Daily
-
-    resolve Auto 100 --> Weekly
-
-    resolve Auto 400 --> Monthly
-
-    resolve Weekly 22 --> Weekly
-
--}
-resolve : Granularity -> Int -> Granularity
-resolve g spanDays =
-    case g of
-        Auto ->
-            if spanDays <= 35 then
-                Daily
-
-            else if spanDays <= 210 then
-                Weekly
-
-            else
-                Monthly
-
-        _ ->
-            g
