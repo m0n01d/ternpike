@@ -35,6 +35,7 @@
     background-size: 2400px 2000px;
   }
   .topo-hero     { background-position: -580px -1100px; }
+  .topo-how      { background-position: -240px -260px; }
   .topo-features { background-position: -1700px -1380px; }
   .topo-oss      { background-position: -1280px -80px; }
 
@@ -391,6 +392,178 @@
     font-family: var(--font-body);
     font-size: 16px;
     color: var(--color-moss);
+    line-height: 1.6;
+  }
+
+  /* ─── HOW IT WORKS — v2 (app card idiom) ─── */
+  .how {
+    padding: 100px 24px;
+    background-color: var(--color-parchment);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .how-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .how .section-eyebrow {
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.22em;
+  }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    align-items: stretch;
+    background: transparent;
+    border-radius: 0;
+    overflow: visible;
+    box-shadow: none;
+    position: relative;
+  }
+
+  @media (min-width: 681px) {
+    .steps > .step-card + .step-card::before {
+      content: '';
+      position: absolute;
+      top: 56px;
+      left: calc(-16px - 1px);
+      width: 32px;
+      height: 0;
+      border-top: var(--rule-tan);
+      pointer-events: none;
+    }
+  }
+
+  @media (max-width: 680px) {
+    .steps { grid-template-columns: 1fr; gap: 20px; }
+  }
+
+  .step-card {
+    position: relative;
+    background: var(--color-cream-deep);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: 36px 32px 32px;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .step-card:hover {
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
+  }
+
+  .step-card .step-num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-rust);
+    margin-bottom: 18px;
+    font-variant-caps: all-small-caps;
+  }
+
+  .step-card .step-icon {
+    font-size: 30px;
+    margin-bottom: 14px;
+    line-height: 1;
+  }
+
+  .step-card .step-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--color-forest);
+    margin-bottom: 10px;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  .step-card .step-body {
+    font-family: var(--font-body);
+    font-size: 18px;
+    color: var(--color-forest-mid);
+    line-height: 1.65;
+  }
+
+  /* ─── FEATURES — v2 (app card idiom) ─── */
+  .features {
+    padding: 100px 24px;
+    background-color: var(--color-parchment);
+  }
+
+  .features .features-inner {
+    max-width: 1100px;
+  }
+
+  .features .section-eyebrow {
+    color: var(--color-rust);
+    font-variant-caps: all-small-caps;
+    letter-spacing: 0.22em;
+  }
+
+  .features .section-h2 {
+    color: var(--color-forest);
+    margin-bottom: 56px;
+  }
+
+  .feat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    background: transparent;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  @media (max-width: 900px) {
+    .feat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 600px) {
+    .feat-grid { grid-template-columns: 1fr; }
+  }
+
+  .feat-card {
+    background: var(--color-cream-deep);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: 32px 28px;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .feat-card:hover {
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
+  }
+
+  .feat-card .feat-icon {
+    font-size: 26px;
+    margin-bottom: 14px;
+    line-height: 1;
+  }
+
+  .feat-card .feat-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--color-forest);
+    margin-bottom: 8px;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  .feat-card .feat-body {
+    font-family: var(--font-body);
+    font-size: 17px;
+    color: var(--color-forest-mid);
     line-height: 1.6;
   }
 

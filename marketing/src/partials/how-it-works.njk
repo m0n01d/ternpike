@@ -1,15 +1,17 @@
-<section class="how" id="how">
-  <div class="section-eyebrow">{{ howItWorks.eyebrow }}</div>
-  <h2 class="section-h2">{{ howItWorks.headlineHtml | safe }}</h2>
+<section class="how topo topo-how" id="how">
+  <div class="how-inner">
+    <div class="section-eyebrow">{{ howItWorks.eyebrow }}</div>
+    <h2 class="section-h2">{{ howItWorks.headlineHtml | safe }}</h2>
 
-  <div class="steps">
-    {% for step in howItWorks.steps %}
-    <div class="step">
-      <div class="step-num">{{ step.number }}</div>
-      <div class="step-icon">{{ step.icon }}</div>
-      <div class="step-title">{{ step.title }}</div>
-      <div class="step-body">{{ step.body }}</div>
+    <div class="steps">
+      {% for step in howItWorks.steps %}
+      <div class="step-card">
+        <div class="step-num">{{ step.number }}</div>
+        <div class="step-icon">{{ step.icon }}</div>
+        <div class="step-title">{{ step.title }}</div>
+        <div class="step-body">{{ step.body }}</div>
+      </div>
+      {% endfor %}
     </div>
-    {% endfor %}
   </div>
 </section>
