@@ -12,7 +12,6 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Html.Keyed as Keyed
-import Json.Decode
 import Routing
 import Set
 import Types exposing (AuthState, Msg(..))
@@ -160,12 +159,12 @@ viewBody model mode =
         LedgerReady entries ->
             Html.div []
                 [ viewLedgerMap model entries
-                , viewEntries model.basePath model.showDayIntensity entries
+                , viewEntries model.basePath model.openLedgerMenu model.showDayIntensity entries
                 ]
 
 
-viewEntries : String -> Bool -> List Entry.EffectiveEntry -> Html Msg
-viewEntries basePath showIntensity entries =
+viewEntries : String -> Maybe ExpenseId.ExpenseId -> Bool -> List Entry.EffectiveEntry -> Html Msg
+viewEntries basePath openMenu showIntensity entries =
     let
         dates =
             Entry.uniqueDates entries
@@ -199,7 +198,7 @@ viewEntries basePath showIntensity entries =
                 , Keyed.node "div"
                     [ Html.Attributes.class "animate-stagger-row" ]
                     (List.map
-                        (\e -> ( ExpenseId.toString e.id, viewEntryRow basePath e ))
+                        (\e -> ( ExpenseId.toString e.id, viewEntryRow basePath openMenu e ))
                         dayEntries
                     )
                 ]
@@ -263,8 +262,8 @@ viewLedgerMap model entries =
         Html.text ""
 
 
-viewEntryRow : String -> Entry.EffectiveEntry -> Html Msg
-viewEntryRow basePath entry =
+viewEntryRow : String -> Maybe ExpenseId.ExpenseId -> Entry.EffectiveEntry -> Html Msg
+viewEntryRow basePath openMenu entry =
     let
         primaryLabel =
             if entry.merchant /= "" then
@@ -275,49 +274,115 @@ viewEntryRow basePath entry =
 
             else
                 Category.label entry.category
-    in
-    Html.a
-        [ Html.Attributes.href (Routing.editEntryPath basePath entry.tripId entry.id)
-        , Html.Attributes.class "w-full text-left py-3 border-b border-dashed border-tan/70 flex items-baseline gap-3 cursor-pointer text-ink"
-        ]
-        [ Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
-            [ Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
-                [ Html.text primaryLabel ]
-            , Html.div [ Html.Attributes.class "mt-1.5 flex items-center gap-2" ]
-                [ Html.span
-                    [ Html.Attributes.class "inline-block text-[10px] font-mono uppercase tracking-wider text-moss bg-cream-deep px-2 py-0.5 rounded" ]
-                    [ Html.text (Category.label entry.category) ]
-                , Html.span
-                    [ Html.Attributes.class "text-xs leading-none"
-                    , Html.Attributes.attribute "aria-hidden" "true"
-                    ]
-                    [ Html.text (Category.icon entry.category) ]
-                , case entry.lat of
-                    Just _ ->
-                        Html.span
-                            [ Html.Attributes.class "text-moss"
-                            , Html.Attributes.title "Has GPS coordinates"
-                            ]
-                            [ UI.Icons.pin "w-3 h-3" ]
 
-                    Nothing ->
-                        Html.text ""
+        isOpen =
+            openMenu == Just entry.id
+    in
+    Html.div
+        [ Html.Attributes.class "relative border-b border-dashed border-tan/70" ]
+        [ Html.a
+            [ Html.Attributes.href (Routing.editEntryPath basePath entry.tripId entry.id)
+            , Html.Attributes.class "w-full text-left py-3 flex items-baseline gap-3 cursor-pointer text-ink"
+            ]
+            [ Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
+                [ Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
+                    [ Html.text primaryLabel ]
+                , Html.div [ Html.Attributes.class "mt-1.5 flex items-center gap-2" ]
+                    [ Html.span
+                        [ Html.Attributes.class "inline-block text-[10px] font-mono uppercase tracking-wider text-moss bg-cream-deep px-2 py-0.5 rounded" ]
+                        [ Html.text (Category.label entry.category) ]
+                    , Html.span
+                        [ Html.Attributes.class "text-xs leading-none"
+                        , Html.Attributes.attribute "aria-hidden" "true"
+                        ]
+                        [ Html.text (Category.icon entry.category) ]
+                    , case entry.lat of
+                        Just _ ->
+                            Html.span
+                                [ Html.Attributes.class "text-moss"
+                                , Html.Attributes.title "Has GPS coordinates"
+                                ]
+                                [ UI.Icons.pin "w-3 h-3" ]
+
+                        Nothing ->
+                            Html.text ""
+                    ]
                 ]
+            , Html.div
+                [ Html.Attributes.class "font-mono text-base text-forest tabular-nums shrink-0" ]
+                [ Html.text (formatAmount entry.amount) ]
             ]
+        , viewRowMenuButton entry
+        , if isOpen then
+            viewRowMenu entry
+
+          else
+            Html.text ""
+        ]
+
+
+viewRowMenuButton : Entry.EffectiveEntry -> Html Msg
+viewRowMenuButton entry =
+    Html.button
+        [ Html.Attributes.type_ "button"
+        , Html.Attributes.attribute "aria-label" "Row actions"
+        , Html.Attributes.class "absolute right-0 top-1/2 -translate-y-1/2 text-muted shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
+        , Html.Events.onClick (OpenLedgerMenu entry.id)
+        ]
+        [ UI.Icons.kebab "w-4 h-4" ]
+
+
+viewRowMenu : Entry.EffectiveEntry -> Html Msg
+viewRowMenu entry =
+    let
+        expense =
+            effectiveEntryToExpense entry
+    in
+    Html.div []
+        [ Html.button
+            [ Html.Attributes.type_ "button"
+            , Html.Attributes.attribute "aria-label" "Close menu"
+            , Html.Attributes.class "fixed inset-0 z-10 bg-transparent cursor-default"
+            , Html.Events.onClick CloseLedgerMenu
+            ]
+            []
         , Html.div
-            [ Html.Attributes.class "font-mono text-base text-forest tabular-nums shrink-0" ]
-            [ Html.text (formatAmount entry.amount) ]
-        , Html.span
-            [ Html.Events.custom "click"
-                (Json.Decode.succeed
-                    { message = VoidEntry (effectiveEntryToExpense entry)
-                    , preventDefault = True
-                    , stopPropagation = True
-                    }
-                )
-            , Html.Attributes.class "text-rust shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center cursor-pointer"
+            [ Html.Attributes.class "absolute right-2 top-10 z-20 w-44 bg-cream rounded-card shadow-panel border border-tan/60 py-1" ]
+            [ menuItem
+                { icon = UI.Icons.copy "w-4 h-4"
+                , label = "Duplicate"
+                , onClick = DuplicateEntry expense
+                , danger = False
+                }
+            , menuItem
+                { icon = UI.Icons.trash "w-4 h-4"
+                , label = "Delete"
+                , onClick = VoidEntry expense
+                , danger = True
+                }
             ]
-            [ UI.Icons.close "w-4 h-4" ]
+        ]
+
+
+menuItem :
+    { icon : Html Msg
+    , label : String
+    , onClick : Msg
+    , danger : Bool
+    }
+    -> Html Msg
+menuItem item =
+    Html.button
+        [ Html.Attributes.type_ "button"
+        , Html.Attributes.classList
+            [ ( "w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-cream-deep", True )
+            , ( "text-rust", item.danger )
+            , ( "text-ink", not item.danger )
+            ]
+        , Html.Events.onClick item.onClick
+        ]
+        [ item.icon
+        , Html.text item.label
         ]
 
 

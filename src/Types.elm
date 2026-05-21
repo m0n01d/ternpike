@@ -38,6 +38,7 @@ import Data.Amendment exposing (Amendment)
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category)
 import Data.Expense exposing (Expense)
+import Data.ExpenseId exposing (ExpenseId)
 import Data.Guest exposing (GuestSession)
 import Data.Navigation exposing (Route)
 import Data.PaymentMethod exposing (PaymentMethod)
@@ -160,6 +161,7 @@ type alias AuthState =
     , loadingExpenses : Set String
     , loadingTrips : Set String
     , networkOffline : Bool
+    , openLedgerMenu : Maybe ExpenseId
     , route : Route
     , scanQueue : Dict String ScanItem
     , showDayIntensity : Bool
@@ -205,6 +207,12 @@ Trip CRUD: `OpenNewTripForm`, `OpenEditTripForm`, `TripFieldChanged`,
 
 Expense submit/void: `SubmitEntry`, `GotSubmitTime`, `VoidEntry`.
 
+Expense duplicate: `DuplicateEntry`, `GotDuplicateTime` — snapshot the
+effective state into a brand-new expense doc in the same trip.
+
+Ledger row menu: `OpenLedgerMenu`, `CloseLedgerMenu` — toggle the kebab
+popover holding secondary row actions (Duplicate, Delete).
+
 Guest auth: `EmailInputChanged`, `SubmitEmail`, `CodeInputChanged`,
 `SubmitCode`, `RequestCodeResult`, `VerifyCodeResult`,
 `ToggleGuestSettings`.
@@ -238,6 +246,7 @@ type Msg
     | CancelDeleteTrip
     | CategorySelected Category
     | ClearDoneItems
+    | CloseLedgerMenu
     | CloseTripForm
     | CodeInputChanged String
     | ConfirmDeleteTrip Trip
@@ -245,6 +254,7 @@ type Msg
     | DeleteTrip Trip
     | DismissError
     | DismissMapPicker
+    | DuplicateEntry Expense
     | EmailInputChanged String
     | FilesSelected (List File)
     | GeolocationDenied
@@ -252,6 +262,7 @@ type Msg
     | GotFileUrl String String
     | GotGpsCoords Float Float
     | GotOcrResult String (Result Http.Error String)
+    | GotDuplicateTime Expense Time.Posix
     | GotPouchMsg Json.Decode.Value
     | GotSaveTripTime Time.Posix
     | GotSubmitTime Time.Posix
@@ -264,6 +275,7 @@ type Msg
     | NetworkStatusChanged Bool
     | NoteChanged String
     | OpenEditTripForm Trip
+    | OpenLedgerMenu ExpenseId
     | OpenMapPicker
     | OpenNewTripForm
     | PaymentMethodChanged (Maybe PaymentMethod)

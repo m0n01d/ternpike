@@ -128,6 +128,12 @@ a default per trip via `StatsGranularity.fromSpan` — and becomes
 `Just g` after the user touches the chip selector (Daily / Weekly /
 Monthly). In-memory only; never syncs to PouchDB.
 
+`openLedgerMenu : Maybe ExpenseId` tracks which ledger row currently has its
+kebab popover open. The popover holds secondary row actions (Duplicate,
+Delete); a full-screen transparent `<button aria-label="Close menu">`
+backdrop closes it. In-memory only; reset by `OpenLedgerMenu` /
+`CloseLedgerMenu` and cleared whenever a row action fires.
+
 ---
 
 ## Data modeling with Dicts
@@ -413,6 +419,22 @@ This is how synced remote changes appear in the UI without a page reload.
    lands in `as_.expenses` via the normal `ExpenseChanged` branch.
 
 No separate "confirm success" message is needed — the live feed is the confirmation.
+
+### Duplicating an expense
+
+Duplicate is the simplest possible "save a new expense" path: the kebab menu on
+a ledger row dispatches `DuplicateEntry expense` carrying the row's effective
+snapshot (`Helpers.effectiveEntryToExpense`). `update` performs
+`Task.perform Time.now`, and `GotDuplicateTime` calls
+`Expense.snapshotWith { id, createdAt, tripId }` to mint a new expense doc that
+copies every user-visible field (date, amount, category, merchant, note,
+longNote, paymentMethod, lat, lon) onto a fresh `ExpenseId` and `createdAt`,
+with the *same* `tripId`. The duplicate is then sent through `SaveExpense` and
+optimistically inserted into the destination trip's inner dict — the same path
+as a brand-new expense.
+
+A duplicate is **not** an amendment: it's an independent document with its own
+identity and its own amendment chain going forward.
 
 ---
 

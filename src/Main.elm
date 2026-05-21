@@ -200,6 +200,7 @@ toAuthState creds initialRoute gs =
     , loadingExpenses = Set.empty
     , loadingTrips = Set.empty
     , networkOffline = gs.networkOffline
+    , openLedgerMenu = Nothing
     , route = initialRoute
     , scanQueue = Dict.empty
     , showDayIntensity = True
@@ -1666,7 +1667,11 @@ updateAuth msg as_ =
                     , createdAt = as_.today
                     }
             in
-            ( AuthModel { as_ | voids = Dict.insert voidId optimisticVoid as_.voids }
+            ( AuthModel
+                { as_
+                    | openLedgerMenu = Nothing
+                    , voids = Dict.insert voidId optimisticVoid as_.voids
+                }
             , sendPouch
                 (SaveVoid
                     (E.object
@@ -1678,6 +1683,56 @@ updateAuth msg as_ =
                     )
                 )
             )
+
+        DuplicateEntry expense ->
+            ( AuthModel { as_ | openLedgerMenu = Nothing }
+            , Task.perform (GotDuplicateTime expense) Time.now
+            )
+
+        GotDuplicateTime expense posix ->
+            let
+                timestamp =
+                    String.fromInt (Time.posixToMillis posix)
+
+                newId =
+                    ExpenseId.fromString
+                        ("expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp)
+
+                duplicate =
+                    Expense.snapshotWith
+                        { id = newId
+                        , createdAt = posixToIso posix
+                        , tripId = expense.tripId
+                        }
+                        expense
+
+                tripKey =
+                    TripId.toString expense.tripId
+
+                tripBucket =
+                    Dict.get tripKey as_.expenses |> Maybe.withDefault Dict.empty
+
+                updatedExpenses =
+                    Dict.insert tripKey
+                        (Dict.insert (ExpenseId.toString newId) duplicate tripBucket)
+                        as_.expenses
+            in
+            ( AuthModel
+                { as_
+                    | expenses = updatedExpenses
+                    , toast = Just "Duplicated"
+                }
+            , Cmd.batch
+                [ sendPouch (SaveExpense (Expense.encoder duplicate))
+                , toastFor "Duplicated"
+                ]
+            )
+
+        OpenLedgerMenu expenseId ->
+            ( AuthModel { as_ | openLedgerMenu = Just expenseId }, Cmd.none )
+
+        CloseLedgerMenu ->
+            ( AuthModel { as_ | openLedgerMenu = Nothing }, Cmd.none )
 
         CloseTripForm ->
             ( AuthModel { as_ | tripForm = Nothing }, Cmd.none )

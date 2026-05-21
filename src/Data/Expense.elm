@@ -1,4 +1,4 @@
-module Data.Expense exposing (Expense, decoder, encoder)
+module Data.Expense exposing (Expense, decoder, encoder, snapshotWith)
 
 {-| One expense as originally saved.
 
@@ -67,6 +67,23 @@ encoder e =
                 Nothing -> []
             )
         )
+
+
+{-| Copy every user-visible field from a source expense onto a fresh
+identity. The building block for "duplicate" (new id, same trip) and
+"move" (new id, different trip).
+
+The record-update form ensures the invariant "new identity ⇒ new
+(id, createdAt) ⇒ same date/amount/category/merchant/note/longNote/
+paymentMethod/lat/lon" stays stated in one place.
+-}
+snapshotWith : { id : ExpenseId, createdAt : String, tripId : TripId } -> Expense -> Expense
+snapshotWith fields source =
+    { source
+        | id = fields.id
+        , createdAt = fields.createdAt
+        , tripId = fields.tripId
+    }
 
 
 decoder : D.Decoder Expense
