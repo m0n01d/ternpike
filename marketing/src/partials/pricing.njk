@@ -1,39 +1,46 @@
-<section class="pricing topo topo-pricing" id="pricing">
-  <div class="pricing-inner">
+<section class="topo topo-pricing relative overflow-hidden py-24 px-6 bg-parchment" id="pricing">
+  <div class="relative z-10 mx-auto max-w-[1100px]">
     <div class="section-eyebrow pricing-eyebrow">{{ pricing.sectionLabel }}</div>
-    <h2 class="section-h2 pricing-headline">{{ pricing.headline | replace("\n", "<br>") | safe }}</h2>
+    <h2 class="section-h2 mb-14">{{ pricing.headline | replace("\n", "<br>") | safe }}</h2>
 
-    <div class="pricing-grid">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
       {% for tier in pricing.tiers %}
-      <div class="pricing-card{% if tier.featured %} pricing-card-featured{% endif %}" data-tier="{{ tier.id }}">
-        {% if tier.featured and tier.badge %}
-        <div class="pricing-badge">{{ tier.badge }}</div>
+      {% set featured = tier.featured %}
+      <div
+        class="relative flex flex-col rounded-panel transition hover:shadow-card-hover hover:-translate-y-0.5 {{ 'bg-parchment border-2 border-rust shadow-lift pt-11 pb-9 px-7 md:-mt-4 md:-mb-4' if featured else 'bg-cream-deep border border-tan shadow-card p-9' }}"
+        data-tier="{{ tier.id }}"
+      >
+        {% if featured and tier.badge %}
+        <div class="absolute -top-3 left-1/2 -translate-x-1/2 font-mono text-[9px] tracking-[0.2em] uppercase bg-rust text-parchment px-3.5 py-1.5 rounded-full shadow-[0_2px_8px_rgb(184_92_56/0.3)]">{{ tier.badge }}</div>
         {% endif %}
 
-        <div class="pricing-name">{{ tier.name }}</div>
-        <div class="pricing-tagline">{{ tier.tagline }}</div>
+        <div class="font-display font-black text-[26px] text-forest tracking-[-0.01em] leading-[1.1]">{{ tier.name }}</div>
+        <div class="font-body italic text-base text-muted mt-1.5 mb-6 leading-snug">{{ tier.tagline }}</div>
 
-        <div class="pricing-price-row">
-          <div class="pricing-price">{{ tier.price }}</div>
-          <div class="pricing-price-note">{{ tier.priceNote }}</div>
+        <div class="[border-top:var(--rule-tan)] [border-bottom:var(--rule-tan)] py-5 mb-6">
+          <div class="font-display font-black text-[44px] leading-none tracking-[-0.02em] {{ 'text-rust' if featured else 'text-forest' }}">{{ tier.price }}</div>
+          <div class="mt-2 font-mono text-[10px] tracking-[0.2em] uppercase text-muted">{{ tier.priceNote }}</div>
         </div>
 
-        <ul class="pricing-features">
+        <ul class="list-none p-0 m-0 mb-7 flex-1">
           {% for feature in tier.features %}
-          <li class="pricing-feature">
-            <span class="pricing-check" aria-hidden="true">✓</span>
-            <span class="pricing-feature-text">{{ feature }}</span>
+          <li class="flex items-start gap-2.5 py-2 font-body text-base leading-snug text-forest">
+            <span class="flex-shrink-0 w-[18px] h-[18px] inline-flex items-center justify-center font-mono text-xs font-medium mt-[3px] {{ 'text-rust' if featured else 'text-tan' }}" aria-hidden="true">✓</span>
+            <span class="flex-1">{{ feature }}</span>
           </li>
           {% endfor %}
         </ul>
 
-        <a class="pricing-cta pricing-cta-{{ tier.cta.style }}" href="{{ tier.cta.href }}">
-          {{ tier.cta.label }}{% if tier.cta.arrow %} <span class="pricing-cta-arrow" aria-hidden="true">→</span>{% endif %}
+        <a
+          class="inline-flex items-center justify-center gap-2 font-mono text-[11px] tracking-[0.15em] uppercase px-5 py-3.5 rounded-lg text-center no-underline transition {{ 'bg-rust text-parchment shadow-[0_4px_16px_rgb(184_92_56/0.25)] hover:bg-rust-deep hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgb(184_92_56/0.3)]' if tier.cta.style == 'primary' else 'text-moss border border-tan bg-transparent hover:border-moss hover:text-forest hover:-translate-y-0.5' }}"
+          href="{{ tier.cta.href }}"
+        >
+          {{ tier.cta.label }}{% if tier.cta.arrow %} <span class="inline-block" aria-hidden="true">→</span>{% endif %}
         </a>
       </div>
       {% endfor %}
     </div>
 
-    <p class="pricing-fine">{{ pricing.finePrint }}</p>
+    <p class="mt-12 max-w-[640px] mx-auto text-center font-body italic text-base text-muted leading-relaxed">{{ pricing.finePrint }}</p>
   </div>
 </section>
