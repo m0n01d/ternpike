@@ -1,15 +1,15 @@
-<section class="signup email-capture" id="signup">
-  <div class="email-capture-card">
-    <h2 class="signup-h2 email-capture-h2">{{ emailCapture.headlineHtml | safe }}</h2>
-    <p class="signup-sub email-capture-sub">{{ emailCapture.sub }}</p>
+<section id="signup" class="topo px-6 py-25 [background-position:-800px_-600px]">
+  <div class="mx-auto max-w-[640px] rounded-panel border border-tan bg-parchment px-10 py-14 text-center shadow-[0_16px_60px_rgb(45_58_34_/_0.12)] max-[480px]:px-6 max-[480px]:py-10">
+    <h2 class="mb-4 font-display text-[clamp(36px,6vw,56px)] font-black leading-[1.05] tracking-[-0.02em] text-forest">{{ emailCapture.headlineHtml | safe }}</h2>
+    <p class="mb-9 font-body text-xl italic leading-[1.4] text-muted">{{ emailCapture.sub }}</p>
 
-    <div class="email-form email-capture-form"
+    <div class="email-form mx-auto flex max-w-[460px] gap-2 max-[480px]:flex-col"
          data-success-label="{{ emailCapture.successLabel }}"
          data-success-placeholder="{{ emailCapture.successPlaceholder }}">
-      <input class="email-input email-capture-input" type="email" name="email" placeholder="{{ emailCapture.placeholder }}">
-      <button class="email-btn email-capture-btn">{{ emailCapture.buttonLabel }}</button>
+      <input class="email-input flex-1 rounded-lg border border-tan bg-cream px-[18px] py-[14px] font-body text-base text-forest outline-none transition-colors duration-200 placeholder:italic placeholder:text-muted focus:border-moss" type="email" name="email" placeholder="{{ emailCapture.placeholder }}">
+      <button class="email-btn whitespace-nowrap rounded-lg bg-rust px-6 py-[14px] font-mono text-[10px] uppercase tracking-[0.15em] text-white transition-all duration-200 hover:-translate-y-px hover:bg-rust-light">{{ emailCapture.buttonLabel }}</button>
     </div>
 
-    <p class="signup-fine email-capture-fine">{{ emailCapture.fine }}</p>
+    <p class="mt-3.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted">{{ emailCapture.fine }}</p>
   </div>
 </section>
