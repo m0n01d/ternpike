@@ -1,5 +1,24 @@
 module Data.Amendment exposing (Amendment, decoder, encoder)
 
+{-| A patch applied to an existing `Expense`.
+
+Editing an expense never mutates the original — it writes a new `Amendment`
+document keyed `amend::<expenseId>::<8-char nonce>`. Each `Maybe` field on
+the record means "this column was changed"; `Nothing` means "leave the
+original value alone." `Data.Entry.resolve` folds amendments in `createdAt`
+order to produce the user-facing `EffectiveEntry`.
+
+Why this pattern:
+
+  - Edit history is preserved automatically.
+  - Sync conflicts are rare — two devices editing the same field still
+    converge deterministically by `createdAt`.
+  - We can reconstruct any past state of an expense.
+
+The encoder omits any field that is `Nothing` so the stored document only
+contains the actual changes.
+-}
+
 import Data.Category as Category exposing (Category)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)

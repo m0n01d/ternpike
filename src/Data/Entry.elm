@@ -7,6 +7,44 @@ module Data.Entry exposing
     , uniqueDates
     )
 
+{-| The "effective" (post-amendment, non-voided) view of expenses.
+
+# What "effective" means
+
+A raw `Expense` is the document originally saved to PouchDB. After it's
+saved, two things can happen to it:
+
+  - **Amendments** (`Data.Amendment`) — partial edits that point at the
+    expense via `targetId`. Each amendment carries only the fields that
+    changed.
+  - **Voids** (`Data.Void`) — tombstones that soft-delete an expense.
+
+An `EffectiveEntry` is what the UI actually renders: the original expense
+with every amendment folded in (newest wins per field), or nothing at all
+if the expense has been voided. `isAmended : Bool` lets the view show an
+"edited" badge.
+
+`resolve` is the function that turns raw documents into effective entries.
+
+# How resolve looks up amendments and voids
+
+The naive shape would be `List.filter` on amendments by `targetId` for
+every expense — O(n × m). Instead, `resolve` builds two cheap indexes
+once per call:
+
+  - `voidedIds : Set String` — ID → tombstoned? O(log n) `Set.member`.
+  - `amendsByTarget : Dict String (List Amendment)` — expense ID → its
+    amendments. O(log n) `Dict.get` per expense.
+
+Expenses are then filtered by `tripId` (a small linear pass — only one
+trip's expenses are in memory at a time, thanks to lazy loading) and each
+surviving expense is run through `applyAmends`, which sorts amendments by
+`createdAt` and folds them left-to-right.
+
+@docs EffectiveEntry, resolve, biggestDay, medianAmount, topCategory, uniqueDates
+
+-}
+
 import Data.Amendment as Amendment exposing (Amendment)
 import Data.Category as Category exposing (Category)
 import Data.Expense as Expense exposing (Expense)
@@ -18,6 +56,10 @@ import Dict
 import Set
 
 
+{-| An expense as the user sees it right now: the original fields with all
+amendments applied. `isAmended` is `True` if at least one amendment was
+folded in, so the UI can render an "edited" indicator.
+-}
 type alias EffectiveEntry =
     { amount        : Float
     , category      : Category
@@ -35,6 +77,16 @@ type alias EffectiveEntry =
     }
 
 
+{-| Build the sorted list of effective entries for one trip.
+
+Callers pass the full list of every cached amendment and void — this
+function builds its own per-call indexes (`voidedIds`, `amendsByTarget`),
+so passing extra docs that don't belong to this trip is harmless and
+cheap. Expenses, however, should already be scoped to the trip (the
+caller does a `Dict.get tripId as_.expenses` first); the `activeTripId`
+argument is a final safety filter and the trip handed to `findEffective`
+for single-expense resolution.
+-}
 resolve : List Expense -> List Amendment -> List Void -> TripId -> List EffectiveEntry
 resolve expenses amendments voids activeTripId =
     let

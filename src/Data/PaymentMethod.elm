@@ -1,5 +1,10 @@
 module Data.PaymentMethod exposing (PaymentMethod(..), fromString, label, toString)
 
+{-| How the expense was paid for. `toString` is the lowercase wire form;
+`label` is the display form ("Cash" / "Credit"). Optional on `Expense` —
+older receipts predate this field.
+-}
+
 
 type PaymentMethod
     = Cash

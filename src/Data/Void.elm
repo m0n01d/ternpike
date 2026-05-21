@@ -1,5 +1,18 @@
 module Data.Void exposing (Void, decoder)
 
+{-| Tombstone marker — a soft delete.
+
+Hard-deleting from PouchDB is awkward to sync (it produces a deletion
+revision that has to propagate before the doc disappears everywhere, and
+conflicts can resurrect deleted docs). Instead, "deleting" an expense or
+trip writes a `Void` document keyed `void::<targetId>::del`. The void
+propagates exactly like any other write, and `Data.Entry.resolve` filters
+out any expense whose ID is in the set of void targets.
+
+`targetId` is stored as a plain `String` (not `ExpenseId` or `TripId`)
+because the same Void type covers both expense and trip deletions.
+-}
+
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 

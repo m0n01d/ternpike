@@ -5,6 +5,21 @@
 
 ---
 
+## Glossary
+
+- **Expense** — a single saved expense document. Immutable after creation.
+- **Amendment** — a partial edit. Carries only the fields that changed,
+  plus a `targetId` pointing at the expense. Never overwrites the original.
+- **Void** — a tombstone. Soft-deletes an expense (or trip) by ID. Sync-safe.
+- **Effective entry** — what the UI actually shows: an expense with every
+  amendment folded in, minus anything that's been voided. `EffectiveEntry`
+  in `Data/Entry.elm` is the type; "effective" anywhere in this doc or in
+  function names (`resolveForTrip`, `findEffective`) means "post-amendment,
+  non-voided." This is event-sourcing-lite: raw expenses + amendments are
+  the events, `EffectiveEntry` is the projection.
+
+---
+
 ## Directory map
 
 ```

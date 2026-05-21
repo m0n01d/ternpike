@@ -7,6 +7,21 @@ module Data.Trip exposing
     , validator
     )
 
+{-| A trip — the top-level container that expenses belong to.
+
+Three types live here:
+
+  - `Trip` — the saved document (immutable in practice; we overwrite the
+    whole doc on edit rather than using amendments, because trips are
+    rarely edited and the data is small).
+  - `TripForm` — the in-progress draft used by the new/edit modal.
+    Strings rather than typed fields so the user can type freely; the
+    `validator` is what gates submission.
+  - `TripField` — the tag passed to `TripFieldChanged` so one `Msg`
+    handler can route updates to the right field on `TripForm`.
+
+-}
+
 import Data.TripId as TripId exposing (TripId)
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline

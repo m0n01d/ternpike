@@ -1,5 +1,62 @@
 port module Main exposing (main)
 
+{-| Application entry point and the single source of truth for state.
+
+# Big picture
+
+The model is a sum type:
+
+    type Model
+        = AuthModel AuthState
+        | GuestModel GuestState
+
+The compiler enforces that auth-only pages (Add, Ledger, Scan, Stats, Trips)
+cannot be reached while signed out. Any 401 from an HTTP call or the
+CouchDB sync transitions the app to `GuestModel SessionExpired` —
+there's no silent re-auth because tokens expire aggressively.
+
+# Data shape
+
+`AuthState` caches everything fetched from PouchDB:
+
+    expenses   : Dict String (Dict String Expense)
+                   -- outer key = TripId.toString, inner key = ExpenseId.toString
+    amendments : Dict String Amendment   -- keyed by amendment ID
+    voids      : Dict String Void        -- keyed by void ID
+    trips      : TripsState
+
+Single-trip lookup is a `Dict.get` on the outer expenses dict.
+`Data.Entry.resolve` folds amendments and applies voids to produce the
+user-facing `EffectiveEntry` list.
+
+# Flow
+
+  1. `init` reads cached creds from JS flags and either constructs a
+     `GuestModel` or jumps straight to `AuthModel` and starts CouchDB sync.
+  2. The first time sync settles (`SyncStateMsg Synced`), we send
+     `GetAllTrips`. We do **not** fetch on login — that would race with
+     the initial sync pull.
+  3. Each route transition runs `fetchesForRoute`, which fires only the
+     PouchDB queries needed for that route (idempotent — guarded by
+     `tripLoaded` / `loadingExpenses`).
+  4. PouchDB's live-changes feed pushes every local or synced write
+     through `pouchIn`, where `handleDbChange` merges it into the right
+     `Dict`.
+
+# Ports
+
+  - `pouchOut` / `pouchIn` — all PouchDB traffic (tagged JSON, see
+    `src/pouch.js`).
+  - `startSync` / `stopSync` — manage the live CouchDB sync handle.
+  - `saveStorage` / `clearStorage` / `clearAllStorage` — IndexedDB-backed
+    auth creds and API key.
+  - `requestGeolocation` / `gotGpsCoords` — browser geolocation API.
+  - `extractExifGps` / `gotExifResult` — EXIF GPS extraction from receipt
+    photos.
+
+For the full narrative and document ID conventions, see `docs/architecture.md`.
+-}
+
 import Browser
 import Browser.Navigation as Nav
 import Data.Amendment as Amendment
@@ -90,6 +147,16 @@ mapGuestConfig f gs =
     { gs | config = f gs.config }
 
 
+{-| Transition from `GuestState` to `AuthState` after successful auth.
+
+Everything starts empty — no expenses, no trips, no scan queue. The
+caller is responsible for kicking off `startSync`; the trips list will
+populate via `GetAllTrips` once the first sync settles.
+
+`trips = TripsLoading ... initialRouteTripId` carries the pending
+selection from the URL so that when trips arrive we can pick the right
+one without a second navigation.
+-}
 toAuthState : Creds -> Route -> GuestState -> AuthState
 toAuthState creds initialRoute gs =
     { activeScanItemId  = Nothing
@@ -270,8 +337,18 @@ syncStateDecoder =
 
 
 -- CACHE LOOKUPS
+--
+-- "Effective" means post-amendment, non-voided. See Data.Entry for the
+-- definition. These two helpers are the only places in the app that go
+-- from cached PouchDB documents → user-facing data.
 
 
+{-| Every effective expense for one trip, sorted by date.
+
+Pulls only that trip's expenses out of the outer `Dict` (single
+`Dict.get`), then hands the rest to `Entry.resolve`. Amendments and voids
+are passed in full — `resolve` builds its own indexes per call.
+-}
 resolveForTrip : TripId.TripId -> AuthState -> List Entry.EffectiveEntry
 resolveForTrip tripId as_ =
     Entry.resolve
@@ -281,6 +358,16 @@ resolveForTrip tripId as_ =
         tripId
 
 
+{-| Find one expense by ID, with its amendments folded in.
+
+We don't know which trip the expense belongs to up front, so we scan
+`Dict.values as_.expenses` — that's one `Dict.get` per loaded trip
+(typically 1–3). Once we find the raw expense, we run a one-element
+`Entry.resolve` to apply any amendments and detect voids.
+
+Returns `Nothing` if the expense is unknown or has been voided. Used by
+the edit page to hydrate the form.
+-}
 findEffective : ExpenseId.ExpenseId -> AuthState -> Maybe Expense.Expense
 findEffective id as_ =
     as_.expenses
@@ -313,9 +400,11 @@ formPending form =
         FreshForm p  -> p
 
 
--- Build a Route from a Tab + tripId, for navigations that pick a tab
--- (post-submit, scan flow, etc.). Tabs without a tripId map to their
--- bare routes.
+{-| Build a `Route` from a `Tab` plus a tripId. Used for navigations
+where the destination tab is known but the route needs the active
+trip stitched in (post-submit redirect, scan-to-add handoff, etc.).
+Tabs that aren't trip-scoped (Settings, Trips) ignore the tripId.
+-}
 routeForTab : Tab -> TripId.TripId -> Route
 routeForTab tab tripId =
     case tab of
@@ -328,11 +417,27 @@ routeForTab tab tripId =
 
 
 -- ROUTE-DRIVEN STATE TRANSITIONS
+--
+-- These two functions are what makes the URL the source of truth.
+-- `fetchesForRoute` runs after every navigation and fires only the
+-- PouchDB queries we don't already have an answer for. `hydrateFormForRoute`
+-- keeps the edit form in lockstep with the route — entering an edit
+-- route pulls the effective expense into the form; leaving it resets
+-- the form.
 
 
--- Sync the form to the current route. On entering an edit route, hydrate
--- from the cached effective expense (if available — else wait for it).
--- On leaving an edit route, reset to a fresh defaults form.
+{-| Sync the edit form to the current route.
+
+On entering `RouteEditEntry`, hydrate the form from the cached effective
+expense. If the expense isn't cached yet, leave the form alone and wait
+— the data will arrive via PouchDB and `hydrateFormForRoute` will be
+called again from the inbound-data handlers.
+
+On leaving an edit route, reset to a fresh `defaultPendingEntry`.
+
+Idempotent: if the form is already an `EditForm` for this expense, do
+nothing — re-running this function on every state change is safe.
+-}
 hydrateFormForRoute : AuthState -> AuthState
 hydrateFormForRoute as_ =
     case as_.route of
@@ -363,11 +468,25 @@ hydrateFormForRoute as_ =
                     as_
 
 
--- Fire fetches needed to satisfy the route. Idempotent: if the trip is
--- already loaded (or loading), no bulk fetch; if the expense is already
--- cached (or being fetched), no targeted fetch. Also syncs the trips
--- zipper selection to the route's tripId when possible, and hydrates the
--- form if data is already available.
+{-| Fire the PouchDB queries needed to satisfy the current route.
+
+Idempotent — every check guards against a duplicate fetch:
+
+  - Trip-scoped routes (Ledger, Stats, Add, Scan, EditEntry): if the
+    trip's expenses aren't yet in `tripLoaded` or `loadingTrips`,
+    fire `GetTripExpenses` and mark the trip as loading.
+  - `RouteEditEntry`: also fire `GetExpense` if the specific expense
+    isn't already in any inner expenses dict or in `loadingExpenses`.
+
+Side effects beyond fetching:
+
+  - Selects the route's trip in the `Trips` zipper so pages can render
+    the active trip without re-parsing the URL.
+  - Requests browser geolocation when the route is the Add tab (so the
+    new-expense form can stamp lat/lon).
+  - Runs `hydrateFormForRoute` on the way out so the form is in sync
+    whether the data was already cached or not.
+-}
 fetchesForRoute : AuthState -> ( AuthState, Cmd Msg )
 fetchesForRoute as_ =
     let
@@ -409,7 +528,7 @@ fetchesForRoute as_ =
                             ExpenseId.toString eid
 
                         alreadyHave =
-                            Dict.member key as1.expenses
+                            (as1.expenses |> Dict.values |> List.any (Dict.member key))
                                 || Set.member key as1.loadingExpenses
                     in
                     if alreadyHave then
@@ -433,6 +552,17 @@ fetchesForRoute as_ =
     ( hydrateFormForRoute as2, Cmd.batch [ tripCmd, expenseCmd, geoCmd ] )
 
 
+{-| Insert a single document from PouchDB's live-changes feed into the
+right cache.
+
+Fires for every local write, every sync pull from CouchDB, and every
+result of a `Save*` command — we don't need separate "save succeeded"
+plumbing because the live feed is the confirmation. Always re-runs
+`hydrateFormForRoute` afterwards so an in-flight edit picks up freshly
+arrived data without a second navigation.
+
+Expenses are routed into the right inner `Dict` by `expense.tripId`.
+-}
 handleDbChange : DocChange -> AuthState -> ( Model, Cmd Msg )
 handleDbChange change as_ =
     let
@@ -458,6 +588,16 @@ handleDbChange change as_ =
     ( AuthModel (hydrateFormForRoute as1), Cmd.none )
 
 
+{-| Remove a document from every cache it might live in.
+
+Called on PouchDB `_deleted` revisions (rare — we soft-delete via `Void`
+docs in normal flow). We don't know the doc's `type` here, so we attempt
+removal from every cache. For expenses that means scanning every inner
+dict, which is O(n trips) and fine in practice.
+
+If the deleted doc was the one currently being edited, the form is
+reset so the page doesn't end up showing stale data.
+-}
 handleDbDelete : String -> AuthState -> ( Model, Cmd Msg )
 handleDbDelete id as_ =
     let

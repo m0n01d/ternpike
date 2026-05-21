@@ -8,6 +8,24 @@ module Data.Category exposing
     , label
     )
 
+{-| Closed enum of the 12 expense categories.
+
+`label` is the canonical serialization (lowercase, matches the on-disk
+`category` field and the OCR prompt). `icon` and `color` are presentation.
+`all` is the canonical display order — alphabetical input order on the
+type, but the `all` list reorders for UX.
+
+Two parsers:
+
+  - `fromString` always succeeds, falling back to `Misc` for unknown
+    inputs. Used by `Expense.decoder` so a stored receipt with a
+    category we've since removed still loads.
+  - `fromStringMaybe` returns `Nothing` for unknown inputs. Used by
+    `Amendment.decoder` (where `Nothing` legitimately means "category
+    wasn't changed") so we don't conflate "unknown" with "unchanged."
+
+-}
+
 
 type Category
     = Activities

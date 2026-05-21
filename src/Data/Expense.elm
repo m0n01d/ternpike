@@ -1,5 +1,20 @@
 module Data.Expense exposing (Expense, decoder, encoder)
 
+{-| One expense as originally saved.
+
+`Expense` is **immutable after creation**. Edits never overwrite an expense —
+they produce an `Amendment` instead (see `Data.Amendment`). Deletes produce a
+`Void`. The user-facing view is built by `Data.Entry.resolve`, which folds
+amendments onto the raw expense to produce an `EffectiveEntry`.
+
+The encoder adds `"type": "expense"` so the live-changes feed in `pouch.js`
+can route incoming docs to the right decoder. `_id` is the PouchDB document
+key and comes from `ExpenseId.encode`.
+
+Unknown categories decode to `Misc` rather than failing — receipts older than
+the current category list still load.
+-}
+
 import Data.Category as Category exposing (Category)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
