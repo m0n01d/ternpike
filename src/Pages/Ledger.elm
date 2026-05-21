@@ -129,40 +129,22 @@ viewLedgerHero budget entries =
 
             else
                 String.fromInt entryCount ++ " ENTRIES"
-
-        isOver =
-            budget > 0 && total >= budget
-
-        totalClass =
-            if isOver then
-                "font-display text-5xl font-black text-danger tracking-tight leading-none"
-
-            else
-                "font-display text-5xl font-black text-forest tracking-tight leading-none"
-
-        trailingKicker =
-            Html.span
-                [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
-                [ Html.text kickerText ]
     in
     Html.div [ Html.Attributes.class "py-2" ]
         [ Html.div
             [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
             [ Html.text "RUNNING TOTAL" ]
         , Html.div
-            [ Html.Attributes.class totalClass ]
+            [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
             [ Html.text (formatAmount total) ]
+        , Html.div
+            [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
+            [ Html.text kickerText ]
         , if budget > 0 then
-            UI.BudgetBar.viewMerged
-                { budget = budget
-                , spent = total
-                , trailing = trailingKicker
-                }
+            UI.BudgetBar.viewSubtle { spent = total, budget = budget }
 
           else
-            Html.div
-                [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
-                [ Html.text kickerText ]
+            Html.text ""
         ]
 
 

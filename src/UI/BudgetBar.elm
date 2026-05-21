@@ -1,14 +1,16 @@
-module UI.BudgetBar exposing (view, viewMerged)
+module UI.BudgetBar exposing (view, viewSubtle)
 
-{-| Shared budget progress bar used by both the Trips and Ledger heroes.
+{-| Shared budget progress bar used by the Trips and Ledger heroes.
 
-The two view functions render the same track, fill, and color logic so the
-"is this over budget?" treatment stays in lockstep across pages. They
-differ only in what sits under the bar:
+Two variants, same color logic (rust fill, danger when over budget):
 
-  - `view` — Trips-style: spent on the left, budget on the right
-  - `viewMerged` — Ledger-style: `<pct>% of $<budget>` on the left, caller-
-    supplied trailing content (e.g. entry/day counts) on the right
+  - `view` — Trips-style: a labelled bar inside the hero with spent on the
+    left and budget on the right, sitting under a dashed rule.
+  - `viewSubtle` — Ledger-style: a thin un-labelled bar absolute-positioned
+    against the bottom edge of the hero card. The hero card in
+    `UI.Layout.page` is already `relative overflow-hidden`, so the bar
+    follows the card's rounded corners and never affects the hero's text
+    layout.
 
 Render nothing for `budget <= 0` upstream; this module assumes a positive
 budget.
@@ -35,7 +37,7 @@ view { spent, budget } =
     in
     Html.div []
         [ UI.Rule.dashedRule
-        , track st
+        , track st "h-2 bg-cream-deep rounded-full overflow-hidden"
         , Html.div [ Html.Attributes.class "mt-2 flex justify-between items-baseline gap-3" ]
             [ Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
                 [ Html.span [ Html.Attributes.class spentAmountClass ]
@@ -53,35 +55,10 @@ view { spent, budget } =
         ]
 
 
-viewMerged : { budget : Float, spent : Float, trailing : Html msg } -> Html msg
-viewMerged { budget, spent, trailing } =
-    let
-        st =
-            state spent budget
-
-        percentText =
-            if st.isOver then
-                "100%+ of $" ++ String.fromInt (round budget)
-
-            else
-                String.fromInt st.pctInt ++ "% of $" ++ String.fromInt (round budget)
-
-        percentClass =
-            if st.isOver then
-                "text-[10px] font-mono uppercase tracking-widest text-danger"
-
-            else
-                labelClass
-    in
-    Html.div []
-        [ UI.Rule.dashedRule
-        , track st
-        , Html.div [ Html.Attributes.class "mt-2 flex justify-between items-baseline gap-3" ]
-            [ Html.span [ Html.Attributes.class percentClass ]
-                [ Html.text percentText ]
-            , trailing
-            ]
-        ]
+viewSubtle : { spent : Float, budget : Float } -> Html msg
+viewSubtle { spent, budget } =
+    track (state spent budget)
+        "absolute bottom-0 left-0 right-0 h-1 bg-cream-deep"
 
 
 
@@ -105,8 +82,8 @@ state spent budget =
     }
 
 
-track : BarState -> Html msg
-track st =
+track : BarState -> String -> Html msg
+track st trackClass =
     let
         barColor =
             if st.isOver then
@@ -115,7 +92,7 @@ track st =
             else
                 "h-full bg-rust transition-all duration-500"
     in
-    Html.div [ Html.Attributes.class "h-2 bg-cream-deep rounded-full overflow-hidden" ]
+    Html.div [ Html.Attributes.class trackClass ]
         [ Html.div
             [ Html.Attributes.class barColor
 
