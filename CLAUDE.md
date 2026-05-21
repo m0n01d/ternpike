@@ -55,10 +55,28 @@ Html.div [ Html.Attributes.class "tw-flex" ] [ Html.text "hello world" ]
 - Use semantic markup — only `<button>` elements get click handlers.
 - Aggressively refactor modules you touch; clean up tech debt as you go.
 
-## Upcoming infrastructure needs
-- **App hosting** — need a host for the main app (currently GitHub Pages, may outgrow it)
-- **Marketing page hosting** — `landing.html` needs its own host/domain
-- **Email API** — replace current email sender with a better transactional API (Resend, Postmark, etc.) for one-time auth codes
+## Infrastructure
+
+### Domain
+- `ternpike.com` registered via Squarespace
+- Nameservers need to be pointed to Cloudflare to enable Pages/Workers/Analytics
+
+### Hosting plan (Cloudflare)
+- `app.ternpike.com` → Cloudflare Pages (Elm SPA, `dist/`)
+- `ternpike.com` → Cloudflare Pages (marketing page, `marketing/index.html`)
+- `api.ternpike.com` → Cloudflare Worker (auth server, replaces `server/`)
+- `couch.ternpike.com` → CouchDB (already live)
+- Analytics: Cloudflare Web Analytics (cookie-free, non-Google)
+
+### Auth server
+- Currently Express + Gmail/Nodemailer in `server/` — not yet deployed
+- Migrating to Cloudflare Worker + Cloudflare KV (for code storage) + Resend (email)
+- In-memory `Map` for verification codes is a bug — KV fixes it
+- GitHub issues: #4 (Worker rewrite), #5 (analytics)
+
+### Email
+- Replacing Gmail/Nodemailer with Resend (resend.com) — 3k emails/mo free
+- Domain verification via Cloudflare DNS (DKIM/SPF records)
 
 ## Sheet columns
 `A=id, B=date, C=amount, D=category, E=note, F=merchant, G=createdAt, H=lat, I=lon, J=longNote` — Range: A:J
