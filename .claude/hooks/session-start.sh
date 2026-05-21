@@ -38,4 +38,18 @@ else
   fi
 fi
 
+# Install the caseyWebb/elm-claude-plugin into the per-container plugin
+# directory so its `elm-packages` skill is available to Claude. The cloud
+# container wipes ~/.claude/plugins/ between sessions, so we re-clone every
+# session if missing. Pairs with `@caseywebb/elmq` in devDependencies, which
+# provides the `elmq` CLI the skill drives. Best-effort: never block the
+# session if the network call fails.
+PLUGIN_DIR="$HOME/.claude/plugins/elm"
+if [ ! -d "$PLUGIN_DIR/.git" ]; then
+  mkdir -p "$HOME/.claude/plugins"
+  if ! git clone --depth 1 https://github.com/caseyWebb/elm-claude-plugin.git "$PLUGIN_DIR" >&2 2>/dev/null; then
+    echo "[session-start] could not install elm-claude-plugin" >&2
+  fi
+fi
+
 exit 0
