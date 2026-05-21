@@ -15,17 +15,18 @@ import Json.Encode as E
 
 effectiveEntryToExpense : EffectiveEntry -> Expense
 effectiveEntryToExpense e =
-    { amount    = e.amount
-    , category  = e.category
-    , createdAt = e.createdAt
-    , date      = e.date
-    , id        = e.id
-    , lat       = e.lat
-    , lon       = e.lon
-    , longNote  = e.longNote
-    , merchant  = e.merchant
-    , note      = e.note
-    , tripId    = e.tripId
+    { amount        = e.amount
+    , category      = e.category
+    , createdAt     = e.createdAt
+    , date          = e.date
+    , id            = e.id
+    , lat           = e.lat
+    , lon           = e.lon
+    , longNote      = e.longNote
+    , merchant      = e.merchant
+    , note          = e.note
+    , paymentMethod = e.paymentMethod
+    , tripId        = e.tripId
     }
 
 
