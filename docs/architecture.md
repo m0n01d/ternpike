@@ -663,7 +663,10 @@ The Elm-side types for the multi-DB world live in three modules:
   provably-non-empty flat list on demand. On the wire (`flock:meta`
   doc) the field is flat — the decoder picks the owner out and
   hard-rejects (`Json.Decode.fail`) any doc where `billingOwner` is
-  not in `members`.
+  not in `members`. The CouchDB document id is the literal marker
+  string `flock:meta` (one such doc per per-flock DB), so the per-flock
+  identifier rides on a separate `flockId` field that `Data.Flock.decoder`
+  reads via `Data.FlockId.decoder`.
 - `Data.Flocks` — `Dict String Flock` keyed by `FlockId.toString`,
   lives at `AuthState.flocks`. `ownedBy` / `joinedBy` filter by user.
 

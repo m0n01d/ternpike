@@ -112,7 +112,10 @@ export const seedPouchDB = async (
   data: SeedData,
 ): Promise<void> => {
   await interceptPouchdbCdn(context)
-  const sentinel = 'http://localhost:3000/__e2e_seed__'
+  // Same vite-port override as `auth-stub.ts` — the seed sentinel must
+  // live on the origin the spec navigates to so IndexedDB is shared.
+  const vitePort = process.env.E2E_VITE_PORT || '3000'
+  const sentinel = `http://localhost:${vitePort}/__e2e_seed__`
   await context.route(sentinel, (route) =>
     route.fulfill({
       status: 200,

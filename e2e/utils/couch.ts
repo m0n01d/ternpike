@@ -1,6 +1,10 @@
 import { spawn, spawnSync } from 'node:child_process'
 
-const CONTAINER_NAME = 'ternpike-e2e-couch'
+// Per-process container name. Lets concurrent worktrees / agents run their
+// own e2e suites without clobbering each other on the single fixed name.
+// The numeric suffix is per-launch so a crashed-and-restarted run still
+// gets a fresh container.
+const CONTAINER_NAME = `ternpike-e2e-couch-${process.pid}`
 const IMAGE = 'couchdb:3.3'
 
 export type CouchHandle = {

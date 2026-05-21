@@ -179,7 +179,7 @@ the structural `billingOwner :: otherMembers` split back to a single
 encode : Flock -> Json.Encode.Value
 encode flock =
     Json.Encode.object
-        [ ( "_id", Data.FlockId.encode flock.id )
+        [ ( "_id", Json.Encode.string "flock:meta" )
         , ( "billingLapsedAt"
           , flock.billingLapsedAt
                 |> Maybe.map Json.Encode.string
@@ -189,6 +189,7 @@ encode flock =
         , ( "billingStatus", Json.Encode.string (billingStatusToString flock.billingStatus) )
         , ( "createdAt", Json.Encode.string flock.createdAt )
         , ( "createdBy", Data.UserId.encode flock.createdBy )
+        , ( "flockId", Data.FlockId.encode flock.id )
         , ( "members", Json.Encode.list Data.UserId.encode (members flock) )
         , ( "name", Json.Encode.string flock.name )
         , ( "type", Json.Encode.string "flock:meta" )
@@ -201,13 +202,16 @@ malformed and we'd rather see the error than silently paper over it.
 -}
 decoder : Json.Decode.Decoder Flock
 decoder =
+    -- `_id` on the PouchDB doc is the literal `"flock:meta"` (one meta
+    -- doc per per-flock DB), not the FlockId — so we read the per-flock
+    -- identifier off the `flockId` field the server writes alongside it.
     Json.Decode.succeed RawFlock
         |> Pipeline.optional "billingLapsedAt" (Json.Decode.nullable Json.Decode.string) Nothing
         |> Pipeline.required "billingOwner" Data.UserId.decoder
         |> Pipeline.required "billingStatus" billingStatusDecoder
         |> Pipeline.required "createdAt" Json.Decode.string
         |> Pipeline.required "createdBy" Data.UserId.decoder
-        |> Pipeline.required "_id" Data.FlockId.decoder
+        |> Pipeline.required "flockId" Data.FlockId.decoder
         |> Pipeline.required "members" (Json.Decode.list Data.UserId.decoder)
         |> Pipeline.required "name" Json.Decode.string
         |> Json.Decode.andThen

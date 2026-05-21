@@ -79,8 +79,11 @@ export default async function globalSetup(): Promise<void> {
   console.log(`[e2e] CouchDB      → ${couchHandle.url}`)
 
   const serverSecret = 'e2e-server-secret'
-  const wranglerPort = 4000
-  const vitePort = 3000
+  // Allow per-process port overrides via env so concurrent worktree
+  // agents can share the host without colliding on port 3000 / 4000.
+  // CI keeps the historical defaults.
+  const wranglerPort = Number(process.env.E2E_AUTH_PORT || 4000)
+  const vitePort = Number(process.env.E2E_VITE_PORT || 3000)
 
   wranglerProcess = spawnService(
     'wrangler',

@@ -16,7 +16,8 @@ export default defineConfig({
   snapshotDir: './screenshots',
   timeout: 60_000,
   use: {
-    baseURL: 'http://localhost:3000',
+    // Mirrors `E2E_VITE_PORT` in `global-setup.ts`. Defaults to 3000 (CI).
+    baseURL: `http://localhost:${process.env.E2E_VITE_PORT || 3000}`,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     video: 'retain-on-failure',

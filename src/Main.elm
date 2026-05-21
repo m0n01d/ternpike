@@ -1175,6 +1175,18 @@ init flagsJson url key =
             D.decodeValue (D.field "authCreds" (D.nullable credsDecoder)) flagsJson
                 |> Result.withDefault Nothing
 
+        -- Tier override from flags. Defaults to Fledgling. The auth server's
+        -- `/me` endpoint is the long-term source of truth (see CLAUDE.md
+        -- "Storage tiers"); this flag exists so the E2E harness can set the
+        -- right tier on stub-auth boots without having to mount a fake
+        -- session endpoint. Production main.js does not set the flag, so
+        -- the default applies until /me is wired.
+        initialTier =
+            D.decodeValue (D.field "tier" D.string) flagsJson
+                |> Result.toMaybe
+                |> Maybe.andThen Data.Tier.fromString
+                |> Maybe.withDefault Data.Tier.Fledgling
+
         cfg =
             { anthropicKey = dec "anthropicKey"
             , backendUrl = dec "backendUrl"
@@ -1207,6 +1219,9 @@ init flagsJson url key =
                     Routing.routeFromUrl basePath url
 
                 as_ =
+                    { tierBoot | tier = initialTier }
+
+                tierBoot =
                     toAuthState creds initialRoute gs
             in
             -- Don't fire route-driven fetches here. Sync hasn't settled

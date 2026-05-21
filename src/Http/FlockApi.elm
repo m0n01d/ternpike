@@ -188,7 +188,7 @@ inviteToFlock creds flockId { email } toMsg =
         , body =
             Http.jsonBody
                 (Json.Encode.object
-                    [ ( "email", Json.Encode.string email ) ]
+                    [ ( "inviteeEmail", Json.Encode.string email ) ]
                 )
         , expect = Http.expectWhatever toMsg
         , timeout = Nothing

@@ -6,13 +6,37 @@
 // freezes any whose `billingLapsedAt + 14d <= now` is the smaller change and
 // scales fine at our user volume. See `scheduled()` at the bottom.
 
-import { Resend } from 'resend'
-
 import {
   FLOCK_DESIGN_DOC_ID,
   buildFlockDesignDoc,
 } from './couch/flockValidator.js'
 import { signJwt, verifyJwt } from './jwt.js'
+
+// The Resend Worker SDK reads its baseUrl from `process.env.RESEND_BASE_URL`
+// at module load — which never resolves inside `workerd` (Cloudflare's
+// runtime has no `process.env`). That made the E2E harness's mock Resend
+// unreachable from the auth Worker. We sidestep the SDK and call the
+// REST surface directly, taking `RESEND_BASE_URL` off the Worker `env`
+// binding the harness wires up (`server/wrangler.toml` --var) and falling
+// back to the real Resend host in production.
+const RESEND_DEFAULT_BASE_URL = 'https://api.resend.com'
+
+const sendResendEmail = async (env, payload) => {
+  const baseUrl = env.RESEND_BASE_URL || RESEND_DEFAULT_BASE_URL
+  const res = await fetch(`${baseUrl}/emails`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`resend ${res.status}: ${text}`)
+  }
+  return res.json().catch(() => ({}))
+}
 
 const encoder = new TextEncoder()
 const GRACE_PERIOD_MS = 14 * 24 * 60 * 60 * 1000
@@ -280,9 +304,16 @@ export function registerFlockRoutes(app) {
 
     const flockId = randomFlockId()
     const dbName = flockDbName(flockId)
+    // CouchDB doc id stays at the well-known `flock:meta` so the Elm
+    // client's PouchDB hydration (`local.get('flock:meta')`) can find it,
+    // and so the validator's admin-only branch matches by id. The wire
+    // shape Elm decodes (see `src/Data/Flock.elm`) expects the per-flock
+    // identifier on `flockId` and the marker type as `flock:meta`, so
+    // we encode both alongside the existing fields.
     const meta = {
       _id: 'flock:meta',
-      type: 'flock',
+      type: 'flock:meta',
+      flockId,
       name,
       members: [caller.email],
       billingOwner: caller.email,
@@ -353,6 +384,9 @@ export function registerFlockRoutes(app) {
     if (!inviteeEmail.includes('@')) {
       return c.json({ ok: false, error: 'invalid_email' }, 400)
     }
+    if (meta.members.includes(inviteeEmail)) {
+      return c.json({ ok: false, error: 'already_a_member' }, 409)
+    }
 
     const now = Math.floor(Date.now() / 1000)
     const token = await signJwt(
@@ -368,8 +402,7 @@ export function registerFlockRoutes(app) {
 
     const joinUrl = `${APP_JOIN_URL}?token=${encodeURIComponent(token)}`
     try {
-      const resend = new Resend(env.RESEND_API_KEY)
-      await resend.emails.send({
+      await sendResendEmail(env, {
         from: 'Ternpike <noreply@ternpike.com>',
         to: inviteeEmail,
         subject: `Join the ${meta.name} flock on Ternpike`,

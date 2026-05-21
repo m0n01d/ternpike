@@ -7,6 +7,10 @@ export type AuthCreds = {
   dbName: string
   email: string
   password: string
+  // Optional. When set, the Elm app reads it off the auth_creds blob and
+  // initializes `AuthState.tier`. Matches the `Data.Tier.fromString` wire
+  // values: 'fledgling' | 'fly' | 'trailblazer'.
+  tier?: string
 }
 
 /**
@@ -30,7 +34,13 @@ export const stubAuthCreds = async (
   await page.route('**/pouchdb.min.js', (route) =>
     route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }),
   )
-  await page.goto('http://localhost:3000/seed.html', { waitUntil: 'domcontentloaded' })
+  // Honor the vite port override used by `e2e/global-setup.ts`. The IDB
+  // is per-origin so the seed page must live on the same host:port the
+  // spec navigates to, otherwise the Elm app never sees `auth_creds`.
+  const vitePort = process.env.E2E_VITE_PORT || '3000'
+  await page.goto(`http://localhost:${vitePort}/seed.html`, {
+    waitUntil: 'domcontentloaded',
+  })
   await page.evaluate(
     async ([dbName, storeName, value]) => {
       await new Promise<void>((resolve, reject) => {
