@@ -226,6 +226,11 @@ viewEntryRow basePath entry =
                 [ Html.span
                     [ Html.Attributes.class "inline-block text-[10px] font-mono uppercase tracking-wider text-moss bg-cream-deep px-2 py-0.5 rounded" ]
                     [ Html.text (Category.label entry.category) ]
+                , Html.span
+                    [ Html.Attributes.class "text-xs leading-none"
+                    , Html.Attributes.attribute "aria-hidden" "true"
+                    ]
+                    [ Html.text (Category.icon entry.category) ]
                 , case entry.lat of
                     Just _ ->
                         Html.span
