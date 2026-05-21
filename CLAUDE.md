@@ -6,15 +6,33 @@
 - Tailwind CSS v4 via `@tailwindcss/postcss` — config in `src/global.css` `@theme {}` block
 - PouchDB for local-first storage; CouchDB sync working
 - Anthropic API for OCR (receipt scanning)
-- GitHub Pages deployment from `dist/` (CI triggers on push to main)
+- Cloudflare Pages deployment from `dist/` via `wrangler.jsonc` at project root
 - Elm binary: `elm` (via asdf at `~/.asdf/shims/elm`)
 - Node.js 22 required (set via `.tool-versions`)
 
-## Build
+## Architecture reference
+
+**Read `docs/architecture.md` before working on this codebase.** It covers everything you need to understand before touching Elm code: the GuestModel/AuthModel split, PouchDB port protocol, document ID conventions (`expense::`, `amend::`, `void::`, `trip::`), startup and sync sequence, route-driven lazy loading, the amendment and soft-delete patterns, the `Trips` zipper, and CouchDB sync. It also has a quick-reference table of where to find things.
+
+This file (`CLAUDE.md`) contains conventions and rules that override or extend what's in the architecture doc. If the two disagree, this file wins.
+
+## Build and toolchain
+
 ```
-npm run dev      # Vite dev server
-npm run build    # produces dist/
+npm run dev           # Vite dev server (port 3000) + local auth server (port 4000) via concurrently
+npm run dev:vite      # Vite only
+npm run dev:server    # Auth server only (Hono + Wrangler dev)
+npm run build         # produces dist/
+npm test              # elm-verify-examples && elm-test
+npm run format        # elm-format src --yes
+npm run format:check  # validates formatting without writing
+npm run review        # elm-review (strict rules — see review/src/ReviewConfig.elm)
+npm run review:fix    # elm-review --fix-all
 ```
+
+`vite.config.js` proxies `/auth` to `http://localhost:4000` during development.
+The build injects `__BUILD_SHA__` from `WORKERS_CI_COMMIT_SHA`, `CF_PAGES_COMMIT_SHA`, or
+`GITHUB_SHA` (in that precedence order) so the settings screen can show a commit hash.
 
 ## Git discipline
 Never use `git checkout <branch> -- <file>` to resolve a stash conflict — it silently replaces the file with the committed version, discarding all stash changes.
@@ -25,10 +43,11 @@ Correct sequence when a stash pop conflicts:
 3. If a stash is accidentally dropped: `git fsck --lost-found` → find the dangling commit → `git show <sha>:<file>`
 
 ## Model architecture (GuestModel / AuthModel split)
-`Model = GuestModel GuestState | AuthModel AuthState`
-- Compiler enforces that auth-only pages (Scan, Add, Ledger, Stats) cannot be reached while signed out.
+
+See `docs/architecture.md` for the full structural description. Key behavioral conventions:
 - 401 from any HTTP call → `GuestModel (toGuestState SessionExpired as_) + clearStorage ()`. No silent re-auth — the app is unverified by Google so tokens expire aggressively.
-- Auth error messages live in `GuestReason` (FreshGuest | SessionExpired | MissingConfig), NOT in `model.error`.
+- Auth error messages live in `GuestReason`, NOT in `model.error`.
+- `expenses : Dict String (Dict String Expense)` — **nested** by trip. Outer key is `TripId.toString`, inner key is `ExpenseId.toString`.
 
 ## Subscription tiers
 
@@ -40,6 +59,10 @@ type Tier
     | Fly           -- $2.99/mo or $24/yr
     | Trailblazer   -- $79 one-time, capped at 500
 ```
+
+> **Status:** The `Tier` type and `Data.Tier` module are **planned but not yet implemented**
+> in the Elm codebase. `AuthState` does not yet carry a `tier` field. When implementing,
+> follow the patterns below.
 
 Tier is server-authoritative — populated from the session at login + refreshed via `/me`, never trusted from the client. BYO keys (Anthropic / OpenAI / Gemini) are available on **all** tiers — paid does not take that away. Paid is purely additive.
 
@@ -62,20 +85,10 @@ Tracking issues: #13 (BYO-key infrastructure, foundation for Fledgling), #14 (pa
 
 ## Storage tiers — where data lives
 
-Three places, picked deliberately. Misplacing data here causes real problems: secrets leak via sync, tier gets stale across devices, etc.
+See `docs/architecture.md` for the full breakdown. Short rules:
 
-| What | Where | Why |
-|---|---|---|
-| JWT / session token | IndexedDB (`auth_creds`) | Device-local. Never sync. |
-| BYO API keys (Anthropic/OpenAI/Gemini) | IndexedDB (`ai_config`, see #13) | PouchDB syncs to CouchDB — keys would land on the server. **Hard no.** |
-| Subscription tier / status / `stripeCustomerId` | Server (Worker KV), hydrated into `AuthState` in memory at login + via `/me` | Server is source of truth. Re-checked on every gated endpoint. |
-| Identity (email, googleSub) | Server, hydrated into `AuthState` | Same as tier. |
-| User preferences (default currency, fav categories, UI prefs, preferred scan source) | PouchDB doc `_id = "user:profile"` | Syncs across the user's devices. Not secret. Not server-authoritative. |
-| Expense / Trip / Amendment / Void | PouchDB (existing) | Domain data. |
-
-**Rules:**
 1. **PouchDB** = things the user wants synced across their own devices, that aren't secret and aren't server-authoritative.
-2. **IndexedDB** = device-local secrets and caches (JWT, API keys, ephemeral state).
+2. **IndexedDB** = device-local secrets and caches (JWT at `auth_creds`, BYO API keys at `ai_config`). BYO keys must **never** go in PouchDB — they'd sync to CouchDB.
 3. **Server** = identity, tier, billing. Anything that gates a paid feature must be re-checked server-side on every request.
 
 Never cache `tier` in PouchDB — it'd sync stale state across devices when a user upgrades. The `/me` call on startup (#19) is the refresh path.
@@ -118,46 +131,15 @@ are listed in `tests/elm-verify-examples.json`. Generated test files land in
 `tests/VerifyExamples/` (gitignored). Add new modules to that list as you add
 examples. Run with `npm test`.
 
-**What qualifies for examples:** `Data.Category`, `Data.PaymentMethod`, and
-any future pure helpers. Opaque ID types (constructors not exposed), encoders,
-decoders, and HTML-returning functions don't need examples.
+**Current modules with examples** (keep `tests/elm-verify-examples.json` in sync):
+- `Data.Category`
+- `Data.Entry`
+- `Data.PaymentMethod`
+- `Data.StatsGranularity`
 
-## UI vetting with Playwright
-
-Playwright is installed (`playwright ^1.60.0`). Use it to take real browser screenshots whenever you implement or plan a UI change — show the user actual pixels, not prose descriptions.
-
-### When to use
-- **Vetting (after implementation):** before reporting a UI task done, screenshot the affected route and send it with `SendUserFile`.
-- **Planning (before implementation):** screenshot the current state so the user can see what's changing.
-
-### Workflow
-1. Start the dev server in the background: `npm run dev:vite &` then wait a few seconds for it to be ready.
-2. **Seed data** — navigate to `http://localhost:3000/seed.html` and wait for the `#done` element to become visible. This populates PouchDB with 6 realistic trips and 180+ expenses.
-3. Navigate to the target route and screenshot.
-4. Send the file to the user with `SendUserFile`.
-
-### Minimal one-shot script
-
-Create `scripts/screenshot.js` on-demand (it's not committed — generate it when you need it):
-
-```js
-// node scripts/screenshot.js <route> <outfile>
-import { chromium } from 'playwright';
-const [,, route = '/', out = '/tmp/screenshot.png'] = process.argv;
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-await page.goto('http://localhost:3000/seed.html');
-await page.waitForSelector('#done', { state: 'visible', timeout: 30_000 });
-await page.goto(`http://localhost:3000${route}`);
-await page.waitForLoadState('networkidle');
-await page.screenshot({ path: out, fullPage: true });
-await browser.close();
-```
-
-Run it: `node --input-type=module < scripts/screenshot.js /ledger /tmp/ledger.png`
-
-### Auth gate caveat
-Most app routes (`/ledger`, `/stats`, `/scan`, `/add`) require a signed-in session and will redirect to the login screen without one. Guest-accessible routes (the login/landing page, `/seed.html`) are always screenshottable. For auth-gated routes, note in your report that you can screenshot the UI only when a real session exists — don't pass off a login-redirect screenshot as the feature.
+**What qualifies for examples:** Pure helpers (`a -> b`) with no JSON codecs,
+opaque constructors, or effects. Opaque ID types (constructors not exposed),
+encoders, decoders, and HTML-returning functions don't need examples.
 
 ## Elm style guide
 - **Alphabetize** all record fields and all type constructor lists. Apply to every new type and every edit of an existing type.
@@ -184,6 +166,40 @@ Html.div [ Html.Attributes.class "tw-flex" ] [ Html.text "hello world" ]
 - Use semantic markup — only `<button>` elements get click handlers.
 - Aggressively refactor modules you touch; clean up tech debt as you go.
 
+## elm-review
+
+`review/src/ReviewConfig.elm` enforces strict rules via `elm-review`:
+- `NoExposingEverything`, `NoImportingEverything` — no wildcard imports or `(..)` exposing
+- `NoMissingTypeAnnotation`, `NoMissingTypeExpose`
+- Full `NoUnused.*` suite (variables, exports, modules, patterns, dependencies, custom type constructors/args)
+- `Simplify`
+
+Rules apply to `src/` only; `vendor/` is ignored. Run `npm run review:fix` for
+auto-fixable violations; manual fixes are needed for unused exports and missing
+type annotations.
+
+## Routing conventions
+
+Routes live in `src/Data/Navigation.elm` (`Route`, `Tab`) and `src/Routing.elm`.
+
+**IDs live in query strings, not path segments.** `trip::2024-05-21T...::abc` contains
+colons; Cloudflare URL Normalization percent-encodes `:` in path segments but leaves
+query values alone. `Url.Parser.Query.string` percent-decodes either way.
+
+Route patterns:
+```
+/trips                        → RouteTrips
+/trip/add?tripId=...          → RouteAdd TripId
+/trip/ledger?tripId=...       → RouteLedger TripId
+/trip/scan?tripId=...         → RouteScan TripId
+/trip/stats?tripId=...        → RouteStats TripId
+/trip/ledger/edit?tripId=...&expenseId=...  → RouteEditEntry TripId ExpenseId
+/settings                     → RouteSettings
+```
+
+`RouteAddReviewScan` is a derived route — `Routing.effectiveRoute` returns it when
+`as_.route == RouteAdd _` and `as_.activeScanItemId /= Nothing`. It has no URL.
+
 ## Infrastructure
 
 ### Domain
@@ -191,20 +207,23 @@ Html.div [ Html.Attributes.class "tw-flex" ] [ Html.text "hello world" ]
 - Nameservers need to be pointed to Cloudflare to enable Pages/Workers/Analytics
 
 ### Hosting plan (Cloudflare)
-- `app.ternpike.com` → Cloudflare Pages (Elm SPA, `dist/`)
+- `app.ternpike.com` → Cloudflare Pages (Elm SPA, `dist/`) — deployed via root `wrangler.jsonc`
 - `ternpike.com` → Cloudflare Pages (marketing page, `marketing/index.html`)
-- `api.ternpike.com` → Cloudflare Worker (auth server, replaces `server/`)
+- `api.ternpike.com` → Cloudflare Worker (auth server, `server/`) — deployed via `server/wrangler.toml`
 - `couch.ternpike.com` → CouchDB (already live)
 - Analytics: Cloudflare Web Analytics (cookie-free, non-Google)
 
-### Auth server
-- Currently Express + Gmail/Nodemailer in `server/` — not yet deployed
-- Migrating to Cloudflare Worker + Cloudflare KV (for code storage) + Resend (email)
-- In-memory `Map` for verification codes is a bug — KV fixes it
-- GitHub issues: #4 (Worker rewrite), #5 (analytics)
+### Auth server (`server/`)
+- **Stack:** Hono + Resend + Cloudflare Worker KV (`CODES_KV`) — migration from Express/Gmail is complete
+- **Deploy:** `wrangler deploy` from `server/` — routes to `api.ternpike.com`
+- **Email:** Resend (`RESEND_API_KEY` secret), 3k emails/mo free; DKIM/SPF via Cloudflare DNS
+- **Secrets** (set via `wrangler secret put`): `COUCH_ADMIN_USER`, `COUCH_ADMIN_PASS`, `SERVER_SECRET`, `RESEND_API_KEY`
+- **KV:** `CODES_KV` stores hashed verification codes with 600-second TTL
+- **Auth flow:** email → 6-digit code stored in KV → code verified → CouchDB per-user DB credentials returned
+- **Password derivation:** HMAC-SHA256 of `"couch:" + email.toLowerCase()` using `SERVER_SECRET`, hex-encoded, first 32 chars
 
 ### Email
-- Replacing Gmail/Nodemailer with Resend (resend.com) — 3k emails/mo free
+- Resend (`resend.com`) — 3k emails/mo free
 - Domain verification via Cloudflare DNS (DKIM/SPF records)
 
 ## Sheet columns
