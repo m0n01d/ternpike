@@ -307,13 +307,14 @@ viewBody model entries =
         , if numDays > 1 then
             let
                 resolved =
-                    StatsGranularity.resolve model.statsGranularity (spanDays entries)
+                    Maybe.withDefault (StatsGranularity.fromSpan (spanDays entries))
+                        model.statsGranularity
             in
             Html.div []
                 [ UI.Rule.dashedRule
                 , UI.Rule.kicker (StatsGranularity.kicker resolved)
                 , UI.Card.subCard
-                    [ viewDailyChart model.statsGranularity resolved model.statsHover.dailyBars entries ]
+                    [ viewDailyChart resolved model.statsHover.dailyBars entries ]
                 ]
 
           else
@@ -492,8 +493,8 @@ categoryBar fill pct =
         ]
 
 
-viewDailyChart : Granularity -> Granularity -> List (CI.One DailyDay CI.Bar) -> List Entry.EffectiveEntry -> Html Msg
-viewDailyChart selected resolved hovered entries =
+viewDailyChart : Granularity -> List (CI.One DailyDay CI.Bar) -> List Entry.EffectiveEntry -> Html Msg
+viewDailyChart resolved hovered entries =
     let
         sortedDates =
             Entry.uniqueDates entries |> List.reverse
@@ -521,7 +522,7 @@ viewDailyChart selected resolved hovered entries =
                     ++ " days"
     in
     Html.div []
-        [ granularitySelector selected resolved
+        [ granularitySelector resolved
         , Html.div [ Html.Attributes.class "flex items-center justify-between mb-2" ]
             [ Html.div [ Html.Attributes.class "text-[11px] font-mono text-muted" ]
                 [ Html.text rangeLabel ]
@@ -555,24 +556,17 @@ viewDailyChart selected resolved hovered entries =
         ]
 
 
-granularitySelector : Granularity -> Granularity -> Html Msg
-granularitySelector selected resolved =
+granularitySelector : Granularity -> Html Msg
+granularitySelector resolved =
     Html.div [ Html.Attributes.class "flex flex-wrap gap-1 mb-2" ]
-        (List.map (granularityChip selected resolved) StatsGranularity.all)
+        (List.map (granularityChip resolved) StatsGranularity.all)
 
 
-granularityChip : Granularity -> Granularity -> Granularity -> Html Msg
-granularityChip selected resolved chip =
+granularityChip : Granularity -> Granularity -> Html Msg
+granularityChip resolved chip =
     let
         isActive =
-            chip == selected
-
-        chipLabel =
-            if chip == Auto && isActive then
-                "Auto (" ++ String.toLower (StatsGranularity.label resolved) ++ ")"
-
-            else
-                StatsGranularity.label chip
+            chip == resolved
 
         baseClass =
             "text-[11px] font-mono px-2.5 py-1 rounded-full border transition-colors"
@@ -589,7 +583,7 @@ granularityChip selected resolved chip =
         , Html.Attributes.type_ "button"
         , Html.Events.onClick (SetStatsGranularity chip)
         ]
-        [ Html.text chipLabel ]
+        [ Html.text (StatsGranularity.label chip) ]
 
 
 scrubHint : Html msg
@@ -692,10 +686,6 @@ binEntries resolved entries =
 
             else
                 buildMonthlyBins firstDate lastDate totalBetween
-
-        Auto ->
-            -- Auto is resolved before this call; fall back to Daily.
-            binEntries Daily entries
 
 
 buildWeeklyBins : String -> String -> (String -> String -> Float) -> List DailyDay
