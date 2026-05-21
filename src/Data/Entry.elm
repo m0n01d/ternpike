@@ -46,7 +46,8 @@ import Data.Expense as Expense exposing (Expense)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Data.TripId as TripId exposing (TripId)
-import Data.Void as Void exposing (Void)
+import Data.UserId exposing (UserId)
+import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import Set
 
@@ -59,6 +60,7 @@ type alias EffectiveEntry =
     { amount : Float
     , category : Category
     , createdAt : String
+    , createdBy : UserId
     , date : String
     , id : ExpenseId
     , isAmended : Bool
@@ -121,6 +123,7 @@ toEffectiveEntry isAmended e =
     { amount = e.amount
     , category = e.category
     , createdAt = e.createdAt
+    , createdBy = e.createdBy
     , date = e.date
     , id = e.id
     , isAmended = isAmended
@@ -139,6 +142,7 @@ applyAmendment e a =
     { amount = Maybe.withDefault e.amount a.amount
     , category = Maybe.withDefault e.category a.category
     , createdAt = e.createdAt
+    , createdBy = e.createdBy
     , date = Maybe.withDefault e.date a.date
     , id = e.id
     , isAmended = True

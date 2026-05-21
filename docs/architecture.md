@@ -47,6 +47,7 @@ src/
 │   ├── Trip.elm          # Trip type, encoder, decoder
 │   ├── TripId.elm        # Newtype wrapper around String
 │   ├── Trips.elm         # Zipper-like collection + TripsState loading wrapper
+│   ├── UserId.elm        # Opaque user identifier (email-backed today)
 │   └── Void.elm          # Soft-delete tombstone type
 ├── Pages/              # One file per page; only view + local Msg handlers
 ├── UI/                 # Dumb UI components (buttons, cards, layout)
@@ -452,13 +453,14 @@ Expenses are never mutated. Instead, an **amendment** document is created:
 type alias Amendment =
     { amount    : Maybe Float      -- only the fields the user changed
     , category  : Maybe Category
+    , createdAt : String
+    , createdBy : UserId            -- which signed-in user wrote the patch
     , date      : Maybe String
     , id        : String           -- "amend::<expenseId>::<ts>"
     , longNote  : Maybe String
     , merchant  : Maybe String
     , note      : Maybe String
     , targetId  : ExpenseId        -- points at the original expense
-    , createdAt : String
     }
 ```
 
@@ -536,6 +538,7 @@ Deleting also avoids mutation. A **void** document is created:
 ```elm
 type alias Void =
     { createdAt : String
+    , createdBy : UserId    -- which signed-in user wrote the tombstone
     , id        : String    -- "void::<targetId>::del"
     , targetId  : String    -- the expense or trip being deleted
     }
