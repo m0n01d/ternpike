@@ -5,3 +5,4 @@ dist/
 main.js
 .env.local
 .env.*.local
+tests/VerifyExamples/

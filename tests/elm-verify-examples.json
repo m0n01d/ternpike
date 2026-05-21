@@ -1,0 +1,3 @@
+{
+    "tests": ["Data.Category", "Data.PaymentMethod"]
+}

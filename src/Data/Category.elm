@@ -24,6 +24,23 @@ Two parsers:
     `Amendment.decoder` (where `Nothing` legitimately means "category
     wasn't changed") so we don't conflate "unknown" with "unchanged."
 
+Examples:
+
+    label Fuel
+    --> "fuel"
+
+    fromString "fuel"
+    --> Fuel
+
+    fromString "unknown"
+    --> Misc
+
+    fromStringMaybe "fuel"
+    --> Just Fuel
+
+    fromStringMaybe "unknown"
+    --> Nothing
+
 -}
 
 

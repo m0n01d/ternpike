@@ -45,6 +45,33 @@ Correct sequence when a stash pop conflicts:
 
 If a section of the doc no longer matches the code, fix the doc — don't leave it stale.
 
+## Doc comments and examples
+
+Every exposed function in `src/Data/` must have a `{-| -}` doc comment. Every
+new module needs a module-level doc comment. When you edit an existing function,
+update its doc comment in the same commit.
+
+For pure functions (`a -> b` with no JSON, opaque constructors, or effects),
+include `-->` inline examples that `elm-verify-examples` can run:
+
+```elm
+{-| Convert a category to its wire-format label.
+
+    label Fuel
+    --> "fuel"
+-}
+label : Category -> String
+```
+
+The test pipeline is `elm-verify-examples && elm-test`. Modules with examples
+are listed in `tests/elm-verify-examples.json`. Generated test files land in
+`tests/VerifyExamples/` (gitignored). Add new modules to that list as you add
+examples. Run with `npm test`.
+
+**What qualifies for examples:** `Data.Category`, `Data.PaymentMethod`, and
+any future pure helpers. Opaque ID types (constructors not exposed), encoders,
+decoders, and HTML-returning functions don't need examples.
+
 ## Elm style guide
 - **Alphabetize** all record fields and all type constructor lists. Apply to every new type and every edit of an existing type.
 - Always fully qualify imports. If you touch a module or function whose imports are not fully qualified, refactor them. You can expose the type, but not `(..)`.
