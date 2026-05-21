@@ -83,6 +83,7 @@ import Data.PaymentMethod as PaymentMethod
 import Data.PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.StatsGranularity as StatsGranularity
 import Data.StatsHover as StatsHover
 import Data.Sync exposing (SyncState(..))
 import Data.Trip as Trip exposing (Trip, TripField(..))
@@ -194,6 +195,7 @@ toAuthState creds initialRoute gs =
     , scanQueue = Dict.empty
     , showLedgerMap = False
     , showMapPicker = False
+    , statsGranularity = StatsGranularity.default
     , statsHover = StatsHover.empty
     , submitting = False
     , syncState = NotEnabled
@@ -1715,6 +1717,9 @@ updateAuth msg as_ =
 
         ToggleLedgerMap ->
             ( AuthModel { as_ | showLedgerMap = not as_.showLedgerMap }, Cmd.none )
+
+        SetStatsGranularity g ->
+            ( AuthModel { as_ | statsGranularity = g }, Cmd.none )
 
         ShowToast message ->
             ( AuthModel { as_ | toast = Just message }, toastFor message )

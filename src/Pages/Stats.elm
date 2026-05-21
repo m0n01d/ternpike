@@ -6,6 +6,7 @@ import Chart.Events as CE
 import Chart.Item as CI
 import Data.Category as Category
 import Data.Entry as Entry
+import Data.StatsGranularity as StatsGranularity exposing (Granularity(..))
 import Data.StatsHover exposing (CumulativePoint, DailyDay)
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
@@ -13,6 +14,7 @@ import Dict
 import Helpers exposing (formatAmount, isoToDayCount)
 import Html exposing (Html)
 import Html.Attributes
+import Html.Events
 import Routing
 import Set
 import Svg
@@ -303,11 +305,15 @@ viewBody model entries =
                     [ viewCategoryList entries ]
                 ]
         , if numDays > 1 then
+            let
+                resolved =
+                    StatsGranularity.resolve model.statsGranularity (spanDays entries)
+            in
             Html.div []
                 [ UI.Rule.dashedRule
-                , UI.Rule.kicker "DAILY SPENDING"
+                , UI.Rule.kicker (StatsGranularity.kicker resolved)
                 , UI.Card.subCard
-                    [ viewDailyChart model.statsHover.dailyBars entries ]
+                    [ viewDailyChart model.statsGranularity resolved model.statsHover.dailyBars entries ]
                 ]
 
           else
@@ -486,31 +492,21 @@ categoryBar fill pct =
         ]
 
 
-viewDailyChart : List (CI.One DailyDay CI.Bar) -> List Entry.EffectiveEntry -> Html Msg
-viewDailyChart hovered entries =
+viewDailyChart : Granularity -> Granularity -> List (CI.One DailyDay CI.Bar) -> List Entry.EffectiveEntry -> Html Msg
+viewDailyChart selected resolved hovered entries =
     let
         sortedDates =
             Entry.uniqueDates entries |> List.reverse
-
-        days : List DailyDay
-        days =
-            sortedDates
-                |> List.map
-                    (\date ->
-                        { date = date
-                        , total =
-                            entries
-                                |> List.filter (\e -> e.date == date)
-                                |> List.map .amount
-                                |> List.sum
-                        }
-                    )
 
         firstDate =
             List.head sortedDates |> Maybe.withDefault ""
 
         lastDate =
             sortedDates |> List.reverse |> List.head |> Maybe.withDefault ""
+
+        days : List DailyDay
+        days =
+            binEntries resolved entries
 
         rangeLabel =
             if firstDate == "" then
@@ -525,8 +521,12 @@ viewDailyChart hovered entries =
                     ++ " days"
     in
     Html.div []
-        [ Html.div [ Html.Attributes.class "text-[11px] font-mono text-muted mb-2" ]
-            [ Html.text rangeLabel ]
+        [ granularitySelector selected resolved
+        , Html.div [ Html.Attributes.class "flex items-center justify-between mb-2" ]
+            [ Html.div [ Html.Attributes.class "text-[11px] font-mono text-muted" ]
+                [ Html.text rangeLabel ]
+            , scrubHint
+            ]
         , C.chart
             [ CA.height 160
             , CA.margin { top = 8, bottom = 8, left = 44, right = 8 }
@@ -549,19 +549,313 @@ viewDailyChart hovered entries =
                     [ C.tooltip item
                         [ CA.onTopOrBottom, CA.background "#fffaf2", CA.border UI.Theme.colorTan ]
                         []
-                        (dailyTooltipContent (CI.getData item))
+                        (dailyTooltipContent resolved (CI.getData item))
                     ]
             ]
         ]
 
 
-dailyTooltipContent : DailyDay -> List (Html Never)
-dailyTooltipContent d =
+granularitySelector : Granularity -> Granularity -> Html Msg
+granularitySelector selected resolved =
+    Html.div [ Html.Attributes.class "flex flex-wrap gap-1 mb-2" ]
+        (List.map (granularityChip selected resolved) StatsGranularity.all)
+
+
+granularityChip : Granularity -> Granularity -> Granularity -> Html Msg
+granularityChip selected resolved chip =
+    let
+        isActive =
+            chip == selected
+
+        chipLabel =
+            if chip == Auto && isActive then
+                "Auto (" ++ String.toLower (StatsGranularity.label resolved) ++ ")"
+
+            else
+                StatsGranularity.label chip
+
+        baseClass =
+            "text-[11px] font-mono px-2.5 py-1 rounded-full border transition-colors"
+
+        toneClass =
+            if isActive then
+                " bg-rust text-cream border-rust"
+
+            else
+                " bg-transparent text-muted border-tan/60 hover:border-muted"
+    in
+    Html.button
+        [ Html.Attributes.class (baseClass ++ toneClass)
+        , Html.Attributes.type_ "button"
+        , Html.Events.onClick (SetStatsGranularity chip)
+        ]
+        [ Html.text chipLabel ]
+
+
+scrubHint : Html msg
+scrubHint =
+    Html.button
+        [ Html.Attributes.class "group relative inline-flex items-center justify-center w-5 h-5 rounded-full border border-tan/60 text-[10px] font-mono text-muted hover:text-moss hover:border-muted focus:outline-none focus:text-moss focus:border-muted"
+        , Html.Attributes.type_ "button"
+        , Html.Attributes.attribute "aria-label" "How to read this chart"
+        ]
+        [ Html.text "i"
+        , Html.span
+            [ Html.Attributes.class "hidden group-hover:block group-focus:block absolute z-10 right-0 top-full mt-1 px-2 py-1 whitespace-nowrap rounded border border-tan bg-[#fffaf2] text-[11px] font-mono text-moss shadow-sm pointer-events-none"
+            ]
+            [ Html.text "swipe across the chart to inspect" ]
+        ]
+
+
+dailyTooltipContent : Granularity -> DailyDay -> List (Html Never)
+dailyTooltipContent resolved d =
+    let
+        header =
+            if d.date == d.endDate then
+                formatDateShort d.date
+
+            else if resolved == Monthly then
+                formatMonthLong d.date
+
+            else
+                formatDateShort d.date ++ " – " ++ formatDateShort d.endDate
+    in
     [ Html.div [ Html.Attributes.class "font-mono text-[11px] text-moss" ]
-        [ Html.text (formatDateShort d.date) ]
+        [ Html.text header ]
     , Html.div [ Html.Attributes.class "font-mono text-sm text-rust" ]
         [ Html.text (formatAmount d.total) ]
     ]
+
+
+{-| Inclusive day count between first and last unique date with spend.
+Returns 0 when there are no entries.
+-}
+spanDays : List Entry.EffectiveEntry -> Int
+spanDays entries =
+    let
+        sorted =
+            Entry.uniqueDates entries |> List.reverse
+    in
+    case ( List.head sorted, sorted |> List.reverse |> List.head ) of
+        ( Just first, Just last ) ->
+            isoToDayCount last - isoToDayCount first + 1
+
+        _ ->
+            0
+
+
+{-| Aggregate expenses into the bins for a resolved granularity. Empty
+weeks/months inside the trip span are included as zero-height bars so the
+time axis reads linearly. Daily mode preserves the historical
+"only days with spend" behaviour to avoid surprise.
+-}
+binEntries : Granularity -> List Entry.EffectiveEntry -> List DailyDay
+binEntries resolved entries =
+    let
+        sortedDates =
+            Entry.uniqueDates entries |> List.reverse
+
+        firstDate =
+            List.head sortedDates |> Maybe.withDefault ""
+
+        lastDate =
+            sortedDates |> List.reverse |> List.head |> Maybe.withDefault ""
+
+        totalBetween : String -> String -> Float
+        totalBetween startIso endIso =
+            entries
+                |> List.filter (\e -> e.date >= startIso && e.date <= endIso)
+                |> List.map .amount
+                |> List.sum
+    in
+    case resolved of
+        Daily ->
+            sortedDates
+                |> List.map
+                    (\date ->
+                        { date = date
+                        , endDate = date
+                        , total = totalBetween date date
+                        }
+                    )
+
+        Weekly ->
+            if firstDate == "" then
+                []
+
+            else
+                buildWeeklyBins firstDate lastDate totalBetween
+
+        Monthly ->
+            if firstDate == "" then
+                []
+
+            else
+                buildMonthlyBins firstDate lastDate totalBetween
+
+        Auto ->
+            -- Auto is resolved before this call; fall back to Daily.
+            binEntries Daily entries
+
+
+buildWeeklyBins : String -> String -> (String -> String -> Float) -> List DailyDay
+buildWeeklyBins firstDate lastDate totalBetween =
+    let
+        firstCount =
+            isoToDayCount firstDate
+
+        lastCount =
+            isoToDayCount lastDate
+
+        weekCount =
+            (lastCount - firstCount) // 7 + 1
+    in
+    List.range 0 (weekCount - 1)
+        |> List.map
+            (\i ->
+                let
+                    startCount =
+                        firstCount + i * 7
+
+                    endCount =
+                        min lastCount (startCount + 6)
+
+                    startIso =
+                        dayCountToIso startCount
+
+                    endIso =
+                        dayCountToIso endCount
+                in
+                { date = startIso
+                , endDate = endIso
+                , total = totalBetween startIso endIso
+                }
+            )
+
+
+buildMonthlyBins : String -> String -> (String -> String -> Float) -> List DailyDay
+buildMonthlyBins firstDate lastDate totalBetween =
+    let
+        ( fy, fm ) =
+            parseYearMonth firstDate
+
+        ( ly, lm ) =
+            parseYearMonth lastDate
+
+        monthCount =
+            (ly - fy) * 12 + (lm - fm) + 1
+    in
+    List.range 0 (monthCount - 1)
+        |> List.map
+            (\i ->
+                let
+                    yearOffset =
+                        (fm - 1 + i) // 12
+
+                    year =
+                        fy + yearOffset
+
+                    month =
+                        modBy 12 (fm - 1 + i) + 1
+
+                    startIso =
+                        formatIso year month 1
+
+                    -- "31" is fine as the upper-bound of a string filter:
+                    -- all dates in this month compare ≤ "YYYY-MM-31", and
+                    -- the tooltip header for monthly mode renders via
+                    -- `formatMonthLong d.date` so the exact end day is
+                    -- never shown to the user.
+                    endIso =
+                        formatIso year month 31
+                in
+                { date = startIso
+                , endDate = endIso
+                , total = totalBetween startIso endIso
+                }
+            )
+
+
+parseYearMonth : String -> ( Int, Int )
+parseYearMonth iso =
+    case String.split "-" iso of
+        y :: m :: _ ->
+            ( String.toInt y |> Maybe.withDefault 0
+            , String.toInt m |> Maybe.withDefault 1
+            )
+
+        _ ->
+            ( 0, 1 )
+
+
+formatIso : Int -> Int -> Int -> String
+formatIso y m d =
+    String.fromInt y
+        ++ "-"
+        ++ String.padLeft 2 '0' (String.fromInt m)
+        ++ "-"
+        ++ String.padLeft 2 '0' (String.fromInt d)
+
+
+{-| Inverse of `Helpers.isoToDayCount`.
+
+`isoToDayCount` uses a naive `y * 365 + monthOffset + d` calendar (no leap
+years). We invert the same way: year is `(count - 1) // 365` and the
+remainder picks the month/day off the same `monthOffsets` table. The
+calendar is fictional but self-consistent — adding 7 to a day count and
+piping back through `dayCountToIso` reliably advances the ISO string by
+exactly seven entries, which is all the weekly-bin code needs.
+
+    dayCountToIso (Helpers.isoToDayCount "2026-04-30")
+    --> "2026-04-30"
+
+    dayCountToIso (Helpers.isoToDayCount "2026-04-30" + 7)
+    --> "2026-05-07"
+
+-}
+dayCountToIso : Int -> String
+dayCountToIso count =
+    let
+        y =
+            (count - 1) // 365
+
+        remainder =
+            count - y * 365
+
+        ( m, d ) =
+            findMonthDay 1 0 monthEnds remainder
+    in
+    formatIso y m d
+
+
+monthEnds : List Int
+monthEnds =
+    [ 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 ]
+
+
+findMonthDay : Int -> Int -> List Int -> Int -> ( Int, Int )
+findMonthDay m prevEnd ends remainder =
+    case ends of
+        end :: rest ->
+            if remainder <= end then
+                ( m, remainder - prevEnd )
+
+            else
+                findMonthDay (m + 1) end rest remainder
+
+        [] ->
+            -- Should not happen given valid `count`; fall back to Dec 31.
+            ( 12, 31 )
+
+
+formatMonthLong : String -> String
+formatMonthLong iso =
+    case String.split "-" iso of
+        y :: m :: _ ->
+            monthAbbr m ++ " " ++ y
+
+        _ ->
+            iso
 
 
 viewCumulativeChart : List (CI.One CumulativePoint CI.Dot) -> List Entry.EffectiveEntry -> Html Msg
@@ -598,61 +892,65 @@ viewCumulativeChart hovered entries =
                 |> Maybe.map .y
                 |> Maybe.withDefault 0
     in
-    C.chart
-        [ CA.height 180
-        , CA.margin { top = 16, bottom = 24, left = 44, right = 12 }
-        , CE.onMouseMove HoverCumulativePoints (CE.getNearest CI.dots)
-        , CE.onMouseLeave (HoverCumulativePoints [])
-        ]
-        [ C.yLabels
-            [ CA.amount 4
-            , CA.format (\v -> formatAmount v)
-            , CA.fontSize 10
-            , CA.color UI.Theme.colorMuted
-            , CA.withGrid
+    Html.div []
+        [ Html.div [ Html.Attributes.class "flex items-center justify-end mb-1" ]
+            [ scrubHint ]
+        , C.chart
+            [ CA.height 180
+            , CA.margin { top = 16, bottom = 24, left = 44, right = 12 }
+            , CE.onMouseMove HoverCumulativePoints (CE.getNearest CI.dots)
+            , CE.onMouseLeave (HoverCumulativePoints [])
             ]
-        , C.grid [ CA.color UI.Theme.colorTan, CA.dashed [ 2, 3 ] ]
-        , C.series .x
-            [ C.interpolated .y
-                [ CA.color UI.Theme.colorRust
-                , CA.width 2
-                , CA.opacity 0.18
+            [ C.yLabels
+                [ CA.amount 4
+                , CA.format (\v -> formatAmount v)
+                , CA.fontSize 10
+                , CA.color UI.Theme.colorMuted
+                , CA.withGrid
                 ]
-                []
-            ]
-            points
-        , C.labelAt .min
-            .min
-            [ CA.moveDown 16
-            , CA.fontSize 10
-            , CA.color UI.Theme.colorMuted
-            , CA.alignLeft
-            ]
-            [ Svg.text (formatDateShort firstDate) ]
-        , C.labelAt .max
-            .min
-            [ CA.moveDown 16
-            , CA.fontSize 10
-            , CA.color UI.Theme.colorMuted
-            , CA.alignRight
-            ]
-            [ Svg.text (formatDateShort lastDate) ]
-        , C.labelAt .max
-            (\_ -> finalTotal)
-            [ CA.moveUp 8
-            , CA.moveLeft 2
-            , CA.fontSize 11
-            , CA.color UI.Theme.colorRust
-            , CA.alignRight
-            ]
-            [ Svg.text (formatAmount finalTotal) ]
-        , C.each hovered <|
-            \_ item ->
-                [ C.tooltip item
-                    [ CA.onTopOrBottom, CA.background "#fffaf2", CA.border UI.Theme.colorTan ]
+            , C.grid [ CA.color UI.Theme.colorTan, CA.dashed [ 2, 3 ] ]
+            , C.series .x
+                [ C.interpolated .y
+                    [ CA.color UI.Theme.colorRust
+                    , CA.width 2
+                    , CA.opacity 0.18
+                    ]
                     []
-                    (cumulativeTooltipContent (CI.getData item))
                 ]
+                points
+            , C.labelAt .min
+                .min
+                [ CA.moveDown 16
+                , CA.fontSize 10
+                , CA.color UI.Theme.colorMuted
+                , CA.alignLeft
+                ]
+                [ Svg.text (formatDateShort firstDate) ]
+            , C.labelAt .max
+                .min
+                [ CA.moveDown 16
+                , CA.fontSize 10
+                , CA.color UI.Theme.colorMuted
+                , CA.alignRight
+                ]
+                [ Svg.text (formatDateShort lastDate) ]
+            , C.labelAt .max
+                (\_ -> finalTotal)
+                [ CA.moveUp 8
+                , CA.moveLeft 2
+                , CA.fontSize 11
+                , CA.color UI.Theme.colorRust
+                , CA.alignRight
+                ]
+                [ Svg.text (formatAmount finalTotal) ]
+            , C.each hovered <|
+                \_ item ->
+                    [ C.tooltip item
+                        [ CA.onTopOrBottom, CA.background "#fffaf2", CA.border UI.Theme.colorTan ]
+                        []
+                        (cumulativeTooltipContent (CI.getData item))
+                    ]
+            ]
         ]
 
 

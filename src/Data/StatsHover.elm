@@ -30,11 +30,17 @@ tooltips for them.
 import Chart.Item as CI
 
 
-{-| One bar in the Daily Spending chart: a date string (ISO `YYYY-MM-DD`)
-and the day's total spend.
+{-| One bar in the Daily Spending chart.
+
+`date` is the bin's start (ISO `YYYY-MM-DD`); `endDate` is the inclusive
+last day in the bin. `endDate == date` means a single-day bin (`Daily`
+granularity); otherwise the bin spans a week or a calendar month and the
+tooltip renders the range.
+
 -}
 type alias DailyDay =
     { date : String
+    , endDate : String
     , total : Float
     }
 
