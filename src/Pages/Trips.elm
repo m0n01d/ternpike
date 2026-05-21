@@ -13,10 +13,10 @@ import Html.Events
 import Routing
 import Set
 import Types exposing (AuthState, Msg(..))
+import UI.BudgetBar
 import UI.Button
 import UI.Icons
 import UI.Layout
-import UI.Rule
 import UI.Skeleton
 
 
@@ -159,67 +159,10 @@ viewTripHero activeTrip entries =
           else
             Html.text ""
         , if activeTrip.budget > 0 then
-            viewBudgetBar totalSpent activeTrip.budget
+            UI.BudgetBar.view { spent = totalSpent, budget = activeTrip.budget }
 
           else
             Html.text ""
-        ]
-
-
-viewBudgetBar : Float -> Float -> Html Msg
-viewBudgetBar totalSpent budget =
-    let
-        pct =
-            Basics.min 1.0 (totalSpent / budget)
-
-        pctInt =
-            round (pct * 100)
-
-        isOver =
-            pct >= 1.0
-
-        barColor =
-            if isOver then
-                "h-full bg-danger transition-all duration-500"
-
-            else
-                "h-full bg-rust transition-all duration-500"
-
-        spentAmountClass =
-            if isOver then
-                "text-sm font-semibold text-danger"
-
-            else
-                "text-sm font-semibold text-rust"
-
-        labelClass =
-            "text-[10px] font-mono uppercase tracking-widest text-moss"
-    in
-    Html.div []
-        [ UI.Rule.dashedRule
-        , Html.div [ Html.Attributes.class "h-2 bg-cream-deep rounded-full overflow-hidden" ]
-            [ Html.div
-                [ Html.Attributes.class barColor
-
-                -- dynamic percentage width; cannot be expressed as a static Tailwind class
-                , Html.Attributes.style "width" (String.fromInt pctInt ++ "%")
-                ]
-                []
-            ]
-        , Html.div [ Html.Attributes.class "mt-2 flex justify-between items-baseline gap-3" ]
-            [ Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
-                [ Html.span [ Html.Attributes.class spentAmountClass ]
-                    [ Html.text ("$" ++ String.fromInt (round totalSpent)) ]
-                , Html.span [ Html.Attributes.class labelClass ]
-                    [ Html.text "spent" ]
-                ]
-            , Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
-                [ Html.span [ Html.Attributes.class "text-sm font-semibold text-forest" ]
-                    [ Html.text ("$" ++ String.fromInt (round budget)) ]
-                , Html.span [ Html.Attributes.class labelClass ]
-                    [ Html.text "budget" ]
-                ]
-            ]
         ]
 
 

@@ -5,6 +5,7 @@ import Data.Entry as Entry
 import Data.ExpenseId as ExpenseId
 import Data.Ledger exposing (LedgerMode(..))
 import Data.TripId as TripId
+import Data.Trips
 import Dict
 import Helpers exposing (effectiveEntryToExpense, encodeWaypoints, formatAmount, formatDateDisplay)
 import Html exposing (Html)
@@ -15,6 +16,7 @@ import Json.Decode
 import Routing
 import Set
 import Types exposing (AuthState, Msg(..))
+import UI.BudgetBar
 import UI.Button
 import UI.Icons
 import UI.Mascot
@@ -29,8 +31,20 @@ viewTab as_ =
     in
     { actions = viewActions as_
     , body = viewBody as_ mode
-    , hero = viewHero mode
+    , hero = viewHero (activeBudget as_) mode
     }
+
+
+activeBudget : AuthState -> Float
+activeBudget as_ =
+    case ( Routing.routeTripId as_.route, as_.trips ) of
+        ( Just tripId, Data.Trips.TripsLoaded trips ) ->
+            Data.Trips.findTrip tripId trips
+                |> Maybe.map .budget
+                |> Maybe.withDefault 0
+
+        _ ->
+            0
 
 
 
@@ -78,19 +92,19 @@ viewActions model =
     ]
 
 
-viewHero : LedgerMode -> Html Msg
-viewHero mode =
+viewHero : Float -> LedgerMode -> Html Msg
+viewHero budget mode =
     case mode of
         LedgerReady entries ->
-            viewLedgerHero entries
+            viewLedgerHero budget entries
 
         LedgerLoading ->
             Html.div [ Html.Attributes.class "font-mono text-[22px] text-muted" ]
                 [ Html.text "—" ]
 
 
-viewLedgerHero : List Entry.EffectiveEntry -> Html Msg
-viewLedgerHero entries =
+viewLedgerHero : Float -> List Entry.EffectiveEntry -> Html Msg
+viewLedgerHero budget entries =
     let
         total =
             List.sum (List.map .amount entries)
@@ -115,17 +129,40 @@ viewLedgerHero entries =
 
             else
                 String.fromInt entryCount ++ " ENTRIES"
+
+        isOver =
+            budget > 0 && total >= budget
+
+        totalClass =
+            if isOver then
+                "font-display text-5xl font-black text-danger tracking-tight leading-none"
+
+            else
+                "font-display text-5xl font-black text-forest tracking-tight leading-none"
+
+        trailingKicker =
+            Html.span
+                [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
+                [ Html.text kickerText ]
     in
     Html.div [ Html.Attributes.class "py-2" ]
         [ Html.div
             [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
             [ Html.text "RUNNING TOTAL" ]
         , Html.div
-            [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
+            [ Html.Attributes.class totalClass ]
             [ Html.text (formatAmount total) ]
-        , Html.div
-            [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
-            [ Html.text kickerText ]
+        , if budget > 0 then
+            UI.BudgetBar.viewMerged
+                { budget = budget
+                , spent = total
+                , trailing = trailingKicker
+                }
+
+          else
+            Html.div
+                [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
+                [ Html.text kickerText ]
         ]
 
 
