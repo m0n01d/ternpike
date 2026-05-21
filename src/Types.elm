@@ -38,6 +38,7 @@ import Data.Amendment exposing (Amendment)
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category)
 import Data.Expense exposing (Expense)
+import Data.ExpenseId exposing (ExpenseId)
 import Data.Guest exposing (GuestSession)
 import Data.Navigation exposing (Route)
 import Data.PaymentMethod exposing (PaymentMethod)
@@ -47,6 +48,7 @@ import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
 import Data.Sync exposing (SyncState)
 import Data.Trip exposing (Trip, TripField, TripForm)
+import Data.TripId exposing (TripId)
 import Data.Trips exposing (TripsState)
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
@@ -159,7 +161,9 @@ type alias AuthState =
     , key : Nav.Key
     , loadingExpenses : Set String
     , loadingTrips : Set String
+    , movePicker : Maybe Expense
     , networkOffline : Bool
+    , openLedgerMenu : Maybe ExpenseId
     , route : Route
     , scanQueue : Dict String ScanItem
     , showDayIntensity : Bool
@@ -205,6 +209,17 @@ Trip CRUD: `OpenNewTripForm`, `OpenEditTripForm`, `TripFieldChanged`,
 
 Expense submit/void: `SubmitEntry`, `GotSubmitTime`, `VoidEntry`.
 
+Expense duplicate: `DuplicateEntry`, `GotDuplicateTime` — snapshot the
+effective state into a brand-new expense doc in the same trip.
+
+Expense move: `OpenMovePicker`, `CloseMovePicker`, `MoveEntry`,
+`GotMoveTime` — snapshot the effective state into a new expense in the
+destination trip and void the original. The expense's ID changes.
+
+Ledger row menu: `OpenLedgerMenu`, `CloseLedgerMenu` — toggle the kebab
+popover holding secondary row actions (Duplicate, Move to trip…,
+Delete).
+
 Guest auth: `EmailInputChanged`, `SubmitEmail`, `CodeInputChanged`,
 `SubmitCode`, `RequestCodeResult`, `VerifyCodeResult`,
 `ToggleGuestSettings`.
@@ -238,6 +253,8 @@ type Msg
     | CancelDeleteTrip
     | CategorySelected Category
     | ClearDoneItems
+    | CloseLedgerMenu
+    | CloseMovePicker
     | CloseTripForm
     | CodeInputChanged String
     | ConfirmDeleteTrip Trip
@@ -245,6 +262,7 @@ type Msg
     | DeleteTrip Trip
     | DismissError
     | DismissMapPicker
+    | DuplicateEntry Expense
     | EmailInputChanged String
     | FilesSelected (List File)
     | GeolocationDenied
@@ -252,6 +270,8 @@ type Msg
     | GotFileUrl String String
     | GotGpsCoords Float Float
     | GotOcrResult String (Result Http.Error String)
+    | GotDuplicateTime Expense Time.Posix
+    | GotMoveTime Expense TripId Time.Posix
     | GotPouchMsg Json.Decode.Value
     | GotSaveTripTime Time.Posix
     | GotSubmitTime Time.Posix
@@ -261,10 +281,13 @@ type Msg
     | LongNoteChanged String
     | MapPickerConfirmed Float Float
     | MerchantChanged String
+    | MoveEntry Expense TripId
     | NetworkStatusChanged Bool
     | NoteChanged String
     | OpenEditTripForm Trip
+    | OpenLedgerMenu ExpenseId
     | OpenMapPicker
+    | OpenMovePicker Expense
     | OpenNewTripForm
     | PaymentMethodChanged (Maybe PaymentMethod)
     | RefreshClicked

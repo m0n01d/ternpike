@@ -3,8 +3,11 @@ module UI.Icons exposing
     , chart
     , chevronRight
     , close
+    , copy
     , journal
+    , kebab
     , map
+    , move
     , pencil
     , pin
     , plus
@@ -68,6 +71,14 @@ close classes =
         ]
 
 
+copy : String -> Svg.Svg msg
+copy classes =
+    Svg.svg (common classes)
+        [ Svg.path [ Svg.Attributes.d "M9 9 H19 A1 1 0 0 1 20 10 V20 A1 1 0 0 1 19 21 H9 A1 1 0 0 1 8 20 V10 A1 1 0 0 1 9 9 Z" ] []
+        , Svg.path [ Svg.Attributes.d "M5 15 H4 A1 1 0 0 1 3 14 V4 A1 1 0 0 1 4 3 H14 A1 1 0 0 1 15 4 V5" ] []
+        ]
+
+
 journal : String -> Svg.Svg msg
 journal classes =
     Svg.svg (common classes)
@@ -77,6 +88,36 @@ journal classes =
         , Svg.path [ Svg.Attributes.d "M8 3 V21" ] []
         , Svg.path [ Svg.Attributes.d "M11 8 H17" ] []
         , Svg.path [ Svg.Attributes.d "M11 12 H17" ] []
+        ]
+
+
+kebab : String -> Svg.Svg msg
+kebab classes =
+    Svg.svg (common classes)
+        [ Svg.circle
+            [ Svg.Attributes.cx "12"
+            , Svg.Attributes.cy "5"
+            , Svg.Attributes.r "1.4"
+            , Svg.Attributes.fill "currentColor"
+            , Svg.Attributes.stroke "none"
+            ]
+            []
+        , Svg.circle
+            [ Svg.Attributes.cx "12"
+            , Svg.Attributes.cy "12"
+            , Svg.Attributes.r "1.4"
+            , Svg.Attributes.fill "currentColor"
+            , Svg.Attributes.stroke "none"
+            ]
+            []
+        , Svg.circle
+            [ Svg.Attributes.cx "12"
+            , Svg.Attributes.cy "19"
+            , Svg.Attributes.r "1.4"
+            , Svg.Attributes.fill "currentColor"
+            , Svg.Attributes.stroke "none"
+            ]
+            []
         ]
 
 
@@ -95,6 +136,15 @@ map classes =
             , Svg.Attributes.fill "currentColor"
             ]
             []
+        ]
+
+
+move : String -> Svg.Svg msg
+move classes =
+    Svg.svg (common classes)
+        [ Svg.path [ Svg.Attributes.d "M4 12 H20" ] []
+        , Svg.path [ Svg.Attributes.d "M15 7 L20 12 L15 17" ] []
+        , Svg.path [ Svg.Attributes.d "M4 6 V18" ] []
         ]
 
 
