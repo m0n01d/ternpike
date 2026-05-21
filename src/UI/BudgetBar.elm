@@ -1,8 +1,8 @@
-module UI.BudgetBar exposing (view, viewSubtle)
+module UI.BudgetBar exposing (view, viewLine, viewSubtle)
 
-{-| Shared budget progress bar used by the Trips and Ledger heroes.
+{-| Shared budget progress bar used across hero cards.
 
-Two variants, same color logic (rust fill, danger when over budget):
+Three variants, same color logic (rust fill, danger when over budget):
 
   - `view` — Trips-style: a labelled bar inside the hero with spent on the
     left and budget on the right, sitting under a dashed rule.
@@ -11,6 +11,8 @@ Two variants, same color logic (rust fill, danger when over budget):
     `UI.Layout.page` is already `relative overflow-hidden`, so the bar
     follows the card's rounded corners and never affects the hero's text
     layout.
+  - `viewLine` — Stats-style: a thin un-labelled bar sitting in flow as a
+    divider, intended as a drop-in replacement for `UI.Rule.dashedRule`.
 
 Render nothing for `budget <= 0` upstream; this module assumes a positive
 budget.
@@ -59,6 +61,12 @@ viewSubtle : { spent : Float, budget : Float } -> Html msg
 viewSubtle { spent, budget } =
     track (state spent budget)
         "absolute bottom-0 left-0 right-0 h-1 bg-cream-deep"
+
+
+viewLine : { spent : Float, budget : Float } -> Html msg
+viewLine { spent, budget } =
+    track (state spent budget)
+        "h-1 bg-cream-deep rounded-full overflow-hidden my-4"
 
 
 

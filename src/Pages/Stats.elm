@@ -20,6 +20,7 @@ import Set
 import Svg
 import Svg.Attributes
 import Types exposing (AuthState, Msg(..))
+import UI.BudgetBar
 import UI.Card
 import UI.Rule
 import UI.Theme
@@ -85,13 +86,23 @@ viewHero model entries =
             else
                 0
 
-        tripStart =
-            case model.trips of
-                TripsLoaded trips ->
-                    (Trips.selectedTrip trips).startDate
+        activeTrip =
+            case ( Routing.routeTripId model.route, model.trips ) of
+                ( Just tripId, TripsLoaded trips ) ->
+                    Trips.findTrip tripId trips
 
                 _ ->
-                    ""
+                    Nothing
+
+        tripStart =
+            activeTrip
+                |> Maybe.map .startDate
+                |> Maybe.withDefault ""
+
+        budget =
+            activeTrip
+                |> Maybe.map .budget
+                |> Maybe.withDefault 0
 
         daysIn =
             if tripStart /= "" && model.today /= "" then
@@ -122,7 +133,11 @@ viewHero model entries =
                 ]
             , sparkline last7
             ]
-        , UI.Rule.dashedRule
+        , if budget > 0 then
+            UI.BudgetBar.viewLine { spent = total, budget = budget }
+
+          else
+            UI.Rule.dashedRule
         , Html.div [ Html.Attributes.class "flex gap-6" ]
             [ statBlock "DAILY BURN" (formatAmount avgPerDay)
             , statBlock "AVG / ENTRY" (formatAmount avgPerEntry)
