@@ -29,6 +29,7 @@ viewGuest gs =
                 [ Html.text "ROAD LOG FOR THE LONG WAY NORTH" ]
             ]
         , UI.Rule.dashedRule
+        , viewJoinHint gs
         , Html.div [ Html.Attributes.class "max-w-sm w-full" ]
             [ viewFormCard gs ]
         , viewErrorChip gs
@@ -41,6 +42,19 @@ viewGuest gs =
                 Html.text ""
             ]
         ]
+
+
+viewJoinHint : GuestState -> Html Msg
+viewJoinHint gs =
+    case gs.pendingJoinToken of
+        Just _ ->
+            Html.div [ Html.Attributes.class "max-w-sm w-full mb-4" ]
+                [ Html.p [ Html.Attributes.class "text-sm text-moss text-center" ]
+                    [ Html.text "Sign in to accept your flock invite." ]
+                ]
+
+        Nothing ->
+            Html.text ""
 
 
 viewFormCard : GuestState -> Html Msg

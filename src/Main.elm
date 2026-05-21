@@ -78,6 +78,7 @@ import Data.Expense as Expense
 import Data.ExpenseId as ExpenseId
 import Data.Flock as Flock
 import Data.FlockId
+import Data.FlockUi as FlockUi
 import Data.Flocks as Flocks
 import Data.Guest exposing (GuestReason(..), GuestSession)
 import Data.Location exposing (LocationSource(..), LocationState(..))
@@ -105,6 +106,7 @@ import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 import Pages.Add
 import Pages.Guest exposing (viewGuest)
+import Pages.JoinFlock
 import Pages.Ledger
 import Pages.Scan
 import Pages.Settings
@@ -200,6 +202,7 @@ toAuthState creds initialRoute gs =
     , creds = creds
     , error = Nothing
     , expenses = Dict.empty
+    , flockUi = FlockUi.empty
     , flocks = Flocks.empty
     , form = FreshForm (defaultPendingEntry gs.today)
     , geoBlocked = False
@@ -238,6 +241,7 @@ toGuestState reason as_ =
     , emailInput = ""
     , key = as_.key
     , networkOffline = as_.networkOffline
+    , pendingJoinToken = Nothing
     , session = { config = as_.config, reason = reason }
     , showSettings = reason == SessionExpired
     , today = as_.today
@@ -1145,6 +1149,7 @@ init flagsJson url key =
             , emailInput = ""
             , key = key
             , networkOffline = False
+            , pendingJoinToken = Nothing
             , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
             , today = dec "today"
@@ -1441,6 +1446,7 @@ updateAuth msg as_ =
                 , emailInput = ""
                 , key = as_.key
                 , networkOffline = as_.networkOffline
+                , pendingJoinToken = Nothing
                 , session = { config = { anthropicKey = "", backendUrl = "" }, reason = NotLoggedIn }
                 , showSettings = False
                 , today = as_.today
@@ -2299,6 +2305,9 @@ viewAuth as_ =
 
                 RouteEditEntry _ _ ->
                     Pages.Add.viewTab as_
+
+                RouteJoinFlock token ->
+                    Pages.JoinFlock.viewAuth as_ token
 
                 RouteLedger _ ->
                     Pages.Ledger.viewTab as_

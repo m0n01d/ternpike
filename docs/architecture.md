@@ -718,6 +718,29 @@ Server endpoints back paid features still re-check the actual tier
 (caller's or flock-owner's depending on the call). Client-side gating is
 UX, not security.
 
+### Flocks settings UI
+
+The user-facing surface for create / invite / join / leave / transfer
+lives in `src/Pages/Settings/Flocks.elm` (#62). Its modals and inline
+errors all sit on `AuthState.flockUi : Data.FlockUi.FlockUiState`.
+HTTP wrappers for the five `/flocks/*` endpoints (`createFlock`,
+`inviteToFlock`, `joinFlock`, `leaveFlock`, `transferOwnership`) live
+in `src/Http/FlockApi.elm`. The "Create" button is tier-gated via
+`Data.Tier.isPaid as_.tier` — Fledgling users see a disabled button
+with an upgrade copy card next to it; the actual capability check
+happens server-side.
+
+Invite links land on a new `RouteJoinFlock String` route at
+`/flocks/join?token=<jwt>` (path-segment-safe — the token has no `:`
+collisions). Signed-out users get the token parked on
+`GuestState.pendingJoinToken` and the verify-code success path
+redirects to `/flocks/join?token=…` instead of `/trips`, so the
+invite is consumed immediately after auth. The signed-in view
+(`src/Pages/JoinFlock.elm`) decodes the JWT payload locally for
+display only — the server checks the signature — and surfaces a
+friendly "this invite is for someone else" error when the token's
+`inviteeEmail` doesn't match `creds.email`.
+
 ---
 
 ## Encoders and decoders
