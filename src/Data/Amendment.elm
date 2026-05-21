@@ -1,22 +1,43 @@
 module Data.Amendment exposing (Amendment, decoder, encoder)
 
+{-| A patch applied to an existing `Expense`.
+
+Editing an expense never mutates the original — it writes a new `Amendment`
+document keyed `amend::<expenseId>::<8-char nonce>`. Each `Maybe` field on
+the record means "this column was changed"; `Nothing` means "leave the
+original value alone." `Data.Entry.resolve` folds amendments in `createdAt`
+order to produce the user-facing `EffectiveEntry`.
+
+Why this pattern:
+
+  - Edit history is preserved automatically.
+  - Sync conflicts are rare — two devices editing the same field still
+    converge deterministically by `createdAt`.
+  - We can reconstruct any past state of an expense.
+
+The encoder omits any field that is `Nothing` so the stored document only
+contains the actual changes.
+-}
+
 import Data.Category as Category exposing (Category)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 
 
 type alias Amendment =
-    { amount    : Maybe Float
-    , category  : Maybe Category
-    , createdAt : String
-    , date      : Maybe String
-    , id        : String
-    , longNote  : Maybe String
-    , merchant  : Maybe String
-    , note      : Maybe String
-    , targetId  : ExpenseId
+    { amount        : Maybe Float
+    , category      : Maybe Category
+    , createdAt     : String
+    , date          : Maybe String
+    , id            : String
+    , longNote      : Maybe String
+    , merchant      : Maybe String
+    , note          : Maybe String
+    , paymentMethod : Maybe PaymentMethod
+    , targetId      : ExpenseId
     }
 
 
@@ -49,7 +70,11 @@ encoder a =
                 Nothing -> []
             )
          ++ (case a.note of
-                Just v  -> [ ( "note",     E.string v ) ]
+                Just v  -> [ ( "note",          E.string v ) ]
+                Nothing -> []
+            )
+         ++ (case a.paymentMethod of
+                Just v  -> [ ( "paymentMethod", E.string (PaymentMethod.toString v) ) ]
                 Nothing -> []
             )
         )
@@ -76,7 +101,19 @@ decoder =
         |> Pipeline.required "createdAt" D.string
         |> Pipeline.optional "date"      (D.nullable D.string) Nothing
         |> Pipeline.required "_id"       D.string
-        |> Pipeline.optional "longNote"  (D.nullable D.string) Nothing
-        |> Pipeline.optional "merchant"  (D.nullable D.string) Nothing
-        |> Pipeline.optional "note"      (D.nullable D.string) Nothing
-        |> Pipeline.required "targetId"  ExpenseId.decode
+        |> Pipeline.optional "longNote"      (D.nullable D.string) Nothing
+        |> Pipeline.optional "merchant"      (D.nullable D.string) Nothing
+        |> Pipeline.optional "note"          (D.nullable D.string) Nothing
+        |> Pipeline.optional "paymentMethod"
+            (D.nullable
+                (D.string
+                    |> D.andThen
+                        (\s ->
+                            case PaymentMethod.fromString s of
+                                Just pm -> D.succeed pm
+                                Nothing -> D.fail ("Unknown paymentMethod: " ++ s)
+                        )
+                )
+            )
+            Nothing
+        |> Pipeline.required "targetId"      ExpenseId.decode

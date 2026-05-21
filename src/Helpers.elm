@@ -26,7 +26,7 @@ effectiveEntryToExpense e =
     , merchant = e.merchant
     , note = e.note
     , tripId = e.tripId
-    }
+}
 
 
 formatAmount : Float -> String

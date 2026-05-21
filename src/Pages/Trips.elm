@@ -88,7 +88,7 @@ viewHero as_ =
                 entries =
                     if Set.member (TripId.toString activeTrip.id) as_.tripLoaded then
                         Entry.resolve
-                            (Dict.values as_.expenses)
+                            (as_.expenses |> Dict.get (TripId.toString activeTrip.id) |> Maybe.withDefault Dict.empty |> Dict.values)
                             (Dict.values as_.amendments)
                             (Dict.values as_.voids)
                             activeTrip.id

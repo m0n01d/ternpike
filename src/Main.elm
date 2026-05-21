@@ -1,5 +1,62 @@
 port module Main exposing (main)
 
+{-| Application entry point and the single source of truth for state.
+
+# Big picture
+
+The model is a sum type:
+
+    type Model
+        = AuthModel AuthState
+        | GuestModel GuestState
+
+The compiler enforces that auth-only pages (Add, Ledger, Scan, Stats, Trips)
+cannot be reached while signed out. Any 401 from an HTTP call or the
+CouchDB sync transitions the app to `GuestModel SessionExpired` —
+there's no silent re-auth because tokens expire aggressively.
+
+# Data shape
+
+`AuthState` caches everything fetched from PouchDB:
+
+    expenses   : Dict String (Dict String Expense)
+                   -- outer key = TripId.toString, inner key = ExpenseId.toString
+    amendments : Dict String Amendment   -- keyed by amendment ID
+    voids      : Dict String Void        -- keyed by void ID
+    trips      : TripsState
+
+Single-trip lookup is a `Dict.get` on the outer expenses dict.
+`Data.Entry.resolve` folds amendments and applies voids to produce the
+user-facing `EffectiveEntry` list.
+
+# Flow
+
+  1. `init` reads cached creds from JS flags and either constructs a
+     `GuestModel` or jumps straight to `AuthModel` and starts CouchDB sync.
+  2. The first time sync settles (`SyncStateMsg Synced`), we send
+     `GetAllTrips`. We do **not** fetch on login — that would race with
+     the initial sync pull.
+  3. Each route transition runs `fetchesForRoute`, which fires only the
+     PouchDB queries needed for that route (idempotent — guarded by
+     `tripLoaded` / `loadingExpenses`).
+  4. PouchDB's live-changes feed pushes every local or synced write
+     through `pouchIn`, where `handleDbChange` merges it into the right
+     `Dict`.
+
+# Ports
+
+  - `pouchOut` / `pouchIn` — all PouchDB traffic (tagged JSON, see
+    `src/pouch.js`).
+  - `startSync` / `stopSync` — manage the live CouchDB sync handle.
+  - `saveStorage` / `clearStorage` / `clearAllStorage` — IndexedDB-backed
+    auth creds and API key.
+  - `requestGeolocation` / `gotGpsCoords` — browser geolocation API.
+  - `extractExifGps` / `gotExifResult` — EXIF GPS extraction from receipt
+    photos.
+
+For the full narrative and document ID conventions, see `docs/architecture.md`.
+-}
+
 import Browser
 import Browser.Navigation as Nav
 import Data.Amendment as Amendment
@@ -7,6 +64,7 @@ import Data.Category as Category exposing (Category(..))
 import Data.Entry as Entry
 import Data.Expense as Expense
 import Data.ExpenseId as ExpenseId
+import Data.PaymentMethod as PaymentMethod
 import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
 import Data.Trips as Trips
@@ -89,6 +147,16 @@ mapGuestConfig f gs =
     { gs | config = f gs.config }
 
 
+{-| Transition from `GuestState` to `AuthState` after successful auth.
+
+Everything starts empty — no expenses, no trips, no scan queue. The
+caller is responsible for kicking off `startSync`; the trips list will
+populate via `GetAllTrips` once the first sync settles.
+
+`trips = TripsLoading ... initialRouteTripId` carries the pending
+selection from the URL so that when trips arrive we can pick the right
+one without a second navigation.
+-}
 toAuthState : Creds -> Route -> GuestState -> AuthState
 toAuthState creds initialRoute gs =
     { activeScanItemId  = Nothing
@@ -269,20 +337,43 @@ syncStateDecoder =
 
 
 -- CACHE LOOKUPS
+--
+-- "Effective" means post-amendment, non-voided. See Data.Entry for the
+-- definition. These two helpers are the only places in the app that go
+-- from cached PouchDB documents → user-facing data.
 
 
+{-| Every effective expense for one trip, sorted by date.
+
+Pulls only that trip's expenses out of the outer `Dict` (single
+`Dict.get`), then hands the rest to `Entry.resolve`. Amendments and voids
+are passed in full — `resolve` builds its own indexes per call.
+-}
 resolveForTrip : TripId.TripId -> AuthState -> List Entry.EffectiveEntry
 resolveForTrip tripId as_ =
     Entry.resolve
-        (Dict.values as_.expenses)
+        (as_.expenses |> Dict.get (TripId.toString tripId) |> Maybe.withDefault Dict.empty |> Dict.values)
         (Dict.values as_.amendments)
         (Dict.values as_.voids)
         tripId
 
 
+{-| Find one expense by ID, with its amendments folded in.
+
+We don't know which trip the expense belongs to up front, so we scan
+`Dict.values as_.expenses` — that's one `Dict.get` per loaded trip
+(typically 1–3). Once we find the raw expense, we run a one-element
+`Entry.resolve` to apply any amendments and detect voids.
+
+Returns `Nothing` if the expense is unknown or has been voided. Used by
+the edit page to hydrate the form.
+-}
 findEffective : ExpenseId.ExpenseId -> AuthState -> Maybe Expense.Expense
 findEffective id as_ =
-    Dict.get (ExpenseId.toString id) as_.expenses
+    as_.expenses
+        |> Dict.values
+        |> List.filterMap (Dict.get (ExpenseId.toString id))
+        |> List.head
         |> Maybe.andThen
             (\raw ->
                 Entry.resolve
@@ -309,9 +400,11 @@ formPending form =
         FreshForm p  -> p
 
 
--- Build a Route from a Tab + tripId, for navigations that pick a tab
--- (post-submit, scan flow, etc.). Tabs without a tripId map to their
--- bare routes.
+{-| Build a `Route` from a `Tab` plus a tripId. Used for navigations
+where the destination tab is known but the route needs the active
+trip stitched in (post-submit redirect, scan-to-add handoff, etc.).
+Tabs that aren't trip-scoped (Settings, Trips) ignore the tripId.
+-}
 routeForTab : Tab -> TripId.TripId -> Route
 routeForTab tab tripId =
     case tab of
@@ -324,11 +417,27 @@ routeForTab tab tripId =
 
 
 -- ROUTE-DRIVEN STATE TRANSITIONS
+--
+-- These two functions are what makes the URL the source of truth.
+-- `fetchesForRoute` runs after every navigation and fires only the
+-- PouchDB queries we don't already have an answer for. `hydrateFormForRoute`
+-- keeps the edit form in lockstep with the route — entering an edit
+-- route pulls the effective expense into the form; leaving it resets
+-- the form.
 
 
--- Sync the form to the current route. On entering an edit route, hydrate
--- from the cached effective expense (if available — else wait for it).
--- On leaving an edit route, reset to a fresh defaults form.
+{-| Sync the edit form to the current route.
+
+On entering `RouteEditEntry`, hydrate the form from the cached effective
+expense. If the expense isn't cached yet, leave the form alone and wait
+— the data will arrive via PouchDB and `hydrateFormForRoute` will be
+called again from the inbound-data handlers.
+
+On leaving an edit route, reset to a fresh `defaultPendingEntry`.
+
+Idempotent: if the form is already an `EditForm` for this expense, do
+nothing — re-running this function on every state change is safe.
+-}
 hydrateFormForRoute : AuthState -> AuthState
 hydrateFormForRoute as_ =
     case as_.route of
@@ -359,11 +468,25 @@ hydrateFormForRoute as_ =
                     as_
 
 
--- Fire fetches needed to satisfy the route. Idempotent: if the trip is
--- already loaded (or loading), no bulk fetch; if the expense is already
--- cached (or being fetched), no targeted fetch. Also syncs the trips
--- zipper selection to the route's tripId when possible, and hydrates the
--- form if data is already available.
+{-| Fire the PouchDB queries needed to satisfy the current route.
+
+Idempotent — every check guards against a duplicate fetch:
+
+  - Trip-scoped routes (Ledger, Stats, Add, Scan, EditEntry): if the
+    trip's expenses aren't yet in `tripLoaded` or `loadingTrips`,
+    fire `GetTripExpenses` and mark the trip as loading.
+  - `RouteEditEntry`: also fire `GetExpense` if the specific expense
+    isn't already in any inner expenses dict or in `loadingExpenses`.
+
+Side effects beyond fetching:
+
+  - Selects the route's trip in the `Trips` zipper so pages can render
+    the active trip without re-parsing the URL.
+  - Requests browser geolocation when the route is the Add tab (so the
+    new-expense form can stamp lat/lon).
+  - Runs `hydrateFormForRoute` on the way out so the form is in sync
+    whether the data was already cached or not.
+-}
 fetchesForRoute : AuthState -> ( AuthState, Cmd Msg )
 fetchesForRoute as_ =
     let
@@ -405,7 +528,7 @@ fetchesForRoute as_ =
                             ExpenseId.toString eid
 
                         alreadyHave =
-                            Dict.member key as1.expenses
+                            (as1.expenses |> Dict.values |> List.any (Dict.member key))
                                 || Set.member key as1.loadingExpenses
                     in
                     if alreadyHave then
@@ -429,6 +552,17 @@ fetchesForRoute as_ =
     ( hydrateFormForRoute as2, Cmd.batch [ tripCmd, expenseCmd, geoCmd ] )
 
 
+{-| Insert a single document from PouchDB's live-changes feed into the
+right cache.
+
+Fires for every local write, every sync pull from CouchDB, and every
+result of a `Save*` command — we don't need separate "save succeeded"
+plumbing because the live feed is the confirmation. Always re-runs
+`hydrateFormForRoute` afterwards so an in-flight edit picks up freshly
+arrived data without a second navigation.
+
+Expenses are routed into the right inner `Dict` by `expense.tripId`.
+-}
 handleDbChange : DocChange -> AuthState -> ( Model, Cmd Msg )
 handleDbChange change as_ =
     let
@@ -438,7 +572,12 @@ handleDbChange change as_ =
                     { as_ | amendments = Dict.insert a.id a as_.amendments }
 
                 ExpenseChanged e ->
-                    { as_ | expenses = Dict.insert (ExpenseId.toString e.id) e as_.expenses }
+                    { as_
+                        | expenses =
+                            Dict.update (TripId.toString e.tripId)
+                                (Just << Dict.insert (ExpenseId.toString e.id) e << Maybe.withDefault Dict.empty)
+                                as_.expenses
+                    }
 
                 TripChanged t ->
                     { as_ | trips = upsertTripIntoState t as_.trips }
@@ -449,13 +588,23 @@ handleDbChange change as_ =
     ( AuthModel (hydrateFormForRoute as1), Cmd.none )
 
 
+{-| Remove a document from every cache it might live in.
+
+Called on PouchDB `_deleted` revisions (rare — we soft-delete via `Void`
+docs in normal flow). We don't know the doc's `type` here, so we attempt
+removal from every cache. For expenses that means scanning every inner
+dict, which is O(n trips) and fine in practice.
+
+If the deleted doc was the one currently being edited, the form is
+reset so the page doesn't end up showing stale data.
+-}
 handleDbDelete : String -> AuthState -> ( Model, Cmd Msg )
 handleDbDelete id as_ =
     let
         as1 =
             { as_
                 | amendments = Dict.remove id as_.amendments
-                , expenses   = Dict.remove id as_.expenses
+                , expenses   = Dict.map (\_ inner -> Dict.remove id inner) as_.expenses
                 , trips      = removeTripFromState (TripId.fromString id) as_.trips
                 , voids      = Dict.remove id as_.voids
             }
@@ -602,6 +751,7 @@ defaultPendingEntry today =
     , longNote      = ""
     , merchant      = ""
     , note          = ""
+    , paymentMethod = Nothing
     }
 
 
@@ -617,6 +767,7 @@ expenseToPending e =
     , longNote      = e.longNote
     , merchant      = e.merchant
     , note          = e.note
+    , paymentMethod = e.paymentMethod
     }
 
 
@@ -652,7 +803,7 @@ authPending f as_ =
 
 ocrSystemPrompt : String
 ocrSystemPrompt =
-    "You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\"}. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
+    "You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
 
 
 makeOcrCall : String -> String -> String -> String -> Cmd Msg
@@ -713,12 +864,24 @@ claudeTextDecoder =
 ocrDataDecoder : D.Decoder OcrData
 ocrDataDecoder =
     D.succeed OcrData
-        |> Pipeline.optional "amount"   (D.map Just D.float) Nothing
-        |> Pipeline.optional "category" (D.map Just (D.map Category.fromString D.string)) Nothing
-        |> Pipeline.optional "date"     (D.map Just D.string) Nothing
-        |> Pipeline.optional "longNote" (D.map Just D.string) Nothing
-        |> Pipeline.optional "merchant" (D.map Just D.string) Nothing
-        |> Pipeline.optional "note"     (D.map Just D.string) Nothing
+        |> Pipeline.optional "amount"        (D.map Just D.float) Nothing
+        |> Pipeline.optional "category"      (D.map Just (D.map Category.fromString D.string)) Nothing
+        |> Pipeline.optional "date"          (D.map Just D.string) Nothing
+        |> Pipeline.optional "longNote"      (D.map Just D.string) Nothing
+        |> Pipeline.optional "merchant"      (D.map Just D.string) Nothing
+        |> Pipeline.optional "note"          (D.map Just D.string) Nothing
+        |> Pipeline.optional "paymentMethod"
+            (D.nullable
+                (D.string
+                    |> D.andThen
+                        (\s ->
+                            case PaymentMethod.fromString s of
+                                Just pm -> D.succeed pm
+                                Nothing -> D.fail ("Unknown paymentMethod: " ++ s)
+                        )
+                )
+            )
+            Nothing
 
 
 stripCodeFence : String -> String
@@ -997,7 +1160,7 @@ updateAuth msg as_ =
                         as1 =
                             { as_
                                 | amendments   = Dict.union bundle.amendments as_.amendments
-                                , expenses     = Dict.union bundle.expenses as_.expenses
+                                , expenses     = Dict.insert key bundle.expenses as_.expenses
                                 , loadingTrips = Set.remove key as_.loadingTrips
                                 , tripLoaded   = Set.insert key as_.tripLoaded
                                 , voids        = Dict.union bundle.voids as_.voids
@@ -1013,7 +1176,9 @@ updateAuth msg as_ =
                                 , expenses        =
                                     case bundle.expense of
                                         Just e ->
-                                            Dict.insert (ExpenseId.toString e.id) e as_.expenses
+                                            Dict.update (TripId.toString e.tripId)
+                                                (Just << Dict.insert (ExpenseId.toString e.id) e << Maybe.withDefault Dict.empty)
+                                                as_.expenses
 
                                         Nothing ->
                                             as_.expenses
@@ -1128,12 +1293,13 @@ updateAuth msg as_ =
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
 
-        AmountChanged s   -> authPending (\p -> { p | amount = s }) as_
-        CategorySelected c -> authPending (\p -> { p | category = c }) as_
-        NoteChanged s     -> authPending (\p -> { p | note = s }) as_
-        LongNoteChanged s -> authPending (\p -> { p | longNote = s }) as_
-        MerchantChanged s -> authPending (\p -> { p | merchant = s }) as_
-        DateChanged s     -> authPending (\p -> { p | date = s }) as_
+        AmountChanged s        -> authPending (\p -> { p | amount = s }) as_
+        CategorySelected c     -> authPending (\p -> { p | category = c }) as_
+        DateChanged s          -> authPending (\p -> { p | date = s }) as_
+        LongNoteChanged s      -> authPending (\p -> { p | longNote = s }) as_
+        MerchantChanged s      -> authPending (\p -> { p | merchant = s }) as_
+        NoteChanged s          -> authPending (\p -> { p | note = s }) as_
+        PaymentMethodChanged pm -> authPending (\p -> { p | paymentMethod = pm }) as_
 
         SubmitEntry ->
             case String.toFloat (formPending as_.form).amount of
@@ -1174,15 +1340,16 @@ updateAuth msg as_ =
                                     "amend::" ++ ExpenseId.toString original.id ++ "::" ++ String.left 8 timestamp
 
                                 amend =
-                                    { id        = amendId
-                                    , targetId  = original.id
-                                    , amount    = if p.amount /= String.fromFloat original.amount then String.toFloat p.amount else Nothing
-                                    , category  = if p.category /= original.category then Just p.category else Nothing
-                                    , createdAt = posixToIso posix
-                                    , date      = if p.date /= original.date then Just p.date else Nothing
-                                    , longNote  = if p.longNote /= original.longNote then Just p.longNote else Nothing
-                                    , merchant  = if p.merchant /= original.merchant then Just p.merchant else Nothing
-                                    , note      = if p.note /= original.note then Just p.note else Nothing
+                                    { id            = amendId
+                                    , targetId      = original.id
+                                    , amount        = if p.amount /= String.fromFloat original.amount then String.toFloat p.amount else Nothing
+                                    , category      = if p.category /= original.category then Just p.category else Nothing
+                                    , createdAt     = posixToIso posix
+                                    , date          = if p.date /= original.date then Just p.date else Nothing
+                                    , longNote      = if p.longNote /= original.longNote then Just p.longNote else Nothing
+                                    , merchant      = if p.merchant /= original.merchant then Just p.merchant else Nothing
+                                    , note          = if p.note /= original.note then Just p.note else Nothing
+                                    , paymentMethod = if p.paymentMethod /= original.paymentMethod then p.paymentMethod else Nothing
                                     }
 
                                 nextRoute =
@@ -1216,17 +1383,18 @@ updateAuth msg as_ =
                                     "expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp
 
                                 expense =
-                                    { id        = ExpenseId.fromString expenseId
-                                    , tripId    = tripId
-                                    , amount    = String.toFloat p.amount |> Maybe.withDefault 0
-                                    , category  = p.category
-                                    , createdAt = posixToIso posix
-                                    , date      = p.date
-                                    , lat       = eLat
-                                    , lon       = eLon
-                                    , longNote  = p.longNote
-                                    , merchant  = p.merchant
-                                    , note      = p.note
+                                    { id            = ExpenseId.fromString expenseId
+                                    , tripId        = tripId
+                                    , amount        = String.toFloat p.amount |> Maybe.withDefault 0
+                                    , category      = p.category
+                                    , createdAt     = posixToIso posix
+                                    , date          = p.date
+                                    , lat           = eLat
+                                    , lon           = eLon
+                                    , longNote      = p.longNote
+                                    , merchant      = p.merchant
+                                    , note          = p.note
+                                    , paymentMethod = p.paymentMethod
                                     }
 
                                 nextRoute =
@@ -1354,7 +1522,7 @@ updateAuth msg as_ =
                     let
                         ocr =
                             Maybe.withDefault
-                                { amount = Nothing, category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing }
+                                { amount = Nothing, category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
                                 item.ocrData
 
                         newPending =
@@ -1365,6 +1533,7 @@ updateAuth msg as_ =
                             , longNote      = Maybe.withDefault "" ocr.longNote
                             , merchant      = Maybe.withDefault "" ocr.merchant
                             , note          = Maybe.withDefault "" ocr.note
+                            , paymentMethod = ocr.paymentMethod
                             }
 
                         newRoute =

@@ -12,6 +12,20 @@ module Data.Trips exposing
     , upsertTrip
     )
 
+{-| A non-empty zipper-like collection of trips with one "selected" trip
+at the head.
+
+Why not `Dict TripId Trip` plus a separate `Maybe TripId` for selection?
+Because every page that renders trip data needs the active trip — keeping
+the selection as the head of the structure means `selectedTrip` returns a
+`Trip` directly (no `Maybe` to unwrap) and the type guarantees we never
+have "trips loaded but nothing selected" or "selection points at a
+missing trip."
+
+Sorting in `fromDict` is by `TripId.toString` descending, which works out
+to newest-first because the ID starts with an ISO-8601 timestamp.
+-}
+
 import Data.Trip exposing (Trip)
 import Data.TripId as TripId exposing (TripId)
 import Dict exposing (Dict)
