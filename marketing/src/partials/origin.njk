@@ -1,12 +1,12 @@
-<section class="origin" id="origin">
-  <div class="origin-inner">
-    <div class="origin-eyebrow">{{ origin.eyebrow }}</div>
-    <h2 class="origin-h2">{{ origin.headline }}</h2>
-    <div class="origin-body">
+<section class="py-[100px] px-6 bg-parchment" id="origin">
+  <div class="max-w-[640px] mx-auto">
+    <div class="font-mono text-[10px] tracking-[0.25em] uppercase text-rust mb-4">{{ origin.eyebrow }}</div>
+    <h2 class="font-display font-black text-[clamp(32px,5vw,48px)] tracking-[-0.02em] leading-[1.1] text-forest mb-9">{{ origin.headline }}</h2>
+    <div class="font-body text-[20px] leading-[1.65] text-forest">
       {% for p in origin.paragraphs %}
-      <p class="origin-p">{{ p }}</p>
+      <p class="mb-5 last:mb-0">{{ p }}</p>
       {% endfor %}
     </div>
-    <p class="origin-attribution">{{ origin.attribution }}</p>
+    <p class="mt-8 font-display italic font-medium text-[18px] text-muted">{{ origin.attribution }}</p>
   </div>
 </section>
