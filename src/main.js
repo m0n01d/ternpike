@@ -75,7 +75,7 @@ import './global.css'
   const flags = {
     authCreds:    authCreds,
     anthropicKey: anthropicKey  || '',
-    backendUrl:   '',
+    backendUrl:   'https://api.ternpike.com',
     basePath:     import.meta.env.BASE_URL,
     today:        new Date().toISOString().slice(0, 10),
     version:      __BUILD_SHA__,
