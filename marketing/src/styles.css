@@ -1438,3 +1438,58 @@
     .email-capture-card { padding: 40px 24px; }
   }
 }
+
+/* ─── LEDGER ROW (sanctioned @apply escape hatch, issue #55) ───
+   The ledger row repeats 5–8 times in the marketing partial and mirrors
+   src/Pages/Ledger.elm's viewEntryRow. Inlining 8+ utilities per row across
+   a loop hurts legibility, so this is the one component class the marketing
+   partial is allowed to lean on. Keep these names parallel to what the app
+   uses (or would use after the shared-component-CSS follow-up). */
+@layer components {
+  .ledger-row {
+    @apply flex items-start justify-between gap-4 py-3.5 border-b border-dashed border-tan/70 last:border-b-0;
+  }
+
+  .ledger-row-main {
+    @apply flex-1 min-w-0;
+  }
+
+  .ledger-merchant {
+    @apply font-body font-semibold text-[17px] leading-tight text-ink truncate;
+  }
+
+  .ledger-meta {
+    @apply mt-2 flex items-center gap-2.5;
+  }
+
+  .ledger-chip {
+    @apply inline-block px-2.5 py-0.5 rounded-full bg-cream-deep text-moss font-mono text-[10px] tracking-[0.15em] uppercase leading-[1.4];
+  }
+
+  .ledger-pin {
+    @apply inline-flex items-center text-rust leading-none;
+  }
+
+  .ledger-amount {
+    @apply font-display font-bold text-[18px] leading-tight text-forest tabular-nums shrink-0;
+  }
+
+  .ledger-day-rail {
+    @apply flex-1 h-0 border-t border-dashed border-tan/70;
+  }
+
+  .ledger-day-num {
+    @apply font-mono text-[11px] tracking-[0.22em] uppercase text-rust shrink-0;
+  }
+
+  .ledger-day-date {
+    @apply font-mono text-[11px] tracking-[0.22em] uppercase text-moss shrink-0;
+  }
+
+  @media (max-width: 560px) {
+    .ledger-merchant { font-size: 15px; }
+    .ledger-amount   { font-size: 16px; }
+    .ledger-day-num,
+    .ledger-day-date { font-size: 10px; letter-spacing: 0.18em; }
+  }
+}

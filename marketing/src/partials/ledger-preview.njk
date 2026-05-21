@@ -1,31 +1,31 @@
 {# Mirrors the real Ledger page. If this falls out of sync with the app, update in lockstep with src/Pages/Ledger.elm. #}
-<section class="ledger-preview-section" id="preview">
-  <div class="ledger-preview-eyebrow">{{ ledgerPreview.sectionLabel }}</div>
-  <h2 class="ledger-preview-headline">{{ ledgerPreview.headline }}</h2>
+<section id="preview" class="max-w-[880px] mx-auto px-6 py-[100px] max-[560px]:px-4 max-[560px]:py-[72px]">
+  <div class="font-mono text-[10px] tracking-[0.25em] uppercase text-rust mb-3">{{ ledgerPreview.sectionLabel }}</div>
+  <h2 class="font-display font-black text-[clamp(36px,6vw,60px)] tracking-[-0.02em] leading-[1.05] text-forest mb-12 whitespace-pre-line">{{ ledgerPreview.headline }}</h2>
 
-  <div class="ledger-preview-panel topo">
-    <header class="ledger-preview-header">
-      <div class="ledger-preview-title">Ledger</div>
-      <div class="ledger-preview-total-label">{{ ledgerPreview.totalLabel }}</div>
-      <div class="ledger-preview-total-amount">{{ ledgerPreview.totalAmount }}</div>
-      <div class="ledger-preview-total-meta">{{ ledgerPreview.totalMeta }}</div>
+  <div class="topo relative bg-parchment border border-tan rounded-panel overflow-hidden shadow-panel">
+    <header class="relative px-7 pt-8 pb-6 border-b border-dashed border-tan/70 max-[560px]:px-5 max-[560px]:pt-6 max-[560px]:pb-5">
+      <div class="font-display font-black text-[28px] tracking-[-0.02em] leading-none text-forest uppercase mb-[18px]">Ledger</div>
+      <div class="font-mono text-[10px] tracking-[0.22em] uppercase text-moss mb-1.5">{{ ledgerPreview.totalLabel }}</div>
+      <div class="font-display font-black text-[clamp(40px,7vw,56px)] tracking-[-0.02em] leading-none text-forest tabular-nums">{{ ledgerPreview.totalAmount }}</div>
+      <div class="mt-2.5 font-mono text-[11px] tracking-[0.18em] uppercase text-muted">{{ ledgerPreview.totalMeta }}</div>
     </header>
 
-    <div class="ledger-preview-list">
+    <div class="px-7 pt-2 pb-6 max-[560px]:px-5 max-[560px]:pt-1 max-[560px]:pb-5">
       {% for day in ledgerPreview.ledgerSample %}
-      <div class="ledger-preview-day">
-        <span class="ledger-preview-day-num">Day {{ day.day }}</span>
-        <span class="ledger-preview-day-rule"></span>
-        <span class="ledger-preview-day-date">{{ day.date }}</span>
+      <div class="flex items-center gap-3 pt-[18px] pb-2.5">
+        <span class="ledger-day-num">Day {{ day.day }}</span>
+        <span class="ledger-day-rail"></span>
+        <span class="ledger-day-date">{{ day.date }}</span>
       </div>
       {% for entry in day.entries %}
-      <div class="ledger-preview-row">
-        <div class="ledger-preview-row-main">
-          <div class="ledger-preview-merchant">{{ entry.merchant }}</div>
-          <div class="ledger-preview-meta">
-            <span class="ledger-preview-chip">{{ entry.category }}</span>
+      <div class="ledger-row">
+        <div class="ledger-row-main">
+          <div class="ledger-merchant">{{ entry.merchant }}</div>
+          <div class="ledger-meta">
+            <span class="ledger-chip">{{ entry.category }}</span>
             {% if entry.hasGps %}
-            <span class="ledger-preview-pin" aria-label="Has GPS coordinates" title="Has GPS coordinates">
+            <span class="ledger-pin" aria-label="Has GPS coordinates" title="Has GPS coordinates">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 22s-7-7.58-7-13a7 7 0 1 1 14 0c0 5.42-7 13-7 13z" />
                 <circle cx="12" cy="9" r="2.5" />
@@ -34,12 +34,12 @@
             {% endif %}
           </div>
         </div>
-        <div class="ledger-preview-amount">{{ entry.amount }}</div>
+        <div class="ledger-amount">{{ entry.amount }}</div>
       </div>
       {% endfor %}
       {% endfor %}
     </div>
   </div>
 
-  <p class="ledger-preview-caption">{{ ledgerPreview.caption }}</p>
+  <p class="mt-8 font-body italic text-[18px] leading-[1.55] text-muted max-w-[640px]">{{ ledgerPreview.caption }}</p>
 </section>
