@@ -297,7 +297,7 @@ viewBody model entries =
                 [ UI.Rule.dashedRule
                 , UI.Rule.kicker "TOP CATEGORIES"
                 , UI.Card.subCard
-                    [ viewCategoryChart entries ]
+                    [ viewCategoryList entries ]
                 ]
         , if numDays > 1 then
             Html.div []
@@ -377,15 +377,14 @@ statCard label_ value =
         ]
 
 
-viewCategoryChart : List Entry.EffectiveEntry -> Html Msg
-viewCategoryChart entries =
+viewCategoryList : List Entry.EffectiveEntry -> Html Msg
+viewCategoryList entries =
     let
         rows =
             Category.all
                 |> List.map
                     (\cat ->
-                        { color = Category.color cat
-                        , label = Category.label cat
+                        { cat = cat
                         , total =
                             entries
                                 |> List.filter (\e -> e.category == cat)
@@ -393,29 +392,108 @@ viewCategoryChart entries =
                                 |> List.sum
                         }
                     )
-    in
-    C.chart
-        [ CA.height 140
-        , CA.margin { top = 10, bottom = 28, left = 0, right = 0 }
-        ]
-        [ C.bars []
-            [ C.bar .total []
-                |> C.variation (\_ d -> [ CA.color d.color ])
-            ]
+                |> List.filter (\r -> r.total > 0)
+                |> List.sortBy (\r -> negate r.total)
+
+        maxTotal =
             rows
-        , C.binLabels .label [ CA.moveDown 16, CA.color UI.Theme.colorMuted, CA.fontSize 9 ]
+                |> List.map .total
+                |> List.maximum
+                |> Maybe.withDefault 1
+    in
+    if List.isEmpty rows then
+        Html.text ""
+
+    else
+        Html.div []
+            (List.indexedMap
+                (\i r ->
+                    categoryRow
+                        { isLast = i == List.length rows - 1
+                        , maxTotal = maxTotal
+                        , row = r
+                        }
+                )
+                rows
+            )
+
+
+categoryRow :
+    { isLast : Bool
+    , maxTotal : Float
+    , row : { cat : Category.Category, total : Float }
+    }
+    -> Html Msg
+categoryRow { isLast, maxTotal, row } =
+    let
+        pct =
+            if maxTotal > 0 then
+                100 * row.total / maxTotal
+
+            else
+                0
+    in
+    Html.div
+        [ Html.Attributes.class
+            ("flex items-center gap-3 py-2 "
+                ++ (if isLast then
+                        ""
+
+                    else
+                        "border-b border-tan/60"
+                   )
+            )
+        ]
+        [ Html.span [ Html.Attributes.class "text-lg leading-none w-5 shrink-0" ]
+            [ Html.text (Category.icon row.cat) ]
+        , Html.span [ Html.Attributes.class "text-sm text-ink w-20 shrink-0" ]
+            [ Html.text (Category.label row.cat) ]
+        , Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
+            [ categoryBar (Category.color row.cat) pct ]
+        , Html.span [ Html.Attributes.class "font-mono text-sm text-rust w-20 text-right shrink-0" ]
+            [ Html.text (formatAmount row.total) ]
+        ]
+
+
+categoryBar : String -> Float -> Svg.Svg msg
+categoryBar fill pct =
+    Svg.svg
+        [ Svg.Attributes.viewBox "0 0 100 8"
+        , Svg.Attributes.preserveAspectRatio "none"
+        , Svg.Attributes.class "block w-full h-2"
+        ]
+        [ Svg.rect
+            [ Svg.Attributes.x "0"
+            , Svg.Attributes.y "0"
+            , Svg.Attributes.width "100"
+            , Svg.Attributes.height "8"
+            , Svg.Attributes.rx "1"
+            , Svg.Attributes.fill "#e8e0c8"
+            ]
+            []
+        , Svg.rect
+            [ Svg.Attributes.x "0"
+            , Svg.Attributes.y "0"
+            , Svg.Attributes.width (String.fromFloat pct)
+            , Svg.Attributes.height "8"
+            , Svg.Attributes.rx "1"
+            , Svg.Attributes.fill fill
+            ]
+            []
         ]
 
 
 viewDailyChart : List Entry.EffectiveEntry -> Html Msg
 viewDailyChart entries =
     let
+        sortedDates =
+            Entry.uniqueDates entries |> List.reverse
+
         days =
-            Entry.uniqueDates entries
-                |> List.reverse
+            sortedDates
                 |> List.map
                     (\date ->
-                        { date = String.slice 5 10 date
+                        { date = date
                         , total =
                             entries
                                 |> List.filter (\e -> e.date == date)
@@ -423,15 +501,44 @@ viewDailyChart entries =
                                 |> List.sum
                         }
                     )
+
+        firstDate =
+            List.head sortedDates |> Maybe.withDefault ""
+
+        lastDate =
+            sortedDates |> List.reverse |> List.head |> Maybe.withDefault ""
+
+        rangeLabel =
+            if firstDate == "" then
+                ""
+
+            else
+                formatDateShort firstDate
+                    ++ " – "
+                    ++ formatDateShort lastDate
+                    ++ " · "
+                    ++ String.fromInt (List.length sortedDates)
+                    ++ " days"
     in
-    C.chart
-        [ CA.height 140
-        , CA.margin { top = 10, bottom = 28, left = 0, right = 0 }
-        ]
-        [ C.bars []
-            [ C.bar .total [ CA.color UI.Theme.colorRust ] ]
-            days
-        , C.binLabels .date [ CA.moveDown 16, CA.color UI.Theme.colorMuted, CA.fontSize 8 ]
+    Html.div []
+        [ Html.div [ Html.Attributes.class "text-[11px] font-mono text-muted mb-2" ]
+            [ Html.text rangeLabel ]
+        , C.chart
+            [ CA.height 160
+            , CA.margin { top = 8, bottom = 8, left = 44, right = 8 }
+            ]
+            [ C.grid [ CA.color UI.Theme.colorTan, CA.dashed [ 2, 3 ] ]
+            , C.yLabels
+                [ CA.amount 4
+                , CA.format (\v -> formatAmount v)
+                , CA.fontSize 10
+                , CA.color UI.Theme.colorMuted
+                , CA.withGrid
+                ]
+            , C.bars []
+                [ C.bar .total [ CA.color UI.Theme.colorRust ] ]
+                days
+            ]
         ]
 
 
@@ -453,12 +560,117 @@ viewCumulativeChart entries =
                     }
                 )
                 sorted
+
+        firstDate =
+            List.head sorted |> Maybe.withDefault ""
+
+        lastDate =
+            sorted |> List.reverse |> List.head |> Maybe.withDefault ""
+
+        finalTotal =
+            points
+                |> List.reverse
+                |> List.head
+                |> Maybe.map .y
+                |> Maybe.withDefault 0
     in
     C.chart
-        [ CA.height 160
-        , CA.margin { top = 10, bottom = 10, left = 0, right = 0 }
+        [ CA.height 180
+        , CA.margin { top = 16, bottom = 24, left = 44, right = 12 }
         ]
-        [ C.series .x
-            [ C.interpolated .y [ CA.color UI.Theme.colorRust, CA.width 2 ] [] ]
+        [ C.yLabels
+            [ CA.amount 4
+            , CA.format (\v -> formatAmount v)
+            , CA.fontSize 10
+            , CA.color UI.Theme.colorMuted
+            , CA.withGrid
+            ]
+        , C.grid [ CA.color UI.Theme.colorTan, CA.dashed [ 2, 3 ] ]
+        , C.series .x
+            [ C.interpolated .y
+                [ CA.color UI.Theme.colorRust
+                , CA.width 2
+                , CA.opacity 0.18
+                ]
+                []
+            ]
             points
+        , C.labelAt .min
+            .min
+            [ CA.moveDown 16
+            , CA.fontSize 10
+            , CA.color UI.Theme.colorMuted
+            , CA.alignLeft
+            ]
+            [ Svg.text (formatDateShort firstDate) ]
+        , C.labelAt .max
+            .min
+            [ CA.moveDown 16
+            , CA.fontSize 10
+            , CA.color UI.Theme.colorMuted
+            , CA.alignRight
+            ]
+            [ Svg.text (formatDateShort lastDate) ]
+        , C.labelAt .max
+            (\_ -> finalTotal)
+            [ CA.moveUp 8
+            , CA.moveLeft 2
+            , CA.fontSize 11
+            , CA.color UI.Theme.colorRust
+            , CA.alignRight
+            ]
+            [ Svg.text (formatAmount finalTotal) ]
         ]
+
+
+formatDateShort : String -> String
+formatDateShort iso =
+    case String.split "-" iso of
+        [ _, m, d ] ->
+            monthAbbr m ++ " " ++ (String.toInt d |> Maybe.withDefault 0 |> String.fromInt)
+
+        _ ->
+            iso
+
+
+monthAbbr : String -> String
+monthAbbr m =
+    case m of
+        "01" ->
+            "Jan"
+
+        "02" ->
+            "Feb"
+
+        "03" ->
+            "Mar"
+
+        "04" ->
+            "Apr"
+
+        "05" ->
+            "May"
+
+        "06" ->
+            "Jun"
+
+        "07" ->
+            "Jul"
+
+        "08" ->
+            "Aug"
+
+        "09" ->
+            "Sep"
+
+        "10" ->
+            "Oct"
+
+        "11" ->
+            "Nov"
+
+        "12" ->
+            "Dec"
+
+        _ ->
+            m
