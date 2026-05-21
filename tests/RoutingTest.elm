@@ -9,13 +9,13 @@ import Types exposing (Route(..))
 import Url
 
 
-testUrl : String -> Url.Url
-testUrl path =
+testUrl : String -> Maybe String -> Url.Url
+testUrl path query =
     { protocol = Url.Https
     , host = "example.com"
     , port_ = Nothing
     , path = path
-    , query = Nothing
+    , query = query
     , fragment = Nothing
     }
 
@@ -29,18 +29,19 @@ suite =
                     editEntryPath "/"
                         (TripId.fromString "trip::abc")
                         (ExpenseId.fromString "expense::def")
-                        |> Expect.equal "/trip/trip::abc/ledger/expense::def/edit"
+                        |> Expect.equal "/trip/ledger/edit?tripId=trip::abc&expenseId=expense::def"
             , test "subdirectory basePath" <|
                 \_ ->
                     editEntryPath "/ternpike/"
                         (TripId.fromString "trip::abc")
                         (ExpenseId.fromString "expense::def")
-                        |> Expect.equal "/ternpike/trip/trip::abc/ledger/expense::def/edit"
+                        |> Expect.equal "/ternpike/trip/ledger/edit?tripId=trip::abc&expenseId=expense::def"
             ]
         , describe "routeFromUrl"
             [ test "parses edit route at root" <|
                 \_ ->
-                    routeFromUrl "/" (testUrl "/trip/trip::abc/ledger/expense::def/edit")
+                    routeFromUrl "/"
+                        (testUrl "/trip/ledger/edit" (Just "tripId=trip::abc&expenseId=expense::def"))
                         |> Expect.equal
                             (RouteEditEntry
                                 (TripId.fromString "trip::abc")
@@ -48,7 +49,8 @@ suite =
                             )
             , test "parses edit route with basePath" <|
                 \_ ->
-                    routeFromUrl "/ternpike/" (testUrl "/ternpike/trip/trip::abc/ledger/expense::def/edit")
+                    routeFromUrl "/ternpike/"
+                        (testUrl "/ternpike/trip/ledger/edit" (Just "tripId=trip::abc&expenseId=expense::def"))
                         |> Expect.equal
                             (RouteEditEntry
                                 (TripId.fromString "trip::abc")
@@ -62,8 +64,44 @@ suite =
 
                         expId =
                             ExpenseId.fromString "expense::2024-01-15T10:30:00.000Z::17000001"
+
+                        built =
+                            editEntryPath "/" tripId expId
+
+                        ( path, query ) =
+                            case String.split "?" built of
+                                p :: q :: _ ->
+                                    ( p, Just q )
+
+                                _ ->
+                                    ( built, Nothing )
                     in
-                    routeFromUrl "/" (testUrl (editEntryPath "/" tripId expId))
+                    routeFromUrl "/" (testUrl path query)
                         |> Expect.equal (RouteEditEntry tripId expId)
+            , test "percent-encoded query values decode back to ::" <|
+                \_ ->
+                    routeFromUrl "/"
+                        (testUrl "/trip/ledger/edit"
+                            (Just "tripId=trip%3A%3Aabc&expenseId=expense%3A%3Adef")
+                        )
+                        |> Expect.equal
+                            (RouteEditEntry
+                                (TripId.fromString "trip::abc")
+                                (ExpenseId.fromString "expense::def")
+                            )
+            , test "parses ledger route" <|
+                \_ ->
+                    routeFromUrl "/"
+                        (testUrl "/trip/ledger" (Just "tripId=trip::abc"))
+                        |> Expect.equal (RouteLedger (TripId.fromString "trip::abc"))
+            , test "ledger without tripId falls back to RouteTrips" <|
+                \_ ->
+                    routeFromUrl "/" (testUrl "/trip/ledger" Nothing)
+                        |> Expect.equal RouteTrips
+            , test "edit without expenseId falls back to RouteTrips" <|
+                \_ ->
+                    routeFromUrl "/"
+                        (testUrl "/trip/ledger/edit" (Just "tripId=trip::abc"))
+                        |> Expect.equal RouteTrips
             ]
         ]
