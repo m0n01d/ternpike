@@ -1,8 +1,8 @@
-<footer>
-  <div class="footer-brand">
-    <div class="footer-logo">
-      <span class="footer-tern">
-        <svg width="28" height="18" viewBox="0 0 120 80" fill="none" class="footer-tern-svg">
+<footer class="mx-auto grid max-w-[1000px] grid-cols-1 items-center gap-y-6 gap-x-10 border-t border-dashed border-tan/70 px-8 pt-10 pb-12 sm:grid-cols-[1fr_auto]">
+  <div>
+    <div class="font-display text-2xl font-black tracking-[-0.02em] text-forest">
+      <span class="inline-block animate-soar">
+        <svg width="28" height="18" viewBox="0 0 120 80" fill="none" class="mr-1.5 inline align-middle">
           <path d="M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z" fill="var(--color-forest)"/>
           <path d="M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z" fill="var(--color-forest-mid)"/>
           <ellipse cx="60" cy="43" rx="20" ry="7" fill="var(--color-forest)"/>
@@ -10,16 +10,16 @@
           <ellipse cx="76" cy="40" rx="9" ry="7" fill="var(--color-ink)"/>
           <path d="M84 40 L96 38.5 L84 42Z" fill="var(--color-rust)"/>
         </svg>
-      </span>{{ brand.namePrefix }}<span>{{ brand.nameSuffix }}</span>
+      </span>{{ brand.namePrefix }}<span class="text-rust">{{ brand.nameSuffix }}</span>
     </div>
-    <div class="footer-tagline">{{ footer.tagline }}</div>
+    <div class="mt-0.5 font-body text-sm italic text-muted">{{ footer.tagline }}</div>
   </div>
 
-  <div class="footer-links">
+  <div class="flex flex-wrap gap-6">
     {% for link in footer.links %}
-    <a href="{{ link.href }}" class="footer-link">{{ link.label }}</a>
+    <a href="{{ link.href }}" class="font-mono text-[9px] uppercase tracking-[0.15em] text-muted no-underline transition-colors duration-200 hover:text-forest">{{ link.label }}</a>
     {% endfor %}
   </div>
 
-  <div class="footer-legal">{{ footer.legal }}</div>
+  <div class="border-t border-dashed border-tan/70 pt-5 font-mono text-[9px] uppercase tracking-[0.15em] text-muted sm:col-span-2">{{ footer.legal }}</div>
 </footer>
