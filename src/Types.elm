@@ -148,6 +148,7 @@ type alias AuthState =
     , loadingTrips : Set String
     , route : Route
     , scanQueue : Dict String ScanItem
+    , showDayIntensity : Bool
     , showLedgerMap : Bool
     , showMapPicker : Bool
     , statsGranularity : Maybe Granularity
@@ -196,8 +197,8 @@ Guest auth: `EmailInputChanged`, `SubmitEmail`, `CodeInputChanged`,
 Session: `SignOutClicked`, `ResetSettingsClicked`, `ApiKeyChanged`.
 
 PouchDB / navigation / chrome: `GotPouchMsg`, `LinkClicked`,
-`UrlChanged`, `RefreshClicked`, `ToggleLedgerMap`, `ShowToast`,
-`ToastExpired`, `DismissError`.
+`UrlChanged`, `RefreshClicked`, `ToggleDayIntensity`, `ToggleLedgerMap`,
+`ShowToast`, `ToastExpired`, `DismissError`.
 
 Stats hover: `HoverDailyBars`, `HoverCumulativePoints` — UI-only,
 records the chart datapoint(s) the pointer is currently over so the
@@ -257,6 +258,7 @@ type Msg
     | SubmitEmail
     | SubmitEntry
     | ToastExpired
+    | ToggleDayIntensity
     | ToggleGuestSettings
     | ToggleLedgerMap
     | TripFieldChanged TripField String

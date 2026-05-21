@@ -102,9 +102,12 @@ type alias AuthState =
 
 Transient view state (`statsHover : Data.StatsHover.Hover`,
 `statsGranularity : Maybe Data.StatsGranularity.Granularity`,
-`scanQueue`, `confirmDeleteTrip`, etc.) also lives on `AuthState`,
-but it never persists — these fields are reset on the relevant
-pointer-leave / submit / sign-out event. The hover state for the
+`showDayIntensity : Bool`, `scanQueue`, `confirmDeleteTrip`, etc.)
+also lives on `AuthState`, but it never persists — these fields are
+reset on the relevant pointer-leave / submit / sign-out event.
+`showDayIntensity` defaults to `True` and toggles the Ledger's
+band-tinted day rail; it's an in-memory UI pref until the
+`user:profile` PouchDB doc lands and absorbs it. The hover state for the
 Stats charts records the elm-charts `CI.One` handle(s) the user is
 currently touching so the page can render anchored `C.tooltip`
 overlays; pointer leave clears them back to `StatsHover.empty`.
