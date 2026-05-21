@@ -10,7 +10,7 @@ Local-first trip expense tracker — scan receipts, log expenses, see totals per
 - PouchDB for local storage (CouchDB sync planned)
 - Leaflet for waypoint maps; `exifr` for photo EXIF
 - Anthropic API called directly from the browser for receipt OCR
-- GitHub Pages deploy via `.github/workflows/deploy.yml`
+- Cloudflare Pages deploys `dist/` (app) and `marketing/` (landing); auth API runs as a Cloudflare Worker in `server/`
 
 See `CLAUDE.md` for the architectural notes (model split, append-only doc scheme).
 
@@ -72,4 +72,4 @@ Append-only PouchDB documents: `trip`, `expense`, `amend`, `void`. Edits and del
 
 ## Deploy
 
-Push to `main`. GitHub Actions runs `npm run build` and publishes `dist/` to GitHub Pages, with `404.html` as the SPA fallback. The Vite `base` switches to `/ternpike/` in CI so subdirectory routing works.
+Push to `main`. Cloudflare Pages picks up the commit via its Git integration and runs `npm run build`, publishing `dist/` to `app.ternpike.com`. SPA routing falls back through `public/_redirects` (`/* /index.html 200`). The marketing page (`marketing/`) deploys as a separate Pages project at `ternpike.com`. The auth Worker in `server/` deploys via `wrangler deploy` to `api.ternpike.com`.

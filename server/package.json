@@ -3,11 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch --env-file=../.env.local index.js",
-    "start": "node --env-file=../.env.local index.js"
+    "dev": "wrangler dev --port 4000",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "express": "^5.0.0",
-    "nodemailer": "^8.0.7"
+    "hono": "^4.6.0",
+    "resend": "^4.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
   }
 }

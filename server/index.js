@@ -1,48 +1,71 @@
-import express from 'express'
-import nodemailer from 'nodemailer'
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto'
+import { Hono } from 'hono'
+import { Resend } from 'resend'
 
-const {
-  COUCH_URL = 'https://couch.ternpike.com',
-  COUCH_ADMIN_USER,
-  COUCH_ADMIN_PASS,
-  SERVER_SECRET,
-  GMAIL_USER,
-  GMAIL_APP_PASSWORD,
-  PORT = '4000',
-} = process.env
-
-if (!COUCH_ADMIN_USER || !COUCH_ADMIN_PASS || !SERVER_SECRET || !GMAIL_USER || !GMAIL_APP_PASSWORD) {
-  console.error('Missing required env vars. See .env.example.')
-  process.exit(1)
-}
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
-})
-
-const codes = new Map()
-const CODE_TTL_MS = 10 * 60_000
+const CODE_TTL_SECONDS = 600
 const CODE_LENGTH = 6
 
-const adminAuth =
-  'Basic ' + Buffer.from(`${COUCH_ADMIN_USER}:${COUCH_ADMIN_PASS}`).toString('base64')
+const encoder = new TextEncoder()
 
-const hashCode = (code) =>
-  createHmac('sha256', SERVER_SECRET).update(code).digest()
+const importHmacKey = (secret) =>
+  crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
 
-const derivePassword = (email) =>
-  createHmac('sha256', SERVER_SECRET)
-    .update('couch:' + email.toLowerCase())
-    .digest('hex')
-    .slice(0, 32)
+const bytesToBase64 = (bytes) => {
+  let s = ''
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])
+  return btoa(s)
+}
+
+const bytesToHex = (bytes) => {
+  let s = ''
+  for (let i = 0; i < bytes.length; i++) {
+    s += bytes[i].toString(16).padStart(2, '0')
+  }
+  return s
+}
+
+const hashCode = async (code, secret) => {
+  const key = await importHmacKey(secret)
+  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(code))
+  return bytesToBase64(new Uint8Array(sig))
+}
+
+const derivePassword = async (email, secret) => {
+  const key = await importHmacKey(secret)
+  const sig = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode('couch:' + email.toLowerCase()),
+  )
+  return bytesToHex(new Uint8Array(sig)).slice(0, 32)
+}
+
+const constantTimeEqual = (a, b) => {
+  let acc = 0
+  const len = Math.min(a.length, b.length)
+  for (let i = 0; i < len; i++) {
+    acc |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return acc === 0 && a.length === b.length
+}
+
+const generateCode = () => {
+  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000
+  return String(n).padStart(CODE_LENGTH, '0')
+}
 
 const sanitizeDb = (email) =>
   'ternpike-' + email.toLowerCase().replace(/[^a-z0-9_$()+/-]/g, '-')
 
-const couchAdmin = (path, init = {}) =>
-  fetch(`${COUCH_URL}${path}`, {
+const couchAdmin = (env, path, init = {}) => {
+  const adminAuth =
+    'Basic ' + btoa(`${env.COUCH_ADMIN_USER}:${env.COUCH_ADMIN_PASS}`)
+  return fetch(`${env.COUCH_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -50,11 +73,12 @@ const couchAdmin = (path, init = {}) =>
       ...(init.headers || {}),
     },
   })
+}
 
-async function ensureUser(email, password) {
+async function ensureUser(env, email, password) {
   const id = `org.couchdb.user:${email}`
   const url = `/_users/${encodeURIComponent(id)}`
-  const cur = await couchAdmin(url)
+  const cur = await couchAdmin(env, url)
   const rev = cur.ok ? (await cur.json())._rev : null
   const body = {
     _id: id,
@@ -64,76 +88,95 @@ async function ensureUser(email, password) {
     type: 'user',
     ...(rev && { _rev: rev }),
   }
-  const put = await couchAdmin(url, { method: 'PUT', body: JSON.stringify(body) })
+  const put = await couchAdmin(env, url, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
   if (!put.ok) throw new Error(`_users PUT ${put.status}`)
 }
 
-async function ensureDb(dbName, email) {
-  const create = await couchAdmin(`/${dbName}`, { method: 'PUT' })
+async function ensureDb(env, dbName, email) {
+  const create = await couchAdmin(env, `/${dbName}`, { method: 'PUT' })
   if (!create.ok && create.status !== 412)
     throw new Error(`db PUT ${create.status}`)
   const security = {
     admins: { names: [], roles: [] },
     members: { names: [email], roles: [] },
   }
-  const sec = await couchAdmin(`/${dbName}/_security`, {
+  const sec = await couchAdmin(env, `/${dbName}/_security`, {
     method: 'PUT',
     body: JSON.stringify(security),
   })
   if (!sec.ok) throw new Error(`_security PUT ${sec.status}`)
 }
 
-const app = express()
-app.use(express.json())
+const app = new Hono()
 
-app.post('/auth/request-code', async (req, res) => {
-  const { email } = req.body || {}
-  if (typeof email !== 'string' || !email.includes('@')) {
-    return res.status(400).json({ ok: false })
+app.post('/auth/request-code', async (c) => {
+  const env = c.env
+  let body
+  try {
+    body = await c.req.json()
+  } catch {
+    body = {}
   }
-  const code = String(randomInt(0, 10 ** CODE_LENGTH)).padStart(CODE_LENGTH, '0')
-  codes.set(email.toLowerCase(), {
-    hash: hashCode(code),
-    exp: Date.now() + CODE_TTL_MS,
+  const { email } = body || {}
+  if (typeof email !== 'string' || !email.includes('@')) {
+    return c.json({ ok: false }, 400)
+  }
+  const code = generateCode()
+  const hashB64 = await hashCode(code, env.SERVER_SECRET)
+  await env.CODES_KV.put(email.toLowerCase(), hashB64, {
+    expirationTtl: CODE_TTL_SECONDS,
   })
   try {
-    await transporter.sendMail({
-      from: `Ternpike <${GMAIL_USER}>`,
+    const resend = new Resend(env.RESEND_API_KEY)
+    await resend.emails.send({
+      from: 'Ternpike <noreply@ternpike.com>',
       to: email,
       subject: `Your Ternpike code: ${code}`,
       text: `Your code is ${code}. It expires in 10 minutes.\n`,
     })
-    res.json({ ok: true })
+    return c.json({ ok: true })
   } catch (err) {
     console.error('sendMail:', err)
-    res.status(500).json({ ok: false })
+    return c.json({ ok: false }, 500)
   }
 })
 
-app.post('/auth/verify-code', async (req, res) => {
-  const { email, code } = req.body || {}
+app.post('/auth/verify-code', async (c) => {
+  const env = c.env
+  let body
+  try {
+    body = await c.req.json()
+  } catch {
+    body = {}
+  }
+  const { email, code } = body || {}
   if (typeof email !== 'string' || typeof code !== 'string') {
-    return res.status(400).json({ ok: false })
+    return c.json({ ok: false }, 400)
   }
   const key = email.toLowerCase()
-  const entry = codes.get(key)
-  if (!entry || entry.exp < Date.now()) return res.status(401).json({ ok: false })
-  const incoming = hashCode(code)
-  if (incoming.length !== entry.hash.length || !timingSafeEqual(incoming, entry.hash)) {
-    return res.status(401).json({ ok: false })
+  const stored = await env.CODES_KV.get(key)
+  if (!stored) return c.json({ ok: false }, 401)
+  const incoming = await hashCode(code, env.SERVER_SECRET)
+  if (!constantTimeEqual(incoming, stored)) {
+    return c.json({ ok: false }, 401)
   }
-  codes.delete(key)
+  await env.CODES_KV.delete(key)
 
-  const password = derivePassword(email)
+  const password = await derivePassword(email, env.SERVER_SECRET)
   const dbName = sanitizeDb(email)
   try {
-    await ensureUser(email, password)
-    await ensureDb(dbName, email)
-    res.json({ ok: true, email, password, dbName })
+    await ensureUser(env, email, password)
+    await ensureDb(env, dbName, email)
+    return c.json({ ok: true, email, password, dbName })
   } catch (err) {
     console.error('provision:', err)
-    res.status(500).json({ ok: false })
+    return c.json({ ok: false }, 500)
   }
 })
 
-app.listen(Number(PORT), () => console.log(`auth server on :${PORT}`))
+export default {
+  fetch: app.fetch,
+}
