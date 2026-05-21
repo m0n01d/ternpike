@@ -568,150 +568,204 @@
   }
 
   /* ─── LEDGER PREVIEW ─── */
-  .preview-section {
+  /* Mirrors the real Ledger page (src/Pages/Ledger.elm). Keep visual parity:
+     header running-total stack, dashed day rail, category chip on cream-deep,
+     rust GPS pin, and dashed --rule-tan between rows. */
+  .ledger-preview-section {
     padding: 100px 24px;
-    max-width: 1000px;
+    max-width: 880px;
     margin: 0 auto;
   }
 
-  .ledger-mock {
-    background: var(--color-parchment);
-    border: 1px solid var(--color-tan);
-    border-radius: 20px;
-    overflow: hidden;
-    box-shadow: 0 16px 60px rgba(45,58,34,0.12);
-    margin-top: 48px;
+  .ledger-preview-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--color-rust);
+    margin-bottom: 12px;
   }
 
-  .mock-nav {
-    background: var(--color-forest);
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .mock-nav-word {
+  .ledger-preview-headline {
     font-family: var(--font-display);
     font-weight: 900;
-    font-size: 18px;
-    color: var(--color-tan);
-  }
-  .mock-nav-word span { color: var(--color-rust-light); }
-
-  .mock-tabs { display: flex; gap: 2px; }
-
-  .mock-tab {
-    font-family: var(--font-mono);
-    font-size: 8px;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    padding: 6px 12px;
-    border-radius: 4px;
-    color: var(--color-moss);
-    cursor: default;
-  }
-  .mock-tab.active {
-    background: rgba(107,124,88,0.3);
-    color: var(--color-tan);
-  }
-
-  .mock-stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    background: var(--color-cream);
-    border-bottom: 1px solid var(--color-tan);
-  }
-
-  @media (max-width: 560px) { .mock-stats { grid-template-columns: repeat(2,1fr); } }
-
-  .mock-stat {
-    padding: 20px 20px;
-    border-right: 1px solid var(--color-tan);
-  }
-  .mock-stat:last-child { border-right: none; }
-
-  .mock-stat-label {
-    font-family: var(--font-mono);
-    font-size: 8px;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--color-moss);
-    margin-bottom: 4px;
-  }
-
-  .mock-stat-val {
-    font-family: var(--font-display);
-    font-style: italic;
-    font-size: 22px;
+    font-size: clamp(36px, 6vw, 60px);
+    letter-spacing: -0.02em;
+    line-height: 1.05;
     color: var(--color-forest);
-    letter-spacing: -0.01em;
-    line-height: 1;
+    margin-bottom: 48px;
+    white-space: pre-line;
   }
 
-  .mock-day {
-    padding: 8px 24px 4px;
+  .ledger-preview-panel {
+    position: relative;
+    background: var(--color-parchment);
+    border: 1px solid var(--color-tan);
+    border-radius: var(--radius-panel);
+    overflow: hidden;
+    box-shadow: var(--shadow-panel);
+  }
+
+  .ledger-preview-header {
+    padding: 32px 28px 24px;
+    border-bottom: var(--rule-tan);
+    position: relative;
+  }
+
+  .ledger-preview-title {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    color: var(--color-forest);
+    line-height: 1;
+    margin-bottom: 18px;
+    text-transform: uppercase;
+  }
+
+  .ledger-preview-total-label {
     font-family: var(--font-mono);
-    font-size: 8px;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-moss);
+    margin-bottom: 6px;
+  }
+
+  .ledger-preview-total-amount {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(40px, 7vw, 56px);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--color-forest);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ledger-preview-total-meta {
+    margin-top: 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--color-moss);
-    background: var(--color-parchment);
-    border-bottom: 1px solid var(--color-tan);
+    color: var(--color-muted);
   }
 
-  .mock-entry {
+  .ledger-preview-list {
+    padding: 8px 28px 24px;
+  }
+
+  .ledger-preview-day {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 24px;
-    border-bottom: 1px solid rgba(212,201,168,0.45);
-    transition: background 0.15s;
-    cursor: default;
+    gap: 12px;
+    padding: 18px 0 10px;
   }
-  .mock-entry:hover { background: var(--color-cream); }
-  .mock-entry-dim { opacity: 0.6; }
 
-  .mock-cat {
-    width: 34px; height: 34px;
-    border-radius: 9px;
-    background: var(--color-cream);
-    border: 1px solid var(--color-tan);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 15px;
+  .ledger-preview-day-num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-rust);
     flex-shrink: 0;
   }
 
-  .mock-info { flex: 1; min-width: 0; }
+  .ledger-preview-day-rule {
+    flex: 1;
+    height: 0;
+    border-top: var(--rule-tan);
+  }
 
-  .mock-merchant {
+  .ledger-preview-day-date {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-moss);
+    flex-shrink: 0;
+  }
+
+  .ledger-preview-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 14px 0;
+    border-bottom: var(--rule-tan);
+  }
+  .ledger-preview-row:last-child { border-bottom: none; }
+
+  .ledger-preview-row-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ledger-preview-merchant {
     font-family: var(--font-body);
     font-weight: 600;
-    font-size: 15px;
-    color: var(--color-forest);
+    font-size: 17px;
+    color: var(--color-ink);
+    line-height: 1.25;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .mock-note {
-    font-family: var(--font-body);
-    font-style: italic;
-    font-size: 13px;
-    color: var(--color-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .ledger-preview-meta {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
-  .mock-pin { font-size: 11px; color: var(--color-moss); flex-shrink: 0; }
+  .ledger-preview-chip {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--color-moss);
+    background: var(--color-cream-deep);
+    padding: 3px 9px;
+    border-radius: 999px;
+    line-height: 1.4;
+  }
 
-  .mock-amt {
+  .ledger-preview-pin {
+    display: inline-flex;
+    align-items: center;
+    color: var(--color-rust);
+    line-height: 0;
+  }
+
+  .ledger-preview-amount {
     font-family: var(--font-display);
     font-weight: 700;
-    font-size: 15px;
+    font-size: 18px;
     color: var(--color-forest);
+    font-variant-numeric: tabular-nums;
     flex-shrink: 0;
+    line-height: 1.25;
+  }
+
+  .ledger-preview-caption {
+    margin-top: 32px;
+    font-family: var(--font-body);
+    font-style: italic;
+    font-size: 18px;
+    line-height: 1.55;
+    color: var(--color-muted);
+    max-width: 640px;
+  }
+
+  @media (max-width: 560px) {
+    .ledger-preview-section { padding: 72px 16px; }
+    .ledger-preview-header { padding: 24px 20px 20px; }
+    .ledger-preview-list { padding: 4px 20px 20px; }
+    .ledger-preview-merchant { font-size: 15px; }
+    .ledger-preview-amount { font-size: 16px; }
+    .ledger-preview-day-date { font-size: 10px; letter-spacing: 0.18em; }
+    .ledger-preview-day-num { font-size: 10px; letter-spacing: 0.18em; }
   }
 
   /* ─── WHY TERNPIKE ─── */

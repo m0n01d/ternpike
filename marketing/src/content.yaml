@@ -81,49 +81,50 @@ features:
       body: "Daily spend. Category breakdown. Cumulative curve. Average per day. The numbers you actually look at when you're deciding whether to drive on or pull over."
 
 ledgerPreview:
-  eyebrow: "The Ledger"
-  headlineHtml: "Looks like a journal.<br>Works like a spreadsheet."
-  tabs:
-    - label: "Ledger"
-      active: true
-    - label: "Stats"
-      active: false
-    - label: "Map"
-      active: false
-  stats:
-    - label: "Total Spent"
-      value: "$1,247"
-    - label: "Days on Road"
-      value: "14"
-    - label: "Avg / Day"
-      value: "$89"
-    - label: "Top Category"
-      value: "⛽ Fuel"
-  days:
-    - heading: "Aug 2, 2026 · Whitehorse, YT · $134.60"
+  sectionLabel: "The ledger"
+  headline: "Looks like a journal.\nWorks like a spreadsheet."
+  caption: "Every expense logged, categorized, and mapped. Grouped by day so the story of your trip reads like a trip, not an accounting report."
+  totalLabel: "Running total"
+  totalAmount: "$39989.00"
+  totalMeta: "744 entries · 181 days"
+  ledgerSample:
+    - day: 181
+      date: "May 21, 2026"
       entries:
-        - category: "⛽"
-          merchant: "Petro-Canada — Alaska Hwy"
-          note: "Fill-up before long stretch to Watson Lake"
-          amount: "$67.40"
-          dim: false
-        - category: "🍔"
-          merchant: "Tim Hortons, Whitehorse"
-          note: "Double double, breakfast sandwich"
-          amount: "$11.20"
-          dim: false
-        - category: "⛺"
-          merchant: "Yukon River Camp"
-          note: "Tenting, no hookups — beautiful spot"
-          amount: "$24.00"
-          dim: false
-    - heading: "Aug 1, 2026 · Watson Lake, YT · $98.30"
+        - merchant: "ice cream"
+          category: "food"
+          amount: "$2.00"
+          hasGps: true
+        - merchant: "Centolla King Crab Shack"
+          category: "food"
+          amount: "$48.00"
+          hasGps: true
+    - day: 180
+      date: "May 20, 2026"
       entries:
-        - category: "⛽"
-          merchant: "Shell — Watson Lake"
-          note: "Pricey but no choice, next station 220mi"
-          amount: "$74.30"
-          dim: true
+        - merchant: "Aerolíneas Argentinas USH → EZE → LAX"
+          category: "transport"
+          amount: "$1850.00"
+          hasGps: true
+        - merchant: "La Anónima Supermarket"
+          category: "food"
+          amount: "$36.40"
+          hasGps: true
+    - day: 179
+      date: "May 19, 2026"
+      entries:
+        - merchant: "Hostería Tierra del Fuego"
+          category: "lodging"
+          amount: "$92.00"
+          hasGps: true
+        - merchant: "YPF Ruta 3 Sur"
+          category: "fuel"
+          amount: "$64.10"
+          hasGps: true
+        - merchant: "Parque Nacional entry"
+          category: "activities"
+          amount: "$18.00"
+          hasGps: false
 
 pricing:
   eyebrow: ""
