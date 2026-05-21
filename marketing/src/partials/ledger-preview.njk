@@ -1,0 +1,40 @@
+<section class="preview-section" id="preview">
+  <div class="section-eyebrow">{{ ledgerPreview.eyebrow }}</div>
+  <h2 class="section-h2">{{ ledgerPreview.headlineHtml | safe }}</h2>
+
+  <div class="ledger-mock">
+    <div class="mock-nav">
+      <div class="mock-nav-word">{{ brand.namePrefix }}<span>{{ brand.nameSuffix }}</span></div>
+      <div class="mock-tabs">
+        {% for tab in ledgerPreview.tabs %}
+        <div class="mock-tab{% if tab.active %} active{% endif %}">{{ tab.label }}</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mock-stats">
+      {% for stat in ledgerPreview.stats %}
+      <div class="mock-stat">
+        <div class="mock-stat-label">{{ stat.label }}</div>
+        <div class="mock-stat-val">{{ stat.value }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% for day in ledgerPreview.days %}
+    <div class="mock-day">{{ day.heading }}</div>
+
+    {% for entry in day.entries %}
+    <div class="mock-entry{% if entry.dim %} mock-entry-dim{% endif %}">
+      <div class="mock-cat">{{ entry.category }}</div>
+      <div class="mock-info">
+        <div class="mock-merchant">{{ entry.merchant }}</div>
+        <div class="mock-note">{{ entry.note }}</div>
+      </div>
+      <div class="mock-pin">📍</div>
+      <div class="mock-amt">{{ entry.amount }}</div>
+    </div>
+    {% endfor %}
+    {% endfor %}
+  </div>
+</section>

@@ -1,0 +1,13 @@
+<section class="signup" id="signup">
+  <h2 class="signup-h2">{{ emailCapture.headlineHtml | safe }}</h2>
+  <p class="signup-sub">{{ emailCapture.sub }}</p>
+
+  <div class="email-form"
+       data-success-label="{{ emailCapture.successLabel }}"
+       data-success-placeholder="{{ emailCapture.successPlaceholder }}">
+    <input class="email-input" type="email" placeholder="{{ emailCapture.placeholder }}">
+    <button class="email-btn">{{ emailCapture.buttonLabel }}</button>
+  </div>
+
+  <p class="signup-fine">{{ emailCapture.fine }}</p>
+</section>
