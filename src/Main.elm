@@ -2105,6 +2105,7 @@ viewAuth as_ =
     in
     Html.div []
         [ UI.Layout.viewHeader as_
+        , UI.Layout.viewOfflineBanner as_.networkOffline
         , UI.Layout.viewErrorBanner as_.error
         , Html.div [ Html.Attributes.class "pb-20" ]
             [ UI.Layout.page

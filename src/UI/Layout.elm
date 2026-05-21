@@ -8,6 +8,7 @@ module UI.Layout exposing
     , viewErrorBanner
     , viewHeader
     , viewNavTab
+    , viewOfflineBanner
     , viewToast
     )
 
@@ -52,7 +53,7 @@ viewHeader as_ =
                 ]
             ]
         , Html.div [ Html.Attributes.class "flex items-center gap-3" ]
-            [ viewSyncBadge as_.syncState
+            [ viewSyncBadge { networkOffline = as_.networkOffline, syncState = as_.syncState }
             , Html.a
                 [ Html.Attributes.href settingsHref
                 , Html.Attributes.class
@@ -92,35 +93,54 @@ viewTripKicker state =
             Html.text ""
 
 
-viewSyncBadge : SyncState -> Html Msg
-viewSyncBadge state =
-    case state of
-        AuthExpired ->
-            Html.text ""
+viewSyncBadge : { networkOffline : Bool, syncState : SyncState } -> Html Msg
+viewSyncBadge { networkOffline, syncState } =
+    if networkOffline then
+        Html.span
+            [ Html.Attributes.class "text-xs text-muted"
+            , Html.Attributes.title "Offline"
+            ]
+            [ Html.text "●" ]
 
-        NotEnabled ->
-            Html.text ""
+    else
+        case syncState of
+            AuthExpired ->
+                Html.text ""
 
-        SyncError ->
-            Html.span
-                [ Html.Attributes.class "text-xs text-rust"
-                , Html.Attributes.title "Sync error"
-                ]
-                [ Html.text "⚠" ]
+            NotEnabled ->
+                Html.text ""
 
-        Synced ->
-            Html.span
-                [ Html.Attributes.class "text-xs text-moss"
-                , Html.Attributes.title "Synced"
-                ]
-                [ Html.text "●" ]
+            SyncError ->
+                Html.span
+                    [ Html.Attributes.class "text-xs text-rust"
+                    , Html.Attributes.title "Sync error"
+                    ]
+                    [ Html.text "⚠" ]
 
-        Syncing ->
-            Html.span
-                [ Html.Attributes.class "text-xs text-rust animate-pulse"
-                , Html.Attributes.title "Syncing"
-                ]
-                [ Html.text "●" ]
+            Synced ->
+                Html.span
+                    [ Html.Attributes.class "text-xs text-moss"
+                    , Html.Attributes.title "Synced"
+                    ]
+                    [ Html.text "●" ]
+
+            Syncing ->
+                Html.span
+                    [ Html.Attributes.class "text-xs text-rust animate-pulse"
+                    , Html.Attributes.title "Syncing"
+                    ]
+                    [ Html.text "●" ]
+
+
+viewOfflineBanner : Bool -> Html Msg
+viewOfflineBanner networkOffline =
+    if networkOffline then
+        Html.div
+            [ Html.Attributes.class "sticky top-14 z-10 px-5 py-1.5 text-xs text-center font-mono tracking-wide bg-tan/50 text-forest border-b border-moss/25" ]
+            [ Html.text "You're offline · changes will sync when you reconnect" ]
+
+    else
+        Html.text ""
 
 
 viewBottomNav : AuthState -> Html Msg

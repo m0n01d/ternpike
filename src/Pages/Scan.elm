@@ -19,28 +19,45 @@ viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html
 viewTab as_ =
     { actions = []
     , body = viewBody as_
-    , hero = viewHero
+    , hero = viewHero as_
     }
 
 
-viewHero : Html Msg
-viewHero =
-    Html.label
-        [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep cursor-pointer hover:bg-tan/30 transition-colors" ]
-        [ Html.div [ Html.Attributes.class "flex justify-center mb-3 text-moss" ]
+viewHero : AuthState -> Html Msg
+viewHero as_ =
+    if as_.networkOffline then
+        viewOfflineHero
+
+    else
+        Html.label
+            [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep cursor-pointer hover:bg-tan/30 transition-colors" ]
+            [ Html.div [ Html.Attributes.class "flex justify-center mb-3 text-moss" ]
+                [ UI.Icons.camera "w-12 h-12" ]
+            , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
+                [ Html.text "Tap to add receipts" ]
+            , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
+                [ Html.text "Stack them up — Ternpike processes in parallel." ]
+            , Html.input
+                [ Html.Attributes.type_ "file"
+                , Html.Attributes.accept "image/*"
+                , Html.Attributes.attribute "multiple" "true"
+                , Html.Attributes.class "hidden"
+                , Html.Events.on "change" (Json.Decode.map FilesSelected (Json.Decode.at [ "target", "files" ] fileListDecoder))
+                ]
+                []
+            ]
+
+
+viewOfflineHero : Html Msg
+viewOfflineHero =
+    Html.div
+        [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep opacity-70" ]
+        [ Html.div [ Html.Attributes.class "flex justify-center mb-3 text-muted" ]
             [ UI.Icons.camera "w-12 h-12" ]
         , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
-            [ Html.text "Tap to add receipts" ]
+            [ Html.text "Connect to scan receipts" ]
         , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
-            [ Html.text "Stack them up — Ternpike processes in parallel." ]
-        , Html.input
-            [ Html.Attributes.type_ "file"
-            , Html.Attributes.accept "image/*"
-            , Html.Attributes.attribute "multiple" "true"
-            , Html.Attributes.class "hidden"
-            , Html.Events.on "change" (Json.Decode.map FilesSelected (Json.Decode.at [ "target", "files" ] fileListDecoder))
-            ]
-            []
+            [ Html.text "Scanning needs the network. We'll be ready when you're back." ]
         ]
 
 
