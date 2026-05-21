@@ -220,7 +220,11 @@ viewEntries opts entries =
                         (\e -> ( ExpenseId.toString e.id, viewEntryRow opts e ))
                         dayEntries
                     )
-                , viewDayTotal (Dict.get date totals |> Maybe.withDefault 0)
+                , if List.length dayEntries > 1 then
+                    viewDayTotal (Dict.get date totals |> Maybe.withDefault 0)
+
+                  else
+                    Html.text ""
                 ]
             )
     in
