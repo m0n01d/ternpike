@@ -2,8 +2,11 @@ module Pages.Stats exposing (viewTab)
 
 import Chart as C
 import Chart.Attributes as CA
+import Chart.Events as CE
+import Chart.Item as CI
 import Data.Category as Category
 import Data.Entry as Entry
+import Data.StatsHover exposing (CumulativePoint, DailyDay)
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
 import Dict
@@ -14,7 +17,7 @@ import Routing
 import Set
 import Svg
 import Svg.Attributes
-import Types exposing (AuthState, Msg)
+import Types exposing (AuthState, Msg(..))
 import UI.Card
 import UI.Rule
 import UI.Theme
@@ -304,7 +307,7 @@ viewBody model entries =
                 [ UI.Rule.dashedRule
                 , UI.Rule.kicker "DAILY SPENDING"
                 , UI.Card.subCard
-                    [ viewDailyChart entries ]
+                    [ viewDailyChart model.statsHover.dailyBars entries ]
                 ]
 
           else
@@ -314,7 +317,7 @@ viewBody model entries =
                 [ UI.Rule.dashedRule
                 , UI.Rule.kicker "CUMULATIVE SPEND"
                 , UI.Card.subCard
-                    [ viewCumulativeChart entries ]
+                    [ viewCumulativeChart model.statsHover.cumulativePoints entries ]
                 ]
 
           else
@@ -483,12 +486,13 @@ categoryBar fill pct =
         ]
 
 
-viewDailyChart : List Entry.EffectiveEntry -> Html Msg
-viewDailyChart entries =
+viewDailyChart : List (CI.One DailyDay CI.Bar) -> List Entry.EffectiveEntry -> Html Msg
+viewDailyChart hovered entries =
     let
         sortedDates =
             Entry.uniqueDates entries |> List.reverse
 
+        days : List DailyDay
         days =
             sortedDates
                 |> List.map
@@ -526,6 +530,8 @@ viewDailyChart entries =
         , C.chart
             [ CA.height 160
             , CA.margin { top = 8, bottom = 8, left = 44, right = 8 }
+            , CE.onMouseMove HoverDailyBars (CE.getNearest CI.bars)
+            , CE.onMouseLeave (HoverDailyBars [])
             ]
             [ C.grid [ CA.color UI.Theme.colorTan, CA.dashed [ 2, 3 ] ]
             , C.yLabels
@@ -538,20 +544,38 @@ viewDailyChart entries =
             , C.bars []
                 [ C.bar .total [ CA.color UI.Theme.colorRust ] ]
                 days
+            , C.each hovered <|
+                \_ item ->
+                    [ C.tooltip item
+                        [ CA.onTopOrBottom, CA.background "#fffaf2", CA.border UI.Theme.colorTan ]
+                        []
+                        (dailyTooltipContent (CI.getData item))
+                    ]
             ]
         ]
 
 
-viewCumulativeChart : List Entry.EffectiveEntry -> Html Msg
-viewCumulativeChart entries =
+dailyTooltipContent : DailyDay -> List (Html Never)
+dailyTooltipContent d =
+    [ Html.div [ Html.Attributes.class "font-mono text-[11px] text-moss" ]
+        [ Html.text (formatDateShort d.date) ]
+    , Html.div [ Html.Attributes.class "font-mono text-sm text-rust" ]
+        [ Html.text (formatAmount d.total) ]
+    ]
+
+
+viewCumulativeChart : List (CI.One CumulativePoint CI.Dot) -> List Entry.EffectiveEntry -> Html Msg
+viewCumulativeChart hovered entries =
     let
         sorted =
             Entry.uniqueDates entries |> List.reverse
 
+        points : List CumulativePoint
         points =
             List.indexedMap
                 (\i date ->
-                    { x = toFloat (i + 1)
+                    { date = date
+                    , x = toFloat (i + 1)
                     , y =
                         entries
                             |> List.filter (\e -> e.date <= date)
@@ -577,6 +601,8 @@ viewCumulativeChart entries =
     C.chart
         [ CA.height 180
         , CA.margin { top = 16, bottom = 24, left = 44, right = 12 }
+        , CE.onMouseMove HoverCumulativePoints (CE.getNearest CI.dots)
+        , CE.onMouseLeave (HoverCumulativePoints [])
         ]
         [ C.yLabels
             [ CA.amount 4
@@ -620,7 +646,23 @@ viewCumulativeChart entries =
             , CA.alignRight
             ]
             [ Svg.text (formatAmount finalTotal) ]
+        , C.each hovered <|
+            \_ item ->
+                [ C.tooltip item
+                    [ CA.onTopOrBottom, CA.background "#fffaf2", CA.border UI.Theme.colorTan ]
+                    []
+                    (cumulativeTooltipContent (CI.getData item))
+                ]
         ]
+
+
+cumulativeTooltipContent : CumulativePoint -> List (Html Never)
+cumulativeTooltipContent p =
+    [ Html.div [ Html.Attributes.class "font-mono text-[11px] text-moss" ]
+        [ Html.text (formatDateShort p.date) ]
+    , Html.div [ Html.Attributes.class "font-mono text-sm text-rust" ]
+        [ Html.text (formatAmount p.y) ]
+    ]
 
 
 formatDateShort : String -> String

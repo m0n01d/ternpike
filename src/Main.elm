@@ -83,6 +83,7 @@ import Data.PaymentMethod as PaymentMethod
 import Data.PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.StatsHover as StatsHover
 import Data.Sync exposing (SyncState(..))
 import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
@@ -193,6 +194,7 @@ toAuthState creds initialRoute gs =
     , scanQueue = Dict.empty
     , showLedgerMap = False
     , showMapPicker = False
+    , statsHover = StatsHover.empty
     , submitting = False
     , syncState = NotEnabled
     , toast = Nothing
@@ -1996,6 +1998,16 @@ updateAuth msg as_ =
                     ( AuthModel { as_ | confirmDeleteTrip = Nothing, trips = other }
                     , voidCmd
                     )
+
+        HoverCumulativePoints items ->
+            ( AuthModel { as_ | statsHover = StatsHover.setCumulative as_.statsHover items }
+            , Cmd.none
+            )
+
+        HoverDailyBars items ->
+            ( AuthModel { as_ | statsHover = StatsHover.setDaily as_.statsHover items }
+            , Cmd.none
+            )
 
         LinkClicked (Browser.Internal url) ->
             ( AuthModel as_, Nav.pushUrl as_.key (Url.toString url) )

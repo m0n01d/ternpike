@@ -33,6 +33,7 @@ because every consumer pattern-matches them.
 
 import Browser
 import Browser.Navigation as Nav
+import Chart.Item as CI
 import Data.Amendment exposing (Amendment)
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category)
@@ -42,6 +43,7 @@ import Data.Navigation exposing (Route)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PendingEntry exposing (PendingForm)
 import Data.Scan exposing (ScanItem)
+import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
 import Data.Sync exposing (SyncState)
 import Data.Trip exposing (Trip, TripField, TripForm)
 import Data.Trips exposing (TripsState)
@@ -147,6 +149,7 @@ type alias AuthState =
     , scanQueue : Dict String ScanItem
     , showLedgerMap : Bool
     , showMapPicker : Bool
+    , statsHover : Hover
     , submitting : Bool
     , syncState : SyncState
     , toast : Maybe String
@@ -194,6 +197,10 @@ PouchDB / navigation / chrome: `GotPouchMsg`, `LinkClicked`,
 `UrlChanged`, `RefreshClicked`, `ToggleLedgerMap`, `ShowToast`,
 `ToastExpired`, `DismissError`.
 
+Stats hover: `HoverDailyBars`, `HoverCumulativePoints` — UI-only,
+records the chart datapoint(s) the pointer is currently over so the
+Stats page can render a tooltip overlay.
+
 -}
 type Msg
     = AmountChanged String
@@ -219,6 +226,8 @@ type Msg
     | GotPouchMsg Json.Decode.Value
     | GotSaveTripTime Time.Posix
     | GotSubmitTime Time.Posix
+    | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
+    | HoverDailyBars (List (CI.One DailyDay CI.Bar))
     | LinkClicked Browser.UrlRequest
     | LongNoteChanged String
     | MapPickerConfirmed Float Float
