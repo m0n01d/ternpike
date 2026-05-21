@@ -39,7 +39,7 @@ import Data.ExpenseId exposing (ExpenseId)
 import Data.Flock exposing (Flock)
 import Data.FlockId exposing (FlockId)
 import Data.Sync exposing (SyncState)
-import Data.Trip exposing (Trip)
+import Data.Trip exposing (Trip, TripTarget)
 import Data.TripId exposing (TripId)
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
@@ -52,12 +52,12 @@ dependencies on the inner records.
 -}
 type PouchOutbound
     = GetAllTrips
-    | GetExpense ExpenseId
-    | GetTripExpenses TripId
-    | SaveAmend Json.Decode.Value
-    | SaveExpense Json.Decode.Value
-    | SaveTrip Json.Decode.Value
-    | SaveVoid Json.Decode.Value
+    | GetExpense TripTarget ExpenseId
+    | GetTripExpenses TripTarget TripId
+    | SaveAmend TripTarget Json.Decode.Value
+    | SaveExpense TripTarget Json.Decode.Value
+    | SaveTrip TripTarget Json.Decode.Value
+    | SaveVoid TripTarget Json.Decode.Value
 
 
 {-| Events received through the `pouchIn` port.

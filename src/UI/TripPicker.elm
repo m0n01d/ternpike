@@ -10,12 +10,16 @@ picker only renders. Each candidate trip is a `<button>` that dispatches
 -}
 
 import Data.Expense exposing (Expense)
+import Data.Flock
+import Data.Flocks exposing (Flocks)
 import Data.Trip exposing (Trip)
 import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Types exposing (Msg(..))
+import UI.Avatar
+import UI.FlockBadge
 import UI.Icons
 
 
@@ -24,8 +28,8 @@ filtered out — only candidate destinations are shown. Caller is
 responsible for not rendering this when the destinations list is empty
 (the row menu hides the "Move to trip…" entry in that case).
 -}
-viewMove : { expense : Expense, trips : List Trip } -> Html Msg
-viewMove { expense, trips } =
+viewMove : { expense : Expense, flocks : Flocks, trips : List Trip } -> Html Msg
+viewMove { expense, flocks, trips } =
     let
         candidates =
             List.filter (\t -> t.id /= expense.tripId) trips
@@ -41,7 +45,7 @@ viewMove { expense, trips } =
                     [ Html.text (rowLabel expense) ]
                 ]
             , Html.div [ Html.Attributes.class "max-h-72 overflow-y-auto border-t border-tan/60" ]
-                (List.map (viewCandidate expense) candidates)
+                (List.map (viewCandidate expense flocks) candidates)
             , Html.div [ Html.Attributes.class "p-4 border-t border-tan/60 flex justify-end" ]
                 [ Html.button
                     [ Html.Attributes.type_ "button"
@@ -54,18 +58,37 @@ viewMove { expense, trips } =
         ]
 
 
-viewCandidate : Expense -> Trip -> Html Msg
-viewCandidate expense trip =
+viewCandidate : Expense -> Flocks -> Trip -> Html Msg
+viewCandidate expense flocks trip =
+    let
+        maybeFlock =
+            trip.flockId |> Maybe.andThen (\fid -> Data.Flocks.get fid flocks)
+    in
     Html.button
         [ Html.Attributes.type_ "button"
         , Html.Attributes.class "w-full text-left px-6 py-3 border-b border-dashed border-tan/60 last:border-b-0 hover:bg-cream-deep flex items-center justify-between gap-3"
         , Html.Events.onClick (MoveEntry expense trip.id)
         ]
         [ Html.div [ Html.Attributes.class "min-w-0 flex-1" ]
-            [ Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
+            [ case maybeFlock of
+                Just flock ->
+                    Html.div [ Html.Attributes.class "mb-1" ]
+                        [ UI.FlockBadge.view flock ]
+
+                Nothing ->
+                    Html.text ""
+            , Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
                 [ Html.text trip.name ]
-            , Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-wider text-moss mt-1" ]
-                [ Html.text (dateRange trip) ]
+            , Html.div [ Html.Attributes.class "flex items-center gap-2 mt-1" ]
+                [ Html.span [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-wider text-moss" ]
+                    [ Html.text (dateRange trip) ]
+                , case maybeFlock of
+                    Just flock ->
+                        UI.Avatar.viewStack (Data.Flock.members flock)
+
+                    Nothing ->
+                        Html.text ""
+                ]
             ]
         , Html.span [ Html.Attributes.class "text-rust shrink-0" ]
             [ UI.Icons.move "w-4 h-4" ]

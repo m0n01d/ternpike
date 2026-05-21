@@ -78,6 +78,7 @@ import Data.Expense as Expense
 import Data.ExpenseId as ExpenseId
 import Data.Flock as Flock
 import Data.FlockId
+import Data.FlockUi as FlockUi
 import Data.Flocks as Flocks
 import Data.Guest exposing (GuestReason(..), GuestSession)
 import Data.Location exposing (LocationSource(..), LocationState(..))
@@ -88,6 +89,7 @@ import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), Pouc
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.StatsHover as StatsHover
 import Data.Sync exposing (SyncState(..))
+import Data.Tier
 import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
@@ -99,14 +101,17 @@ import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Http
+import Http.FlockApi
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 import Pages.Add
 import Pages.Guest exposing (viewGuest)
+import Pages.JoinFlock
 import Pages.Ledger
 import Pages.Scan
 import Pages.Settings
+import Pages.Settings.Flocks
 import Pages.Stats
 import Pages.Trips
 import Process
@@ -197,8 +202,10 @@ toAuthState creds initialRoute gs =
     , config = gs.session.config
     , confirmDeleteTrip = Nothing
     , creds = creds
+    , currentUser = UserId.fromString creds.email
     , error = Nothing
     , expenses = Dict.empty
+    , flockUi = FlockUi.empty
     , flocks = Flocks.empty
     , form = FreshForm (defaultPendingEntry gs.today)
     , geoBlocked = False
@@ -218,6 +225,7 @@ toAuthState creds initialRoute gs =
     , statsHover = StatsHover.empty
     , submitting = False
     , syncState = NotEnabled
+    , tier = Data.Tier.Fledgling
     , toast = Nothing
     , today = gs.today
     , tripForm = Nothing
@@ -236,6 +244,7 @@ toGuestState reason as_ =
     , emailInput = ""
     , key = as_.key
     , networkOffline = as_.networkOffline
+    , pendingJoinToken = Nothing
     , session = { config = as_.config, reason = reason }
     , showSettings = reason == SessionExpired
     , today = as_.today
@@ -270,34 +279,72 @@ encodePouchOut msg =
         GetAllTrips ->
             E.object [ ( "tag", E.string "GetAllTrips" ) ]
 
-        GetExpense id ->
+        GetExpense target id ->
             E.object
                 [ ( "tag", E.string "GetExpense" )
+                , ( "target", Trip.encodeTarget target )
                 , ( "expenseId", E.string (ExpenseId.toString id) )
                 ]
 
-        GetTripExpenses id ->
+        GetTripExpenses target id ->
             E.object
                 [ ( "tag", E.string "GetTripExpenses" )
+                , ( "target", Trip.encodeTarget target )
                 , ( "tripId", E.string (TripId.toString id) )
                 ]
 
-        SaveAmend doc ->
-            E.object [ ( "tag", E.string "SaveAmend" ), ( "doc", doc ) ]
+        SaveAmend target doc ->
+            E.object
+                [ ( "tag", E.string "SaveAmend" )
+                , ( "target", Trip.encodeTarget target )
+                , ( "doc", doc )
+                ]
 
-        SaveExpense doc ->
-            E.object [ ( "tag", E.string "SaveExpense" ), ( "doc", doc ) ]
+        SaveExpense target doc ->
+            E.object
+                [ ( "tag", E.string "SaveExpense" )
+                , ( "target", Trip.encodeTarget target )
+                , ( "doc", doc )
+                ]
 
-        SaveTrip doc ->
-            E.object [ ( "tag", E.string "SaveTrip" ), ( "doc", doc ) ]
+        SaveTrip target doc ->
+            E.object
+                [ ( "tag", E.string "SaveTrip" )
+                , ( "target", Trip.encodeTarget target )
+                , ( "doc", doc )
+                ]
 
-        SaveVoid doc ->
-            E.object [ ( "tag", E.string "SaveVoid" ), ( "doc", doc ) ]
+        SaveVoid target doc ->
+            E.object
+                [ ( "tag", E.string "SaveVoid" )
+                , ( "target", Trip.encodeTarget target )
+                , ( "doc", doc )
+                ]
 
 
 sendPouch : PouchOutbound -> Cmd Msg
 sendPouch =
     pouchOut << encodePouchOut
+
+
+{-| Resolve the `TripTarget` to use for an outbound `Save*` / `Get*`
+command from a trip id. Looks up the trip in the loaded zipper and
+asks `Trip.targetForTrip` to map it; falls back to `Personal` if the
+trip isn't loaded (legacy / pre-flock callers).
+-}
+targetForTripId : TripId.TripId -> AuthState -> Trip.TripTarget
+targetForTripId tripId as_ =
+    case as_.trips of
+        TripsLoaded loadedTrips ->
+            case Trips.findTrip tripId loadedTrips of
+                Just trip ->
+                    Trip.targetForTrip trip
+
+                Nothing ->
+                    Trip.Personal
+
+        _ ->
+            Trip.Personal
 
 
 pouchInDecoder : D.Decoder PouchInbound
@@ -616,7 +663,7 @@ fetchesForRoute as_ =
 
                     else
                         ( { withSelected | loadingTrips = Set.insert key as_.loadingTrips }
-                        , sendPouch (GetTripExpenses tid)
+                        , sendPouch (GetTripExpenses (targetForTripId tid as_) tid)
                         )
 
                 Nothing ->
@@ -624,7 +671,7 @@ fetchesForRoute as_ =
 
         ( as2, expenseCmd ) =
             case as1.route of
-                RouteEditEntry _ eid ->
+                RouteEditEntry tid eid ->
                     let
                         key =
                             ExpenseId.toString eid
@@ -638,7 +685,7 @@ fetchesForRoute as_ =
 
                     else
                         ( { as1 | loadingExpenses = Set.insert key as1.loadingExpenses }
-                        , sendPouch (GetExpense eid)
+                        , sendPouch (GetExpense (targetForTripId tid as1) eid)
                         )
 
                 _ ->
@@ -1136,6 +1183,17 @@ init flagsJson url key =
         basePath =
             dec "basePath"
 
+        initialRoute =
+            Routing.routeFromUrl basePath url
+
+        pendingJoinToken =
+            case initialRoute of
+                RouteJoinFlock token ->
+                    Just token
+
+                _ ->
+                    Nothing
+
         gs =
             { authError = Nothing
             , basePath = basePath
@@ -1143,6 +1201,7 @@ init flagsJson url key =
             , emailInput = ""
             , key = key
             , networkOffline = False
+            , pendingJoinToken = pendingJoinToken
             , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
             , today = dec "today"
@@ -1155,9 +1214,6 @@ init flagsJson url key =
 
         Just creds ->
             let
-                initialRoute =
-                    Routing.routeFromUrl basePath url
-
                 as_ =
                     toAuthState creds initialRoute gs
             in
@@ -1252,14 +1308,24 @@ updateGuest msg gs =
             case ( gs.session.reason, result ) of
                 ( VerifyingCode _ _, Ok creds ) ->
                     let
+                        ( initialRoute, redirectUrl ) =
+                            case gs.pendingJoinToken of
+                                Just token ->
+                                    ( RouteJoinFlock token
+                                    , gs.basePath ++ "flocks/join?token=" ++ token
+                                    )
+
+                                Nothing ->
+                                    ( RouteTrips, gs.basePath ++ "trips" )
+
                         as_ =
-                            toAuthState creds RouteTrips gs
+                            toAuthState creds initialRoute gs
                     in
                     ( AuthModel as_
                     , Cmd.batch
                         [ saveStorage { key = "auth_creds", value = E.encode 0 (encodeCreds creds) }
                         , startSync (encodeCreds creds)
-                        , Nav.replaceUrl gs.key (gs.basePath ++ "trips")
+                        , Nav.replaceUrl gs.key redirectUrl
                         ]
                     )
 
@@ -1306,6 +1372,14 @@ updateGuest msg gs =
 
         NetworkStatusChanged isOnline ->
             ( GuestModel { gs | networkOffline = not isOnline }, Cmd.none )
+
+        UrlChanged url ->
+            case Routing.routeFromUrl gs.basePath url of
+                RouteJoinFlock token ->
+                    ( GuestModel { gs | pendingJoinToken = Just token }, Cmd.none )
+
+                _ ->
+                    ( GuestModel gs, Cmd.none )
 
         _ ->
             ( GuestModel gs, Cmd.none )
@@ -1439,6 +1513,7 @@ updateAuth msg as_ =
                 , emailInput = ""
                 , key = as_.key
                 , networkOffline = as_.networkOffline
+                , pendingJoinToken = Nothing
                 , session = { config = { anthropicKey = "", backendUrl = "" }, reason = NotLoggedIn }
                 , showSettings = False
                 , today = as_.today
@@ -1645,7 +1720,7 @@ updateAuth msg as_ =
                                     , submitting = False
                                 }
                             , Cmd.batch
-                                [ sendPouch (SaveAmend (Amendment.encoder amend))
+                                [ sendPouch (SaveAmend (targetForTripId original.tripId as_) (Amendment.encoder amend))
                                 , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath original.tripId nextTab)
                                 ]
                             )
@@ -1691,7 +1766,7 @@ updateAuth msg as_ =
                                     , submitting = False
                                 }
                             , Cmd.batch
-                                [ sendPouch (SaveExpense (Expense.encoder expense))
+                                [ sendPouch (SaveExpense (targetForTripId tripId as_) (Expense.encoder expense))
                                 , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tripId nextTab)
                                 ]
                             )
@@ -1723,7 +1798,7 @@ updateAuth msg as_ =
                     , voids = Dict.insert voidId optimisticVoid as_.voids
                 }
             , sendPouch
-                (SaveVoid
+                (SaveVoid (targetForTripId expense.tripId as_)
                     (E.object
                         [ ( "_id", E.string voidId )
                         , ( "targetId", E.string (ExpenseId.toString expense.id) )
@@ -1774,7 +1849,7 @@ updateAuth msg as_ =
                     , toast = Just "Duplicated"
                 }
             , Cmd.batch
-                [ sendPouch (SaveExpense (Expense.encoder duplicate))
+                [ sendPouch (SaveExpense (targetForTripId duplicate.tripId as_) (Expense.encoder duplicate))
                 , toastFor "Duplicated"
                 ]
             )
@@ -1858,7 +1933,7 @@ updateAuth msg as_ =
                 }
             , Cmd.batch
                 [ sendPouch
-                    (SaveVoid
+                    (SaveVoid (targetForTripId expense.tripId as_)
                         (E.object
                             [ ( "_id", E.string voidId )
                             , ( "targetId", E.string (ExpenseId.toString expense.id) )
@@ -1868,7 +1943,7 @@ updateAuth msg as_ =
                             ]
                         )
                     )
-                , sendPouch (SaveExpense (Expense.encoder moved))
+                , sendPouch (SaveExpense (targetForTripId moved.tripId as_) (Expense.encoder moved))
                 , Nav.pushUrl as_.key destPath
                 , toastFor "Moved"
                 ]
@@ -1885,7 +1960,7 @@ updateAuth msg as_ =
                             | loadingTrips = Set.insert (TripId.toString tid) as_.loadingTrips
                             , tripLoaded = Set.remove (TripId.toString tid) as_.tripLoaded
                         }
-                    , sendPouch (GetTripExpenses tid)
+                    , sendPouch (GetTripExpenses (targetForTripId tid as_) tid)
                     )
 
                 Nothing ->
@@ -2035,6 +2110,7 @@ updateAuth msg as_ =
                             , errors = []
                             , name = ""
                             , startDate = as_.today
+                            , target = Trip.Personal
                             }
                 }
             , Cmd.none
@@ -2058,6 +2134,7 @@ updateAuth msg as_ =
                             , errors = []
                             , name = trip.name
                             , startDate = trip.startDate
+                            , target = Trip.targetForTrip trip
                             }
                 }
             , Cmd.none
@@ -2087,6 +2164,15 @@ updateAuth msg as_ =
             in
             ( AuthModel { as_ | tripForm = Maybe.map updateForm as_.tripForm }, Cmd.none )
 
+        TripTargetSelected target ->
+            ( AuthModel
+                { as_
+                    | tripForm =
+                        Maybe.map (\f -> { f | target = target }) as_.tripForm
+                }
+            , Cmd.none
+            )
+
         SaveTripForm ->
             case as_.tripForm of
                 Nothing ->
@@ -2112,7 +2198,7 @@ updateAuth msg as_ =
                                             }
                                     in
                                     ( AuthModel { as_ | tripForm = Nothing, trips = upsertTripIntoState updated as_.trips }
-                                    , sendPouch (SaveTrip (Trip.encoder updated))
+                                    , sendPouch (SaveTrip (Trip.targetForTrip updated) (Trip.encoder updated))
                                     )
 
                                 Nothing ->
@@ -2131,12 +2217,20 @@ updateAuth msg as_ =
                         tripId =
                             TripId.fromString ("trip::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp)
 
+                        ( newFlockId, target ) =
+                            case form.target of
+                                Trip.InFlock fid ->
+                                    ( Just fid, Trip.InFlock fid )
+
+                                Trip.Personal ->
+                                    ( Nothing, Trip.Personal )
+
                         newTrip =
                             { budget = String.toFloat form.budget |> Maybe.withDefault 0
                             , coverPhotoUrl = form.coverPhotoUrl
                             , description = form.description
                             , endDate = form.endDate
-                            , flockId = Nothing
+                            , flockId = newFlockId
                             , id = tripId
                             , name = form.name
                             , startDate = form.startDate
@@ -2159,7 +2253,7 @@ updateAuth msg as_ =
                             , trips = newTrips
                         }
                     , Cmd.batch
-                        [ sendPouch (SaveTrip (Trip.encoder newTrip))
+                        [ sendPouch (SaveTrip target (Trip.encoder newTrip))
                         , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tripId LedgerTab)
                         ]
                     )
@@ -2177,7 +2271,7 @@ updateAuth msg as_ =
 
                 voidCmd =
                     sendPouch
-                        (SaveVoid
+                        (SaveVoid (Trip.targetForTrip trip)
                             (E.object
                                 [ ( "_id", E.string voidId )
                                 , ( "targetId", E.string (TripId.toString trip.id) )
@@ -2256,8 +2350,315 @@ updateAuth msg as_ =
         TriggerInstallPrompt ->
             ( AuthModel as_, triggerInstallPrompt () )
 
+        OpenCreateFlockModal ->
+            ( AuthModel (setFlockModal (FlockUi.CreateModal { error = Nothing, name = "" }) as_)
+            , Cmd.none
+            )
+
+        OpenInviteModal flockId ->
+            ( AuthModel (setFlockModal (FlockUi.InviteModal flockId { email = "", error = Nothing }) as_)
+            , Cmd.none
+            )
+
+        OpenLeaveConfirmModal flockId ->
+            ( AuthModel (setFlockModal (FlockUi.LeaveConfirmModal flockId { error = Nothing }) as_)
+            , Cmd.none
+            )
+
+        OpenTransferModal flockId ->
+            ( AuthModel (setFlockModal (FlockUi.TransferModal flockId { error = Nothing, target = "" }) as_)
+            , Cmd.none
+            )
+
+        CloseFlockModal ->
+            ( AuthModel (setFlockModal FlockUi.NoModal as_), Cmd.none )
+
+        ToggleFlockMembers flockId ->
+            ( AuthModel { as_ | flockUi = FlockUi.toggleExpanded flockId as_.flockUi }
+            , Cmd.none
+            )
+
+        CreateFlockNameChanged name ->
+            case as_.flockUi.modal of
+                FlockUi.CreateModal modal ->
+                    ( AuthModel (setFlockModal (FlockUi.CreateModal { modal | name = name }) as_)
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        SubmitCreateFlock ->
+            case as_.flockUi.modal of
+                FlockUi.CreateModal { name } ->
+                    let
+                        trimmed =
+                            String.trim name
+                    in
+                    if trimmed == "" then
+                        ( AuthModel
+                            (setFlockModal
+                                (FlockUi.CreateModal
+                                    { error = Just "Give the flock a name."
+                                    , name = name
+                                    }
+                                )
+                                as_
+                            )
+                        , Cmd.none
+                        )
+
+                    else
+                        ( AuthModel (setFlockInFlight True as_)
+                        , Http.FlockApi.createFlock as_.creds { name = trimmed } CreateFlockResult
+                        )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        CreateFlockResult (Ok _) ->
+            ( AuthModel
+                { as_
+                    | flockUi = FlockUi.empty
+                    , toast = Just "Flock created. It'll show up here once sync settles."
+                }
+            , Cmd.none
+            )
+
+        CreateFlockResult (Err err) ->
+            ( AuthModel (storeFlockError err as_), Cmd.none )
+
+        InviteEmailChanged email ->
+            case as_.flockUi.modal of
+                FlockUi.InviteModal flockId modal ->
+                    ( AuthModel (setFlockModal (FlockUi.InviteModal flockId { modal | email = email }) as_)
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        SubmitInvite ->
+            case as_.flockUi.modal of
+                FlockUi.InviteModal flockId { email } ->
+                    let
+                        trimmed =
+                            String.trim email
+                    in
+                    if trimmed == "" then
+                        ( AuthModel
+                            (setFlockModal
+                                (FlockUi.InviteModal flockId
+                                    { email = email
+                                    , error = Just "Enter an email address."
+                                    }
+                                )
+                                as_
+                            )
+                        , Cmd.none
+                        )
+
+                    else
+                        ( AuthModel (setFlockInFlight True as_)
+                        , Http.FlockApi.inviteToFlock as_.creds flockId { email = trimmed } InviteToFlockResult
+                        )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        InviteToFlockResult (Ok ()) ->
+            ( AuthModel
+                { as_
+                    | flockUi = FlockUi.empty
+                    , toast = Just "Invite sent."
+                }
+            , Cmd.none
+            )
+
+        InviteToFlockResult (Err err) ->
+            ( AuthModel (storeFlockError err as_), Cmd.none )
+
+        TransferTargetChanged target ->
+            case as_.flockUi.modal of
+                FlockUi.TransferModal flockId modal ->
+                    ( AuthModel (setFlockModal (FlockUi.TransferModal flockId { modal | target = target }) as_)
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        SubmitTransfer ->
+            case as_.flockUi.modal of
+                FlockUi.TransferModal flockId { target } ->
+                    if String.trim target == "" then
+                        ( AuthModel
+                            (setFlockModal
+                                (FlockUi.TransferModal flockId
+                                    { error = Just "Pick a member to transfer to."
+                                    , target = target
+                                    }
+                                )
+                                as_
+                            )
+                        , Cmd.none
+                        )
+
+                    else
+                        ( AuthModel (setFlockInFlight True as_)
+                        , Http.FlockApi.transferOwnership
+                            as_.creds
+                            flockId
+                            { newOwnerEmail = String.trim target }
+                            TransferToFlockResult
+                        )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        TransferToFlockResult (Ok ()) ->
+            ( AuthModel
+                { as_
+                    | flockUi = FlockUi.empty
+                    , toast = Just "Ownership transferred."
+                }
+            , Cmd.none
+            )
+
+        TransferToFlockResult (Err err) ->
+            ( AuthModel (storeFlockError err as_), Cmd.none )
+
+        LeaveFlockConfirmed flockId ->
+            ( AuthModel (setFlockInFlight True as_)
+            , Http.FlockApi.leaveFlock as_.creds flockId LeaveFlockResult
+            )
+
+        LeaveFlockResult (Ok ()) ->
+            ( AuthModel
+                { as_
+                    | flockUi = FlockUi.empty
+                    , toast = Just "Left the flock."
+                }
+            , Cmd.none
+            )
+
+        LeaveFlockResult (Err err) ->
+            ( AuthModel (storeFlockError err as_), Cmd.none )
+
+        JoinFlockAccepted token ->
+            ( AuthModel (setFlockInFlight True as_)
+            , Http.FlockApi.joinFlock as_.creds { token = token } JoinFlockResult
+            )
+
+        JoinFlockDeclined ->
+            ( AuthModel as_, Nav.pushUrl as_.key (as_.basePath ++ "trips") )
+
+        JoinFlockResult (Ok response) ->
+            ( AuthModel
+                { as_
+                    | flockUi = FlockUi.empty
+                    , toast = Just ("Joined " ++ response.name ++ ".")
+                }
+            , Nav.pushUrl as_.key (as_.basePath ++ "settings")
+            )
+
+        JoinFlockResult (Err err) ->
+            ( AuthModel { as_ | error = Just (joinErrorMessage err), flockUi = FlockUi.empty }, Cmd.none )
+
         _ ->
             ( AuthModel as_, Cmd.none )
+
+
+
+-- FLOCK HELPERS
+
+
+setFlockModal : FlockUi.FlockModal -> AuthState -> AuthState
+setFlockModal modal as_ =
+    let
+        ui =
+            as_.flockUi
+    in
+    { as_ | flockUi = { ui | inFlight = False, modal = modal } }
+
+
+setFlockInFlight : Bool -> AuthState -> AuthState
+setFlockInFlight v as_ =
+    let
+        ui =
+            as_.flockUi
+    in
+    { as_ | flockUi = { ui | inFlight = v } }
+
+
+storeFlockError : Http.Error -> AuthState -> AuthState
+storeFlockError err as_ =
+    let
+        message =
+            flockErrorMessage err
+
+        ui =
+            as_.flockUi
+
+        newModal =
+            case ui.modal of
+                FlockUi.CreateModal m ->
+                    FlockUi.CreateModal { m | error = Just message }
+
+                FlockUi.InviteModal id m ->
+                    FlockUi.InviteModal id { m | error = Just message }
+
+                FlockUi.LeaveConfirmModal id _ ->
+                    FlockUi.LeaveConfirmModal id { error = Just message }
+
+                FlockUi.TransferModal id m ->
+                    FlockUi.TransferModal id { m | error = Just message }
+
+                FlockUi.NoModal ->
+                    FlockUi.NoModal
+    in
+    { as_ | flockUi = { ui | inFlight = False, modal = newModal } }
+
+
+flockErrorMessage : Http.Error -> String
+flockErrorMessage err =
+    case err of
+        Http.BadStatus 403 ->
+            "Not allowed. Refresh and try again."
+
+        Http.BadStatus 404 ->
+            "That flock wasn't found."
+
+        Http.BadStatus 409 ->
+            "Already a member."
+
+        Http.BadStatus 422 ->
+            "Request rejected. Check the details and try again."
+
+        Http.NetworkError ->
+            "Network error. Try again."
+
+        Http.Timeout ->
+            "Took too long. Try again."
+
+        _ ->
+            "Something went wrong. Try again."
+
+
+joinErrorMessage : Http.Error -> String
+joinErrorMessage err =
+    case err of
+        Http.BadStatus 403 ->
+            "This invite is for someone else."
+
+        Http.BadStatus 404 ->
+            "Invite expired or already used."
+
+        Http.BadStatus 409 ->
+            "You're already a member of that flock."
+
+        _ ->
+            flockErrorMessage err
 
 
 
@@ -2298,6 +2699,9 @@ viewAuth as_ =
                 RouteEditEntry _ _ ->
                     Pages.Add.viewTab as_
 
+                RouteJoinFlock token ->
+                    Pages.JoinFlock.viewAuth as_ token
+
                 RouteLedger _ ->
                     Pages.Ledger.viewTab as_
 
@@ -2336,11 +2740,13 @@ viewAuth as_ =
             ( Just expense, TripsLoaded loadedTrips ) ->
                 UI.TripPicker.viewMove
                     { expense = expense
+                    , flocks = as_.flocks
                     , trips = Trips.allTrips loadedTrips
                     }
 
             _ ->
                 Html.text ""
+        , Pages.Settings.Flocks.viewModal as_
         , UI.Layout.viewToast as_.toast
         ]
 

@@ -689,6 +689,83 @@ The `Data.Pouch` inbound protocol carries the new tags:
 - `FlocksReconciled (List FlockId)` — replaces the known-flock set.
 - `FlockMetaChanged Flock` — upserts one flock.
 
+### Flocks settings UI
+
+The user-facing surface for create / invite / join / leave / transfer
+lives in `src/Pages/Settings/Flocks.elm` (#62). Its modals and inline
+errors all sit on `AuthState.flockUi : Data.FlockUi.FlockUiState`.
+HTTP wrappers for the five `/flocks/*` endpoints (`createFlock`,
+`inviteToFlock`, `joinFlock`, `leaveFlock`, `transferOwnership`) live
+in `src/Http/FlockApi.elm`. The "Create" button is tier-gated via
+`Data.Tier.isPaid as_.tier` — Fledgling users see a disabled button
+with an upgrade copy card next to it; the actual capability check
+happens server-side.
+
+Invite links land on a new `RouteJoinFlock String` route at
+`/flocks/join?token=<jwt>` (path-segment-safe — the token has no `:`
+collisions). Signed-out users get the token parked on
+`GuestState.pendingJoinToken` and the verify-code success path
+redirects to `/flocks/join?token=…` instead of `/trips`, so the
+invite is consumed immediately after auth. The signed-in view
+(`src/Pages/JoinFlock.elm`) decodes the JWT payload locally for
+display only — the server checks the signature — and surfaces a
+friendly "this invite is for someone else" error when the token's
+`inviteeEmail` doesn't match `creds.email`.
+
+### Trip + Ledger UI in flock-shared trips
+
+The day-to-day flock chrome lives in five places (#63):
+
+- **Trip card / hero** — `src/Pages/Trips.elm` overlays a
+  `UI.FlockBadge` and an overlapping `UI.Avatar.viewStack` on the
+  meta row, only for trips with a `flockId`. Personal trips render
+  unchanged.
+- **Ledger row** — `src/Pages/Ledger.elm` resolves the active trip's
+  flock membership into `Dict String FlockMember` and threads it to
+  `viewEntryRow`, which renders an initials avatar + first name
+  (Variant A) on the existing `mt-1.5 flex items-center gap-2` band.
+  Personal trips pass `Dict.empty` so the chip never renders.
+- **Add / Scan context strip** — `src/Pages/Add.elm` and
+  `src/Pages/Scan.elm` render a persistent "ADDING TO / Trip Name"
+  strip at the top of the form when the active trip belongs to a
+  flock, plus a `visible to <first names>` caption under the amount
+  input. The caption collapses to `+ N more` when the flock has
+  more than three members.
+- **Trip Picker drawer** — `src/UI/TripPicker.elm` decorates each
+  candidate row with the flock badge and avatar stack.
+- **New Trip dialog** — `src/Pages/Trips.elm` `viewTargetPicker`
+  asks "where does this trip live?" with one tile per
+  `Flocks.ownedBy currentUser`. Default selection is `Personal`;
+  the segmented control hides entirely when the user owns no
+  flocks. The choice is captured on `TripForm.target : TripTarget`
+  and threaded into the outbound `SaveTrip` port message.
+
+`UI.Avatar` hashes `UserId.toString` into a five-slot palette
+(`bg-rust`, `bg-forest-mid`, `bg-moss`, `bg-rust-deep`, `bg-tan`) so
+Alice keeps the same circle colour on every member's device. The
+hash is pinned by `tests/UIAvatarTests.elm` so casual refactors of
+the hashing function fail loudly.
+
+### Tier resolution in shared trips
+
+Paid features in a flock are gated by the **billing owner's** tier,
+not the writer's, via `Data.Trip.effectiveTier`. The wrappers
+`canUseProxiedOCR` / `canBatchScan` are convenience predicates over
+the same answer — a free Fledgling member of a Fly-owned flock gets
+hosted OCR inside that flock's trips because that's the whole point
+of pooling under one billing relationship. The tier-aware footnote
+in `src/Pages/Scan.elm` is the first call site; the proxied-OCR
+network path itself is still wired through #14.
+
+`Data.Trip.TripTarget` is the routing tag carried on every outbound
+`Save*` / `Get*` port message: `Personal` writes to the user's solo
+PouchDB handle, `InFlock fid` writes to the matching flock handle.
+`Main.targetForTripId` resolves the tag by looking up the trip in
+the loaded zipper; missing trips fall back to `Personal` so legacy
+call sites stay safe. The encoder produces
+`{ "kind": "Personal" }` or `{ "kind": "InFlock", "flockId": "..." }`,
+matching the `targetHandle` reader in `src/pouch.js`.
+
 ---
 
 ## Encoders and decoders

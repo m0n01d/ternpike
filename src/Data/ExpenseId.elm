@@ -10,6 +10,7 @@ Wrapping it in an opaque type stops the compiler from letting you mix
 `ExpenseId` with `TripId` (or with any other `String`). Use `toString` only
 when you need the raw key for a `Dict` lookup or for embedding into an
 amendment/void ID.
+
 -}
 
 import Json.Decode

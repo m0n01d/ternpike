@@ -1,10 +1,15 @@
 module Pages.Add exposing (viewTab)
 
 import Data.Category as Category exposing (Category)
+import Data.Flock exposing (Flock)
+import Data.Flocks
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod(..))
 import Data.PendingEntry exposing (AddPageMode(..), PendingEntry, PendingForm(..))
+import Data.Trip exposing (Trip)
+import Data.Trips
+import Data.UserId as UserId
 import Dict
 import Helpers exposing (formatCoord)
 import Html exposing (Html)
@@ -15,6 +20,7 @@ import Routing
 import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Card
+import UI.FlockBadge
 import UI.Layout
 import UI.Rule
 import UI.Skeleton
@@ -136,8 +142,14 @@ viewLoadingHero =
 
 viewBody : AuthState -> PendingEntry -> Bool -> Html Msg
 viewBody model pending isEditing =
+    let
+        flockContext =
+            activeFlockContext model
+    in
     Html.div []
-        [ viewScanPreview model
+        [ viewFlockContextStrip flockContext
+        , viewScanPreview model
+        , viewVisibleToCaption flockContext
         , UI.Rule.kicker "THE BASICS"
         , UI.Card.subCard
             [ UI.Layout.formField "CATEGORY"
@@ -220,6 +232,100 @@ viewBody model pending isEditing =
                 )
             ]
         ]
+
+
+{-| The active trip's flock context, if any. `Nothing` for personal
+trips and for trips whose flock meta hasn't synced yet — in either
+case the Add page renders without the flock chrome.
+-}
+activeFlockContext : AuthState -> Maybe ( Trip, Flock )
+activeFlockContext model =
+    case ( Routing.routeTripId model.route, model.trips ) of
+        ( Just tripId, Data.Trips.TripsLoaded loadedTrips ) ->
+            case Data.Trips.findTrip tripId loadedTrips of
+                Just trip ->
+                    trip.flockId
+                        |> Maybe.andThen (\fid -> Data.Flocks.get fid model.flocks)
+                        |> Maybe.map (\flock -> ( trip, flock ))
+
+                Nothing ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+{-| The "ADDING TO / Trip Name" strip at the top of the Add screen.
+Only rendered for flock-scoped trips; on personal trips the form keeps
+its current top-of-screen behaviour.
+-}
+viewFlockContextStrip : Maybe ( Trip, Flock ) -> Html Msg
+viewFlockContextStrip ctx =
+    case ctx of
+        Just ( trip, flock ) ->
+            Html.div
+                [ Html.Attributes.class "mb-4 flex items-center gap-3 bg-cream-deep border border-tan rounded-card px-4 py-3" ]
+                [ UI.FlockBadge.view flock
+                , Html.div [ Html.Attributes.class "flex flex-col leading-tight min-w-0" ]
+                    [ Html.span
+                        [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
+                        [ Html.text "Adding to" ]
+                    , Html.span
+                        [ Html.Attributes.class "text-sm font-semibold text-forest truncate" ]
+                        [ Html.text trip.name ]
+                    ]
+                ]
+
+        Nothing ->
+            Html.text ""
+
+
+{-| The "visible to Alice + Bob" caption rendered just under the amount
+hero on flock-scoped trips. Lists the flock's members by first name
+(email local-part), collapsing to "+ N more" when there are more than
+three.
+-}
+viewVisibleToCaption : Maybe ( Trip, Flock ) -> Html Msg
+viewVisibleToCaption ctx =
+    case ctx of
+        Just ( _, flock ) ->
+            Html.p
+                [ Html.Attributes.class "-mt-2 mb-4 text-center text-[11px] font-mono uppercase tracking-widest text-moss" ]
+                [ Html.text ("Visible to " ++ visibleToLabel flock) ]
+
+        Nothing ->
+            Html.text ""
+
+
+visibleToLabel : Flock -> String
+visibleToLabel flock =
+    let
+        names =
+            List.map firstNameFor (Data.Flock.members flock)
+    in
+    case names of
+        [] ->
+            "you"
+
+        _ ->
+            if List.length names <= 3 then
+                String.join ", " names
+
+            else
+                String.join ", " (List.take 2 names)
+                    ++ ", + "
+                    ++ String.fromInt (List.length names - 2)
+                    ++ " more"
+
+
+firstNameFor : UserId.UserId -> String
+firstNameFor user =
+    case String.split "@" (UserId.toString user) of
+        head :: _ ->
+            head
+
+        [] ->
+            UserId.toString user
 
 
 viewLoadingBody : Html Msg

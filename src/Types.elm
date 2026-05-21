@@ -39,6 +39,8 @@ import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
+import Data.FlockId exposing (FlockId)
+import Data.FlockUi exposing (FlockUiState)
 import Data.Flocks
 import Data.Guest exposing (GuestSession)
 import Data.Navigation exposing (Route)
@@ -48,13 +50,16 @@ import Data.Scan exposing (ScanItem)
 import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
 import Data.Sync exposing (SyncState)
+import Data.Tier exposing (Tier)
 import Data.Trip exposing (Trip, TripField, TripForm)
 import Data.TripId exposing (TripId)
 import Data.Trips exposing (TripsState)
+import Data.UserId
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import File exposing (File)
 import Http
+import Http.FlockApi
 import Json.Decode
 import Set exposing (Set)
 import Time
@@ -91,6 +96,7 @@ type alias GuestState =
     , emailInput : String
     , key : Nav.Key
     , networkOffline : Bool
+    , pendingJoinToken : Maybe String
     , session : GuestSession
     , showSettings : Bool
     , today : String
@@ -155,8 +161,10 @@ type alias AuthState =
     , config : AppConfig
     , confirmDeleteTrip : Maybe Trip
     , creds : Creds
+    , currentUser : Data.UserId.UserId
     , error : Maybe String
     , expenses : Dict String (Dict String Expense)
+    , flockUi : FlockUiState
     , flocks : Data.Flocks.Flocks
     , form : PendingForm
     , geoBlocked : Bool
@@ -176,6 +184,7 @@ type alias AuthState =
     , statsHover : Hover
     , submitting : Bool
     , syncState : SyncState
+    , tier : Tier
     , toast : Maybe String
     , today : String
     , tripForm : Maybe TripForm
@@ -255,11 +264,14 @@ type Msg
     | CancelDeleteTrip
     | CategorySelected Category
     | ClearDoneItems
+    | CloseFlockModal
     | CloseLedgerMenu
     | CloseMovePicker
     | CloseTripForm
     | CodeInputChanged String
     | ConfirmDeleteTrip Trip
+    | CreateFlockNameChanged String
+    | CreateFlockResult (Result Http.Error Http.FlockApi.CreateFlockResponse)
     | DateChanged String
     | DeleteTrip Trip
     | DismissError
@@ -279,6 +291,13 @@ type Msg
     | GotSubmitTime Time.Posix
     | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
     | HoverDailyBars (List (CI.One DailyDay CI.Bar))
+    | InviteEmailChanged String
+    | InviteToFlockResult (Result Http.Error ())
+    | JoinFlockAccepted String
+    | JoinFlockDeclined
+    | JoinFlockResult (Result Http.Error Http.FlockApi.JoinFlockResponse)
+    | LeaveFlockConfirmed FlockId
+    | LeaveFlockResult (Result Http.Error ())
     | LinkClicked Browser.UrlRequest
     | LongNoteChanged String
     | MapPickerConfirmed Float Float
@@ -286,11 +305,15 @@ type Msg
     | MoveEntry Expense TripId
     | NetworkStatusChanged Bool
     | NoteChanged String
+    | OpenCreateFlockModal
     | OpenEditTripForm Trip
+    | OpenInviteModal FlockId
+    | OpenLeaveConfirmModal FlockId
     | OpenLedgerMenu ExpenseId
     | OpenMapPicker
     | OpenMovePicker Expense
     | OpenNewTripForm
+    | OpenTransferModal FlockId
     | PaymentMethodChanged (Maybe PaymentMethod)
     | RefreshClicked
     | RequestCodeResult (Result Http.Error ())
@@ -303,14 +326,21 @@ type Msg
     | SignOutClicked
     | SkipLocation
     | SubmitCode
+    | SubmitCreateFlock
     | SubmitEmail
     | SubmitEntry
+    | SubmitInvite
+    | SubmitTransfer
     | ToastExpired
     | ToggleDayIntensity
+    | ToggleFlockMembers FlockId
     | ToggleGuestSettings
     | ToggleLedgerMap
+    | TransferTargetChanged String
+    | TransferToFlockResult (Result Http.Error ())
     | TriggerInstallPrompt
     | TripFieldChanged TripField String
+    | TripTargetSelected Data.Trip.TripTarget
     | UrlChanged Url.Url
     | VerifyCodeResult (Result Http.Error Creds)
     | VoidEntry Expense
