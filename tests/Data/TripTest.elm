@@ -17,12 +17,12 @@ suite =
         [ test "personal trip returns the user's own tier" <|
             \_ ->
                 Trip.effectiveTier (personalTrip "trip::1::aaaaaaaa")
-                    { tier = Tier.Fledgling, flocks = Flocks.empty }
+                    { currentUser = member, tier = Tier.Fledgling, flocks = Flocks.empty }
                     |> Expect.equal Tier.Fledgling
         , test "personal trip for a paid user returns Fly" <|
             \_ ->
                 Trip.effectiveTier (personalTrip "trip::2::bbbbbbbb")
-                    { tier = Tier.Fly, flocks = Flocks.empty }
+                    { currentUser = member, tier = Tier.Fly, flocks = Flocks.empty }
                     |> Expect.equal Tier.Fly
         , test "active flock trip elevates a Fledgling member to Fly" <|
             \_ ->
@@ -31,7 +31,8 @@ suite =
                         validFlockId
 
                     state =
-                        { tier = Tier.Fledgling
+                        { currentUser = member
+                        , tier = Tier.Fledgling
                         , flocks = Flocks.fromList [ flockWith fid Active ]
                         }
                 in
@@ -44,33 +45,39 @@ suite =
                         validFlockId
 
                     state =
-                        { tier = Tier.Fly
+                        { currentUser = owner
+                        , tier = Tier.Fly
                         , flocks = Flocks.fromList [ flockWith fid Active ]
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::4::dddddddd" fid) state
                     |> Expect.equal Tier.Fly
-        , test "grace flock falls back to the user's own tier" <|
+        , test "grace flock as the owner returns the owner's own tier" <|
             \_ ->
                 let
                     fid =
                         validFlockId
 
                     state =
-                        { tier = Tier.Fledgling
+                        { currentUser = owner
+                        , tier = Tier.Fledgling
                         , flocks = Flocks.fromList [ flockWith fid Grace ]
                         }
                 in
+                -- Under #63's semantics the helper doesn't read billingStatus —
+                -- the lapsed-billing banner (#64) handles UX. Owner-is-me path
+                -- returns ctx.tier so a downgraded owner sees their actual tier.
                 Trip.effectiveTier (flockTrip "trip::5::eeeeeeee" fid) state
                     |> Expect.equal Tier.Fledgling
-        , test "frozen flock falls back to the user's own tier" <|
+        , test "frozen flock as a Fly owner stays Fly" <|
             \_ ->
                 let
                     fid =
                         validFlockId
 
                     state =
-                        { tier = Tier.Fly
+                        { currentUser = owner
+                        , tier = Tier.Fly
                         , flocks = Flocks.fromList [ flockWith fid Frozen ]
                         }
                 in
@@ -83,20 +90,22 @@ suite =
                         validFlockId
 
                     state =
-                        { tier = Tier.Fledgling
+                        { currentUser = member
+                        , tier = Tier.Fledgling
                         , flocks = Flocks.empty
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::7::99999999" fid) state
                     |> Expect.equal Tier.Fledgling
-        , test "canUseProxiedOCR is True on an active flock trip for a Fledgling" <|
+        , test "canUseProxiedOCR is True on an active flock trip for a Fledgling member" <|
             \_ ->
                 let
                     fid =
                         validFlockId
 
                     state =
-                        { tier = Tier.Fledgling
+                        { currentUser = member
+                        , tier = Tier.Fledgling
                         , flocks = Flocks.fromList [ flockWith fid Active ]
                         }
                 in
@@ -105,16 +114,17 @@ suite =
         , test "canUseProxiedOCR is False on a personal trip for a Fledgling" <|
             \_ ->
                 Trip.canUseProxiedOCR (personalTrip "trip::9::77777777")
-                    { tier = Tier.Fledgling, flocks = Flocks.empty }
+                    { currentUser = member, tier = Tier.Fledgling, flocks = Flocks.empty }
                     |> Expect.equal False
-        , test "canBatchScan is True on an active flock trip for a Fledgling" <|
+        , test "canBatchScan is True on an active flock trip for a Fledgling member" <|
             \_ ->
                 let
                     fid =
                         validFlockId
 
                     state =
-                        { tier = Tier.Fledgling
+                        { currentUser = member
+                        , tier = Tier.Fledgling
                         , flocks = Flocks.fromList [ flockWith fid Active ]
                         }
                 in
@@ -190,3 +200,8 @@ flockWith fid status =
 owner : UserId
 owner =
     UserId.fromString "owner@example.com"
+
+
+member : UserId
+member =
+    UserId.fromString "member@example.com"
