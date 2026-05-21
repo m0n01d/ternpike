@@ -39,6 +39,7 @@ import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
+import Data.Flocks
 import Data.Guest exposing (GuestSession)
 import Data.Navigation exposing (Route)
 import Data.PaymentMethod exposing (PaymentMethod)
@@ -156,6 +157,7 @@ type alias AuthState =
     , creds : Creds
     , error : Maybe String
     , expenses : Dict String (Dict String Expense)
+    , flocks : Data.Flocks.Flocks
     , form : PendingForm
     , geoBlocked : Bool
     , key : Nav.Key

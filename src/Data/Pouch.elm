@@ -36,6 +36,8 @@ event delivers all the related documents at once.
 import Data.Amendment exposing (Amendment)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
+import Data.Flock exposing (Flock)
+import Data.FlockId exposing (FlockId)
 import Data.Sync exposing (SyncState)
 import Data.Trip exposing (Trip)
 import Data.TripId exposing (TripId)
@@ -68,6 +70,13 @@ type PouchOutbound
   - `DbError` — non-fatal error message to surface as a toast/banner.
   - `ExpenseFetched` / `TripExpensesFetched` / `TripsFetched` —
     responses to the corresponding outbound queries.
+  - `FlockMetaChanged` — a `flock:meta` document arrived (initial
+    hydration after first sync, or a live change). Carries the full
+    decoded `Flock`.
+  - `FlocksReconciled` — the JS side has finished opening / closing
+    flock handles after seeing a `user:flocks` doc; payload is the
+    list of `FlockId`s the user belongs to right now (so Elm can drop
+    cached flocks the user has left).
   - `SyncStateMsg` — sync health update.
 
 -}
@@ -77,6 +86,8 @@ type PouchInbound
     | DbDeleted String
     | DbError String
     | ExpenseFetched ExpenseId ExpenseBundle
+    | FlockMetaChanged Flock
+    | FlocksReconciled (List FlockId)
     | SyncStateMsg SyncState
     | TripExpensesFetched TripId TripBundle
     | TripsFetched (Dict String Trip)
