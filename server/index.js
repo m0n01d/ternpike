@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { Resend } from 'resend'
 
+import { registerFlockRoutes, runGraceFreezeSweep } from './flocks.js'
+
 const CODE_TTL_SECONDS = 600
 const CODE_LENGTH = 6
 
@@ -122,20 +124,21 @@ const STATIC_ORIGINS = new Set([
 const PREVIEW_ORIGIN =
   /^https:\/\/[a-z0-9-]+-ternpike\.dwightdoane\.workers\.dev$/
 
-app.use(
-  '/auth/*',
-  cors({
-    origin: (origin) => {
-      if (!origin) return null
-      if (STATIC_ORIGINS.has(origin)) return origin
-      if (PREVIEW_ORIGIN.test(origin)) return origin
-      return null
-    },
-    allowMethods: ['POST', 'OPTIONS'],
-    allowHeaders: ['Content-Type'],
-    maxAge: 86400,
-  }),
-)
+const corsConfig = cors({
+  origin: (origin) => {
+    if (!origin) return null
+    if (STATIC_ORIGINS.has(origin)) return origin
+    if (PREVIEW_ORIGIN.test(origin)) return origin
+    return null
+  },
+  allowMethods: ['POST', 'OPTIONS'],
+  allowHeaders: ['Authorization', 'Content-Type', 'X-Webhook-Secret'],
+  maxAge: 86400,
+})
+
+app.use('/auth/*', corsConfig)
+app.use('/flocks/*', corsConfig)
+app.use('/flocks', corsConfig)
 
 app.post('/auth/request-code', async (c) => {
   const env = c.env
@@ -202,6 +205,11 @@ app.post('/auth/verify-code', async (c) => {
   }
 })
 
+registerFlockRoutes(app)
+
 export default {
   fetch: app.fetch,
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(runGraceFreezeSweep(env))
+  },
 }
