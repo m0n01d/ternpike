@@ -222,7 +222,7 @@ viewEntryRow basePath entry =
         [ Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
             [ Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
                 [ Html.text primaryLabel ]
-            , Html.div [ Html.Attributes.class "mt-0.5 flex items-center gap-2" ]
+            , Html.div [ Html.Attributes.class "mt-1.5 flex items-center gap-2" ]
                 [ Html.span
                     [ Html.Attributes.class "inline-block text-[10px] font-mono uppercase tracking-wider text-moss bg-cream-deep px-2 py-0.5 rounded" ]
                     [ Html.text (Category.label entry.category) ]
