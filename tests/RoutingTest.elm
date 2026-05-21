@@ -1,11 +1,11 @@
 module RoutingTest exposing (suite)
 
 import Data.ExpenseId as ExpenseId
+import Data.Navigation exposing (Route(..))
 import Data.TripId as TripId
 import Expect
 import Routing exposing (editEntryPath, routeFromUrl)
 import Test exposing (Test, describe, test)
-import Types exposing (Route(..))
 import Url
 
 

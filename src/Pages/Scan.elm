@@ -1,6 +1,8 @@
 module Pages.Scan exposing (viewTab)
 
 import Data.Category as Category
+import Data.Navigation exposing (Tab(..))
+import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Dict
 import File exposing (File)
 import Html exposing (Html)
@@ -8,7 +10,7 @@ import Html.Attributes
 import Html.Events
 import Json.Decode
 import Routing
-import Types exposing (AuthState, Msg(..), OcrData, ScanItem, ScanStatus(..), Tab(..))
+import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Icons
 
@@ -30,7 +32,7 @@ viewHero =
         , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
             [ Html.text "Tap to add receipts" ]
         , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
-            [ Html.text "Stack them up \u{2014} Ternpike processes in parallel." ]
+            [ Html.text "Stack them up — Ternpike processes in parallel." ]
         , Html.input
             [ Html.Attributes.type_ "file"
             , Html.Attributes.accept "image/*"
@@ -54,7 +56,7 @@ viewBody model =
                 [ Html.Attributes.href (Routing.pathForCurrentTab model AddTab)
                 , Html.Attributes.class "mt-4 inline-block py-2 px-4 rounded-lg border border-tan text-muted text-sm cursor-pointer"
                 ]
-                [ Html.text "Fill in manually \u{2192}" ]
+                [ Html.text "Fill in manually →" ]
             ]
 
     else
@@ -95,7 +97,7 @@ viewExifDebugBlock : Int -> ScanItem -> Html Msg
 viewExifDebugBlock idx item =
     Html.div [ Html.Attributes.class "mb-3 mt-2 rounded-lg bg-cream p-3" ]
         [ Html.div [ Html.Attributes.class "text-moss text-xs mb-1" ]
-            [ Html.text ("EXIF dump \u{2014} photo " ++ String.fromInt (idx + 1)) ]
+            [ Html.text ("EXIF dump — photo " ++ String.fromInt (idx + 1)) ]
         , Html.div
             [ Html.Attributes.class "font-mono text-[10px] text-muted break-all whitespace-pre-wrap max-h-40 overflow-y-auto" ]
             [ Html.text item.exifDebug ]
@@ -121,13 +123,13 @@ viewScanCardStatus item =
     case item.status of
         ScanQueued ->
             Html.div []
-                [ Html.div [ Html.Attributes.class "text-moss text-xs mb-1.5" ] [ Html.text "Queued\u{2026}" ]
+                [ Html.div [ Html.Attributes.class "text-moss text-xs mb-1.5" ] [ Html.text "Queued…" ]
                 , viewProgressBar "w-1/4"
                 ]
 
         ScanProcessing ->
             Html.div []
-                [ Html.div [ Html.Attributes.class "text-rust text-xs mb-1.5" ] [ Html.text "Reading\u{2026}" ]
+                [ Html.div [ Html.Attributes.class "text-rust text-xs mb-1.5" ] [ Html.text "Reading…" ]
                 , viewProgressBar "w-2/3"
                 ]
 
@@ -143,19 +145,19 @@ viewScanCardStatus item =
                     [ Html.Events.onClick (ReviewScanItem item.id)
                     , Html.Attributes.class "w-full py-1.5 rounded-lg bg-rust text-parchment text-xs font-bold cursor-pointer border-none"
                     ]
-                    [ Html.text "Review \u{2192}" ]
+                    [ Html.text "Review →" ]
                 ]
 
         ScanSubmitted ->
             Html.div [ Html.Attributes.class "text-moss text-xs text-center py-1" ]
-                [ Html.text "\u{2713} Submitted" ]
+                [ Html.text "✓ Submitted" ]
 
 
 viewOcrSummary : OcrData -> Html Msg
 viewOcrSummary ocr =
     Html.div [ Html.Attributes.class "mb-2" ]
         [ Html.div [ Html.Attributes.class "text-rust font-mono text-sm font-bold" ]
-            [ Html.text (ocr.amount |> Maybe.map (\a -> "$" ++ String.fromFloat a) |> Maybe.withDefault "\u{2014}") ]
+            [ Html.text (ocr.amount |> Maybe.map (\a -> "$" ++ String.fromFloat a) |> Maybe.withDefault "—") ]
         , Html.div [ Html.Attributes.class "text-muted text-xs truncate" ]
             [ Html.text
                 (ocr.merchant

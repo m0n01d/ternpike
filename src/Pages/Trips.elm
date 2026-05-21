@@ -1,9 +1,10 @@
 module Pages.Trips exposing (viewTab)
 
 import Data.Entry as Entry
+import Data.Navigation exposing (Tab(..))
 import Data.Trip exposing (Trip, TripField(..), TripForm)
 import Data.TripId as TripId
-import Data.Trips as Trips
+import Data.Trips as Trips exposing (TripsState(..))
 import Dict
 import Helpers
 import Html exposing (Html)
@@ -11,7 +12,7 @@ import Html.Attributes
 import Html.Events
 import Routing
 import Set
-import Types exposing (AuthState, Msg(..), Tab(..), TripsState(..))
+import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Icons
 import UI.Layout
@@ -114,7 +115,7 @@ viewTripHero activeTrip entries =
         dateLine =
             if hasStart && hasEnd then
                 Helpers.formatDateDisplay activeTrip.startDate
-                    ++ " \u{2014} "
+                    ++ " — "
                     ++ Helpers.formatDateDisplay activeTrip.endDate
 
             else if hasStart then
@@ -149,7 +150,7 @@ viewTripHero activeTrip entries =
             Html.div [ Html.Attributes.class "mt-2 flex items-center gap-2 text-xs font-mono tracking-wide text-muted" ]
                 [ Html.text dateLine
                 , if totalDays > 0 then
-                    Html.text (" \u{00B7} " ++ String.fromInt totalDays ++ " DAYS")
+                    Html.text (" · " ++ String.fromInt totalDays ++ " DAYS")
 
                   else
                     Html.text ""

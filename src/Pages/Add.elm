@@ -1,8 +1,10 @@
 module Pages.Add exposing (viewTab)
 
-import Data.Category as Category exposing (Category(..))
-import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.Category as Category exposing (Category)
+import Data.Location exposing (LocationSource(..), LocationState(..))
+import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod(..))
+import Data.PendingEntry exposing (AddPageMode(..), PendingEntry, PendingForm(..))
 import Dict
 import Helpers exposing (formatCoord)
 import Html exposing (Html)
@@ -10,7 +12,7 @@ import Html.Attributes
 import Html.Events
 import Json.Decode
 import Routing
-import Types exposing (..)
+import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Card
 import UI.Layout
@@ -23,26 +25,28 @@ viewTab as_ =
     case addPageMode as_.route as_.form of
         AddPageLoading _ ->
             { actions = []
-            , body    = viewLoadingBody
-            , hero    = viewLoadingHero
+            , body = viewLoadingBody
+            , hero = viewLoadingHero
             }
 
         AddPageNew ->
             let
-                pending = formPending as_.form
+                pending =
+                    formPending as_.form
             in
             { actions = viewNewActions as_
-            , body    = viewBody as_ pending False
-            , hero    = viewHero pending
+            , body = viewBody as_ pending False
+            , hero = viewHero pending
             }
 
         AddPageEditing _ ->
             let
-                pending = formPending as_.form
+                pending =
+                    formPending as_.form
             in
             { actions = viewEditingActions as_
-            , body    = viewBody as_ pending True
-            , hero    = viewHero pending
+            , body = viewBody as_ pending True
+            , hero = viewHero pending
             }
 
 
@@ -52,7 +56,11 @@ addPageMode route form =
         RouteEditEntry _ id ->
             case form of
                 EditForm formId _ ->
-                    if formId == id then AddPageEditing id else AddPageLoading id
+                    if formId == id then
+                        AddPageEditing id
+
+                    else
+                        AddPageLoading id
 
                 FreshForm _ ->
                     AddPageLoading id
@@ -64,8 +72,11 @@ addPageMode route form =
 formPending : PendingForm -> PendingEntry
 formPending form =
     case form of
-        EditForm _ p -> p
-        FreshForm p  -> p
+        EditForm _ p ->
+            p
+
+        FreshForm p ->
+            p
 
 
 viewNewActions : AuthState -> List (Html Msg)
@@ -189,7 +200,12 @@ viewBody model pending isEditing =
             , Html.Attributes.disabled model.submitting
             , Html.Attributes.class
                 ("w-full bg-rust hover:bg-rust-deep text-parchment border-none rounded-lg py-[18px] text-lg font-bold tracking-wide cursor-pointer mt-2 min-h-[56px] "
-                    ++ (if model.submitting then "opacity-60 cursor-not-allowed" else "")
+                    ++ (if model.submitting then
+                            "opacity-60 cursor-not-allowed"
+
+                        else
+                            ""
+                       )
                 )
             ]
             [ Html.text
@@ -260,11 +276,29 @@ viewCategoryBtn selected cat =
         [ Html.Events.onClick (CategorySelected cat)
         , Html.Attributes.class
             ("rounded-lg py-3 px-2 text-sm cursor-pointer flex flex-col items-center gap-1 min-h-[64px] text-ink "
-                ++ (if active then "font-bold" else "border border-tan bg-cream")
+                ++ (if active then
+                        "font-bold"
+
+                    else
+                        "border border-tan bg-cream"
+                   )
             )
+
         -- dynamic color from data; cannot express as a Tailwind class
-        , Html.Attributes.style "background" (if active then Category.color cat else "")
-        , Html.Attributes.style "border-color" (if active then Category.color cat else "")
+        , Html.Attributes.style "background"
+            (if active then
+                Category.color cat
+
+             else
+                ""
+            )
+        , Html.Attributes.style "border-color"
+            (if active then
+                Category.color cat
+
+             else
+                ""
+            )
         ]
         [ Html.span [ Html.Attributes.class "text-xl leading-none" ] [ Html.text (Category.icon cat) ]
         , Html.text (Category.label cat)
@@ -332,9 +366,14 @@ viewLocationStatus ls =
             let
                 sourceLabel =
                     case source of
-                        ExifGps    -> "📍 from photo"
-                        BrowserGeo -> "📍 GPS"
-                        ManualPin  -> "📍 pinned"
+                        ExifGps ->
+                            "📍 from photo"
+
+                        BrowserGeo ->
+                            "📍 GPS"
+
+                        ManualPin ->
+                            "📍 pinned"
             in
             Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
                 [ Html.span [ Html.Attributes.class "text-moss text-sm" ]
@@ -389,7 +428,11 @@ viewPaymentMethodBtn selected pm =
             selected == Just pm
 
         nextValue =
-            if active then Nothing else Just pm
+            if active then
+                Nothing
+
+            else
+                Just pm
     in
     Html.button
         [ Html.Events.onClick (PaymentMethodChanged nextValue)

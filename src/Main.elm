@@ -2,6 +2,7 @@ port module Main exposing (main)
 
 {-| Application entry point and the single source of truth for state.
 
+
 # Big picture
 
 The model is a sum type:
@@ -15,33 +16,41 @@ cannot be reached while signed out. Any 401 from an HTTP call or the
 CouchDB sync transitions the app to `GuestModel SessionExpired` —
 there's no silent re-auth because tokens expire aggressively.
 
+
 # Data shape
 
 `AuthState` caches everything fetched from PouchDB:
 
-    expenses   : Dict String (Dict String Expense)
-                   -- outer key = TripId.toString, inner key = ExpenseId.toString
-    amendments : Dict String Amendment   -- keyed by amendment ID
-    voids      : Dict String Void        -- keyed by void ID
-    trips      : TripsState
+    expenses : Dict String (Dict String Expense)
+
+    -- outer key = TripId.toString, inner key = ExpenseId.toString
+    amendments : Dict String Amendment
+
+    -- keyed by amendment ID
+    voids : Dict String Void
+
+    -- keyed by void ID
+    trips : TripsState
 
 Single-trip lookup is a `Dict.get` on the outer expenses dict.
 `Data.Entry.resolve` folds amendments and applies voids to produce the
 user-facing `EffectiveEntry` list.
 
+
 # Flow
 
-  1. `init` reads cached creds from JS flags and either constructs a
-     `GuestModel` or jumps straight to `AuthModel` and starts CouchDB sync.
-  2. The first time sync settles (`SyncStateMsg Synced`), we send
-     `GetAllTrips`. We do **not** fetch on login — that would race with
-     the initial sync pull.
-  3. Each route transition runs `fetchesForRoute`, which fires only the
-     PouchDB queries needed for that route (idempotent — guarded by
-     `tripLoaded` / `loadingExpenses`).
-  4. PouchDB's live-changes feed pushes every local or synced write
-     through `pouchIn`, where `handleDbChange` merges it into the right
-     `Dict`.
+1.  `init` reads cached creds from JS flags and either constructs a
+    `GuestModel` or jumps straight to `AuthModel` and starts CouchDB sync.
+2.  The first time sync settles (`SyncStateMsg Synced`), we send
+    `GetAllTrips`. We do **not** fetch on login — that would race with
+    the initial sync pull.
+3.  Each route transition runs `fetchesForRoute`, which fires only the
+    PouchDB queries needed for that route (idempotent — guarded by
+    `tripLoaded` / `loadingExpenses`).
+4.  PouchDB's live-changes feed pushes every local or synced write
+    through `pouchIn`, where `handleDbChange` merges it into the right
+    `Dict`.
+
 
 # Ports
 
@@ -55,26 +64,35 @@ user-facing `EffectiveEntry` list.
     photos.
 
 For the full narrative and document ID conventions, see `docs/architecture.md`.
+
 -}
 
 import Browser
 import Browser.Navigation as Nav
 import Data.Amendment as Amendment
+import Data.Auth exposing (AppConfig, Creds)
 import Data.Category as Category exposing (Category(..))
 import Data.Entry as Entry
 import Data.Expense as Expense
 import Data.ExpenseId as ExpenseId
+import Data.Guest exposing (GuestReason(..), GuestSession)
+import Data.Location exposing (LocationSource(..), LocationState(..))
+import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod
+import Data.PendingEntry exposing (PendingEntry, PendingForm(..))
+import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
+import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.Sync exposing (SyncState(..))
 import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
-import Data.Trips as Trips
-import Http
+import Data.Trips as Trips exposing (TripsState(..))
 import Data.Void as Void
 import Dict
 import File
 import Helpers
 import Html exposing (Html)
 import Html.Attributes
+import Http
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
@@ -90,7 +108,7 @@ import Routing
 import Set
 import Task
 import Time
-import Types exposing (..)
+import Types exposing (AuthState, GuestState, Model(..), Msg(..))
 import UI.Layout
 import Url
 import Validate
@@ -136,9 +154,6 @@ port gotExifResult : ({ id : String, lat : Float, lon : Float, hasGps : Bool, de
 
 -- ROUTING
 -- See src/Routing.elm
-
-
-
 -- SESSION HELPERS
 
 
@@ -156,49 +171,50 @@ populate via `GetAllTrips` once the first sync settles.
 `trips = TripsLoading ... initialRouteTripId` carries the pending
 selection from the URL so that when trips arrive we can pick the right
 one without a second navigation.
+
 -}
 toAuthState : Creds -> Route -> GuestState -> AuthState
 toAuthState creds initialRoute gs =
-    { activeScanItemId  = Nothing
-    , amendments        = Dict.empty
-    , basePath          = gs.basePath
-    , config            = gs.session.config
+    { activeScanItemId = Nothing
+    , amendments = Dict.empty
+    , basePath = gs.basePath
+    , config = gs.session.config
     , confirmDeleteTrip = Nothing
-    , creds             = creds
-    , error             = Nothing
-    , expenses          = Dict.empty
-    , form              = FreshForm (defaultPendingEntry gs.today)
-    , geoBlocked        = False
-    , key               = gs.key
-    , loadingExpenses   = Set.empty
-    , loadingTrips      = Set.empty
-    , route             = initialRoute
-    , scanQueue         = Dict.empty
-    , showLedgerMap     = False
-    , showMapPicker     = False
-    , submitting        = False
-    , syncState         = NotEnabled
-    , toast             = Nothing
-    , today             = gs.today
-    , tripForm          = Nothing
-    , tripLoaded        = Set.empty
-    , trips             = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
-    , version           = gs.version
-    , voids             = Dict.empty
+    , creds = creds
+    , error = Nothing
+    , expenses = Dict.empty
+    , form = FreshForm (defaultPendingEntry gs.today)
+    , geoBlocked = False
+    , key = gs.key
+    , loadingExpenses = Set.empty
+    , loadingTrips = Set.empty
+    , route = initialRoute
+    , scanQueue = Dict.empty
+    , showLedgerMap = False
+    , showMapPicker = False
+    , submitting = False
+    , syncState = NotEnabled
+    , toast = Nothing
+    , today = gs.today
+    , tripForm = Nothing
+    , tripLoaded = Set.empty
+    , trips = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
+    , version = gs.version
+    , voids = Dict.empty
     }
 
 
 toGuestState : GuestReason -> AuthState -> GuestState
 toGuestState reason as_ =
-    { authError    = Nothing
-    , basePath     = as_.basePath
-    , codeInput    = ""
-    , emailInput   = ""
-    , key          = as_.key
-    , session      = { config = as_.config, reason = reason }
+    { authError = Nothing
+    , basePath = as_.basePath
+    , codeInput = ""
+    , emailInput = ""
+    , key = as_.key
+    , session = { config = as_.config, reason = reason }
     , showSettings = reason == SessionExpired
-    , today        = as_.today
-    , version      = as_.version
+    , today = as_.today
+    , version = as_.version
     }
 
 
@@ -241,10 +257,17 @@ encodePouchOut msg =
                 , ( "tripId", E.string (TripId.toString id) )
                 ]
 
-        SaveAmend doc   -> E.object [ ( "tag", E.string "SaveAmend" ),   ( "doc", doc ) ]
-        SaveExpense doc -> E.object [ ( "tag", E.string "SaveExpense" ), ( "doc", doc ) ]
-        SaveTrip doc    -> E.object [ ( "tag", E.string "SaveTrip" ),    ( "doc", doc ) ]
-        SaveVoid doc    -> E.object [ ( "tag", E.string "SaveVoid" ),    ( "doc", doc ) ]
+        SaveAmend doc ->
+            E.object [ ( "tag", E.string "SaveAmend" ), ( "doc", doc ) ]
+
+        SaveExpense doc ->
+            E.object [ ( "tag", E.string "SaveExpense" ), ( "doc", doc ) ]
+
+        SaveTrip doc ->
+            E.object [ ( "tag", E.string "SaveTrip" ), ( "doc", doc ) ]
+
+        SaveVoid doc ->
+            E.object [ ( "tag", E.string "SaveVoid" ), ( "doc", doc ) ]
 
 
 sendPouch : PouchOutbound -> Cmd Msg
@@ -297,11 +320,20 @@ docChangeDecoder =
         |> D.andThen
             (\t ->
                 case t of
-                    "amend"   -> D.map AmendChanged   Amendment.decoder
-                    "expense" -> D.map ExpenseChanged Expense.decoder
-                    "trip"    -> D.map TripChanged    Trip.decoder
-                    "void"    -> D.map VoidChanged    Void.decoder
-                    _         -> D.fail ("Unknown doc type: " ++ t)
+                    "amend" ->
+                        D.map AmendChanged Amendment.decoder
+
+                    "expense" ->
+                        D.map ExpenseChanged Expense.decoder
+
+                    "trip" ->
+                        D.map TripChanged Trip.decoder
+
+                    "void" ->
+                        D.map VoidChanged Void.decoder
+
+                    _ ->
+                        D.fail ("Unknown doc type: " ++ t)
             )
 
 
@@ -309,16 +341,16 @@ tripBundleDecoder : D.Decoder TripBundle
 tripBundleDecoder =
     D.map3 TripBundle
         (D.field "amendments" (D.dict Amendment.decoder))
-        (D.field "expenses"   (D.dict Expense.decoder))
-        (D.field "voids"      (D.dict Void.decoder))
+        (D.field "expenses" (D.dict Expense.decoder))
+        (D.field "voids" (D.dict Void.decoder))
 
 
 expenseBundleDecoder : D.Decoder ExpenseBundle
 expenseBundleDecoder =
     D.map3 ExpenseBundle
         (D.field "amendments" (D.dict Amendment.decoder))
-        (D.field "expense"    (D.nullable Expense.decoder))
-        (D.field "void"       (D.nullable Void.decoder))
+        (D.field "expense" (D.nullable Expense.decoder))
+        (D.field "void" (D.nullable Void.decoder))
 
 
 syncStateDecoder : D.Decoder SyncState
@@ -327,11 +359,20 @@ syncStateDecoder =
         |> D.andThen
             (\s ->
                 case s of
-                    "auth_error" -> D.succeed AuthExpired
-                    "error"      -> D.succeed SyncError
-                    "synced"     -> D.succeed Synced
-                    "syncing"    -> D.succeed Syncing
-                    _            -> D.succeed NotEnabled
+                    "auth_error" ->
+                        D.succeed AuthExpired
+
+                    "error" ->
+                        D.succeed SyncError
+
+                    "synced" ->
+                        D.succeed Synced
+
+                    "syncing" ->
+                        D.succeed Syncing
+
+                    _ ->
+                        D.succeed NotEnabled
             )
 
 
@@ -348,6 +389,7 @@ syncStateDecoder =
 Pulls only that trip's expenses out of the outer `Dict` (single
 `Dict.get`), then hands the rest to `Entry.resolve`. Amendments and voids
 are passed in full — `resolve` builds its own indexes per call.
+
 -}
 resolveForTrip : TripId.TripId -> AuthState -> List Entry.EffectiveEntry
 resolveForTrip tripId as_ =
@@ -367,6 +409,7 @@ We don't know which trip the expense belongs to up front, so we scan
 
 Returns `Nothing` if the expense is unknown or has been voided. Used by
 the edit page to hydrate the form.
+
 -}
 findEffective : ExpenseId.ExpenseId -> AuthState -> Maybe Expense.Expense
 findEffective id as_ =
@@ -389,15 +432,21 @@ findEffective id as_ =
 mapForm : (PendingEntry -> PendingEntry) -> PendingForm -> PendingForm
 mapForm f form =
     case form of
-        EditForm id p -> EditForm id (f p)
-        FreshForm p   -> FreshForm (f p)
+        EditForm id p ->
+            EditForm id (f p)
+
+        FreshForm p ->
+            FreshForm (f p)
 
 
 formPending : PendingForm -> PendingEntry
 formPending form =
     case form of
-        EditForm _ p -> p
-        FreshForm p  -> p
+        EditForm _ p ->
+            p
+
+        FreshForm p ->
+            p
 
 
 {-| Build a `Route` from a `Tab` plus a tripId. Used for navigations
@@ -408,12 +457,24 @@ Tabs that aren't trip-scoped (Settings, Trips) ignore the tripId.
 routeForTab : Tab -> TripId.TripId -> Route
 routeForTab tab tripId =
     case tab of
-        AddTab      -> RouteAdd tripId
-        LedgerTab   -> RouteLedger tripId
-        ScanTab     -> RouteScan tripId
-        SettingsTab -> RouteSettings
-        StatsTab    -> RouteStats tripId
-        TripsTab    -> RouteTrips
+        AddTab ->
+            RouteAdd tripId
+
+        LedgerTab ->
+            RouteLedger tripId
+
+        ScanTab ->
+            RouteScan tripId
+
+        SettingsTab ->
+            RouteSettings
+
+        StatsTab ->
+            RouteStats tripId
+
+        TripsTab ->
+            RouteTrips
+
 
 
 -- ROUTE-DRIVEN STATE TRANSITIONS
@@ -437,6 +498,7 @@ On leaving an edit route, reset to a fresh `defaultPendingEntry`.
 
 Idempotent: if the form is already an `EditForm` for this expense, do
 nothing — re-running this function on every state change is safe.
+
 -}
 hydrateFormForRoute : AuthState -> AuthState
 hydrateFormForRoute as_ =
@@ -445,8 +507,11 @@ hydrateFormForRoute as_ =
             let
                 alreadyHydrated =
                     case as_.form of
-                        EditForm formId _ -> formId == id
-                        FreshForm _       -> False
+                        EditForm formId _ ->
+                            formId == id
+
+                        FreshForm _ ->
+                            False
             in
             if alreadyHydrated then
                 as_
@@ -486,6 +551,7 @@ Side effects beyond fetching:
     new-expense form can stamp lat/lon).
   - Runs `hydrateFormForRoute` on the way out so the form is in sync
     whether the data was already cached or not.
+
 -}
 fetchesForRoute : AuthState -> ( AuthState, Cmd Msg )
 fetchesForRoute as_ =
@@ -562,6 +628,7 @@ plumbing because the live feed is the confirmation. Always re-runs
 arrived data without a second navigation.
 
 Expenses are routed into the right inner `Dict` by `expense.tripId`.
+
 -}
 handleDbChange : DocChange -> AuthState -> ( Model, Cmd Msg )
 handleDbChange change as_ =
@@ -597,6 +664,7 @@ dict, which is O(n trips) and fine in practice.
 
 If the deleted doc was the one currently being edited, the form is
 reset so the page doesn't end up showing stale data.
+
 -}
 handleDbDelete : String -> AuthState -> ( Model, Cmd Msg )
 handleDbDelete id as_ =
@@ -604,9 +672,9 @@ handleDbDelete id as_ =
         as1 =
             { as_
                 | amendments = Dict.remove id as_.amendments
-                , expenses   = Dict.map (\_ inner -> Dict.remove id inner) as_.expenses
-                , trips      = removeTripFromState (TripId.fromString id) as_.trips
-                , voids      = Dict.remove id as_.voids
+                , expenses = Dict.map (\_ inner -> Dict.remove id inner) as_.expenses
+                , trips = removeTripFromState (TripId.fromString id) as_.trips
+                , voids = Dict.remove id as_.voids
             }
 
         -- If the deleted doc was the entry currently being edited, drop the
@@ -630,7 +698,8 @@ handleDbDelete id as_ =
 requestCode : GuestState -> ( Model, Cmd Msg )
 requestCode gs =
     let
-        email = String.trim gs.emailInput
+        email =
+            String.trim gs.emailInput
     in
     if email == "" then
         ( GuestModel { gs | authError = Just "Enter your email address." }, Cmd.none )
@@ -639,11 +708,11 @@ requestCode gs =
         ( GuestModel
             { gs
                 | authError = Nothing
-                , session   = { config = gs.session.config, reason = RequestingCode email }
+                , session = { config = gs.session.config, reason = RequestingCode email }
             }
         , Http.post
-            { url    = gs.session.config.backendUrl ++ "/auth/request-code"
-            , body   = Http.jsonBody (E.object [ ( "email", E.string email ) ])
+            { url = gs.session.config.backendUrl ++ "/auth/request-code"
+            , body = Http.jsonBody (E.object [ ( "email", E.string email ) ])
             , expect = Http.expectWhatever RequestCodeResult
             }
         )
@@ -652,7 +721,8 @@ requestCode gs =
 verifyCode : String -> GuestState -> ( Model, Cmd Msg )
 verifyCode email gs =
     let
-        code = String.trim gs.codeInput
+        code =
+            String.trim gs.codeInput
     in
     if code == "" then
         ( GuestModel { gs | authError = Just "Enter the code from your email." }, Cmd.none )
@@ -661,11 +731,11 @@ verifyCode email gs =
         ( GuestModel
             { gs
                 | authError = Nothing
-                , session   = { config = gs.session.config, reason = VerifyingCode email code }
+                , session = { config = gs.session.config, reason = VerifyingCode email code }
             }
         , Http.post
-            { url    = gs.session.config.backendUrl ++ "/auth/verify-code"
-            , body   = Http.jsonBody (E.object [ ( "email", E.string email ), ( "code", E.string code ) ])
+            { url = gs.session.config.backendUrl ++ "/auth/verify-code"
+            , body = Http.jsonBody (E.object [ ( "email", E.string email ), ( "code", E.string code ) ])
             , expect = Http.expectJson VerifyCodeResult credsDecoder
             }
         )
@@ -744,29 +814,32 @@ removeTripFromState id state =
 
 defaultPendingEntry : String -> PendingEntry
 defaultPendingEntry today =
-    { amount        = ""
-    , category      = Fuel
-    , date          = today
+    { amount = ""
+    , category = Fuel
+    , date = today
     , locationState = LocationIdle
-    , longNote      = ""
-    , merchant      = ""
-    , note          = ""
+    , longNote = ""
+    , merchant = ""
+    , note = ""
     , paymentMethod = Nothing
     }
 
 
 expenseToPending : Expense.Expense -> PendingEntry
 expenseToPending e =
-    { amount        = String.fromFloat e.amount
-    , category      = e.category
-    , date          = e.date
+    { amount = String.fromFloat e.amount
+    , category = e.category
+    , date = e.date
     , locationState =
         case ( e.lat, e.lon ) of
-            ( Just la, Just lo ) -> LocationGot la lo ManualPin
-            _                    -> LocationIdle
-    , longNote      = e.longNote
-    , merchant      = e.merchant
-    , note          = e.note
+            ( Just la, Just lo ) ->
+                LocationGot la lo ManualPin
+
+            _ ->
+                LocationIdle
+    , longNote = e.longNote
+    , merchant = e.merchant
+    , note = e.note
     , paymentMethod = e.paymentMethod
     }
 
@@ -783,12 +856,12 @@ setLocation ls p =
 
 freshScanItem : String -> ScanItem
 freshScanItem id =
-    { exifDebug     = ""
-    , id            = id
-    , imageUrl      = ""
+    { exifDebug = ""
+    , id = id
+    , imageUrl = ""
     , locationState = LocationCheckingExif
-    , ocrData       = Nothing
-    , status        = ScanQueued
+    , ocrData = Nothing
+    , status = ScanQueued
     }
 
 
@@ -864,20 +937,23 @@ claudeTextDecoder =
 ocrDataDecoder : D.Decoder OcrData
 ocrDataDecoder =
     D.succeed OcrData
-        |> Pipeline.optional "amount"        (D.map Just D.float) Nothing
-        |> Pipeline.optional "category"      (D.map Just (D.map Category.fromString D.string)) Nothing
-        |> Pipeline.optional "date"          (D.map Just D.string) Nothing
-        |> Pipeline.optional "longNote"      (D.map Just D.string) Nothing
-        |> Pipeline.optional "merchant"      (D.map Just D.string) Nothing
-        |> Pipeline.optional "note"          (D.map Just D.string) Nothing
+        |> Pipeline.optional "amount" (D.map Just D.float) Nothing
+        |> Pipeline.optional "category" (D.map Just (D.map Category.fromString D.string)) Nothing
+        |> Pipeline.optional "date" (D.map Just D.string) Nothing
+        |> Pipeline.optional "longNote" (D.map Just D.string) Nothing
+        |> Pipeline.optional "merchant" (D.map Just D.string) Nothing
+        |> Pipeline.optional "note" (D.map Just D.string) Nothing
         |> Pipeline.optional "paymentMethod"
             (D.nullable
                 (D.string
                     |> D.andThen
                         (\s ->
                             case PaymentMethod.fromString s of
-                                Just pm -> D.succeed pm
-                                Nothing -> D.fail ("Unknown paymentMethod: " ++ s)
+                                Just pm ->
+                                    D.succeed pm
+
+                                Nothing ->
+                                    D.fail ("Unknown paymentMethod: " ++ s)
                         )
                 )
             )
@@ -897,11 +973,13 @@ stripCodeFence s =
             |> (\lines ->
                     if List.reverse lines |> List.head |> Maybe.map (String.startsWith "```") |> Maybe.withDefault False then
                         List.reverse lines |> List.drop 1 |> List.reverse
+
                     else
                         lines
                )
             |> String.join "\n"
             |> String.trim
+
     else
         trimmed
 
@@ -909,18 +987,24 @@ stripCodeFence s =
 extractBase64 : String -> String
 extractBase64 dataUrl =
     case String.split "," dataUrl of
-        _ :: b64 :: _ -> b64
-        _              -> dataUrl
+        _ :: b64 :: _ ->
+            b64
+
+        _ ->
+            dataUrl
 
 
 getMimeType : String -> String
 getMimeType dataUrl =
     if String.contains "image/png" dataUrl then
         "image/png"
+
     else if String.contains "image/gif" dataUrl then
         "image/gif"
+
     else if String.contains "image/webp" dataUrl then
         "image/webp"
+
     else
         "image/jpeg"
 
@@ -932,12 +1016,23 @@ getMimeType dataUrl =
 posixToIso : Time.Posix -> String
 posixToIso posix =
     let
-        y  = String.fromInt (Time.toYear Time.utc posix)
-        m  = String.fromInt (monthNum (Time.toMonth Time.utc posix)) |> String.padLeft 2 '0'
-        d  = String.fromInt (Time.toDay Time.utc posix) |> String.padLeft 2 '0'
-        h  = String.fromInt (Time.toHour Time.utc posix) |> String.padLeft 2 '0'
-        mi = String.fromInt (Time.toMinute Time.utc posix) |> String.padLeft 2 '0'
-        s  = String.fromInt (Time.toSecond Time.utc posix) |> String.padLeft 2 '0'
+        y =
+            String.fromInt (Time.toYear Time.utc posix)
+
+        m =
+            String.fromInt (monthNum (Time.toMonth Time.utc posix)) |> String.padLeft 2 '0'
+
+        d =
+            String.fromInt (Time.toDay Time.utc posix) |> String.padLeft 2 '0'
+
+        h =
+            String.fromInt (Time.toHour Time.utc posix) |> String.padLeft 2 '0'
+
+        mi =
+            String.fromInt (Time.toMinute Time.utc posix) |> String.padLeft 2 '0'
+
+        s =
+            String.fromInt (Time.toSecond Time.utc posix) |> String.padLeft 2 '0'
     in
     y ++ "-" ++ m ++ "-" ++ d ++ "T" ++ h ++ ":" ++ mi ++ ":" ++ s ++ "Z"
 
@@ -945,18 +1040,41 @@ posixToIso posix =
 monthNum : Time.Month -> Int
 monthNum month =
     case month of
-        Time.Jan -> 1
-        Time.Feb -> 2
-        Time.Mar -> 3
-        Time.Apr -> 4
-        Time.May -> 5
-        Time.Jun -> 6
-        Time.Jul -> 7
-        Time.Aug -> 8
-        Time.Sep -> 9
-        Time.Oct -> 10
-        Time.Nov -> 11
-        Time.Dec -> 12
+        Time.Jan ->
+            1
+
+        Time.Feb ->
+            2
+
+        Time.Mar ->
+            3
+
+        Time.Apr ->
+            4
+
+        Time.May ->
+            5
+
+        Time.Jun ->
+            6
+
+        Time.Jul ->
+            7
+
+        Time.Aug ->
+            8
+
+        Time.Sep ->
+            9
+
+        Time.Oct ->
+            10
+
+        Time.Nov ->
+            11
+
+        Time.Dec ->
+            12
 
 
 
@@ -976,22 +1094,22 @@ init flagsJson url key =
 
         cfg =
             { anthropicKey = dec "anthropicKey"
-            , backendUrl   = dec "backendUrl"
+            , backendUrl = dec "backendUrl"
             }
 
         basePath =
             dec "basePath"
 
         gs =
-            { authError    = Nothing
-            , basePath     = basePath
-            , codeInput    = ""
-            , emailInput   = ""
-            , key          = key
-            , session      = { config = cfg, reason = NotLoggedIn }
+            { authError = Nothing
+            , basePath = basePath
+            , codeInput = ""
+            , emailInput = ""
+            , key = key
+            , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
-            , today        = dec "today"
-            , version      = dec "version"
+            , today = dec "today"
+            , version = dec "version"
             }
     in
     case authCreds of
@@ -1051,7 +1169,7 @@ updateGuest msg gs =
                     ( GuestModel
                         { gs
                             | authError = Nothing
-                            , session   = { config = gs.session.config, reason = AwaitingCode email }
+                            , session = { config = gs.session.config, reason = AwaitingCode email }
                         }
                     , Cmd.none
                     )
@@ -1060,7 +1178,7 @@ updateGuest msg gs =
                     ( GuestModel
                         { gs
                             | authError = Just "Could not send code. Try again."
-                            , session   = { config = gs.session.config, reason = NotLoggedIn }
+                            , session = { config = gs.session.config, reason = NotLoggedIn }
                         }
                     , Cmd.none
                     )
@@ -1083,7 +1201,8 @@ updateGuest msg gs =
             case ( gs.session.reason, result ) of
                 ( VerifyingCode _ _, Ok creds ) ->
                     let
-                        as_ = toAuthState creds RouteTrips gs
+                        as_ =
+                            toAuthState creds RouteTrips gs
                     in
                     ( AuthModel as_
                     , Cmd.batch
@@ -1097,7 +1216,7 @@ updateGuest msg gs =
                     ( GuestModel
                         { gs
                             | authError = Just "Wrong or expired code."
-                            , session   = { config = gs.session.config, reason = AwaitingCode email }
+                            , session = { config = gs.session.config, reason = AwaitingCode email }
                         }
                     , Cmd.none
                     )
@@ -1116,10 +1235,10 @@ updateGuest msg gs =
         ResetSettingsClicked ->
             ( GuestModel
                 { gs
-                    | authError    = Nothing
-                    , codeInput    = ""
-                    , emailInput   = ""
-                    , session      = { config = { anthropicKey = "", backendUrl = "" }, reason = NotLoggedIn }
+                    | authError = Nothing
+                    , codeInput = ""
+                    , emailInput = ""
+                    , session = { config = { anthropicKey = "", backendUrl = "" }, reason = NotLoggedIn }
                     , showSettings = False
                 }
             , clearAllStorage ()
@@ -1159,11 +1278,11 @@ updateAuth msg as_ =
 
                         as1 =
                             { as_
-                                | amendments   = Dict.union bundle.amendments as_.amendments
-                                , expenses     = Dict.insert key bundle.expenses as_.expenses
+                                | amendments = Dict.union bundle.amendments as_.amendments
+                                , expenses = Dict.insert key bundle.expenses as_.expenses
                                 , loadingTrips = Set.remove key as_.loadingTrips
-                                , tripLoaded   = Set.insert key as_.tripLoaded
-                                , voids        = Dict.union bundle.voids as_.voids
+                                , tripLoaded = Set.insert key as_.tripLoaded
+                                , voids = Dict.union bundle.voids as_.voids
                             }
                     in
                     ( AuthModel (hydrateFormForRoute as1), Cmd.none )
@@ -1172,8 +1291,8 @@ updateAuth msg as_ =
                     let
                         as1 =
                             { as_
-                                | amendments      = Dict.union bundle.amendments as_.amendments
-                                , expenses        =
+                                | amendments = Dict.union bundle.amendments as_.amendments
+                                , expenses =
                                     case bundle.expense of
                                         Just e ->
                                             Dict.update (TripId.toString e.tripId)
@@ -1183,10 +1302,13 @@ updateAuth msg as_ =
                                         Nothing ->
                                             as_.expenses
                                 , loadingExpenses = Set.remove (ExpenseId.toString eid) as_.loadingExpenses
-                                , voids           =
+                                , voids =
                                     case bundle.void of
-                                        Just v  -> Dict.insert v.id v as_.voids
-                                        Nothing -> as_.voids
+                                        Just v ->
+                                            Dict.insert v.id v as_.voids
+
+                                        Nothing ->
+                                            as_.voids
                             }
                     in
                     ( AuthModel (hydrateFormForRoute as1), Cmd.none )
@@ -1201,8 +1323,11 @@ updateAuth msg as_ =
 
                         tripsStillLoading =
                             case as_.trips of
-                                TripsLoading _ _ -> True
-                                _                -> False
+                                TripsLoading _ _ ->
+                                    True
+
+                                _ ->
+                                    False
 
                         cmd =
                             if syncSettledEdge && tripsStillLoading then
@@ -1228,15 +1353,15 @@ updateAuth msg as_ =
 
         ResetSettingsClicked ->
             ( GuestModel
-                { authError    = Nothing
-                , basePath     = as_.basePath
-                , codeInput    = ""
-                , emailInput   = ""
-                , key          = as_.key
-                , session      = { config = { anthropicKey = "", backendUrl = "" }, reason = NotLoggedIn }
+                { authError = Nothing
+                , basePath = as_.basePath
+                , codeInput = ""
+                , emailInput = ""
+                , key = as_.key
+                , session = { config = { anthropicKey = "", backendUrl = "" }, reason = NotLoggedIn }
                 , showSettings = False
-                , today        = as_.today
-                , version      = as_.version
+                , today = as_.today
+                , version = as_.version
                 }
             , Cmd.batch [ clearAllStorage (), stopSync () ]
             )
@@ -1260,7 +1385,11 @@ updateAuth msg as_ =
         GotFileUrl itemId dataUrl ->
             let
                 newStatus =
-                    if as_.config.anthropicKey /= "" then ScanProcessing else ScanReady
+                    if as_.config.anthropicKey /= "" then
+                        ScanProcessing
+
+                    else
+                        ScanReady
 
                 updatedQueue =
                     Dict.update itemId (Maybe.map (\i -> { i | imageUrl = dataUrl, status = newStatus })) as_.scanQueue
@@ -1269,6 +1398,7 @@ updateAuth msg as_ =
             , Cmd.batch
                 [ if as_.config.anthropicKey /= "" then
                     makeOcrCall itemId as_.config.anthropicKey (extractBase64 dataUrl) (getMimeType dataUrl)
+
                   else
                     Cmd.none
                 , extractExifGps { id = itemId, dataUrl = dataUrl }
@@ -1283,23 +1413,43 @@ updateAuth msg as_ =
                             case D.decodeString claudeTextDecoder responseBody of
                                 Ok innerJson ->
                                     case D.decodeString ocrDataDecoder (stripCodeFence innerJson) of
-                                        Ok data -> Just data
-                                        Err _   -> Nothing
-                                Err _ -> Nothing
-                        Err _ -> Nothing
+                                        Ok data ->
+                                            Just data
+
+                                        Err _ ->
+                                            Nothing
+
+                                Err _ ->
+                                    Nothing
+
+                        Err _ ->
+                            Nothing
 
                 updatedQueue =
                     Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = ocrData })) as_.scanQueue
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
 
-        AmountChanged s        -> authPending (\p -> { p | amount = s }) as_
-        CategorySelected c     -> authPending (\p -> { p | category = c }) as_
-        DateChanged s          -> authPending (\p -> { p | date = s }) as_
-        LongNoteChanged s      -> authPending (\p -> { p | longNote = s }) as_
-        MerchantChanged s      -> authPending (\p -> { p | merchant = s }) as_
-        NoteChanged s          -> authPending (\p -> { p | note = s }) as_
-        PaymentMethodChanged pm -> authPending (\p -> { p | paymentMethod = pm }) as_
+        AmountChanged s ->
+            authPending (\p -> { p | amount = s }) as_
+
+        CategorySelected c ->
+            authPending (\p -> { p | category = c }) as_
+
+        DateChanged s ->
+            authPending (\p -> { p | date = s }) as_
+
+        LongNoteChanged s ->
+            authPending (\p -> { p | longNote = s }) as_
+
+        MerchantChanged s ->
+            authPending (\p -> { p | merchant = s }) as_
+
+        NoteChanged s ->
+            authPending (\p -> { p | note = s }) as_
+
+        PaymentMethodChanged pm ->
+            authPending (\p -> { p | paymentMethod = pm }) as_
 
         SubmitEntry ->
             case String.toFloat (formPending as_.form).amount of
@@ -1307,29 +1457,43 @@ updateAuth msg as_ =
                     ( AuthModel { as_ | submitting = True, error = Nothing }
                     , Task.perform GotSubmitTime Time.now
                     )
+
                 Nothing ->
                     ( AuthModel { as_ | error = Just "Enter a valid amount." }, Cmd.none )
 
         GotSubmitTime posix ->
             let
-                p         = formPending as_.form
-                timestamp = String.fromInt (Time.posixToMillis posix)
+                p =
+                    formPending as_.form
+
+                timestamp =
+                    String.fromInt (Time.posixToMillis posix)
 
                 ( eLat, eLon ) =
                     case p.locationState of
-                        LocationGot la lo _ -> ( Just la, Just lo )
-                        _                   -> ( Nothing, Nothing )
+                        LocationGot la lo _ ->
+                            ( Just la, Just lo )
+
+                        _ ->
+                            ( Nothing, Nothing )
 
                 updatedQueue =
                     case as_.activeScanItemId of
-                        Just id -> Dict.update id (Maybe.map (\i -> { i | status = ScanSubmitted })) as_.scanQueue
-                        Nothing -> as_.scanQueue
+                        Just id ->
+                            Dict.update id (Maybe.map (\i -> { i | status = ScanSubmitted })) as_.scanQueue
+
+                        Nothing ->
+                            as_.scanQueue
 
                 hasRemaining =
                     Dict.values updatedQueue |> List.any (\i -> i.status /= ScanSubmitted)
 
                 nextTab =
-                    if as_.activeScanItemId /= Nothing && hasRemaining then ScanTab else LedgerTab
+                    if as_.activeScanItemId /= Nothing && hasRemaining then
+                        ScanTab
+
+                    else
+                        LedgerTab
             in
             case as_.form of
                 EditForm editId _ ->
@@ -1340,16 +1504,51 @@ updateAuth msg as_ =
                                     "amend::" ++ ExpenseId.toString original.id ++ "::" ++ String.left 8 timestamp
 
                                 amend =
-                                    { id            = amendId
-                                    , targetId      = original.id
-                                    , amount        = if p.amount /= String.fromFloat original.amount then String.toFloat p.amount else Nothing
-                                    , category      = if p.category /= original.category then Just p.category else Nothing
-                                    , createdAt     = posixToIso posix
-                                    , date          = if p.date /= original.date then Just p.date else Nothing
-                                    , longNote      = if p.longNote /= original.longNote then Just p.longNote else Nothing
-                                    , merchant      = if p.merchant /= original.merchant then Just p.merchant else Nothing
-                                    , note          = if p.note /= original.note then Just p.note else Nothing
-                                    , paymentMethod = if p.paymentMethod /= original.paymentMethod then p.paymentMethod else Nothing
+                                    { id = amendId
+                                    , targetId = original.id
+                                    , amount =
+                                        if p.amount /= String.fromFloat original.amount then
+                                            String.toFloat p.amount
+
+                                        else
+                                            Nothing
+                                    , category =
+                                        if p.category /= original.category then
+                                            Just p.category
+
+                                        else
+                                            Nothing
+                                    , createdAt = posixToIso posix
+                                    , date =
+                                        if p.date /= original.date then
+                                            Just p.date
+
+                                        else
+                                            Nothing
+                                    , longNote =
+                                        if p.longNote /= original.longNote then
+                                            Just p.longNote
+
+                                        else
+                                            Nothing
+                                    , merchant =
+                                        if p.merchant /= original.merchant then
+                                            Just p.merchant
+
+                                        else
+                                            Nothing
+                                    , note =
+                                        if p.note /= original.note then
+                                            Just p.note
+
+                                        else
+                                            Nothing
+                                    , paymentMethod =
+                                        if p.paymentMethod /= original.paymentMethod then
+                                            p.paymentMethod
+
+                                        else
+                                            Nothing
                                     }
 
                                 nextRoute =
@@ -1358,10 +1557,10 @@ updateAuth msg as_ =
                             ( AuthModel
                                 { as_
                                     | activeScanItemId = Nothing
-                                    , form             = FreshForm (defaultPendingEntry as_.today)
-                                    , route            = nextRoute
-                                    , scanQueue        = updatedQueue
-                                    , submitting       = False
+                                    , form = FreshForm (defaultPendingEntry as_.today)
+                                    , route = nextRoute
+                                    , scanQueue = updatedQueue
+                                    , submitting = False
                                 }
                             , Cmd.batch
                                 [ sendPouch (SaveAmend (Amendment.encoder amend))
@@ -1383,17 +1582,17 @@ updateAuth msg as_ =
                                     "expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp
 
                                 expense =
-                                    { id            = ExpenseId.fromString expenseId
-                                    , tripId        = tripId
-                                    , amount        = String.toFloat p.amount |> Maybe.withDefault 0
-                                    , category      = p.category
-                                    , createdAt     = posixToIso posix
-                                    , date          = p.date
-                                    , lat           = eLat
-                                    , lon           = eLon
-                                    , longNote      = p.longNote
-                                    , merchant      = p.merchant
-                                    , note          = p.note
+                                    { id = ExpenseId.fromString expenseId
+                                    , tripId = tripId
+                                    , amount = String.toFloat p.amount |> Maybe.withDefault 0
+                                    , category = p.category
+                                    , createdAt = posixToIso posix
+                                    , date = p.date
+                                    , lat = eLat
+                                    , lon = eLon
+                                    , longNote = p.longNote
+                                    , merchant = p.merchant
+                                    , note = p.note
                                     , paymentMethod = p.paymentMethod
                                     }
 
@@ -1403,10 +1602,10 @@ updateAuth msg as_ =
                             ( AuthModel
                                 { as_
                                     | activeScanItemId = Nothing
-                                    , form             = FreshForm (defaultPendingEntry as_.today)
-                                    , route            = nextRoute
-                                    , scanQueue        = updatedQueue
-                                    , submitting       = False
+                                    , form = FreshForm (defaultPendingEntry as_.today)
+                                    , route = nextRoute
+                                    , scanQueue = updatedQueue
+                                    , submitting = False
                                 }
                             , Cmd.batch
                                 [ sendPouch (SaveExpense (Expense.encoder expense))
@@ -1426,8 +1625,8 @@ updateAuth msg as_ =
                 -- Entry.resolve filters out this expense immediately.
                 -- Sync DbChange will be a no-op (same id).
                 optimisticVoid =
-                    { id        = voidId
-                    , targetId  = ExpenseId.toString expense.id
+                    { id = voidId
+                    , targetId = ExpenseId.toString expense.id
                     , createdAt = as_.today
                     }
             in
@@ -1435,10 +1634,10 @@ updateAuth msg as_ =
             , sendPouch
                 (SaveVoid
                     (E.object
-                        [ ( "_id",      E.string voidId )
+                        [ ( "_id", E.string voidId )
                         , ( "targetId", E.string (ExpenseId.toString expense.id) )
                         , ( "createdAt", E.string as_.today )
-                        , ( "type",     E.string "void" )
+                        , ( "type", E.string "void" )
                         ]
                     )
                 )
@@ -1453,7 +1652,7 @@ updateAuth msg as_ =
                     ( AuthModel
                         { as_
                             | loadingTrips = Set.insert (TripId.toString tid) as_.loadingTrips
-                            , tripLoaded   = Set.remove (TripId.toString tid) as_.tripLoaded
+                            , tripLoaded = Set.remove (TripId.toString tid) as_.tripLoaded
                         }
                     , sendPouch (GetTripExpenses tid)
                     )
@@ -1462,7 +1661,10 @@ updateAuth msg as_ =
                     ( AuthModel as_, Cmd.none )
 
         ApiKeyChanged s ->
-            let cfg = as_.config in
+            let
+                cfg =
+                    as_.config
+            in
             ( AuthModel { as_ | config = { cfg | anthropicKey = s } }
             , saveStorage { key = "anthropic_key", value = s }
             )
@@ -1526,27 +1728,30 @@ updateAuth msg as_ =
                                 item.ocrData
 
                         newPending =
-                            { amount        = ocr.amount |> Maybe.map String.fromFloat |> Maybe.withDefault ""
-                            , category      = Maybe.withDefault Fuel ocr.category
-                            , date          = Maybe.withDefault as_.today ocr.date
+                            { amount = ocr.amount |> Maybe.map String.fromFloat |> Maybe.withDefault ""
+                            , category = Maybe.withDefault Fuel ocr.category
+                            , date = Maybe.withDefault as_.today ocr.date
                             , locationState = item.locationState
-                            , longNote      = Maybe.withDefault "" ocr.longNote
-                            , merchant      = Maybe.withDefault "" ocr.merchant
-                            , note          = Maybe.withDefault "" ocr.note
+                            , longNote = Maybe.withDefault "" ocr.longNote
+                            , merchant = Maybe.withDefault "" ocr.merchant
+                            , note = Maybe.withDefault "" ocr.note
                             , paymentMethod = ocr.paymentMethod
                             }
 
                         newRoute =
                             case Routing.routeTripId as_.route of
-                                Just tid -> RouteAdd tid
-                                Nothing  -> as_.route
+                                Just tid ->
+                                    RouteAdd tid
+
+                                Nothing ->
+                                    as_.route
                     in
                     ( AuthModel
                         { as_
                             | activeScanItemId = Just itemId
-                            , error            = Nothing
-                            , form             = FreshForm newPending
-                            , route            = newRoute
+                            , error = Nothing
+                            , form = FreshForm newPending
+                            , route = newRoute
                         }
                     , Cmd.none
                     )
@@ -1555,14 +1760,17 @@ updateAuth msg as_ =
             let
                 newRoute =
                     case Routing.routeTripId as_.route of
-                        Just tid -> RouteScan tid
-                        Nothing  -> as_.route
+                        Just tid ->
+                            RouteScan tid
+
+                        Nothing ->
+                            as_.route
             in
             ( AuthModel
                 { as_
                     | activeScanItemId = Nothing
-                    , form             = FreshForm (defaultPendingEntry as_.today)
-                    , route            = newRoute
+                    , form = FreshForm (defaultPendingEntry as_.today)
+                    , route = newRoute
                 }
             , case Routing.routeTripId as_.route of
                 Just tid ->
@@ -1580,16 +1788,17 @@ updateAuth msg as_ =
         OpenNewTripForm ->
             ( AuthModel
                 { as_
-                    | tripForm = Just
-                        { budget        = ""
-                        , coverPhotoUrl = ""
-                        , description   = ""
-                        , editing       = Nothing
-                        , endDate       = ""
-                        , errors        = []
-                        , name          = ""
-                        , startDate     = as_.today
-                        }
+                    | tripForm =
+                        Just
+                            { budget = ""
+                            , coverPhotoUrl = ""
+                            , description = ""
+                            , editing = Nothing
+                            , endDate = ""
+                            , errors = []
+                            , name = ""
+                            , startDate = as_.today
+                            }
                 }
             , Cmd.none
             )
@@ -1597,16 +1806,22 @@ updateAuth msg as_ =
         OpenEditTripForm trip ->
             ( AuthModel
                 { as_
-                    | tripForm = Just
-                        { budget        = if trip.budget > 0 then String.fromFloat trip.budget else ""
-                        , coverPhotoUrl = trip.coverPhotoUrl
-                        , description   = trip.description
-                        , editing       = Just trip
-                        , endDate       = trip.endDate
-                        , errors        = []
-                        , name          = trip.name
-                        , startDate     = trip.startDate
-                        }
+                    | tripForm =
+                        Just
+                            { budget =
+                                if trip.budget > 0 then
+                                    String.fromFloat trip.budget
+
+                                else
+                                    ""
+                            , coverPhotoUrl = trip.coverPhotoUrl
+                            , description = trip.description
+                            , editing = Just trip
+                            , endDate = trip.endDate
+                            , errors = []
+                            , name = trip.name
+                            , startDate = trip.startDate
+                            }
                 }
             , Cmd.none
             )
@@ -1615,12 +1830,23 @@ updateAuth msg as_ =
             let
                 updateForm f =
                     case field of
-                        TripBudget      -> { f | budget = value }
-                        TripCoverPhoto  -> { f | coverPhotoUrl = value }
-                        TripDescription -> { f | description = value }
-                        TripEndDate     -> { f | endDate = value }
-                        TripName        -> { f | name = value }
-                        TripStartDate   -> { f | startDate = value }
+                        TripBudget ->
+                            { f | budget = value }
+
+                        TripCoverPhoto ->
+                            { f | coverPhotoUrl = value }
+
+                        TripDescription ->
+                            { f | description = value }
+
+                        TripEndDate ->
+                            { f | endDate = value }
+
+                        TripName ->
+                            { f | name = value }
+
+                        TripStartDate ->
+                            { f | startDate = value }
             in
             ( AuthModel { as_ | tripForm = Maybe.map updateForm as_.tripForm }, Cmd.none )
 
@@ -1640,14 +1866,13 @@ updateAuth msg as_ =
                                     let
                                         updated =
                                             { existing
-                                                | budget        = String.toFloat form.budget |> Maybe.withDefault 0
+                                                | budget = String.toFloat form.budget |> Maybe.withDefault 0
                                                 , coverPhotoUrl = form.coverPhotoUrl
-                                                , description   = form.description
-                                                , endDate       = form.endDate
-                                                , name          = form.name
-                                                , startDate     = form.startDate
+                                                , description = form.description
+                                                , endDate = form.endDate
+                                                , name = form.name
+                                                , startDate = form.startDate
                                             }
-
                                     in
                                     ( AuthModel { as_ | tripForm = Nothing, trips = upsertTripIntoState updated as_.trips }
                                     , sendPouch (SaveTrip (Trip.encoder updated))
@@ -1663,17 +1888,20 @@ updateAuth msg as_ =
 
                 Just form ->
                     let
-                        timestamp = String.fromInt (Time.posixToMillis posix)
-                        tripId    = TripId.fromString ("trip::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp)
+                        timestamp =
+                            String.fromInt (Time.posixToMillis posix)
+
+                        tripId =
+                            TripId.fromString ("trip::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp)
 
                         newTrip =
-                            { id            = tripId
-                            , budget        = String.toFloat form.budget |> Maybe.withDefault 0
+                            { id = tripId
+                            , budget = String.toFloat form.budget |> Maybe.withDefault 0
                             , coverPhotoUrl = form.coverPhotoUrl
-                            , description   = form.description
-                            , endDate       = form.endDate
-                            , name          = form.name
-                            , startDate     = form.startDate
+                            , description = form.description
+                            , endDate = form.endDate
+                            , name = form.name
+                            , startDate = form.startDate
                             }
 
                         newTrips =
@@ -1686,11 +1914,11 @@ updateAuth msg as_ =
                     in
                     ( AuthModel
                         { as_
-                            | form       = FreshForm (defaultPendingEntry as_.today)
-                            , route      = RouteLedger tripId
-                            , tripForm   = Nothing
+                            | form = FreshForm (defaultPendingEntry as_.today)
+                            , route = RouteLedger tripId
+                            , tripForm = Nothing
                             , tripLoaded = Set.insert (TripId.toString tripId) as_.tripLoaded
-                            , trips      = newTrips
+                            , trips = newTrips
                         }
                     , Cmd.batch
                         [ sendPouch (SaveTrip (Trip.encoder newTrip))
@@ -1713,10 +1941,10 @@ updateAuth msg as_ =
                     sendPouch
                         (SaveVoid
                             (E.object
-                                [ ( "_id",      E.string voidId )
+                                [ ( "_id", E.string voidId )
                                 , ( "targetId", E.string (TripId.toString trip.id) )
                                 , ( "createdAt", E.string as_.today )
-                                , ( "type",     E.string "void" )
+                                , ( "type", E.string "void" )
                                 ]
                             )
                         )
@@ -1730,8 +1958,8 @@ updateAuth msg as_ =
                     ( AuthModel
                         { as_
                             | confirmDeleteTrip = Nothing
-                            , route             = RouteLedger nextHead.id
-                            , trips             = TripsLoaded trips
+                            , route = RouteLedger nextHead.id
+                            , trips = TripsLoaded trips
                         }
                     , Cmd.batch
                         [ voidCmd
@@ -1743,8 +1971,8 @@ updateAuth msg as_ =
                     ( AuthModel
                         { as_
                             | confirmDeleteTrip = Nothing
-                            , route             = RouteTrips
-                            , trips             = NoTripsYet
+                            , route = RouteTrips
+                            , trips = NoTripsYet
                         }
                     , Cmd.batch [ voidCmd, Nav.pushUrl as_.key (as_.basePath ++ "trips") ]
                     )
@@ -1785,8 +2013,11 @@ view model =
         [ Html.div
             [ Html.Attributes.class "bg-parchment text-ink min-h-screen font-body max-w-[480px] mx-auto relative" ]
             [ case model of
-                GuestModel gs -> viewGuest gs
-                AuthModel as_ -> viewAuth as_
+                GuestModel gs ->
+                    viewGuest gs
+
+                AuthModel as_ ->
+                    viewAuth as_
             ]
         ]
     }
@@ -1800,14 +2031,29 @@ viewAuth as_ =
 
         tab =
             case route of
-                RouteAdd _         -> Pages.Add.viewTab as_
-                RouteAddReviewScan -> Pages.Add.viewTab as_
-                RouteEditEntry _ _ -> Pages.Add.viewTab as_
-                RouteLedger _      -> Pages.Ledger.viewTab as_
-                RouteScan _        -> Pages.Scan.viewTab as_
-                RouteSettings      -> Pages.Settings.viewTab as_
-                RouteStats _       -> Pages.Stats.viewTab as_
-                RouteTrips         -> Pages.Trips.viewTab as_
+                RouteAdd _ ->
+                    Pages.Add.viewTab as_
+
+                RouteAddReviewScan ->
+                    Pages.Add.viewTab as_
+
+                RouteEditEntry _ _ ->
+                    Pages.Add.viewTab as_
+
+                RouteLedger _ ->
+                    Pages.Ledger.viewTab as_
+
+                RouteScan _ ->
+                    Pages.Scan.viewTab as_
+
+                RouteSettings ->
+                    Pages.Settings.viewTab as_
+
+                RouteStats _ ->
+                    Pages.Stats.viewTab as_
+
+                RouteTrips ->
+                    Pages.Trips.viewTab as_
     in
     Html.div []
         [ UI.Layout.viewHeader as_
@@ -1815,15 +2061,18 @@ viewAuth as_ =
         , Html.div [ Html.Attributes.class "pb-20" ]
             [ UI.Layout.page
                 { actions = tab.actions
-                , body    = tab.body
-                , hero    = tab.hero
-                , route   = route
+                , body = tab.body
+                , hero = tab.hero
+                , route = route
                 }
             ]
         , UI.Layout.viewBottomNav as_
         , case as_.confirmDeleteTrip of
-            Just trip -> UI.Layout.viewDeleteConfirmModal trip
-            Nothing   -> Html.text ""
+            Just trip ->
+                UI.Layout.viewDeleteConfirmModal trip
+
+            Nothing ->
+                Html.text ""
         , UI.Layout.viewToast as_.toast
         ]
 
@@ -1835,16 +2084,30 @@ viewAuth as_ =
 main : Program D.Value Model Msg
 main =
     Browser.application
-        { init          = init
-        , onUrlChange   = UrlChanged
-        , onUrlRequest  = LinkClicked
+        { init = init
+        , onUrlChange = UrlChanged
+        , onUrlRequest = LinkClicked
         , subscriptions =
             \_ ->
                 Sub.batch
                     [ pouchIn GotPouchMsg
-                    , gotGpsCoords (\r -> if r.denied then GeolocationDenied else GotGpsCoords r.lat r.lon)
-                    , gotExifResult (\r -> if r.hasGps then GotExifCoords r.id (Just r.lat) (Just r.lon) "" else GotExifCoords r.id Nothing Nothing r.debug)
+                    , gotGpsCoords
+                        (\r ->
+                            if r.denied then
+                                GeolocationDenied
+
+                            else
+                                GotGpsCoords r.lat r.lon
+                        )
+                    , gotExifResult
+                        (\r ->
+                            if r.hasGps then
+                                GotExifCoords r.id (Just r.lat) (Just r.lon) ""
+
+                            else
+                                GotExifCoords r.id Nothing Nothing r.debug
+                        )
                     ]
-        , update        = update
-        , view          = view
+        , update = update
+        , view = view
         }

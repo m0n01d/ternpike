@@ -25,23 +25,40 @@
 ```
 src/
 ├── Main.elm            # Port module — the app entry point, all update logic
-├── Types.elm           # AuthState, GuestState, Msg, Route, and shared types
+├── Types.elm           # Model, AuthState, GuestState, Msg
 ├── Routing.elm         # URL ↔ Route parsing
 ├── Helpers.elm         # Utility functions
 ├── Data/
-│   ├── Expense.elm     # Expense type, encoder, decoder
-│   ├── ExpenseId.elm   # Newtype wrapper around String
-│   ├── Amendment.elm   # Amendment type, encoder, decoder
-│   ├── Entry.elm       # EffectiveEntry — expense after amendments applied
-│   ├── Trip.elm        # Trip type, encoder, decoder
-│   ├── TripId.elm      # Newtype wrapper around String
-│   ├── Trips.elm       # Zipper-like collection (head + rest)
-│   ├── Category.elm    # 12 expense categories
-│   └── Void.elm        # Soft-delete tombstone type
+│   ├── Amendment.elm     # Amendment type, encoder, decoder
+│   ├── Auth.elm          # Creds, AppConfig (session + runtime config)
+│   ├── Category.elm      # 12 expense categories
+│   ├── Entry.elm         # EffectiveEntry — expense after amendments applied
+│   ├── Expense.elm       # Expense type, encoder, decoder
+│   ├── ExpenseId.elm     # Newtype wrapper around String
+│   ├── Guest.elm         # GuestReason, GuestSession (sign-in flow state)
+│   ├── Ledger.elm        # LedgerMode (loading vs ready)
+│   ├── Location.elm      # LocationSource, LocationState (geo/EXIF capture)
+│   ├── Navigation.elm    # Route, Tab
+│   ├── PaymentMethod.elm # Cash / Credit
+│   ├── PendingEntry.elm  # In-progress Add-page form state
+│   ├── Pouch.elm         # PouchOutbound / PouchInbound port protocol
+│   ├── Scan.elm          # Receipt-scan queue items and OCR data
+│   ├── Sync.elm          # SyncState (PouchDB sync health)
+│   ├── Trip.elm          # Trip type, encoder, decoder
+│   ├── TripId.elm        # Newtype wrapper around String
+│   ├── Trips.elm         # Zipper-like collection + TripsState loading wrapper
+│   └── Void.elm          # Soft-delete tombstone type
 ├── Pages/              # One file per page; only view + local Msg handlers
 ├── UI/                 # Dumb UI components (buttons, cards, layout)
 └── Json/Decode/Pipeline.elm  # Decoder pipeline helpers
 ```
+
+`Types.elm` is intentionally thin: it owns the top-level `Model`,
+`AuthState`, `GuestState`, and the `Msg` union. Every cohesive group of
+supporting types — navigation, location, scan queue, form state, auth
+config, sync, guest flow, PouchDB port protocol — lives in its own
+`Data/*` module so the type surface is searchable and each module can
+carry its own doc comment explaining the design.
 
 JavaScript lives alongside this:
 
@@ -434,13 +451,28 @@ can cause sync headaches).
 
 ```elm
 -- conceptually
-type TripsState
-    = NoTrips
-    | HasTrips { head : Trip, rest : List Trip }
+type Trips
+    = Trips Trip (List Trip)   -- head + rest, head is selected
 ```
 
-`head` is always the active/selected trip. This lets the UI safely use `head`
-without a `Maybe` unwrap in most rendering paths.
+The head is always the active/selected trip. This lets the UI safely use
+`Trips.selectedTrip` without a `Maybe` unwrap in most rendering paths.
+
+The `AuthState.trips` field is wrapped in `TripsState` (also in
+`Data/Trips.elm`) to track loading:
+
+```elm
+type TripsState
+    = NoTripsYet
+    | TripsFailed String
+    | TripsLoaded Trips
+    | TripsLoading (Dict String Trip) (Maybe TripId)
+```
+
+`TripsLoading` carries any trip documents that arrived via the
+live-changes feed before the bulk `GetAllTrips` response, plus the
+route's intended selection hint, so we can pick the right trip the
+moment loading completes.
 
 ---
 
