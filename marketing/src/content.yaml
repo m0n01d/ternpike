@@ -127,10 +127,64 @@ ledgerPreview:
           hasGps: false
 
 pricing:
-  eyebrow: ""
-  headline: ""
-  intro: ""
-  plans: []
+  sectionLabel: "Pricing"
+  headline: "Simple.\nNo surprises."
+  finePrint: "No trials that turn into surprise charges. No features hidden behind enterprise plans. Fledgling is genuinely free, forever."
+  tiers:
+    - id: "fledgling"
+      name: "Fledgling"
+      tagline: "For casual loggers."
+      price: "$0"
+      priceNote: "always free"
+      featured: false
+      features:
+        - "Offline expense log"
+        - "Unlimited trips"
+        - "5 receipt scans per month (amount and category only)"
+        - "Works on any device"
+        - "No account required"
+      cta:
+        label: "Download free"
+        href: "#signup"
+        style: "ghost"
+        arrow: false
+    - id: "fly"
+      name: "Fly"
+      tagline: "For the dedicated road tripper."
+      price: "$2.99 / month"
+      priceNote: "$24 / year. Save $12."
+      featured: true
+      badge: "Recommended"
+      features:
+        - "Everything in Fledgling"
+        - "Unlimited receipt scanning"
+        - "Full receipt extraction (merchant, date, notes, GPS)"
+        - "Cross-device sync"
+        - "Nest. Shared ledger for couples and travel groups."
+        - "Stats dashboard"
+        - "CSV export"
+      cta:
+        label: "Start flying"
+        href: "#signup"
+        style: "primary"
+        arrow: true
+    - id: "trailblazer"
+      name: "Trailblazer"
+      tagline: "Own it forever."
+      price: "$79"
+      priceNote: "one time. First 500 only."
+      featured: false
+      features:
+        - "Everything in Fly"
+        - "No recurring charge, ever"
+        - "All 1.x updates included"
+        - "Loyalty discount on v2"
+        - "Your name in the credits"
+      cta:
+        label: "Claim your spot"
+        href: "#signup"
+        style: "ghost"
+        arrow: false
 
 origin:
   eyebrow: ""
