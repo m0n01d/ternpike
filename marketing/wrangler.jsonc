@@ -1,9 +1,8 @@
 {
-  "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "ternpike-marketing",
   "compatibility_date": "2026-05-21",
   "assets": {
-    "directory": "./",
+    "directory": "./dist",
     "not_found_handling": "404-page"
   },
   "observability": {
