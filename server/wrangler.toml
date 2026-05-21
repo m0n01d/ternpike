@@ -4,10 +4,15 @@ compatibility_date = "2025-01-01"
 
 [[kv_namespaces]]
 binding = "CODES_KV"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "a3818441349d4138b8898fac4480bf1a"
 
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
+
+
+[[routes]]
+pattern = "api.ternpike.com"
+custom_domain = true
 
 # Set secrets via: wrangler secret put NAME
 #   COUCH_ADMIN_USER
