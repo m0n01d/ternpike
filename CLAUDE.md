@@ -32,10 +32,12 @@ Correct sequence when a stash pop conflicts:
 
 ## Subscription tiers
 
-The app is moving toward a two-tier model. Track this on `AuthState` (planned field: `tier : Tier` where `type Tier = Free | Paid { quotaUsed : Int, quotaLimit : Int }`). Tier is server-authoritative — populated from the session/JWT at login, never trusted from the client.
+The app is moving toward a two-tier model. Track this on `AuthState` (planned field: `tier : Tier` where `type Tier = Free | Paid`). Tier is server-authoritative — populated from the session/JWT at login, never trusted from the client.
 
-- **Free** — bring-your-own API key (Anthropic / OpenAI / Gemini). OCR calls go browser → provider directly. One scan in flight at a time (client-side gate via `model.scanInFlight : Maybe ItemId`). No access to Ternpike-hosted models.
-- **Paid** — no key required. OCR is proxied through `api.ternpike.com/scan` (Cloudflare Worker) using Ternpike's Anthropic key. Batch scanning unlocked. Monthly quota enforced server-side in KV.
+BYO keys (Anthropic / OpenAI / Gemini) are available on **both** tiers — paid does not take that away. Paid is purely additive.
+
+- **Free** — BYO key only. OCR calls go browser → provider directly. One scan in flight at a time (client-side gate via `model.scanInFlight : Maybe ItemId`).
+- **Paid** — everything Free has, plus: access to Ternpike's hosted Anthropic key (proxied through `api.ternpike.com/scan` so the key never touches the browser), and batch scanning. No quotas — paid is paid.
 
 **Critical rule:** Ternpike's Anthropic key NEVER ships to the browser. Any feature that uses it must call through the Worker proxy. If you find yourself wanting a Ternpike-owned secret in Elm/JS, you're doing it wrong — add a Worker endpoint instead.
 
