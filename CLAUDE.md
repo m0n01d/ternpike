@@ -10,6 +10,12 @@
 - Elm binary: `elm` (via asdf at `~/.asdf/shims/elm`)
 - Node.js 22 required (set via `.tool-versions`)
 
+## Architecture reference
+
+**Read `docs/architecture.md` before working on this codebase.** It covers everything you need to understand before touching Elm code: the GuestModel/AuthModel split, PouchDB port protocol, document ID conventions (`expense::`, `amend::`, `void::`, `trip::`), startup and sync sequence, route-driven lazy loading, the amendment and soft-delete patterns, the `Trips` zipper, and CouchDB sync. It also has a quick-reference table of where to find things.
+
+This file (`CLAUDE.md`) contains conventions and rules that override or extend what's in the architecture doc. If the two disagree, this file wins.
+
 ## Build and toolchain
 
 ```
