@@ -1,14 +1,18 @@
-<section class="oss" id="oss">
-  <div class="oss-card topo topo-oss">
-    <div class="oss-inner">
+<section class="oss open-source" id="oss">
+  <div class="oss-card open-source-card topo topo-oss">
+    <div class="oss-inner open-source-inner">
 
-      <div class="oss-eyebrow">{{ openSource.eyebrow }}</div>
-      <h2 class="oss-h2">{{ openSource.headlineHtml | safe }}</h2>
-      <p class="oss-body">{{ openSource.body }}</p>
+      <div class="oss-eyebrow open-source-eyebrow">{{ openSource.eyebrow }}</div>
+      <h2 class="oss-h2 open-source-h2">{{ openSource.headlineHtml | safe }}</h2>
+      <div class="open-source-body">
+        {% for p in openSource.paragraphs %}
+        <p class="oss-body open-source-p">{{ p }}</p>
+        {% endfor %}
+      </div>
 
-      <div class="oss-links">
+      <div class="oss-links open-source-links">
         {% for link in openSource.links %}
-        <a href="{{ link.href }}" class="oss-btn {{ link.kind }}">{{ link.label }}</a>
+        <a href="{{ link.href }}" class="oss-btn open-source-btn open-source-btn-{{ link.kind }} {{ link.kind }}">{{ link.label }}</a>
         {% endfor %}
       </div>
 
