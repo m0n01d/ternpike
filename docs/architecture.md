@@ -590,25 +590,66 @@ moment loading completes.
 
 ## CouchDB sync
 
+`pouch.js` keeps a `Map<string, Handle>` of open PouchDBs — the personal
+DB (`ternpike` ↔ `ternpike-<email>`) plus one entry per flock the user
+belongs to (`ternpike-<flockDbName>` ↔ `<flockDbName>`). Each handle
+runs its own `db.sync(remote, { live: true, retry: true })`; CouchDB's
+`_security` doc gates membership per remote, so we don't reimplement
+permission routing in JS.
+
 ```js
 // pouch.js
-const remote = new PouchDB(
-    `https://couch.ternpike.com/${creds.dbName}`,
-    { auth: { username: creds.email, password: creds.password } }
-)
-db.sync(remote, { live: true, retry: true })
-  .on('active',   () => send({ tag: 'SyncStateMsg', state: 'syncing' }))
-  .on('paused',   () => send({ tag: 'SyncStateMsg', state: 'synced'  }))
-  .on('error',    e  => send({ tag: 'SyncStateMsg', state: e.status === 401 ? 'auth_error' : 'error' }))
+const handles = new Map() // localName -> { local, remote, sync, changes, flockId? }
+handles.get('ternpike')   // personal handle, flockId === null
 ```
 
-- `live: true` keeps the connection open permanently.
-- `retry: true` reconnects automatically on network drops.
-- A 401 from CouchDB is sent back as `auth_error`, which transitions Elm to
-  `GuestModel SessionExpired` — the user is kicked to the login screen.
-- Each remote change that sync pulls down fires the local changes feed, so the
-  same `DbChange → pouchIn → update` path handles both local writes and
-  remote sync.
+Solo users (no flocks) keep exactly one handle — no regression on the
+single-user path.
+
+### Startup sequence
+
+1. Open the personal local DB and start its sync.
+2. On the first non-error `paused` event (PouchDB's "fully caught up"
+   signal), `db.get('user:flocks')` from the personal DB. If 404, no
+   flocks — done.
+3. For each `{ flockId, dbName }` entry in `flocks[]`, open a local DB
+   named `ternpike-<dbName>` and start syncing it to `<dbName>` using
+   the same CouchDB credentials (one user, many DBs).
+4. The personal handle watches its own `changes` stream for `user:flocks`
+   updates; reconciliation opens new handles and closes departed ones
+   without a reload. Server admin-writes `user:flocks` on
+   create/join/leave, so the change stream is the trigger.
+
+### Port message fan-out
+
+- `GetAllTrips` queries every handle in parallel, merges by `_id`
+  (globally unique — timestamp + nonce), and tags each trip with
+  `flockId` (`null` for personal, the flock id otherwise). The field is
+  derived from the source DB, **not** stored on disk.
+- `GetTripExpenses` / `GetExpense` / `Save*` take a `target` field on the
+  outbound message: `{ kind: "Personal" }` or
+  `{ kind: "InFlock", flockId }`. Until the Elm side wires this up
+  (#60), missing `target` defaults to the personal handle so the solo
+  path keeps working.
+
+### Live changes feed
+
+Every handle has its own `db.changes({ live, since: 'now' })` listener.
+Each emitted `DbChange` / `DbDeleted` includes a `sourceDbName` field
+so Elm can attribute the doc later when needed; the existing decoder
+ignores it for now.
+
+### Sync state and auth
+
+- `live: true` keeps the connection open permanently; `retry: true`
+  reconnects on network drops.
+- A 401/403 from **any** handle's sync is sent back as `auth_error`,
+  which transitions Elm to `GuestModel SessionExpired` and kicks the
+  user to the login screen. We don't try to keep some flocks alive
+  while others are dead.
+- `clearStorage` / `clearAllStorage` cancel every sync, close every
+  remote, and `local.destroy()` every local DB — so a sign-out / 401
+  wipes IndexedDB for all flock DBs, not just the personal one.
 
 ---
 
