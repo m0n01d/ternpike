@@ -109,11 +109,13 @@ export function couchAdminFetch(couch, path, init = {}) {
   })
 }
 
-// Hit CouchDB directly authenticated as a real seeded user — this exercises
-// `validate_doc_update` because admin writes bypass it. Caller provides the
-// already-derived password (see `fixtures/auth.js#derivePassword`).
+// CouchDB-direct fetch authenticated as a specific user (not admin). Mirrors
+// the way the browser PouchDB client talks to CouchDB — Basic auth with the
+// user's HMAC-derived password. Used by #66 to exercise `validate_doc_update`
+// (admin writes bypass it) and by #70 to assert cross-tenant invisibility.
 export function couchUserFetch(couch, email, password, path, init = {}) {
-  const auth = 'Basic ' + Buffer.from(`${email}:${password}`).toString('base64')
+  const auth =
+    'Basic ' + Buffer.from(`${email}:${password}`).toString('base64')
   return fetch(`${couch.baseUrl}${path}`, {
     ...init,
     headers: {
@@ -122,4 +124,21 @@ export function couchUserFetch(couch, email, password, path, init = {}) {
       ...(init.headers || {}),
     },
   })
+}
+
+// Assert that `docId` is NOT present in `dbName` from `userFetch`'s perspective.
+// Uses GET .../docId and expects 404. Treats 403 ("not a member of this db")
+// the same as 404 — the doc is absent as far as this user is concerned. Any
+// other status (200, 500, etc.) is a hard failure.
+//
+// `userFetch` is a partially-applied fetcher: `(path, init?) => Promise<Response>`.
+// Build it with `(p, i) => couchUserFetch(couch, email, password, p, i)` or
+// `(p, i) => couchAdminFetch(couch, p, i)` depending on which lens you want.
+export async function assertDocAbsent(userFetch, dbName, docId) {
+  const r = await userFetch(`/${dbName}/${encodeURIComponent(docId)}`)
+  if (r.status === 404 || r.status === 403) return
+  const text = await r.text()
+  throw new Error(
+    `assertDocAbsent: expected 404/403 for ${dbName}/${docId}, got ${r.status}: ${text}`,
+  )
 }
