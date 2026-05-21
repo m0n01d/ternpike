@@ -192,6 +192,7 @@ toAuthState creds initialRoute gs =
     , loadingTrips = Set.empty
     , route = initialRoute
     , scanQueue = Dict.empty
+    , showDayIntensity = True
     , showLedgerMap = False
     , showMapPicker = False
     , statsGranularity = Nothing
@@ -1713,6 +1714,9 @@ updateAuth msg as_ =
             ( AuthModel { as_ | form = mapForm (setLocation LocationSkipped) as_.form, showMapPicker = False }
             , Cmd.none
             )
+
+        ToggleDayIntensity ->
+            ( AuthModel { as_ | showDayIntensity = not as_.showDayIntensity }, Cmd.none )
 
         ToggleLedgerMap ->
             ( AuthModel { as_ | showLedgerMap = not as_.showLedgerMap }, Cmd.none )

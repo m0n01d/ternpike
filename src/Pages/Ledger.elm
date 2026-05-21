@@ -141,12 +141,12 @@ viewBody model mode =
         LedgerReady entries ->
             Html.div []
                 [ viewLedgerMap model entries
-                , viewEntries model.basePath entries
+                , viewEntries model.basePath model.showDayIntensity entries
                 ]
 
 
-viewEntries : String -> List Entry.EffectiveEntry -> Html Msg
-viewEntries basePath entries =
+viewEntries : String -> Bool -> List Entry.EffectiveEntry -> Html Msg
+viewEntries basePath showIntensity entries =
     let
         dates =
             Entry.uniqueDates entries
@@ -156,6 +156,19 @@ viewEntries basePath entries =
                 (\i d -> ( d, List.length dates - i ))
                 dates
 
+        totals =
+            Entry.dailyTotals entries
+
+        median =
+            Entry.tripMedian totals
+
+        bandFor date =
+            if showIntensity then
+                Just (Entry.spendBand median (Dict.get date totals |> Maybe.withDefault 0))
+
+            else
+                Nothing
+
         groupBlock ( date, dayN ) =
             let
                 dayEntries =
@@ -163,7 +176,7 @@ viewEntries basePath entries =
             in
             ( date
             , Html.div [ Html.Attributes.class "mt-6 mb-4" ]
-                [ viewDayKicker dayN date
+                [ viewDayKicker (bandFor date) dayN date
                 , Keyed.node "div"
                     [ Html.Attributes.class "animate-stagger-row" ]
                     (List.map
@@ -176,17 +189,46 @@ viewEntries basePath entries =
     Keyed.node "div" [] (List.map groupBlock indexedDates)
 
 
-viewDayKicker : Int -> String -> Html Msg
-viewDayKicker dayN date =
+viewDayKicker : Maybe Entry.Band -> Int -> String -> Html Msg
+viewDayKicker maybeBand dayN date =
     Html.div [ Html.Attributes.class "sticky top-14 z-[9] bg-parchment border-t border-tan/40 -mx-5 px-5 py-3 flex items-center gap-3" ]
         [ Html.span
             [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-rust" ]
             [ Html.text ("DAY " ++ String.fromInt dayN) ]
-        , Html.span [ Html.Attributes.class "h-px flex-1 bg-tan" ] []
+        , Html.span [ Html.Attributes.class (railClass maybeBand) ] []
         , Html.span
             [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-moss" ]
             [ Html.text (String.toUpper (formatDateDisplay date)) ]
         ]
+
+
+railClass : Maybe Entry.Band -> String
+railClass maybeBand =
+    case maybeBand of
+        Nothing ->
+            "h-px flex-1 bg-tan"
+
+        Just band ->
+            "flex-1 h-0.5 " ++ bandColor band
+
+
+bandColor : Entry.Band -> String
+bandColor band =
+    case band of
+        Entry.Frugal ->
+            "bg-moss"
+
+        Entry.Below ->
+            "bg-moss/50"
+
+        Entry.Typical ->
+            "bg-tan"
+
+        Entry.Above ->
+            "bg-rust/60"
+
+        Entry.Splurge ->
+            "bg-rust-deep"
 
 
 viewLedgerMap : AuthState -> List Entry.EffectiveEntry -> Html Msg
