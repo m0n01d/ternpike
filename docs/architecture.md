@@ -651,6 +651,44 @@ ignores it for now.
   remote, and `local.destroy()` every local DB — so a sign-out / 401
   wipes IndexedDB for all flock DBs, not just the personal one.
 
+### Flocks in Elm
+
+The Elm-side types for the multi-DB world live in three modules:
+
+- `Data.FlockId` — opaque wrapper around a 12-character lowercase hex
+  nonce. `fromString` validates the shape and returns `Maybe FlockId`.
+- `Data.Flock` — the `Flock` record. Members are modeled as
+  `billingOwner :: otherMembers` so "the owner is always a member" is
+  a structural invariant; `members : Flock -> List UserId` derives the
+  provably-non-empty flat list on demand. On the wire (`flock:meta`
+  doc) the field is flat — the decoder picks the owner out and
+  hard-rejects (`Json.Decode.fail`) any doc where `billingOwner` is
+  not in `members`.
+- `Data.Flocks` — `Dict String Flock` keyed by `FlockId.toString`,
+  lives at `AuthState.flocks`. `ownedBy` / `joinedBy` filter by user.
+
+`Trip.flockId : Maybe FlockId` is in-memory only: `Trip.encoder`
+deliberately omits it and `Trip.decoder` only reads it if present.
+`src/pouch.js` is the source of truth — it tags trip docs with the
+handle's `flockId` at the port boundary on the way in from
+`GetAllTrips` and from the live-changes feed. Storing it inside the
+doc would let it diverge from the DB it actually lives in.
+
+Startup hydration is JS-driven: after the personal DB's first
+non-error `paused` event, `pouch.js` reads `user:flocks` from the
+personal DB and (a) opens / closes flock handles via `reconcileFlocks`,
+(b) emits `FlocksReconciled flockIds` so Elm can drop cached entries
+for flocks the user has left, and (c) fetches each flock's
+`flock:meta` doc and emits it as `FlockMeta`. The Elm decoder turns
+that into a `Flock` and inserts into `AuthState.flocks`. Subsequent
+live changes to `flock:meta` docs are routed up as `FlockMeta` events
+too, so membership/billing transitions converge without a reload.
+
+The `Data.Pouch` inbound protocol carries the new tags:
+
+- `FlocksReconciled (List FlockId)` — replaces the known-flock set.
+- `FlockMetaChanged Flock` — upserts one flock.
+
 ---
 
 ## Encoders and decoders

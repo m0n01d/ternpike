@@ -76,6 +76,9 @@ import Data.Category as Category exposing (Category(..))
 import Data.Entry as Entry
 import Data.Expense as Expense
 import Data.ExpenseId as ExpenseId
+import Data.Flock as Flock
+import Data.FlockId
+import Data.Flocks as Flocks
 import Data.Guest exposing (GuestReason(..), GuestSession)
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Navigation exposing (Route(..), Tab(..))
@@ -196,6 +199,7 @@ toAuthState creds initialRoute gs =
     , creds = creds
     , error = Nothing
     , expenses = Dict.empty
+    , flocks = Flocks.empty
     , form = FreshForm (defaultPendingEntry gs.today)
     , geoBlocked = False
     , key = gs.key
@@ -319,6 +323,12 @@ pouchInDecoder =
                             (D.field "expenseId" ExpenseId.decode)
                             expenseBundleDecoder
 
+                    "FlockMeta" ->
+                        D.map FlockMetaChanged (D.field "doc" Flock.decoder)
+
+                    "FlocksReconciled" ->
+                        D.map FlocksReconciled (D.field "flockIds" (D.list Data.FlockId.decoder))
+
                     "SyncState" ->
                         D.map SyncStateMsg (D.field "state" syncStateDecoder)
 
@@ -346,6 +356,11 @@ docChangeDecoder =
 
                     "expense" ->
                         D.map ExpenseChanged Expense.decoder
+
+                    "flock:meta" ->
+                        -- Routed up as a top-level FlockMeta event by
+                        -- pouch.js; ignored here.
+                        D.fail "flock:meta routed as FlockMeta event"
 
                     "trip" ->
                         D.map TripChanged Trip.decoder
@@ -1355,6 +1370,32 @@ updateAuth msg as_ =
                 Ok (DbError msg_) ->
                     ( AuthModel { as_ | error = Just msg_ }, Cmd.none )
 
+                Ok (FlockMetaChanged flock) ->
+                    ( AuthModel
+                        { as_
+                            | flocks =
+                                Dict.insert
+                                    (Data.FlockId.toString flock.id)
+                                    flock
+                                    as_.flocks
+                        }
+                    , Cmd.none
+                    )
+
+                Ok (FlocksReconciled flockIds) ->
+                    let
+                        keep =
+                            flockIds
+                                |> List.map Data.FlockId.toString
+                                |> Set.fromList
+                    in
+                    ( AuthModel
+                        { as_
+                            | flocks = Dict.filter (\k _ -> Set.member k keep) as_.flocks
+                        }
+                    , Cmd.none
+                    )
+
                 Ok (SyncStateMsg state) ->
                     let
                         syncSettledEdge =
@@ -2091,11 +2132,12 @@ updateAuth msg as_ =
                             TripId.fromString ("trip::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp)
 
                         newTrip =
-                            { id = tripId
-                            , budget = String.toFloat form.budget |> Maybe.withDefault 0
+                            { budget = String.toFloat form.budget |> Maybe.withDefault 0
                             , coverPhotoUrl = form.coverPhotoUrl
                             , description = form.description
                             , endDate = form.endDate
+                            , flockId = Nothing
+                            , id = tripId
                             , name = form.name
                             , startDate = form.startDate
                             }

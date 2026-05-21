@@ -53,6 +53,14 @@ export function attachPouch(app, { creds = null } = {}) {
           // converge without a reload.
           reconcileFlocks(doc).catch(err =>
             console.error('[pouch] reconcileFlocks:', err))
+          return
+        }
+        if (doc.type === 'flock:meta') {
+          // Route flock metadata up as a typed FlockMeta event so Elm can
+          // decode it through Data.Flock.decoder rather than the
+          // expense/trip-shaped DbChange channel.
+          app.ports.pouchIn.send({ tag: 'FlockMeta', doc })
+          return
         }
         const tagged = handle.flockId != null && doc.type === 'trip'
           ? { ...doc, flockId: handle.flockId }
@@ -175,6 +183,27 @@ export function attachPouch(app, { creds = null } = {}) {
         const handle = openFlockHandle(flockId, dbName)
         startHandleSync(handle, dbName)
       }
+    }
+
+    // Tell Elm which flocks the user belongs to right now so it can drop
+    // any cached entries for flocks they've left.
+    app.ports.pouchIn.send({
+      tag: 'FlocksReconciled',
+      flockIds: Array.from(wanted.values()).map(w => w.flockId),
+    })
+
+    // Best-effort initial hydration of flock:meta from each flock's local DB.
+    // The live-changes feed will keep them up to date afterwards.
+    for (const [localName, { flockId }] of wanted.entries()) {
+      const handle = handles.get(localName)
+      if (!handle) continue
+      handle.local.get('flock:meta').then(meta => {
+        const { _rev, ...doc } = meta
+        app.ports.pouchIn.send({ tag: 'FlockMeta', doc })
+      }).catch(err => {
+        if (err && err.status === 404) return
+        console.warn('[pouch] flock:meta get failed', flockId, err)
+      })
     }
   }
 
