@@ -83,9 +83,19 @@ Three core document types are cached in `AuthState` as flat `Dict String <Type>`
 ### Why flat Dicts instead of nested structure?
 
 PouchDB stores all documents in one flat database — trips, expenses, amendments,
-and voids sit side by side. The app mirrors that shape in memory. When you need
-all expenses for a trip, you filter `Dict.values as_.expenses` by `tripId`. When
-you need to apply edits, you filter `Dict.values as_.amendments` by `targetId`.
+and voids sit side by side. The app mirrors that shape in memory.
+
+To render a trip, callers pass the full `Dict.values` of all three caches to
+`Entry.resolve`. Inside `resolve` (`src/Data/Entry.elm:38`), the lookups are
+efficient:
+
+- **Amendments** are re-indexed into a `Dict String (List Amendment)` keyed by
+  expense ID, then `Dict.get` is used — O(1) per expense.
+- **Voids** are collected into a `Set String` of voided IDs, then `Set.member`
+  is used — O(log n) per expense.
+- **Expenses** are filtered by `tripId` — the one linear scan. This is cheap
+  in practice because lazy loading means only one trip's expenses are ever in
+  memory at a time.
 
 ### Document ID conventions
 
@@ -291,14 +301,22 @@ type alias Amendment =
 ```
 
 `Maybe` fields mean "this field was changed". `Nothing` means "keep the original
-value". To get the effective values, `Entry.resolve` applies all amendments for
-an expense in chronological order:
+value". To get the effective values, `Entry.resolve` (`src/Data/Entry.elm:38`)
+first re-indexes all amendments into a `Dict String (List Amendment)` keyed by
+`ExpenseId.toString a.targetId`, then does a single `Dict.get` per expense and
+folds the matching amendments in chronological order:
 
 ```elm
--- pseudocode
-resolve : Expense -> List Amendment -> EffectiveEntry
-resolve expense amendments =
-    List.foldl applyAmendment (fromExpense expense) amendments
+-- actual shape (Entry.elm:45-63)
+amendsByTarget : Dict String (List Amendment)  -- built once per resolve call
+
+applyAmends expense =
+    case Dict.get (ExpenseId.toString expense.id) amendsByTarget of
+        Nothing    -> toEffectiveEntry False expense
+        Just amends ->
+            amends
+                |> List.sortBy .createdAt
+                |> List.foldl applyAmendment (toEffectiveEntry True expense)
 ```
 
 `EffectiveEntry` is what the UI actually renders. `isAmended : Bool` lets the
