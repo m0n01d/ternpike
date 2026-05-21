@@ -187,9 +187,13 @@ pricing:
         arrow: false
 
 origin:
-  eyebrow: ""
-  headline: ""
-  body: ""
+  eyebrow: "Why we built it"
+  headline: "I needed it, so I built it."
+  paragraphs:
+    - "I was driving to Alaska. Florida to Juneau in a truck with a bed full of gear. I wanted to know what the trip was actually costing me, day by day, without babysitting a spreadsheet at every gas station."
+    - "Nothing out there did what I wanted. So I built Ternpike on the road, for the road. Used it the whole way up and back. It works."
+    - "If you're the kind of person who tracks your spending not because you have to but because you like knowing, this is for you."
+  attribution: "— Dwight, Ternpike founder"
 
 comparison:
   eyebrow: "Why Ternpike"
@@ -199,49 +203,47 @@ comparison:
       heading: "Every other app"
       rows:
         - icon: "❌"
-          text: "No AI receipt scanning"
+          text: "No receipt scanning"
         - icon: "❌"
-          text: "No GPS logging or route map"
+          text: "No GPS logging"
         - icon: "❌"
-          text: "Your data in their silo"
+          text: "Your data in their servers"
         - icon: "❌"
-          text: "Monthly subscription"
-        - icon: "❌"
-          text: "Built for offices, not roads"
+          text: "Monthly subscription required"
     - kind: "us"
       heading: "Ternpike"
       rows:
         - icon: "✅"
-          text: "AI reads receipts instantly"
+          text: "Reads receipts automatically"
         - icon: "✅"
-          text: "GPS on every entry, live route map"
+          text: "GPS pin on every expense"
         - icon: "✅"
-          text: "Your own Google Sheet, always"
+          text: "Your data, your export"
         - icon: "✅"
-          text: "Free to self-host, forever"
-        - icon: "✅"
-          text: "Built on the Alaska Highway"
+          text: "Free tier that's actually free"
 
 openSource:
-  eyebrow: "Open Source"
-  headlineHtml: "Fork it.<br>Self-host it.<br>Make it yours."
-  body: "The full source is on GitHub. Bring your own Google Sheet and API keys and it costs you nothing. If you'd rather skip the setup, a managed version is coming soon."
+  eyebrow: "Open source"
+  headlineHtml: "The code is open.<br>Your data is yours.<br>The hosting is optional."
+  paragraphs:
+    - "Ternpike is source-available on GitHub. If you're comfortable with self-hosting, spin up your own instance and pay nothing beyond a $5 VPS."
+    - "If you'd rather just open the app and go, the managed version handles everything for you."
   links:
     - kind: "gh"
       label: "⭐ Star on GitHub"
-      href: "#"
+      href: "https://github.com/m0n01d/ternpike"
     - kind: "docs"
-      label: "Read the Docs →"
-      href: "#"
+      label: "Read the docs →"
+      href: "#docs"
 
 emailCapture:
-  headlineHtml: "Know before<br>you pull out."
-  sub: "Get notified when the managed version launches — zero setup, just scan and go."
+  headlineHtml: "Know your budget<br>before you pull out tomorrow."
+  sub: "Get notified when the managed version launches. Zero setup, just scan and go."
   placeholder: "your@email.com"
-  buttonLabel: "Notify Me"
+  buttonLabel: "Notify me"
   successLabel: "You're in ✓"
   successPlaceholder: "See you on the road."
-  fine: "No spam. Unsubscribe anytime. We're building this in public."
+  fine: "No spam. We're building this in public."
 
 footer:
   tagline: "Track every turn of the road."

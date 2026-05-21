@@ -1305,4 +1305,136 @@
     color: var(--color-muted);
     line-height: 1.55;
   }
+
+  /* ─── ORIGIN (v2 refresh, issue #32) ─── */
+  .origin {
+    padding: 100px 24px;
+    background: var(--color-parchment);
+  }
+
+  .origin-inner {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  .origin-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--color-rust);
+    margin-bottom: 16px;
+  }
+
+  .origin-h2 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(32px, 5vw, 48px);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: var(--color-forest);
+    margin-bottom: 36px;
+  }
+
+  .origin-body {
+    font-family: 'Crimson Pro', var(--font-body);
+    font-size: 20px;
+    line-height: 1.65;
+    color: var(--color-forest);
+  }
+
+  .origin-p {
+    margin-bottom: 20px;
+  }
+  .origin-p:last-child { margin-bottom: 0; }
+
+  .origin-attribution {
+    margin-top: 32px;
+    font-family: 'Playfair Display', var(--font-display);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 18px;
+    color: var(--color-muted);
+  }
+
+  /* ─── COMPARISON (v2 refresh, issue #32) ─── */
+  .comparison-col-us {
+    box-shadow: 0 8px 24px rgba(45,58,34,0.12);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .comparison-col-them {
+    opacity: 0.95;
+  }
+
+  .comparison-row-them {
+    color: var(--color-muted);
+  }
+
+  .comparison-row-us {
+    color: var(--color-forest);
+    font-weight: 500;
+  }
+
+  .comparison-icon-us {
+    color: var(--color-rust);
+  }
+
+  .comparison-icon-them {
+    color: var(--color-muted);
+    opacity: 0.7;
+  }
+
+  /* ─── OPEN SOURCE (v2 refresh, issue #32) ─── */
+  .open-source-body {
+    margin: 0 auto 36px;
+    max-width: 560px;
+  }
+
+  .open-source-p {
+    font-family: var(--font-body);
+    font-style: normal;
+    font-size: 18px;
+    color: var(--color-cream);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .open-source-p:last-child { margin-bottom: 0; }
+
+  .open-source-btn-gh {
+    background: var(--color-tan);
+    color: var(--color-forest);
+  }
+
+  .open-source-btn-docs {
+    background: transparent;
+    border: 1px solid rgba(212,201,168,0.4);
+    color: var(--color-cream);
+  }
+
+  /* ─── EMAIL CAPTURE (v2 refresh, issue #32) ─── */
+  .email-capture {
+    background-image: var(--bg-topo-atlas);
+    background-repeat: no-repeat;
+    background-size: 2400px 2000px;
+    background-position: -800px -600px;
+    padding: 100px 24px;
+    max-width: none;
+  }
+
+  .email-capture-card {
+    max-width: 640px;
+    margin: 0 auto;
+    background: var(--color-parchment);
+    border: 1px solid var(--color-tan);
+    border-radius: 20px;
+    padding: 56px 40px;
+    text-align: center;
+    box-shadow: 0 16px 60px rgba(45,58,34,0.12);
+  }
+
+  @media (max-width: 480px) {
+    .email-capture-card { padding: 40px 24px; }
+  }
 }

@@ -1,15 +1,15 @@
-<section class="why" id="compare">
-  <div class="why-inner">
-    <div class="section-eyebrow">{{ comparison.eyebrow }}</div>
-    <h2 class="section-h2">{{ comparison.headline }}</h2>
+<section class="why comparison" id="compare">
+  <div class="why-inner comparison-inner">
+    <div class="section-eyebrow comparison-eyebrow">{{ comparison.eyebrow }}</div>
+    <h2 class="section-h2 comparison-h2">{{ comparison.headline }}</h2>
 
-    <div class="compare">
+    <div class="compare comparison-grid">
       {% for col in comparison.columns %}
-      <div class="compare-col">
-        <div class="compare-head {{ col.kind }}">{{ col.heading }}</div>
-        <div class="compare-body">
+      <div class="compare-col comparison-col comparison-col-{{ col.kind }}">
+        <div class="compare-head comparison-head comparison-head-{{ col.kind }} {{ col.kind }}">{{ col.heading }}</div>
+        <div class="compare-body comparison-body">
           {% for row in col.rows %}
-          <div class="compare-row{% if col.kind == 'us' %} us-row{% endif %}"><span class="c-icon">{{ row.icon }}</span> {{ row.text }}</div>
+          <div class="compare-row comparison-row comparison-row-{{ col.kind }}{% if col.kind == 'us' %} us-row{% endif %}"><span class="c-icon comparison-icon comparison-icon-{{ col.kind }}">{{ row.icon }}</span> <span class="comparison-text">{{ row.text }}</span></div>
           {% endfor %}
         </div>
       </div>
