@@ -37,16 +37,11 @@ Correct sequence when a stash pop conflicts:
 3. If a stash is accidentally dropped: `git fsck --lost-found` → find the dangling commit → `git show <sha>:<file>`
 
 ## Model architecture (GuestModel / AuthModel split)
-`Model = GuestModel GuestState | AuthModel AuthState`
-- Compiler enforces that auth-only pages (Scan, Add, Ledger, Stats) cannot be reached while signed out.
+
+See `docs/architecture.md` for the full structural description. Key behavioral conventions:
 - 401 from any HTTP call → `GuestModel (toGuestState SessionExpired as_) + clearStorage ()`. No silent re-auth — the app is unverified by Google so tokens expire aggressively.
-- Auth error messages live in `GuestReason` (FreshGuest | SessionExpired | MissingConfig), NOT in `model.error`.
-
-### AuthState expenses shape
-
-`expenses : Dict String (Dict String Expense)` — **nested** by trip. Outer key is
-`TripId.toString`, inner key is `ExpenseId.toString`. Single-trip lookup is one `Dict.get`
-on the outer dict; cross-trip scan (e.g. `findEffective`) iterates only loaded trips.
+- Auth error messages live in `GuestReason`, NOT in `model.error`.
+- `expenses : Dict String (Dict String Expense)` — **nested** by trip. Outer key is `TripId.toString`, inner key is `ExpenseId.toString`.
 
 ## Subscription tiers
 
@@ -84,20 +79,10 @@ Tracking issues: #13 (BYO-key infrastructure, foundation for Fledgling), #14 (pa
 
 ## Storage tiers — where data lives
 
-Three places, picked deliberately. Misplacing data here causes real problems: secrets leak via sync, tier gets stale across devices, etc.
+See `docs/architecture.md` for the full breakdown. Short rules:
 
-| What | Where | Why |
-|---|---|---|
-| JWT / session token | IndexedDB (`auth_creds`) | Device-local. Never sync. |
-| BYO API keys (Anthropic/OpenAI/Gemini) | IndexedDB (`ai_config`, see #13) | PouchDB syncs to CouchDB — keys would land on the server. **Hard no.** |
-| Subscription tier / status / `stripeCustomerId` | Server (Worker KV), hydrated into `AuthState` in memory at login + via `/me` | Server is source of truth. Re-checked on every gated endpoint. |
-| Identity (email, googleSub) | Server, hydrated into `AuthState` | Same as tier. |
-| User preferences (default currency, fav categories, UI prefs, preferred scan source) | PouchDB doc `_id = "user:profile"` | Syncs across the user's devices. Not secret. Not server-authoritative. |
-| Expense / Trip / Amendment / Void | PouchDB (existing) | Domain data. |
-
-**Rules:**
 1. **PouchDB** = things the user wants synced across their own devices, that aren't secret and aren't server-authoritative.
-2. **IndexedDB** = device-local secrets and caches (JWT, API keys, ephemeral state).
+2. **IndexedDB** = device-local secrets and caches (JWT at `auth_creds`, BYO API keys at `ai_config`). BYO keys must **never** go in PouchDB — they'd sync to CouchDB.
 3. **Server** = identity, tier, billing. Anything that gates a paid feature must be re-checked server-side on every request.
 
 Never cache `tier` in PouchDB — it'd sync stale state across devices when a user upgrades. The `/me` call on startup (#19) is the refresh path.

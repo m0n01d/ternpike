@@ -120,30 +120,27 @@ Monthly). In-memory only; never syncs to PouchDB.
 
 ## Data modeling with Dicts
 
-Three core document types are cached in `AuthState` as flat `Dict String <Type>`:
+Core document types are cached in `AuthState` as Dicts:
 
-| Field | Key | Value |
+| Field | Type | Key |
 |---|---|---|
-| `expenses` | `ExpenseId.toString id` | `Expense` |
-| `amendments` | amendment's own string `id` | `Amendment` |
-| `voids` | void's own string `id` | `Void` |
+| `expenses` | `Dict String (Dict String Expense)` | outer: `TripId.toString`, inner: `ExpenseId.toString` |
+| `amendments` | `Dict String Amendment` | amendment's own string `id` |
+| `voids` | `Dict String Void` | void's own string `id` |
 
-### Why flat Dicts instead of nested structure?
+`expenses` is nested by trip so a single-trip lookup is one `Dict.get` on the outer
+dict. Amendments and voids are flat — they carry a `targetId` field pointing at the
+expense, and `Entry.resolve` builds its own per-call indexes.
 
-PouchDB stores all documents in one flat database — trips, expenses, amendments,
-and voids sit side by side. The app mirrors that shape in memory.
-
-To render a trip, callers pass the full `Dict.values` of all three caches to
-`Entry.resolve`. Inside `resolve` (`src/Data/Entry.elm:38`), the lookups are
-efficient:
+To render a trip, callers scope expenses to that trip via `Dict.get tripId as_.expenses`
+and pass the result with all amendments and voids to `Entry.resolve`. Inside `resolve`
+(`src/Data/Entry.elm`), the lookups are efficient:
 
 - **Amendments** are re-indexed into a `Dict String (List Amendment)` keyed by
-  expense ID, then `Dict.get` is used — O(1) per expense.
+  expense ID, then `Dict.get` is used — O(log n) per expense.
 - **Voids** are collected into a `Set String` of voided IDs, then `Set.member`
   is used — O(log n) per expense.
-- **Expenses** are filtered by `tripId` — the one linear scan. This is cheap
-  in practice because lazy loading means only one trip's expenses are ever in
-  memory at a time.
+- **Expenses** are already scoped to one trip by the caller — no linear scan needed.
 
 ### Document ID conventions
 
