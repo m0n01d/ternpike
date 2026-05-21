@@ -220,10 +220,24 @@ viewEntries opts entries =
                         (\e -> ( ExpenseId.toString e.id, viewEntryRow opts e ))
                         dayEntries
                     )
+                , if List.length dayEntries > 1 then
+                    viewDayTotal (Dict.get date totals |> Maybe.withDefault 0)
+
+                  else
+                    Html.text ""
                 ]
             )
     in
     Keyed.node "div" [] (List.map groupBlock indexedDates)
+
+
+viewDayTotal : Float -> Html Msg
+viewDayTotal total =
+    Html.div
+        [ Html.Attributes.class "mt-3 pt-2 text-center font-mono text-xs tracking-widest text-forest" ]
+        [ Html.text "DAY TOTAL  "
+        , Html.text (formatAmount total)
+        ]
 
 
 viewDayKicker : Maybe Entry.Band -> Int -> String -> Html Msg
