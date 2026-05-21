@@ -689,6 +689,35 @@ The `Data.Pouch` inbound protocol carries the new tags:
 - `FlocksReconciled (List FlockId)` — replaces the known-flock set.
 - `FlockMetaChanged Flock` — upserts one flock.
 
+### Paid-feature gating: `Trip.effectiveTier`
+
+Any predicate that asks "can the user do X on **this trip**?" must consult
+`Trip.effectiveTier : Trip -> { a | flocks, tier } -> Tier` (defined in
+`Data/Trip.elm`), **not** `as_.tier` directly. The rule:
+
+- **Personal trip** (`trip.flockId == Nothing`) → `as_.tier`.
+- **Trip in a flock with `billingStatus == Active`** → `Fly`. The flock's
+  billing owner pays for the flock, and we don't carry the owner's exact
+  tier locally — `Active` is sufficient evidence that they're at least
+  `Fly`. (`Trailblazer` is a billing distinction, not a feature one.)
+- **Flock in `Grace` or `Frozen`** → falls back to `as_.tier`. The
+  lapsed-billing banner handles user messaging.
+- **Trip references a flock we don't yet have data for** → falls back to
+  `as_.tier`, never crashes.
+
+Two convenience wrappers — `Trip.canUseProxiedOCR` and `Trip.canBatchScan`
+— resolve `Tier.isPaid (effectiveTier trip as_)` so call sites stay terse.
+
+The opposite rule still holds: predicates that ask "is the **logged-in
+user** paid?" (Settings tier badge, "Create Flock" upgrade prompt, billing
+screen) keep reading `as_.tier` directly. The headline UX — a Fledgling
+invitee gets paid OCR inside a flock trip but stays Fledgling on personal
+data — falls straight out of this split.
+
+Server endpoints back paid features still re-check the actual tier
+(caller's or flock-owner's depending on the call). Client-side gating is
+UX, not security.
+
 ---
 
 ## Encoders and decoders

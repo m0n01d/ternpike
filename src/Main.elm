@@ -88,6 +88,7 @@ import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), Pouc
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.StatsHover as StatsHover
 import Data.Sync exposing (SyncState(..))
+import Data.Tier as Tier
 import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
@@ -218,6 +219,7 @@ toAuthState creds initialRoute gs =
     , statsHover = StatsHover.empty
     , submitting = False
     , syncState = NotEnabled
+    , tier = Tier.Fledgling
     , toast = Nothing
     , today = gs.today
     , tripForm = Nothing

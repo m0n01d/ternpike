@@ -2,7 +2,10 @@ module Data.Trip exposing
     ( Trip
     , TripField(..)
     , TripForm
+    , canBatchScan
+    , canUseProxiedOCR
     , decoder
+    , effectiveTier
     , encoder
     , validator
     )
@@ -35,7 +38,10 @@ actually lives in.
 
 -}
 
+import Data.Flock
 import Data.FlockId
+import Data.Flocks exposing (Flocks)
+import Data.Tier exposing (Tier)
 import Data.TripId as TripId exposing (TripId)
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
@@ -110,3 +116,72 @@ decoder =
         |> Pipeline.required "_id" TripId.decode
         |> Pipeline.required "name" D.string
         |> Pipeline.required "startDate" D.string
+
+
+
+-- TIER GATING
+
+
+{-| Tier to consult when asking "can this user do X on THIS TRIP?"
+
+For a personal trip (`flockId == Nothing`) the answer is the user's own
+`tier`. For a flock trip, the answer is the flock's billing-owner tier,
+which we don't carry locally — but `billingStatus = Active` is sufficient
+evidence that the owner is at least `Fly`, so any active flock counts as
+`Fly` for capability. `Grace` and `Frozen` flocks fall back to the user's
+own tier (the lapsed-billing banner from #64 mostly disables writes in
+those cases anyway). A trip referencing a flock we don't have data for
+(stale sync, mid-load) defensively falls back to the user's tier rather
+than crashing.
+
+`Trailblazer` is a billing distinction, not a feature distinction (see
+`CLAUDE.md`), so collapsing "active flock" to `Fly` does not lose
+capability — it just means we don't pretend the owner is `Trailblazer`
+when we can't actually tell.
+
+Takes an extensible record so it can be called with either an `AuthState`
+or a smaller record carrying just `tier` and `flocks` (avoids the
+`Data.Trip -> Types -> Data.Trip` import cycle that a literal `AuthState`
+parameter would create).
+
+-}
+effectiveTier : Trip -> { a | flocks : Flocks, tier : Tier } -> Tier
+effectiveTier trip as_ =
+    case trip.flockId of
+        Nothing ->
+            as_.tier
+
+        Just fid ->
+            case Data.Flocks.get fid as_.flocks of
+                Just flock ->
+                    case flock.billingStatus of
+                        Data.Flock.Active ->
+                            Data.Tier.Fly
+
+                        Data.Flock.Frozen ->
+                            as_.tier
+
+                        Data.Flock.Grace ->
+                            as_.tier
+
+                Nothing ->
+                    as_.tier
+
+
+{-| True when the user can route OCR through the Ternpike-hosted Anthropic
+proxy on this trip. Equivalent to `Tier.isPaid (effectiveTier trip as_)` —
+a Fledgling user on an active flock trip gets `True` because the flock's
+billing owner is paying.
+-}
+canUseProxiedOCR : Trip -> { a | flocks : Flocks, tier : Tier } -> Bool
+canUseProxiedOCR trip as_ =
+    Data.Tier.isPaid (effectiveTier trip as_)
+
+
+{-| True when the user can use batch scanning on this trip. Same predicate
+as `canUseProxiedOCR` today; kept distinct so future feature gating can
+diverge without churning call sites.
+-}
+canBatchScan : Trip -> { a | flocks : Flocks, tier : Tier } -> Bool
+canBatchScan trip as_ =
+    Data.Tier.isPaid (effectiveTier trip as_)
