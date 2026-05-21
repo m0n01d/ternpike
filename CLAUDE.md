@@ -122,6 +122,43 @@ examples. Run with `npm test`.
 any future pure helpers. Opaque ID types (constructors not exposed), encoders,
 decoders, and HTML-returning functions don't need examples.
 
+## UI vetting with Playwright
+
+Playwright is installed (`playwright ^1.60.0`). Use it to take real browser screenshots whenever you implement or plan a UI change — show the user actual pixels, not prose descriptions.
+
+### When to use
+- **Vetting (after implementation):** before reporting a UI task done, screenshot the affected route and send it with `SendUserFile`.
+- **Planning (before implementation):** screenshot the current state so the user can see what's changing.
+
+### Workflow
+1. Start the dev server in the background: `npm run dev:vite &` then wait a few seconds for it to be ready.
+2. **Seed data** — navigate to `http://localhost:3000/seed.html` and wait for the `#done` element to become visible. This populates PouchDB with 6 realistic trips and 180+ expenses.
+3. Navigate to the target route and screenshot.
+4. Send the file to the user with `SendUserFile`.
+
+### Minimal one-shot script
+
+Create `scripts/screenshot.js` on-demand (it's not committed — generate it when you need it):
+
+```js
+// node scripts/screenshot.js <route> <outfile>
+import { chromium } from 'playwright';
+const [,, route = '/', out = '/tmp/screenshot.png'] = process.argv;
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+await page.goto('http://localhost:3000/seed.html');
+await page.waitForSelector('#done', { state: 'visible', timeout: 30_000 });
+await page.goto(`http://localhost:3000${route}`);
+await page.waitForLoadState('networkidle');
+await page.screenshot({ path: out, fullPage: true });
+await browser.close();
+```
+
+Run it: `node --input-type=module < scripts/screenshot.js /ledger /tmp/ledger.png`
+
+### Auth gate caveat
+Most app routes (`/ledger`, `/stats`, `/scan`, `/add`) require a signed-in session and will redirect to the login screen without one. Guest-accessible routes (the login/landing page, `/seed.html`) are always screenshottable. For auth-gated routes, note in your report that you can screenshot the UI only when a real session exists — don't pass off a login-redirect screenshot as the feature.
+
 ## Elm style guide
 - **Alphabetize** all record fields and all type constructor lists. Apply to every new type and every edit of an existing type.
 - Always fully qualify imports. If you touch a module or function whose imports are not fully qualified, refactor them. You can expose the type, but not `(..)`.
