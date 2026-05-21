@@ -1,5 +1,5 @@
 // Cache name is stamped with git SHA by CI — ensures old caches are cleaned up on deploy.
-const CACHE = 'ternpike-v1';
+const CACHE = '__CACHE_VERSION__';
 
 const SKIP_CACHE = [
   'api.ternpike.com',

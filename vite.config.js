@@ -16,7 +16,21 @@ export default defineConfig({
     strictPort: true,
     proxy: { '/auth': 'http://localhost:4000' },
   },
-  plugins: [elm()],
+  plugins: [
+    elm(),
+    {
+      name: 'stamp-sw-cache-name',
+      apply: 'build',
+      async writeBundle() {
+        const fs = await import('node:fs/promises')
+        const path = await import('node:path')
+        const swPath = path.resolve('dist/sw.js')
+        const src = await fs.readFile(swPath, 'utf8')
+        const stamped = src.replace('__CACHE_VERSION__', `ternpike-${sha}`)
+        await fs.writeFile(swPath, stamped)
+      },
+    },
+  ],
   resolve: {
     alias: {
       pouchdb: path.resolve('./node_modules/pouchdb/dist/pouchdb.js'),
