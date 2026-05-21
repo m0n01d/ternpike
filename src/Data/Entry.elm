@@ -11,6 +11,7 @@ import Data.Amendment as Amendment exposing (Amendment)
 import Data.Category as Category exposing (Category)
 import Data.Expense as Expense exposing (Expense)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Data.TripId as TripId exposing (TripId)
 import Data.Void as Void exposing (Void)
 import Dict
@@ -18,18 +19,19 @@ import Set
 
 
 type alias EffectiveEntry =
-    { amount    : Float
-    , category  : Category
-    , createdAt : String
-    , date      : String
-    , id        : ExpenseId
-    , isAmended : Bool
-    , lat       : Maybe Float
-    , lon       : Maybe Float
-    , longNote  : String
-    , merchant  : String
-    , note      : String
-    , tripId    : TripId
+    { amount        : Float
+    , category      : Category
+    , createdAt     : String
+    , date          : String
+    , id            : ExpenseId
+    , isAmended     : Bool
+    , lat           : Maybe Float
+    , lon           : Maybe Float
+    , longNote      : String
+    , merchant      : String
+    , note          : String
+    , paymentMethod : Maybe PaymentMethod
+    , tripId        : TripId
     }
 
 
@@ -68,35 +70,37 @@ resolve expenses amendments voids activeTripId =
 
 toEffectiveEntry : Bool -> Expense -> EffectiveEntry
 toEffectiveEntry isAmended e =
-    { amount    = e.amount
-    , category  = e.category
-    , createdAt = e.createdAt
-    , date      = e.date
-    , id        = e.id
-    , isAmended = isAmended
-    , lat       = e.lat
-    , lon       = e.lon
-    , longNote  = e.longNote
-    , merchant  = e.merchant
-    , note      = e.note
-    , tripId    = e.tripId
+    { amount        = e.amount
+    , category      = e.category
+    , createdAt     = e.createdAt
+    , date          = e.date
+    , id            = e.id
+    , isAmended     = isAmended
+    , lat           = e.lat
+    , lon           = e.lon
+    , longNote      = e.longNote
+    , merchant      = e.merchant
+    , note          = e.note
+    , paymentMethod = e.paymentMethod
+    , tripId        = e.tripId
     }
 
 
 applyAmendment : EffectiveEntry -> Amendment -> EffectiveEntry
 applyAmendment e a =
-    { amount    = Maybe.withDefault e.amount a.amount
-    , category  = Maybe.withDefault e.category a.category
-    , createdAt = e.createdAt
-    , date      = Maybe.withDefault e.date a.date
-    , id        = e.id
-    , isAmended = True
-    , lat       = e.lat
-    , lon       = e.lon
-    , longNote  = Maybe.withDefault e.longNote a.longNote
-    , merchant  = Maybe.withDefault e.merchant a.merchant
-    , note      = Maybe.withDefault e.note a.note
-    , tripId    = e.tripId
+    { amount        = Maybe.withDefault e.amount a.amount
+    , category      = Maybe.withDefault e.category a.category
+    , createdAt     = e.createdAt
+    , date          = Maybe.withDefault e.date a.date
+    , id            = e.id
+    , isAmended     = True
+    , lat           = e.lat
+    , lon           = e.lon
+    , longNote      = Maybe.withDefault e.longNote a.longNote
+    , merchant      = Maybe.withDefault e.merchant a.merchant
+    , note          = Maybe.withDefault e.note a.note
+    , paymentMethod = if a.paymentMethod /= Nothing then a.paymentMethod else e.paymentMethod
+    , tripId        = e.tripId
     }
 
 

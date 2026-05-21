@@ -7,6 +7,7 @@ import Data.Category as Category exposing (Category(..))
 import Data.Entry as Entry
 import Data.Expense as Expense
 import Data.ExpenseId as ExpenseId
+import Data.PaymentMethod as PaymentMethod
 import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
 import Data.Trips as Trips
@@ -602,6 +603,7 @@ defaultPendingEntry today =
     , longNote      = ""
     , merchant      = ""
     , note          = ""
+    , paymentMethod = Nothing
     }
 
 
@@ -617,6 +619,7 @@ expenseToPending e =
     , longNote      = e.longNote
     , merchant      = e.merchant
     , note          = e.note
+    , paymentMethod = e.paymentMethod
     }
 
 
@@ -652,7 +655,7 @@ authPending f as_ =
 
 ocrSystemPrompt : String
 ocrSystemPrompt =
-    "You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\"}. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
+    "You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
 
 
 makeOcrCall : String -> String -> String -> String -> Cmd Msg
@@ -713,12 +716,24 @@ claudeTextDecoder =
 ocrDataDecoder : D.Decoder OcrData
 ocrDataDecoder =
     D.succeed OcrData
-        |> Pipeline.optional "amount"   (D.map Just D.float) Nothing
-        |> Pipeline.optional "category" (D.map Just (D.map Category.fromString D.string)) Nothing
-        |> Pipeline.optional "date"     (D.map Just D.string) Nothing
-        |> Pipeline.optional "longNote" (D.map Just D.string) Nothing
-        |> Pipeline.optional "merchant" (D.map Just D.string) Nothing
-        |> Pipeline.optional "note"     (D.map Just D.string) Nothing
+        |> Pipeline.optional "amount"        (D.map Just D.float) Nothing
+        |> Pipeline.optional "category"      (D.map Just (D.map Category.fromString D.string)) Nothing
+        |> Pipeline.optional "date"          (D.map Just D.string) Nothing
+        |> Pipeline.optional "longNote"      (D.map Just D.string) Nothing
+        |> Pipeline.optional "merchant"      (D.map Just D.string) Nothing
+        |> Pipeline.optional "note"          (D.map Just D.string) Nothing
+        |> Pipeline.optional "paymentMethod"
+            (D.nullable
+                (D.string
+                    |> D.andThen
+                        (\s ->
+                            case PaymentMethod.fromString s of
+                                Just pm -> D.succeed pm
+                                Nothing -> D.fail ("Unknown paymentMethod: " ++ s)
+                        )
+                )
+            )
+            Nothing
 
 
 stripCodeFence : String -> String
@@ -1128,12 +1143,13 @@ updateAuth msg as_ =
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
 
-        AmountChanged s   -> authPending (\p -> { p | amount = s }) as_
-        CategorySelected c -> authPending (\p -> { p | category = c }) as_
-        NoteChanged s     -> authPending (\p -> { p | note = s }) as_
-        LongNoteChanged s -> authPending (\p -> { p | longNote = s }) as_
-        MerchantChanged s -> authPending (\p -> { p | merchant = s }) as_
-        DateChanged s     -> authPending (\p -> { p | date = s }) as_
+        AmountChanged s        -> authPending (\p -> { p | amount = s }) as_
+        CategorySelected c     -> authPending (\p -> { p | category = c }) as_
+        DateChanged s          -> authPending (\p -> { p | date = s }) as_
+        LongNoteChanged s      -> authPending (\p -> { p | longNote = s }) as_
+        MerchantChanged s      -> authPending (\p -> { p | merchant = s }) as_
+        NoteChanged s          -> authPending (\p -> { p | note = s }) as_
+        PaymentMethodChanged pm -> authPending (\p -> { p | paymentMethod = pm }) as_
 
         SubmitEntry ->
             case String.toFloat (formPending as_.form).amount of
@@ -1174,15 +1190,16 @@ updateAuth msg as_ =
                                     "amend::" ++ ExpenseId.toString original.id ++ "::" ++ String.left 8 timestamp
 
                                 amend =
-                                    { id        = amendId
-                                    , targetId  = original.id
-                                    , amount    = if p.amount /= String.fromFloat original.amount then String.toFloat p.amount else Nothing
-                                    , category  = if p.category /= original.category then Just p.category else Nothing
-                                    , createdAt = posixToIso posix
-                                    , date      = if p.date /= original.date then Just p.date else Nothing
-                                    , longNote  = if p.longNote /= original.longNote then Just p.longNote else Nothing
-                                    , merchant  = if p.merchant /= original.merchant then Just p.merchant else Nothing
-                                    , note      = if p.note /= original.note then Just p.note else Nothing
+                                    { id            = amendId
+                                    , targetId      = original.id
+                                    , amount        = if p.amount /= String.fromFloat original.amount then String.toFloat p.amount else Nothing
+                                    , category      = if p.category /= original.category then Just p.category else Nothing
+                                    , createdAt     = posixToIso posix
+                                    , date          = if p.date /= original.date then Just p.date else Nothing
+                                    , longNote      = if p.longNote /= original.longNote then Just p.longNote else Nothing
+                                    , merchant      = if p.merchant /= original.merchant then Just p.merchant else Nothing
+                                    , note          = if p.note /= original.note then Just p.note else Nothing
+                                    , paymentMethod = if p.paymentMethod /= original.paymentMethod then p.paymentMethod else Nothing
                                     }
 
                                 nextRoute =
@@ -1216,17 +1233,18 @@ updateAuth msg as_ =
                                     "expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp
 
                                 expense =
-                                    { id        = ExpenseId.fromString expenseId
-                                    , tripId    = tripId
-                                    , amount    = String.toFloat p.amount |> Maybe.withDefault 0
-                                    , category  = p.category
-                                    , createdAt = posixToIso posix
-                                    , date      = p.date
-                                    , lat       = eLat
-                                    , lon       = eLon
-                                    , longNote  = p.longNote
-                                    , merchant  = p.merchant
-                                    , note      = p.note
+                                    { id            = ExpenseId.fromString expenseId
+                                    , tripId        = tripId
+                                    , amount        = String.toFloat p.amount |> Maybe.withDefault 0
+                                    , category      = p.category
+                                    , createdAt     = posixToIso posix
+                                    , date          = p.date
+                                    , lat           = eLat
+                                    , lon           = eLon
+                                    , longNote      = p.longNote
+                                    , merchant      = p.merchant
+                                    , note          = p.note
+                                    , paymentMethod = p.paymentMethod
                                     }
 
                                 nextRoute =
@@ -1354,7 +1372,7 @@ updateAuth msg as_ =
                     let
                         ocr =
                             Maybe.withDefault
-                                { amount = Nothing, category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing }
+                                { amount = Nothing, category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
                                 item.ocrData
 
                         newPending =
@@ -1365,6 +1383,7 @@ updateAuth msg as_ =
                             , longNote      = Maybe.withDefault "" ocr.longNote
                             , merchant      = Maybe.withDefault "" ocr.merchant
                             , note          = Maybe.withDefault "" ocr.note
+                            , paymentMethod = ocr.paymentMethod
                             }
 
                         newRoute =

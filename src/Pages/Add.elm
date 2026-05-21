@@ -2,6 +2,7 @@ module Pages.Add exposing (viewTab)
 
 import Data.Category as Category exposing (Category(..))
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod(..))
 import Dict
 import Helpers exposing (formatCoord)
 import Html exposing (Html)
@@ -141,6 +142,8 @@ viewBody model pending isEditing =
                     ]
                     []
                 )
+            , UI.Layout.formField "PAID WITH"
+                (viewPaymentMethodToggle pending.paymentMethod)
             ]
         , UI.Rule.kicker "WHERE & WHO"
         , UI.Card.subCard
@@ -371,3 +374,29 @@ viewLocationStatus ls =
                     ]
                     [ Html.text "Skip location" ]
                 ]
+
+
+viewPaymentMethodToggle : Maybe PaymentMethod -> Html Msg
+viewPaymentMethodToggle selected =
+    Html.div [ Html.Attributes.class "flex gap-2 py-1" ]
+        (List.map (viewPaymentMethodBtn selected) [ Cash, Credit ])
+
+
+viewPaymentMethodBtn : Maybe PaymentMethod -> PaymentMethod -> Html Msg
+viewPaymentMethodBtn selected pm =
+    let
+        active =
+            selected == Just pm
+
+        nextValue =
+            if active then Nothing else Just pm
+    in
+    Html.button
+        [ Html.Events.onClick (PaymentMethodChanged nextValue)
+        , Html.Attributes.classList
+            [ ( "rounded-lg py-2 px-4 text-sm cursor-pointer border", True )
+            , ( "bg-forest text-parchment border-forest font-bold", active )
+            , ( "bg-cream text-ink border-tan", not active )
+            ]
+        ]
+        [ Html.text (PaymentMethod.label pm) ]

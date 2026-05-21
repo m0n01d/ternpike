@@ -7,6 +7,7 @@ import Data.Category exposing (Category(..))
 import Data.Entry exposing (EffectiveEntry)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
+import Data.PaymentMethod exposing (PaymentMethod)
 import Data.Trip exposing (Trip, TripField, TripForm)
 import Data.TripId exposing (TripId)
 import Data.Trips exposing (Trips)
@@ -72,12 +73,13 @@ type ScanStatus
 
 
 type alias OcrData =
-    { amount   : Maybe Float
-    , category : Maybe Category
-    , date     : Maybe String
-    , longNote : Maybe String
-    , merchant : Maybe String
-    , note     : Maybe String
+    { amount        : Maybe Float
+    , category      : Maybe Category
+    , date          : Maybe String
+    , longNote      : Maybe String
+    , merchant      : Maybe String
+    , note          : Maybe String
+    , paymentMethod : Maybe PaymentMethod
     }
 
 
@@ -102,6 +104,7 @@ type alias PendingEntry =
     , longNote      : String
     , merchant      : String
     , note          : String
+    , paymentMethod : Maybe PaymentMethod
     }
 
 
@@ -249,6 +252,7 @@ type Msg
     | OpenEditTripForm Trip
     | OpenMapPicker
     | OpenNewTripForm
+    | PaymentMethodChanged (Maybe PaymentMethod)
     | RefreshClicked
     | RequestCodeResult (Result Http.Error ())
     | ResetSettingsClicked
