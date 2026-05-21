@@ -1,9 +1,10 @@
 module Pages.Settings exposing (viewPanel, viewTab)
 
+import Data.Auth exposing (AppConfig)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Types exposing (AppConfig, AuthState, Msg(..))
+import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Card
 import UI.Layout

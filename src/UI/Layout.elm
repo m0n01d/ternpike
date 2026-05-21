@@ -11,14 +11,16 @@ module UI.Layout exposing
     , viewToast
     )
 
+import Data.Navigation exposing (Route(..), Tab(..))
+import Data.Sync exposing (SyncState(..))
 import Data.Trip exposing (Trip)
-import Data.Trips as Trips
+import Data.Trips as Trips exposing (TripsState(..))
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Routing
 import Svg
-import Types exposing (..)
+import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Icons
 import UI.Mascot
@@ -55,7 +57,12 @@ viewHeader as_ =
                 [ Html.Attributes.href settingsHref
                 , Html.Attributes.class
                     ("inline-flex items-center px-2 py-1 "
-                        ++ (if Routing.routeToTab as_.route == SettingsTab then "text-rust" else "text-muted")
+                        ++ (if Routing.routeToTab as_.route == SettingsTab then
+                                "text-rust"
+
+                            else
+                                "text-muted"
+                           )
                     )
                 ]
                 [ UI.Icons.settings "w-5 h-5" ]
@@ -142,6 +149,7 @@ viewNavTab as_ ( tab, iconFn, label_ ) =
                     [ Html.Attributes.class "absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] bg-rust" ]
                     []
                 ]
+
             else
                 []
     in
@@ -149,7 +157,12 @@ viewNavTab as_ ( tab, iconFn, label_ ) =
         [ Html.Attributes.href (Routing.pathForCurrentTab as_ tab)
         , Html.Attributes.class
             ("relative flex-1 py-2.5 px-1 flex flex-col items-center gap-0.5 cursor-pointer min-h-[56px] "
-                ++ (if isActive then "text-rust" else "text-muted")
+                ++ (if isActive then
+                        "text-rust"
+
+                    else
+                        "text-muted"
+                   )
             )
         ]
         (indicator
@@ -205,7 +218,7 @@ viewDeleteConfirmModal trip =
         [ Html.div
             [ Html.Attributes.class "w-full max-w-sm p-6 border bg-parchment border-tan rounded-2xl shadow-panel bg-[image:var(--bg-grain)]" ]
             [ Html.p [ Html.Attributes.class "mb-2 text-lg font-bold text-ink font-display" ]
-                [ Html.text ("Delete \u{201C}" ++ trip.name ++ "\u{201D}?") ]
+                [ Html.text ("Delete “" ++ trip.name ++ "”?") ]
             , Html.p [ Html.Attributes.class "mb-6 text-sm leading-relaxed text-muted" ]
                 [ Html.text "This will permanently delete the trip and all its expense data." ]
             , Html.div [ Html.Attributes.class "flex gap-3" ]

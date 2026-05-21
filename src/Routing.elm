@@ -11,12 +11,14 @@ module Routing exposing
     )
 
 import Data.ExpenseId as ExpenseId
+import Data.Navigation exposing (Route(..), Tab(..))
 import Data.TripId as TripId
-import Data.Trips as Trips
-import Types exposing (AuthState, Route(..), Tab(..), TripsState(..))
+import Data.Trips as Trips exposing (TripsState(..))
+import Types exposing (AuthState)
 import Url
 import Url.Parser as Parser exposing ((</>), (<?>))
 import Url.Parser.Query as Query
+
 
 
 -- See `effectiveRoute` below for the one piece of derived state: when the
@@ -49,7 +51,7 @@ routeParser =
         , Parser.map (withTrip RouteStats)
             (Parser.s "trip" </> Parser.s "stats" <?> Query.string "tripId")
         , Parser.map RouteSettings (Parser.s "settings")
-        , Parser.map RouteTrips    (Parser.s "trips")
+        , Parser.map RouteTrips (Parser.s "trips")
         ]
 
 
@@ -82,6 +84,7 @@ routeFromUrl basePath url =
         stripped =
             if String.startsWith basePath url.path then
                 "/" ++ String.dropLeft (String.length basePath) url.path
+
             else
                 url.path
     in
@@ -92,27 +95,57 @@ routeFromUrl basePath url =
 routeToTab : Route -> Tab
 routeToTab route =
     case route of
-        RouteAdd _          -> AddTab
-        RouteAddReviewScan  -> AddTab
-        RouteEditEntry _ _  -> AddTab
-        RouteLedger _       -> LedgerTab
-        RouteScan _         -> ScanTab
-        RouteSettings       -> SettingsTab
-        RouteStats _        -> StatsTab
-        RouteTrips          -> TripsTab
+        RouteAdd _ ->
+            AddTab
+
+        RouteAddReviewScan ->
+            AddTab
+
+        RouteEditEntry _ _ ->
+            AddTab
+
+        RouteLedger _ ->
+            LedgerTab
+
+        RouteScan _ ->
+            ScanTab
+
+        RouteSettings ->
+            SettingsTab
+
+        RouteStats _ ->
+            StatsTab
+
+        RouteTrips ->
+            TripsTab
 
 
 routeTitle : Route -> String
 routeTitle route =
     case route of
-        RouteAdd _          -> "ADD EXPENSE"
-        RouteAddReviewScan  -> "REVIEW SCAN"
-        RouteEditEntry _ _  -> "EDIT EXPENSE"
-        RouteLedger _       -> "LEDGER"
-        RouteScan _         -> "SCAN RECEIPTS"
-        RouteSettings       -> "SETTINGS"
-        RouteStats _        -> "STATS"
-        RouteTrips          -> "TRIPS"
+        RouteAdd _ ->
+            "ADD EXPENSE"
+
+        RouteAddReviewScan ->
+            "REVIEW SCAN"
+
+        RouteEditEntry _ _ ->
+            "EDIT EXPENSE"
+
+        RouteLedger _ ->
+            "LEDGER"
+
+        RouteScan _ ->
+            "SCAN RECEIPTS"
+
+        RouteSettings ->
+            "SETTINGS"
+
+        RouteStats _ ->
+            "STATS"
+
+        RouteTrips ->
+            "TRIPS"
 
 
 effectiveRoute : AuthState -> Route
@@ -133,24 +166,46 @@ tabToPath basePath tripId tab =
     in
     basePath
         ++ (case tab of
-                AddTab      -> withTripId "trip/add"
-                LedgerTab   -> withTripId "trip/ledger"
-                ScanTab     -> withTripId "trip/scan"
-                SettingsTab -> "settings"
-                StatsTab    -> withTripId "trip/stats"
-                TripsTab    -> "trips"
+                AddTab ->
+                    withTripId "trip/add"
+
+                LedgerTab ->
+                    withTripId "trip/ledger"
+
+                ScanTab ->
+                    withTripId "trip/scan"
+
+                SettingsTab ->
+                    "settings"
+
+                StatsTab ->
+                    withTripId "trip/stats"
+
+                TripsTab ->
+                    "trips"
            )
 
 
 routeTripId : Route -> Maybe TripId.TripId
 routeTripId route =
     case route of
-        RouteAdd tripId     -> Just tripId
-        RouteEditEntry t _  -> Just t
-        RouteLedger tripId  -> Just tripId
-        RouteScan tripId    -> Just tripId
-        RouteStats tripId   -> Just tripId
-        _                   -> Nothing
+        RouteAdd tripId ->
+            Just tripId
+
+        RouteEditEntry t _ ->
+            Just t
+
+        RouteLedger tripId ->
+            Just tripId
+
+        RouteScan tripId ->
+            Just tripId
+
+        RouteStats tripId ->
+            Just tripId
+
+        _ ->
+            Nothing
 
 
 editEntryPath : String -> TripId.TripId -> ExpenseId.ExpenseId -> String

@@ -1,10 +1,11 @@
 module Pages.Guest exposing (viewGuest)
 
+import Data.Guest exposing (GuestReason(..))
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Pages.Settings
-import Types exposing (..)
+import Types exposing (GuestState, Msg(..))
 import UI.Button
 import UI.Card
 import UI.Icons

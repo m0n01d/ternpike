@@ -1,5 +1,6 @@
 module Data.Trips exposing
     ( Trips
+    , TripsState(..)
     , allTrips
     , findTrip
     , fromDict
@@ -13,7 +14,7 @@ module Data.Trips exposing
     )
 
 {-| A non-empty zipper-like collection of trips with one "selected" trip
-at the head.
+at the head, plus the loading-state wrapper used by `AuthState`.
 
 Why not `Dict TripId Trip` plus a separate `Maybe TripId` for selection?
 Because every page that renders trip data needs the active trip — keeping
@@ -24,6 +25,11 @@ missing trip."
 
 Sorting in `fromDict` is by `TripId.toString` descending, which works out
 to newest-first because the ID starts with an ISO-8601 timestamp.
+
+`TripsState` lives here too because it's the lifecycle around this
+zipper: it's the type stored at `AuthState.trips` and every transition
+ends in either `TripsLoaded Trips` or one of the empty/failed branches.
+
 -}
 
 import Data.Trip exposing (Trip)
@@ -37,6 +43,29 @@ import Dict exposing (Dict)
 
 type Trips
     = Trips Trip (List Trip)
+
+
+{-| Lifecycle around the trips list.
+
+  - `TripsLoading dict hint` — `GetAllTrips` was sent but hasn't
+    returned; `dict` collects any individual trips that arrive via the
+    live-changes feed in the meantime, and `hint` is the route's
+    intended selection (so we can pick the right trip the moment the
+    bulk response lands).
+  - `TripsLoaded trips` — the zipper is populated and selection is
+    valid; this is the only state in which trip-scoped pages render
+    real data.
+  - `NoTripsYet` — the bulk fetch returned an empty dict; the Trips
+    page shows the "create your first trip" hero.
+  - `TripsFailed err` — the fetch errored; the Trips page surfaces the
+    message and offers a refresh.
+
+-}
+type TripsState
+    = NoTripsYet
+    | TripsFailed String
+    | TripsLoaded Trips
+    | TripsLoading (Dict String Trip) (Maybe TripId)
 
 
 

@@ -3,6 +3,7 @@ module Pages.Ledger exposing (viewTab)
 import Data.Category as Category
 import Data.Entry as Entry
 import Data.ExpenseId as ExpenseId
+import Data.Ledger exposing (LedgerMode(..))
 import Data.TripId as TripId
 import Dict
 import Helpers exposing (effectiveEntryToExpense, encodeWaypoints, formatAmount, formatDateDisplay)
@@ -13,7 +14,7 @@ import Html.Keyed as Keyed
 import Json.Decode
 import Routing
 import Set
-import Types exposing (..)
+import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Icons
 import UI.Mascot
@@ -27,13 +28,16 @@ viewTab as_ =
             ledgerMode as_
     in
     { actions = viewActions as_
-    , body    = viewBody as_ mode
-    , hero    = viewHero mode
+    , body = viewBody as_ mode
+    , hero = viewHero mode
     }
+
 
 
 -- LedgerLoading until the current trip's bulk fetch has completed; then
 -- LedgerReady with the resolved entries derived from the cache.
+
+
 ledgerMode : AuthState -> LedgerMode
 ledgerMode as_ =
     case Routing.routeTripId as_.route of

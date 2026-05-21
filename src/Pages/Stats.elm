@@ -5,16 +5,16 @@ import Chart.Attributes as CA
 import Data.Category as Category
 import Data.Entry as Entry
 import Data.TripId as TripId
+import Data.Trips as Trips exposing (TripsState(..))
 import Dict
 import Helpers exposing (formatAmount, isoToDayCount)
 import Html exposing (Html)
 import Html.Attributes
-import Data.Trips as Trips
 import Routing
 import Set
 import Svg
 import Svg.Attributes
-import Types exposing (..)
+import Types exposing (AuthState, Msg)
 import UI.Card
 import UI.Rule
 import UI.Theme
@@ -27,12 +27,15 @@ viewTab as_ =
             entriesForCurrentTrip as_
     in
     { actions = []
-    , body    = viewBody as_ entries
-    , hero    = viewHero as_ entries
+    , body = viewBody as_ entries
+    , hero = viewHero as_ entries
     }
 
 
+
 -- Resolved entries for the route's trip, or [] if not loaded yet.
+
+
 entriesForCurrentTrip : AuthState -> List Entry.EffectiveEntry
 entriesForCurrentTrip as_ =
     case Routing.routeTripId as_.route of
@@ -54,7 +57,6 @@ entriesForCurrentTrip as_ =
 viewHero : AuthState -> List Entry.EffectiveEntry -> Html Msg
 viewHero model entries =
     let
-
         total =
             List.sum (List.map .amount entries)
 
@@ -65,10 +67,18 @@ viewHero model entries =
             List.length entries
 
         avgPerDay =
-            if numDays > 0 then total / toFloat numDays else 0
+            if numDays > 0 then
+                total / toFloat numDays
+
+            else
+                0
 
         avgPerEntry =
-            if numEntries > 0 then total / toFloat numEntries else 0
+            if numEntries > 0 then
+                total / toFloat numEntries
+
+            else
+                0
 
         tripStart =
             case model.trips of
@@ -81,11 +91,16 @@ viewHero model entries =
         daysIn =
             if tripStart /= "" && model.today /= "" then
                 isoToDayCount model.today - isoToDayCount tripStart + 1
+
             else
                 0
 
         dayOfTripStr =
-            if daysIn > 0 then String.fromInt daysIn else "—"
+            if daysIn > 0 then
+                String.fromInt daysIn
+
+            else
+                "—"
 
         last7 =
             last7DaysValues entries
@@ -143,13 +158,21 @@ sparkline : List Float -> Svg.Svg msg
 sparkline values =
     let
         safeValues =
-            if List.isEmpty values then [ 0 ] else values
+            if List.isEmpty values then
+                [ 0 ]
+
+            else
+                values
 
         maxVal =
             Maybe.withDefault 1 (List.maximum safeValues)
 
         safeMax =
-            if maxVal <= 0 then 1 else maxVal
+            if maxVal <= 0 then
+                1
+
+            else
+                maxVal
 
         barCount =
             List.length safeValues
@@ -196,7 +219,11 @@ viewBody model entries =
             List.length entries
 
         avgPerDay =
-            if numDays > 0 then total / toFloat numDays else 0
+            if numDays > 0 then
+                total / toFloat numDays
+
+            else
+                0
 
         median =
             Entry.medianAmount entries
@@ -223,6 +250,7 @@ viewBody model entries =
         daysIn =
             if tripStart /= "" && model.today /= "" then
                 isoToDayCount model.today - isoToDayCount tripStart + 1
+
             else
                 0
     in
@@ -242,12 +270,23 @@ viewBody model entries =
                             |> Maybe.map (\( d, t ) -> String.slice 5 10 d ++ "  " ++ formatAmount t)
                             |> Maybe.withDefault "—"
                         )
+
                   else
                     statCard "ENTRIES TODAY" (String.fromInt numEntries)
                 , statCard "DAYS INTO TRIP"
-                    (if daysIn > 0 then String.fromInt daysIn else "—")
+                    (if daysIn > 0 then
+                        String.fromInt daysIn
+
+                     else
+                        "—"
+                    )
                 , statCard "PROJ / 30 DAYS"
-                    (if avgPerDay > 0 then formatAmount (avgPerDay * 30) else "—")
+                    (if avgPerDay > 0 then
+                        formatAmount (avgPerDay * 30)
+
+                     else
+                        "—"
+                    )
                 ]
             ]
         , if List.isEmpty entries then
@@ -294,14 +333,27 @@ viewBody model entries =
                                 Html.div
                                     [ Html.Attributes.class
                                         ("flex items-center gap-3 py-2.5 "
-                                            ++ (if i < List.length top5 - 1 then "border-b border-tan" else "")
+                                            ++ (if i < List.length top5 - 1 then
+                                                    "border-b border-tan"
+
+                                                else
+                                                    ""
+                                               )
                                         )
                                     ]
                                     [ Html.span [ Html.Attributes.class "text-moss font-mono w-5" ]
                                         [ Html.text (String.fromInt (i + 1) ++ ".") ]
                                     , Html.span [ Html.Attributes.class "text-lg leading-none" ] [ Html.text (Category.icon entry.category) ]
                                     , Html.div [ Html.Attributes.class "flex-1" ]
-                                        [ Html.div [ Html.Attributes.class "text-sm text-ink" ] [ Html.text (if entry.note /= "" then entry.note else Category.label entry.category) ]
+                                        [ Html.div [ Html.Attributes.class "text-sm text-ink" ]
+                                            [ Html.text
+                                                (if entry.note /= "" then
+                                                    entry.note
+
+                                                 else
+                                                    Category.label entry.category
+                                                )
+                                            ]
                                         , Html.div [ Html.Attributes.class "text-[11px] text-muted" ] [ Html.text entry.date ]
                                         ]
                                     , Html.span [ Html.Attributes.class "font-mono text-rust text-base" ]
