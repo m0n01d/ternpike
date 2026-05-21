@@ -1184,8 +1184,8 @@ init flagsJson url key =
         initialTier =
             D.decodeValue (D.field "tier" D.string) flagsJson
                 |> Result.toMaybe
-                |> Maybe.andThen Data.Tier.fromString
-                |> Maybe.withDefault Data.Tier.Fledgling
+                |> Maybe.andThen Tier.fromString
+                |> Maybe.withDefault Tier.Fledgling
 
         cfg =
             { anthropicKey = dec "anthropicKey"
@@ -2350,6 +2350,104 @@ updateAuth msg as_ =
 
         _ ->
             ( AuthModel as_, Cmd.none )
+
+
+
+-- FLOCK HELPERS
+
+
+setFlockModal : FlockUi.FlockModal -> AuthState -> AuthState
+setFlockModal modal as_ =
+    let
+        ui =
+            as_.flockUi
+    in
+    { as_ | flockUi = { ui | inFlight = False, modal = modal } }
+
+
+setFlockInFlight : Bool -> AuthState -> AuthState
+setFlockInFlight v as_ =
+    let
+        ui =
+            as_.flockUi
+    in
+    { as_ | flockUi = { ui | inFlight = v } }
+
+
+storeFlockError : Http.Error -> AuthState -> AuthState
+storeFlockError err as_ =
+    let
+        message =
+            flockErrorMessage err
+
+        ui =
+            as_.flockUi
+
+        newModal =
+            case ui.modal of
+                FlockUi.CreateModal m ->
+                    FlockUi.CreateModal { m | error = Just message }
+
+                FlockUi.InviteModal id m ->
+                    FlockUi.InviteModal id { m | error = Just message }
+
+                FlockUi.LeaveConfirmModal id _ ->
+                    FlockUi.LeaveConfirmModal id { error = Just message }
+
+                FlockUi.TransferModal id m ->
+                    FlockUi.TransferModal id { m | error = Just message }
+
+                FlockUi.NoModal ->
+                    FlockUi.NoModal
+    in
+    { as_ | flockUi = { ui | inFlight = False, modal = newModal } }
+
+
+flockErrorMessage : Http.Error -> String
+flockErrorMessage err =
+    case err of
+        Http.BadStatus 403 ->
+            "Not allowed. Refresh and try again."
+
+        Http.BadStatus 404 ->
+            "That flock wasn't found."
+
+        Http.BadStatus 409 ->
+            "Already a member."
+
+        Http.BadStatus 422 ->
+            "Request rejected. Check the details and try again."
+
+        Http.NetworkError ->
+            "Network error. Try again."
+
+        Http.Timeout ->
+            "Took too long. Try again."
+
+        _ ->
+            "Something went wrong. Try again."
+
+
+joinErrorMessage : Http.Error -> String
+joinErrorMessage err =
+    case err of
+        Http.BadStatus 401 ->
+            "This invite is no longer valid. Ask the inviter for a fresh link."
+
+        Http.BadStatus 403 ->
+            "This invite is for someone else."
+
+        Http.BadStatus 404 ->
+            "Invite expired or already used."
+
+        Http.BadStatus 409 ->
+            "You're already a member of that flock."
+
+        Http.BadStatus 410 ->
+            "This invite has expired. Ask the inviter for a fresh link."
+
+        _ ->
+            flockErrorMessage err
 
 
 

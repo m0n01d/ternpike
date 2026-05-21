@@ -1,9 +1,10 @@
 import { spawn, spawnSync } from 'node:child_process'
 
-// Per-process container name. Lets concurrent worktrees / agents run their
-// own e2e suites without clobbering each other on the single fixed name.
-// The numeric suffix is per-launch so a crashed-and-restarted run still
-// gets a fresh container.
+// The container name is suffixed with this process's PID so that multiple
+// worktrees on the same host (one per concurrent agent) don't clobber each
+// other on a single fixed name. Without the suffix, peer global-teardowns
+// `docker rm -f` each other's containers mid-run, producing ECONNREFUSED
+// flakes. Also lets a crashed-and-restarted run get a fresh container.
 const CONTAINER_NAME = `ternpike-e2e-couch-${process.pid}`
 const IMAGE = 'couchdb:3.3'
 
