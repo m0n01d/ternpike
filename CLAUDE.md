@@ -269,6 +269,29 @@ The Resend Node SDK reads its `baseUrl` from `process.env` **at module load time
 
 A separately-instantiated PouchDB in a test script does NOT trigger change feeds on the app's bundled PouchDB instance — different module instances, different in-memory event buses. To deliver a doc into the app's local DB during a test, either: (a) push a synthetic event via the `__ternpikeTestApp` hook, or (b) wait for a real CouchDB sync round-trip. The first is fast and synchronous; the second is realistic but slower.
 
+### Seeding flock-bearing trips: use `DbChange`, not a PouchDB `put` on the personal DB
+
+The `GetAllTrips` handler in `src/pouch.js` decorates every trip doc with `flockId: handle.flockId` — for the personal handle, `handle.flockId` is `undefined`, which **wipes** any `flockId` field the doc was put with. That's correct production behavior (flockId is sourced from which DB the doc lives in, not from the doc itself), but it means a naive "seed a flock trip into `new PouchDB('ternpike')` with `flockId` set in the doc" approach silently fails: the Trips list renders the trip but without flock chrome, and there is no error.
+
+When you need a flock-bearing trip to render in a screenshot or test:
+
+1. Use the `window.__ternpikeTestApp` hook to push `FlocksReconciled` + `FlockMeta` events so `AuthState.flocks` is populated.
+2. Push the trip itself as a `DbChange` event with `flockId` set on the inner doc (the `DbChange` handler in Elm decodes via `Trip.decoder`, which DOES read the `flockId` field — unlike the bulk path which overwrites it):
+   ```js
+   app.ports.pouchIn.send({
+     tag: 'DbChange',
+     sourceDbName: `ternpike-flock-${flockId}`,
+     doc: { type: 'trip', _id: tripId, flockId, name: 'Italy', ... }
+   })
+   ```
+3. Push the expenses via `TripExpensesFetched` (bulk), not individual `DbChange`s — the Ledger gates its render on `tripLoaded`, which is flipped by the bulk message, not by per-doc changes.
+
+The alternative — opening a second `new PouchDB('ternpike-flock-<id>')` and letting `reconcileFlocks` discover it — also works, but only after the personal-DB `user:flocks` write triggers reconciliation, which races against the initial `GetAllTrips` and is timing-sensitive. The port-injection path is deterministic.
+
+### Describe pixels by showing them
+
+When working on UI, take the screenshot before claiming the work renders. The prose-describing pattern is unreliable: the Flock track produced multiple agent reports that said "the chrome is wired and the predicate is correct" — and were technically right at the code level — while the chrome was *not* actually appearing in the browser because of upstream port-layer bugs (the `GetAllTrips` flockId overwrite above being the most consequential). The bug was invisible in prose and unmistakable in a screenshot. Run `playwright-ui` (or extend it for the case at hand) before reporting any UI task done.
+
 ### Negative tests find bugs unit tests miss
 
 Five categories of bugs that the `[Flock-Sec]` + `[Flock-E2E]` tracks caught that unit tests had not: wire-format mismatches between server output and client decoder, endpoint status-code drift from the spec (5+ instances), missing admin-bypass in CouchDB validation functions, missing error-message branches in client `Result` handlers, missing duplicate-action 409 responses. Bake negative-test coverage in from the start of any multi-user / multi-tenant feature.
