@@ -78,8 +78,24 @@ import './global.css'
   ])
 
   let authCreds = null
+  let tier = null
   if (authCredsRaw) {
-    try { authCreds = JSON.parse(authCredsRaw) } catch (_) { authCreds = null }
+    try {
+      const parsed = JSON.parse(authCredsRaw)
+      // `tier` rides on the same IndexedDB blob in test harnesses (and,
+      // once /me is wired, after a real session refresh). Pull it off so
+      // the Elm flags carry only credentials in `authCreds`. Falls through
+      // to Fledgling on the Elm side if absent.
+      if (parsed && typeof parsed === 'object') {
+        if (typeof parsed.tier === 'string') tier = parsed.tier
+        const { tier: _t, ...creds } = parsed
+        authCreds = creds
+      } else {
+        authCreds = parsed
+      }
+    } catch (_) {
+      authCreds = null
+    }
   }
 
   const flags = {
@@ -87,6 +103,7 @@ import './global.css'
     anthropicKey: anthropicKey  || '',
     backendUrl:   'https://api.ternpike.com',
     basePath:     import.meta.env.BASE_URL,
+    tier:         tier || '',
     today:        new Date().toISOString().slice(0, 10),
     version:      __BUILD_SHA__,
   }
@@ -221,6 +238,17 @@ import './global.css'
   // ── Start Elm ──────────────────────────────────────────────────────────
 
   const app = Elm.Main.init({ flags })
+
+  // Test-only escape hatch. Lets the E2E harness push synthetic port
+  // messages into Elm without standing up the whole CouchDB sync chain
+  // (`couch.ternpike.com` is hard-coded in src/pouch.js and isn't
+  // reachable in the test environment). Production code never reads
+  // this — see `e2e/specs/create-flock.spec.ts` for the sole user.
+  if (typeof window !== 'undefined') {
+    /* eslint-disable no-underscore-dangle */
+    window.__ternpikeTestApp = app
+    /* eslint-enable no-underscore-dangle */
+  }
 
   attachPouch(app, { creds: authCreds })
 

@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto'
+
 import { test as base, type BrowserContext } from '@playwright/test'
 
 import { stubAuthCreds } from '../utils/auth-stub'
@@ -27,22 +29,67 @@ type Fixtures = {
   resendMock: ResendMockClient
 }
 
+/**
+ * Mirrors `server/flocks.js#derivePassword`. The auth Worker accepts HTTP
+ * Basic creds where the password is `HMAC-SHA256("couch:" + email, SERVER_SECRET)`
+ * hex-encoded, first 32 chars. Stub credentials must match this so the
+ * spec's create/invite calls (proxied to the local auth server) pass the
+ * `authenticateCaller` check.
+ */
+export const deriveStubPassword = (email: string, serverSecret: string): string =>
+  createHmac('sha256', serverSecret)
+    .update('couch:' + email.toLowerCase())
+    .digest('hex')
+    .slice(0, 32)
+
 const buildContext = async (
   browser: import('@playwright/test').Browser,
   spec: UserSpec,
   viewport: { height: number; width: number },
 ): Promise<BrowserContext> => {
+  const state = readHarnessState()
   const ctx = await browser.newContext({ viewport })
   await interceptPouchdbCdn(ctx)
+  await routeApiTernpikeToLocal(ctx, state.serverPort)
   await stubAuthCreds(ctx, {
     dbName: `ternpike-${spec.email.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`,
     email: spec.email,
-    password: 'e2e-stub-password',
+    password: deriveStubPassword(spec.email, state.serverSecret),
+    tier: spec.tier.toLowerCase(),
   })
   if (spec.seed) {
     await seedPouchDB(ctx, spec.seed)
   }
   return ctx
+}
+
+/**
+ * Rewrites the production auth host to the locally-bound wrangler dev port
+ * for every browser-side request the Elm `Http.FlockApi` module makes. The
+ * production URL is hard-coded in `src/Http/FlockApi.elm`; rather than
+ * plumbing a baseUrl override through the app just for tests, we intercept
+ * at the browser. Path + body + headers are preserved.
+ */
+const routeApiTernpikeToLocal = async (
+  ctx: BrowserContext,
+  serverPort: number,
+): Promise<void> => {
+  await ctx.route('https://api.ternpike.com/**', async (route) => {
+    const req = route.request()
+    const target = req
+      .url()
+      .replace('https://api.ternpike.com', `http://127.0.0.1:${serverPort}`)
+    const response = await ctx.request.fetch(target, {
+      method: req.method(),
+      headers: req.headers(),
+      data: req.postDataBuffer() ?? undefined,
+    })
+    await route.fulfill({
+      status: response.status(),
+      headers: response.headers(),
+      body: await response.body(),
+    })
+  })
 }
 
 export const test = base.extend<Options & Fixtures>({
