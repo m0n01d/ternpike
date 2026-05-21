@@ -1,6 +1,6 @@
 meta:
   title: "Ternpike — Track Every Turn of the Road"
-  description: "Snap a photo of your receipt at camp. Ternpike reads it, logs your GPS, and shows exactly where your budget stands before you pull out tomorrow morning."
+  description: "Snap a receipt at camp. Ternpike reads it, logs your GPS, and shows exactly what the trip is costing you day by day, dollar by dollar."
   lang: "en"
 
 brand:
@@ -15,8 +15,6 @@ nav:
       href: "#how"
     - label: "Pricing"
       href: "#pricing"
-    - label: "Open Source"
-      href: "#oss"
   cta:
     label: "Get Started"
     href: "#signup"
@@ -24,12 +22,11 @@ nav:
 hero:
   headline:
     lines:
-      - "Know where your money went"
-      - "before you break camp."
+      - "Orlando to Juneau."
+      - "Every dollar accounted for."
   sub:
     - "Ternpike is a trip expense tracker built for life on the road."
-    - "Snap a receipt at camp. Your budget updates instantly."
-    - "No spreadsheets. No subscription. Your data stays yours."
+    - "Snap a receipt at camp, log your location, and see exactly what the trip is costing you. Day by day, dollar by dollar."
   actions:
     - kind: "primary"
       label: "Start for free"
@@ -47,38 +44,38 @@ howItWorks:
     - number: "01"
       icon: "📸"
       title: "Snap your receipts"
-      body: "Photograph one receipt or a stack at the end of the day. Ternpike reads them and pulls out the amount, merchant, category, and a note about what you bought."
+      body: "Photograph one receipt or a stack at the end of the day. Ternpike reads them and pulls out the amount, merchant, category, and a note. No signal? Just type it in. Nothing gets lost."
     - number: "02"
       icon: "📍"
       title: "Log your location"
-      body: "Every expense gets a GPS pin. From the photo itself, your current location, or a map you drop manually. Your route builds itself as you go."
+      body: "Every expense gets a GPS pin. Your route builds itself as you go."
     - number: "03"
       icon: "✅"
       title: "See the full picture"
-      body: "Open the ledger. See what you've spent, by day and by category. Know your daily average before you decide whether to splurge on a cabin or sleep in the truck."
+      body: "Open the ledger. See what you've spent by day and by category. Know your daily average before you decide whether to splurge on a cabin or sleep in the truck."
 
 features:
   eyebrow: "Features"
-  headlineHtml: "Built for the realities of remote travel."
+  headlineHtml: "Built for the realities<br>of remote travel."
   items:
     - icon: "📶"
-      title: "Offline first"
-      body: "Ternpike is an installable web app. Queue receipts in the backcountry. Sync when you hit signal. Your cached ledger is always viewable, even with no bars."
+      title: "Works without signal"
+      body: "Log expenses anywhere. Everything syncs when you're back online."
     - icon: "🧾"
       title: "Receipt scanning"
-      body: "Photograph the receipt. The app reads the amount, merchant, date, and category. You review and confirm. Edit anything before it lands in the ledger."
+      body: "Point your camera at a receipt and Ternpike fills in the details. Review and confirm. Move on."
     - icon: "🗺️"
       title: "GPS trail"
-      body: "Every expense with coordinates plots on a live map. Your financial trail and your geographic trail in one view. Useful months later when you can't remember where that cabin was."
+      body: "Every expense with a location plots on a live map. A record of everywhere you stopped and everything you spent."
     - icon: "📄"
-      title: "Your data, your spreadsheet"
-      body: "Export the whole trip to a Google Sheet or CSV in a tap. Run your own formulas. Connect to whatever dashboard you like. Ternpike is a UI on top of your data, not a silo."
+      title: "Your data"
+      body: "Your expenses live in your account. Export to CSV anytime."
     - icon: "👥"
-      title: "Shared ledger (Nest)"
-      body: "Add a travel partner to the same trip. Both phones write to one ledger in real time. No more reconciling who paid for the fuel three days ago."
+      title: "Nest. Shared ledger."
+      body: "Add your partner, family, or travel crew. Everyone logs to the same trip. One budget, multiple contributors."
     - icon: "📊"
       title: "Stats that matter"
-      body: "Daily spend. Category breakdown. Cumulative curve. Average per day. The numbers you actually look at when you're deciding whether to drive on or pull over."
+      body: "Daily average. Top category. Projected total. The things you actually want to know when you're deciding where to camp tonight."
 
 ledgerPreview:
   sectionLabel: "The ledger"
@@ -129,7 +126,7 @@ ledgerPreview:
 pricing:
   sectionLabel: "Pricing"
   headline: "Simple.\nNo surprises."
-  finePrint: "No trials that turn into surprise charges. No features hidden behind enterprise plans. Fledgling is genuinely free, forever."
+  finePrint: "Fledgling is genuinely free, forever. No trials that flip to paid."
   tiers:
     - id: "fledgling"
       name: "Fledgling"
@@ -140,8 +137,8 @@ pricing:
       features:
         - "Offline expense log"
         - "Unlimited trips"
-        - "5 receipt scans per month (amount and category only)"
-        - "Works on any device"
+        - "5 receipt scans / month"
+        - "Amount and category only"
         - "No account required"
       cta:
         label: "Download free"
@@ -158,7 +155,7 @@ pricing:
       features:
         - "Everything in Fledgling"
         - "Unlimited receipt scanning"
-        - "Full receipt extraction (merchant, date, notes, GPS)"
+        - "Full receipt details (merchant, date, notes, GPS)"
         - "Cross-device sync"
         - "Nest. Shared ledger for couples and travel groups."
         - "Stats dashboard"
@@ -170,9 +167,9 @@ pricing:
         arrow: true
     - id: "trailblazer"
       name: "Trailblazer"
-      tagline: "Own it forever."
+      tagline: "Own it forever. First 500 only."
       price: "$79"
-      priceNote: "one time. First 500 only."
+      priceNote: "one time"
       featured: false
       features:
         - "Everything in Fly"
@@ -188,12 +185,13 @@ pricing:
 
 origin:
   eyebrow: "Why we built it"
-  headline: "I needed it, so I built it."
+  headline: "I built Ternpike because I was driving to Alaska and couldn't stop doing math in my head."
   paragraphs:
-    - "I was driving to Alaska. Florida to Juneau in a truck with a bed full of gear. I wanted to know what the trip was actually costing me, day by day, without babysitting a spreadsheet at every gas station."
-    - "Nothing out there did what I wanted. So I built Ternpike on the road, for the road. Used it the whole way up and back. It works."
-    - "If you're the kind of person who tracks your spending not because you have to but because you like knowing, this is for you."
-  attribution: "— Dwight, Ternpike founder"
+    - "How much have I spent? How much is left? Is this sustainable or just a thing I did once?"
+    - "Snap a receipt, see the number, stop worrying about it. That's what it does."
+    - "By the end of the trip I had the real cost. Not a guess. Gas, camps, food, the whole thing. Enough to know what the trip actually takes and whether I could do it again."
+    - "I could. Now I know."
+  attribution: "— Dwight"
 
 comparison:
   eyebrow: "Why Ternpike"
@@ -222,22 +220,8 @@ comparison:
         - icon: "✅"
           text: "Free tier that's actually free"
 
-openSource:
-  eyebrow: "Open source"
-  headlineHtml: "The code is open.<br>Your data is yours.<br>The hosting is optional."
-  paragraphs:
-    - "Ternpike is source-available on GitHub. If you're comfortable with self-hosting, spin up your own instance and pay nothing beyond a $5 VPS."
-    - "If you'd rather just open the app and go, the managed version handles everything for you."
-  links:
-    - kind: "gh"
-      label: "⭐ Star on GitHub"
-      href: "https://github.com/m0n01d/ternpike"
-    - kind: "docs"
-      label: "Read the docs →"
-      href: "#docs"
-
 emailCapture:
-  headlineHtml: "Know your budget<br>before you pull out tomorrow."
+  headlineHtml: "Know what the road costs<br>before you plan the next one."
   sub: "Get notified when the managed version launches. Zero setup, just scan and go."
   placeholder: "your@email.com"
   buttonLabel: "Notify me"
