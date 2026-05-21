@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "elm-verify-examples && npx elm-test",
+    "test:server": "npm --prefix server run test:server",
     "format": "elm-format src --yes",
     "format:check": "elm-format src --validate",
     "review": "elm-review",

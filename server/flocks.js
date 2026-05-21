@@ -305,7 +305,7 @@ export function registerFlockRoutes(app) {
         name,
         dbName,
       })
-      return c.json({ ok: true, flockId, dbName })
+      return c.json({ ok: true, flockId, dbName }, 201)
     } catch (err) {
       console.error('flocks/create:', err)
       return c.json({ ok: false, error: 'provision_failed' }, 500)
@@ -331,7 +331,13 @@ export function registerFlockRoutes(app) {
       return c.json({ ok: false, error: 'read_failed' }, 500)
     }
     if (!meta.members.includes(caller.email)) {
-      return c.json({ ok: false, error: 'not_a_member' }, 403)
+      // 404 (not 403) — don't confirm existence to non-members. See #68.
+      return c.json({ ok: false, error: 'not_found' }, 404)
+    }
+    if (meta.billingOwner !== caller.email) {
+      // Invite is owner-only per #68. Members can join but only the
+      // billing owner controls who else gets in.
+      return c.json({ ok: false, error: 'not_owner' }, 403)
     }
 
     let body
@@ -464,13 +470,21 @@ export function registerFlockRoutes(app) {
       return c.json({ ok: false, error: 'read_failed' }, 500)
     }
     if (!meta.members.includes(caller.email)) {
-      return c.json({ ok: false, error: 'not_a_member' }, 403)
+      // Return 404 (not 403) so we don't confirm the flock's existence to
+      // a caller who has no business knowing about it. See #68.
+      return c.json({ ok: false, error: 'not_found' }, 404)
     }
     if (meta.billingOwner === caller.email) {
-      return c.json(
-        { ok: false, error: 'transfer_ownership_first' },
-        409,
-      )
+      if (meta.members.length > 1) {
+        return c.json(
+          { ok: false, error: 'transfer_ownership_first' },
+          409,
+        )
+      }
+      // Sole-member owner self-leave is out of scope for v1 (delete-flock
+      // is not yet implemented). Reject explicitly rather than orphan the
+      // flock db. See #68.
+      return c.json({ ok: false, error: 'sole_owner_cannot_leave' }, 409)
     }
 
     const members = meta.members.filter((m) => m !== caller.email)
@@ -520,6 +534,9 @@ export function registerFlockRoutes(app) {
     }
     if (meta.billingOwner !== caller.email) {
       return c.json({ ok: false, error: 'not_owner' }, 403)
+    }
+    if (newOwnerEmail === caller.email) {
+      return c.json({ ok: false, error: 'cannot_transfer_to_self' }, 400)
     }
     if (!meta.members.includes(newOwnerEmail)) {
       return c.json({ ok: false, error: 'new_owner_not_a_member' }, 409)
