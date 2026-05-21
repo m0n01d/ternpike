@@ -1,22 +1,27 @@
 import PouchDB from 'pouchdb'
 
 const COUCH_BASE = 'https://couch.ternpike.com'
+const PERSONAL_KEY = 'ternpike'
 
 export function attachPouch(app, { creds = null } = {}) {
-  const db = new PouchDB('ternpike', { auto_compaction: true })
-  db.compact().catch(err => console.warn('compact:', err))
+  const handles = new Map()
 
-  let syncHandle = null
+  let credsCache = null
+  let firstSyncSettled = false
 
   const emitSync = state =>
     app.ports.pouchIn.send({ tag: 'SyncState', state })
 
-  function startSync({ email, password, dbName }) {
-    if (syncHandle) syncHandle.cancel()
-    emitSync('syncing')
+  const logHandles = () => {
+    if (import.meta.env.DEV) {
+      console.log('[pouch] open handles:', Array.from(handles.keys()))
+    }
+  }
+
+  function makeRemote(dbName, email, password) {
     const url   = `${COUCH_BASE}/${dbName}`
     const basic = 'Basic ' + btoa(`${email}:${password}`)
-    const remote = new PouchDB(url, {
+    return new PouchDB(url, {
       skip_setup: true,
       fetch: (u, opts) => {
         const o = { ...opts }
@@ -26,63 +31,252 @@ export function attachPouch(app, { creds = null } = {}) {
         return PouchDB.fetch(u, o)
       },
     })
-    syncHandle = db.sync(remote, { live: true, retry: true })
-      .on('change',  () => emitSync('syncing'))
-      .on('paused',  err => emitSync(err ? 'error' : 'synced'))
-      .on('active',  () => emitSync('syncing'))
-      .on('denied',  () => emitSync('error'))
-      .on('error',   err =>
+  }
+
+  function wireChanges(handle) {
+    handle.changes = handle.local.changes({
+      since: 'now',
+      live: true,
+      include_docs: true,
+    }).on('change', change => {
+      if (change.deleted) {
+        app.ports.pouchIn.send({
+          tag: 'DbDeleted',
+          id: change.id,
+          sourceDbName: handle.localName,
+        })
+      } else if (change.doc) {
+        const { _rev, ...doc } = change.doc
+        if (handle.localName === PERSONAL_KEY && change.id === 'user:flocks') {
+          // Server admin-writes user:flocks on create/join/leave; re-derive
+          // the open-handle set on every update so adds and removes both
+          // converge without a reload.
+          reconcileFlocks(doc).catch(err =>
+            console.error('[pouch] reconcileFlocks:', err))
+        }
+        const tagged = handle.flockId != null && doc.type === 'trip'
+          ? { ...doc, flockId: handle.flockId }
+          : doc
+        app.ports.pouchIn.send({
+          tag: 'DbChange',
+          doc: tagged,
+          sourceDbName: handle.localName,
+        })
+      }
+    }).on('error', err => {
+      app.ports.pouchIn.send({ tag: 'DbError', message: String(err) })
+    })
+  }
+
+  function openPersonalHandle() {
+    if (handles.has(PERSONAL_KEY)) return handles.get(PERSONAL_KEY)
+    const local = new PouchDB(PERSONAL_KEY, { auto_compaction: true })
+    local.compact().catch(err => console.warn('compact:', err))
+    const handle = {
+      changes: null,
+      flockId: null,
+      local,
+      localName: PERSONAL_KEY,
+      remote: null,
+      sync: null,
+    }
+    handles.set(PERSONAL_KEY, handle)
+    wireChanges(handle)
+    logHandles()
+    return handle
+  }
+
+  function openFlockHandle(flockId, dbName) {
+    const localName = `ternpike-${dbName}`
+    if (handles.has(localName)) return handles.get(localName)
+    const local = new PouchDB(localName, { auto_compaction: true })
+    local.compact().catch(err => console.warn('compact:', err))
+    const handle = {
+      changes: null,
+      dbName,
+      flockId,
+      local,
+      localName,
+      remote: null,
+      sync: null,
+    }
+    handles.set(localName, handle)
+    wireChanges(handle)
+    logHandles()
+    return handle
+  }
+
+  function startHandleSync(handle, dbName) {
+    if (!credsCache) return
+    if (handle.sync) handle.sync.cancel()
+    if (handle.remote) try { handle.remote.close() } catch (_) {}
+    const { email, password } = credsCache
+    handle.remote = makeRemote(dbName, email, password)
+    handle.sync = handle.local.sync(handle.remote, { live: true, retry: true })
+      .on('change', () => emitSync('syncing'))
+      .on('paused', err => {
+        if (handle.localName === PERSONAL_KEY && !firstSyncSettled && !err) {
+          firstSyncSettled = true
+          // Reading user:flocks after the first paused event avoids racing
+          // the initial replication pull — a freshly logged-in client may
+          // not have the doc locally yet.
+          hydrateFlocksFromPersonal().catch(e =>
+            console.error('[pouch] hydrateFlocks:', e))
+        }
+        emitSync(err ? 'error' : 'synced')
+      })
+      .on('active', () => emitSync('syncing'))
+      .on('denied', () => emitSync('error'))
+      .on('error', err =>
         emitSync(err && (err.status === 401 || err.status === 403) ? 'auth_error' : 'error')
       )
   }
 
+  async function hydrateFlocksFromPersonal() {
+    const personal = handles.get(PERSONAL_KEY)
+    if (!personal) return
+    let doc
+    try {
+      doc = await personal.local.get('user:flocks')
+    } catch (e) {
+      if (e.status === 404) return
+      throw e
+    }
+    await reconcileFlocks(doc)
+  }
+
+  async function reconcileFlocks(flocksDoc) {
+    if (!credsCache) return
+    const entries = Array.isArray(flocksDoc && flocksDoc.flocks)
+      ? flocksDoc.flocks
+      : []
+    const wanted = new Map()
+    for (const entry of entries) {
+      const flockId = entry.flockId ?? entry.id ?? entry.flock_id
+      const dbName  = entry.dbName  ?? entry.db   ?? entry.db_name
+      if (!flockId || !dbName) continue
+      wanted.set(`ternpike-${dbName}`, { flockId, dbName })
+    }
+
+    for (const [localName, handle] of Array.from(handles.entries())) {
+      if (localName === PERSONAL_KEY) continue
+      if (!wanted.has(localName)) {
+        if (handle.sync) handle.sync.cancel()
+        if (handle.changes) handle.changes.cancel()
+        try { if (handle.remote) handle.remote.close() } catch (_) {}
+        try { await handle.local.close() } catch (_) {}
+        handles.delete(localName)
+        logHandles()
+      }
+    }
+
+    for (const [localName, { flockId, dbName }] of wanted.entries()) {
+      if (!handles.has(localName)) {
+        const handle = openFlockHandle(flockId, dbName)
+        startHandleSync(handle, dbName)
+      }
+    }
+  }
+
+  function startSync({ email, password, dbName }) {
+    credsCache = { dbName, email, password }
+    firstSyncSettled = false
+    emitSync('syncing')
+    const personal = openPersonalHandle()
+    startHandleSync(personal, dbName)
+  }
+
   function stopSync() {
-    if (syncHandle) { syncHandle.cancel(); syncHandle = null }
+    for (const handle of handles.values()) {
+      if (handle.sync) { handle.sync.cancel(); handle.sync = null }
+      if (handle.changes) { handle.changes.cancel(); handle.changes = null }
+      try { if (handle.remote) handle.remote.close() } catch (_) {}
+      handle.remote = null
+    }
     emitSync('not_enabled')
   }
 
-  // ── Live changes feed: per-doc updates ─────────────────────────────────
-  // Drops _rev and forwards the doc; the Elm DocChange decoder discriminates
-  // on doc.type to produce a typed variant.
-  db.changes({
-    since: 'now',
-    live: true,
-    include_docs: true,
-  }).on('change', change => {
-    if (change.deleted) {
-      app.ports.pouchIn.send({ tag: 'DbDeleted', id: change.id })
-    } else if (change.doc) {
-      const { _rev, ...doc } = change.doc
-      app.ports.pouchIn.send({ tag: 'DbChange', doc })
+  async function teardownAll({ destroy }) {
+    const list = Array.from(handles.values())
+    handles.clear()
+    for (const handle of list) {
+      if (handle.sync) { try { handle.sync.cancel() } catch (_) {} }
+      if (handle.changes) { try { handle.changes.cancel() } catch (_) {} }
+      try { if (handle.remote) handle.remote.close() } catch (_) {}
+      try {
+        if (destroy) await handle.local.destroy()
+        else await handle.local.close()
+      } catch (e) {
+        console.warn('[pouch] teardown:', e)
+      }
     }
-  }).on('error', err => {
-    app.ports.pouchIn.send({ tag: 'DbError', message: String(err) })
-  })
+    credsCache = null
+    firstSyncSettled = false
+    emitSync('not_enabled')
+    logHandles()
+  }
 
-  // ── Outbound port: batched fetches & saves ─────────────────────────────
+  function targetHandle(target) {
+    if (!target || target.kind === 'Personal' || target.kind === 'personal') {
+      return handles.get(PERSONAL_KEY)
+    }
+    if (target.kind === 'InFlock' || target.kind === 'inFlock') {
+      for (const handle of handles.values()) {
+        if (handle.flockId != null && handle.flockId === target.flockId) {
+          return handle
+        }
+      }
+    }
+    // Elm hasn't been updated yet (lands in #60); default writes/reads to
+    // the personal handle so existing solo behaviour is preserved.
+    return handles.get(PERSONAL_KEY)
+  }
+
+  function allHandles() {
+    return Array.from(handles.values())
+  }
+
+  async function upsertDoc(handle, doc) {
+    try {
+      const existing = await handle.local.get(doc._id)
+      await handle.local.put({ ...doc, _rev: existing._rev })
+    } catch (e) {
+      if (e.status === 404) {
+        await handle.local.put(doc)
+      } else {
+        throw e
+      }
+    }
+  }
+
   app.ports.pouchOut.subscribe(async (msg) => {
     try {
       switch (msg.tag) {
 
         case 'GetAllTrips': {
-          // Group all trip docs into one dict keyed by _id; emit one message.
-          const result = await db.allDocs({ include_docs: true })
           const trips = {}
-          for (const row of result.rows) {
-            const d = row.doc
-            if (!d || d.type !== 'trip') continue
-            const { _rev, ...doc } = d
-            trips[d._id] = doc
+          const responses = await Promise.all(
+            allHandles().map(async (handle) => {
+              const result = await handle.local.allDocs({ include_docs: true })
+              return { handle, rows: result.rows }
+            })
+          )
+          for (const { handle, rows } of responses) {
+            for (const row of rows) {
+              const d = row.doc
+              if (!d || d.type !== 'trip') continue
+              const { _rev, ...doc } = d
+              trips[d._id] = { ...doc, flockId: handle.flockId }
+            }
           }
           app.ports.pouchIn.send({ tag: 'TripsLoaded', trips })
           break
         }
 
         case 'GetTripExpenses': {
-          // Group expenses (for this trip) + amendments + voids targeting any
-          // expense into three dicts; emit one message. Elm decodes straight
-          // into Dicts via D.dict.
-          const result = await db.allDocs({ include_docs: true })
+          const handle = targetHandle(msg.target)
+          if (!handle) break
+          const result = await handle.local.allDocs({ include_docs: true })
           const amendments = {}
           const expenses   = {}
           const voids      = {}
@@ -107,22 +301,21 @@ export function attachPouch(app, { creds = null } = {}) {
         }
 
         case 'GetExpense': {
-          // Targeted single-doc fetch + range-query amendments + lookup void.
-          // App-written amend IDs are `amend::expense::<id>::<ts>`, so the
-          // range scan finds them. (Seed data must match this scheme.)
+          const handle = targetHandle(msg.target)
+          if (!handle) break
           const id = msg.expenseId
           let expense = null
           let voidDoc = null
 
           try {
-            const exp = await db.get(id)
+            const exp = await handle.local.get(id)
             const { _rev, ...doc } = exp
             expense = doc
           } catch (e) {
             if (e.status !== 404) throw e
           }
 
-          const amendRows = await db.allDocs({
+          const amendRows = await handle.local.allDocs({
             startkey: `amend::${id}`,
             endkey:   `amend::${id}￰`,
             include_docs: true,
@@ -135,7 +328,7 @@ export function attachPouch(app, { creds = null } = {}) {
           }
 
           try {
-            const v = await db.get(`void::${id}::del`)
+            const v = await handle.local.get(`void::${id}::del`)
             const { _rev, ...doc } = v
             voidDoc = doc
           } catch (e) {
@@ -156,17 +349,9 @@ export function attachPouch(app, { creds = null } = {}) {
         case 'SaveExpense':
         case 'SaveAmend':
         case 'SaveVoid': {
-          const doc = msg.doc
-          try {
-            const existing = await db.get(doc._id)
-            await db.put({ ...doc, _rev: existing._rev })
-          } catch (e) {
-            if (e.status === 404) {
-              await db.put(doc)
-            } else {
-              throw e
-            }
-          }
+          const handle = targetHandle(msg.target)
+          if (!handle) break
+          await upsertDoc(handle, msg.doc)
           break
         }
 
@@ -181,6 +366,14 @@ export function attachPouch(app, { creds = null } = {}) {
 
   app.ports.startSync.subscribe(startSync)
   app.ports.stopSync.subscribe(stopSync)
+  app.ports.clearStorage.subscribe(() => {
+    teardownAll({ destroy: true }).catch(err =>
+      console.error('[pouch] clearStorage teardown:', err))
+  })
+  app.ports.clearAllStorage.subscribe(() => {
+    teardownAll({ destroy: true }).catch(err =>
+      console.error('[pouch] clearAllStorage teardown:', err))
+  })
 
   if (creds) startSync(creds)
 }
