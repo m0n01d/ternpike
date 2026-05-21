@@ -43,6 +43,7 @@ type Route
     = RouteAdd TripId
     | RouteAddReviewScan
     | RouteEditEntry TripId ExpenseId
+    | RouteJoinFlock String
     | RouteLedger TripId
     | RouteScan TripId
     | RouteSettings

@@ -20,10 +20,12 @@ tier unlock paid features? Use `isPaid` for "can I do X?" predicates; branch
 on the full type when rendering tier-specific UI (badges, billing screen) so
 the compiler forces all three to be handled.
 
-This module is the minimal stub required to land `Trip.effectiveTier` (#61).
-The full subscription-tier track (#16–#22) will flesh out JSON codecs and the
-billing wire format when the server starts persisting tier — they're omitted
-here to keep the surface area minimal and avoid `NoUnused.Exports` noise.
+This module is the minimal stub required to land `Trip.effectiveTier` (#61)
+and the Settings → Flocks gate (#62). The full subscription-tier track
+(#16–#22) will flesh out JSON codecs and the billing wire format when the
+server starts persisting tier — they're omitted here to keep the surface
+area minimal and avoid `NoUnused.Exports` noise. For now the wire form is
+the lowercase constructor name.
 
 Tier is server-authoritative: populated from the session at login + refreshed
 via `/me`, never cached in PouchDB (would sync stale state across devices on
