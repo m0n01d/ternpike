@@ -25,8 +25,13 @@ export default defineConfig({
         const fs = await import('node:fs/promises')
         const path = await import('node:path')
         const swPath = path.resolve('dist/sw.js')
+        const assetsDir = path.resolve('dist/assets')
+        const assetFiles = await fs.readdir(assetsDir).catch(() => [])
+        const precacheUrls = assetFiles.map(f => `/assets/${f}`)
         const src = await fs.readFile(swPath, 'utf8')
-        const stamped = src.replace('__CACHE_VERSION__', `ternpike-${sha}`)
+        const stamped = src
+          .replace("'__CACHE_VERSION__'", JSON.stringify(`ternpike-${sha}`))
+          .replace("'__PRECACHE_URLS__'", JSON.stringify(precacheUrls))
         await fs.writeFile(swPath, stamped)
       },
     },
