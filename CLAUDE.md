@@ -30,6 +30,21 @@ Correct sequence when a stash pop conflicts:
 - 401 from any HTTP call → `GuestModel (toGuestState SessionExpired as_) + clearStorage ()`. No silent re-auth — the app is unverified by Google so tokens expire aggressively.
 - Auth error messages live in `GuestReason` (FreshGuest | SessionExpired | MissingConfig), NOT in `model.error`.
 
+## Architecture doc
+
+`docs/architecture.md` explains the app for a new developer: PouchDB wiring, port protocol, Dict-based data modeling, document ID conventions, startup/sync sequence, lazy loading, amendments, and soft deletes.
+
+**Keep it current.** Whenever you change any of the following, update `docs/architecture.md` in the same commit:
+- `AuthState` fields or types in `Types.elm`
+- Port definitions or the `pouchOut`/`pouchIn` message protocol
+- Document ID schemes (`ExpenseId`, `TripId`, amendment/void ID formats)
+- Any `Data/*.elm` type, encoder, or decoder
+- Startup/sync sequencing logic in `Main.elm`
+- Route-driven fetch logic (`fetchesForRoute`)
+- The `Trips` zipper structure
+
+If a section of the doc no longer matches the code, fix the doc — don't leave it stale.
+
 ## Elm style guide
 - **Alphabetize** all record fields and all type constructor lists. Apply to every new type and every edit of an existing type.
 - Always fully qualify imports. If you touch a module or function whose imports are not fully qualified, refactor them. You can expose the type, but not `(..)`.
