@@ -175,7 +175,9 @@ const openSettingsFlocks = async (page: Page): Promise<void> => {
   await expect(page.getByText('Local-first preferences')).toBeVisible({
     timeout: 30_000,
   })
-  await expect(page.getByText('FLOCKS')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('FLOCKS', { exact: true })).toBeVisible({
+    timeout: 10_000,
+  })
 }
 
 /**
