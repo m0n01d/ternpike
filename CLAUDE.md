@@ -73,6 +73,61 @@ Bullet list of the implementation moves. Reference specific files, functions, po
 
 See #42–#47 (the offline-PWA milestone) for a canonical example of how a multi-issue breakdown looks in this repo.
 
+## Subagent orchestration on multi-issue tracks
+
+This section codifies what we learned running 21 parallel subagents on the Flock feature track. Read before launching any agent on a non-trivial task; read in full before launching three or more.
+
+### Branch lineage is fragile — verify the base
+
+Agents pick the wrong base branch when the prompt is even slightly ambiguous. The Flock track had three real incidents: an agent branched off `#60` when told to branch off `#61` (producing parallel implementations of the same module), an agent's commit landed but the branch ref was never updated (`6bb9ccc` ended up on a session-temp branch instead of `flock/63-trip-ledger-ui`), and two downstream agents inherited the broken base before recovery.
+
+The prevention pattern, baked into every agent prompt:
+
+1. **Spell the base out as a `git fetch` + `git checkout -b` snippet, never as prose.** "Branch off X" is ambiguous; `git checkout -b flock/77 origin/flock/64-billing-banner` is not.
+2. **Have the agent sanity-check the base with `grep` / `test -f`** before writing a single line. Example:
+   ```bash
+   test -f src/UI/BillingBanner.elm || { echo "FAIL: wrong base"; exit 1; }
+   grep -q "type: 'flock:meta'" server/flocks.js || { echo "FAIL: missing wire fix"; exit 1; }
+   ```
+   If the check fails, the agent STOPs and reports. Don't let it improvise on a broken base.
+3. **Push verification is mandatory** — fetch the branch back, compare the local HEAD SHA to `origin/<branch>` SHA, fail loud if they don't match. Lost commits won't notify you otherwise.
+
+### Worktree isolation isn't perfect
+
+Project-level `elm-format` and editor hooks fire in the main checkout when an agent's worktree shares its parent project. We saw `UI/Avatar.elm` content from one agent's worktree leak into another's via the format hook, and saw three files (`docs/architecture.md`, `src/Data/Tier.elm`, `src/Main.elm`) accumulate hundreds of lines of unintended diff in the main checkout. Two rules:
+
+- **Agents should never write to `/home/user/ternpike/...` paths** — only to their worktree. Have prompts include a `pwd` check before any write.
+- **The orchestrator's main checkout will accumulate cross-contamination.** Stash + discard at end of session; don't commit it.
+
+### Issue body quality is the single biggest predictor of agent success
+
+Tight What/Why/How issues with code snippets, file paths, and verification commands produced agents that shipped clean work in one shot. Loose issues produced agents that floundered, made wrong architectural choices, or had to be re-prompted. The cost of a careful issue body is paid back many times over by not having to re-spawn the agent or untangle its output.
+
+### Foundation fixes don't propagate to in-flight siblings
+
+When agent A finds and fixes a base-layer bug on branch A, parallel agents B/C/D running off that same base layer DON'T see the fix until merge. The Flock track had 5+ instances of this — the most consequential being a wire-format mismatch (`type: 'flock'` vs `'flock:meta'`) that #76 *identified* but #72 *fixed*, while #74/#76/#78 sat blocked on the original bug.
+
+Two coping strategies, pick per situation:
+
+- **Sequential when fixes are likely.** If the issue is "go fix bug X then add feature Y", run agents in series so the fix lands before downstream work starts.
+- **Cherry-pick or replicate when running in parallel.** Tell each agent: "If you find a bug that's been fixed on sibling branch Z, cherry-pick the fix into your branch with attribution. Don't `test.fixme` it — make the test pass."
+
+### Sequential dependencies dominate; parallelism pays inside a wave
+
+The 21-issue Flock track had a hard dependency DAG: #57+#58 → #59 → #60 → #61+#62+#63 → #64. Real parallelism only kicked in on the test waves (5 `[Flock-Sec]` specs sharing a harness, 6 `[Flock-E2E]` specs sharing a harness) because those tests were truly independent. **Plan waves around the DAG; don't try to start everything at once.** A "wave" is "the set of issues whose dependencies have all landed."
+
+### Each agent run is expensive — budget accordingly
+
+Substantial issues (multi-file, with verification) ran 700–2000+ seconds. The 21-issue Flock track took ~4 hours of wall-clock from kickoff to last completion. Choose to spawn an agent only when the work justifies the cost; for one-file edits or quick lookups, do it inline.
+
+### Negative tests catch real bugs
+
+The `[Flock-Sec]` track found 6 endpoint-guard bugs (in #68), 3 validator bugs (in #66), and documented 2 known security gaps (in #65). The `[Flock-E2E]` track found a wire-format mismatch (#76 identified, #72 fixed), a missing `name` field in a response decoder (#73), missing error-message branches for 410/401 (#73), a missing duplicate-invite 409 (#72), and a missing server-admin bypass in the validator (#66). **Every one of these passed unit tests.** Negative/integration testing is not optional for a multi-user feature.
+
+### Force-push for branch-tip recovery is sometimes necessary
+
+When a commit lands but the branch ref doesn't update (the `6bb9ccc` incident), the recovery is `git push --force-with-lease origin <commit-sha>:refs/heads/<branch>`. This requires user authorization — surface what's being preserved (nothing destroyed: the old tip is on a sibling branch anyway), get an explicit OK via AskUserQuestion, then push. Don't force-push silently.
+
 ## Model architecture (GuestModel / AuthModel split)
 
 See `docs/architecture.md` for the full structural description. Key behavioral conventions:
@@ -180,10 +235,43 @@ Before reporting a UI task done — or when planning a visual change and want th
 
 Send the screenshot with `SendUserFile`. Don't describe pixels in prose when you can show them. Delete the generated `scripts/` folder before ending the turn (see the untracked-files note in Git discipline above).
 
-### E2E harness vs. `playwright-ui`
+## End-to-end + security test patterns
 
-- The `playwright-ui` skill is for **one-off screenshots** (UI vetting in a single browser context). Files it generates under `scripts/` are throwaway and must be deleted before the turn ends.
-- The `e2e/` directory is the **automated regression suite** (two-user Flock flows, asserted behavior, CI). It's git-tracked, has a real `npm run e2e` script, and boots a disposable CouchDB + mock Resend + auth server via `globalSetup`. See `e2e/README.md` for the fixture API and how to add a spec.
+The `e2e/` directory (added in #71) is the Playwright two-browser-context test harness — separate from `playwright-ui` (which is for one-off screenshots). Use `playwright-ui` for "show me what this looks like right now"; use `e2e/` for "this user-journey is a regression-tested invariant." The server-side `[Flock-Sec]` track lives in `server/test/sec/` and runs against a disposable CouchDB.
+
+### Boundary
+
+- **`playwright-ui` (skill):** ad-hoc screenshots during planning or before reporting a UI task done. Throwaway `scripts/` files, no CI.
+- **`e2e/specs/*.spec.ts` (Playwright suite):** multi-context user journeys, two-user concurrency, visual goldens. Runs in CI on every PR via `npm run e2e`.
+- **`server/test/sec/*.spec.js` (node:test suite):** server-side negative tests against a disposable `couchdb:3` Docker container. Runs via `npm run test:server`.
+
+### CouchDB gotchas the test track surfaced
+
+- **CouchDB 3 returns 403, not 401**, when an authenticated user with valid `_users` credentials is no longer in `_security.members`. 401 is for unauthenticated only. The pragmatic helper is `assertRejected({401, 403})` with one dedicated test that pins 401 for the truly-unauthenticated case.
+- **`validate_doc_update` design-doc functions cannot fetch sibling docs** (no `db.get(...)` in their context). State that needs to drive validation (e.g. `billingStatus`, `billingOwner`) must be mirrored into `_security` at provision time and updated by admin writes thereafter. See `server/couch/flockValidator.js` for the pattern.
+- **`_security` PUT by a member sometimes returns 500 `no_majority`** instead of a clean 403 — single-node CouchDB 3 quirk. Tests accept `{403, 500}` and re-read `_security` as admin to verify the write had no effect.
+- **DB enumeration leak (open follow-up):** a forbidden flock DB returns 403 while a nonexistent one returns 404 — attackers can enumerate IDs. Closing this requires a CouchDB-proxy layer we don't have today. Tests pin the weaker property (no `update_seq` / `doc_count` body leak) and document the stronger assertion as a TODO.
+
+### Resend + workerd
+
+The Resend Node SDK reads its `baseUrl` from `process.env` **at module load time**. `workerd` doesn't populate `process.env`. Outbound email mocking won't work via the SDK — replace it with raw `fetch` to `${env.RESEND_BASE_URL || 'https://api.resend.com'}/emails` so the env binding actually reaches the call site. See `server/flocks.js` for the pattern (added in #72).
+
+### Test stack patterns worth reusing
+
+- **Two-context fixtures** (`aliceContext` + `bobContext` in `e2e/fixtures/twoUsers.ts`) model the real user concurrency that's the whole point of multi-user features. Configurable tier per user via the fixture options.
+- **Mock Resend server** is an in-process Node `http.createServer` exposing `/emails` (capture) + `/__captured` (assertion endpoint). Wired into wrangler via `--var RESEND_BASE_URL`.
+- **Disposable CouchDB** via raw `docker run couchdb:3` (no testcontainers dep) with the container name suffixed by `${process.pid}` so concurrent test runs don't `docker rm -f` each other's container.
+- **Test-only port injection hook** (`window.__ternpikeTestApp` in `src/main.js`) lets specs bypass the hardcoded `couch.ternpike.com` sync URL and push `pouchIn` events directly. Use sparingly — it's a backdoor.
+- **Mint JWTs in-test** using HS256 + the harness's `SERVER_SECRET` when the real auth-server path is too brittle for a particular assertion. See `e2e/utils/flock-test-helpers.ts` for the pattern.
+- **Visual-regression goldens** (Playwright `expect(page).toHaveScreenshot()`) are the most durable UI tests — they catch chrome drift that prose assertions miss. Goldens are git-tracked, regenerated via `npm run e2e:update-snapshots`.
+
+### Cross-PouchDB-library change feed doesn't propagate
+
+A separately-instantiated PouchDB in a test script does NOT trigger change feeds on the app's bundled PouchDB instance — different module instances, different in-memory event buses. To deliver a doc into the app's local DB during a test, either: (a) push a synthetic event via the `__ternpikeTestApp` hook, or (b) wait for a real CouchDB sync round-trip. The first is fast and synchronous; the second is realistic but slower.
+
+### Negative tests find bugs unit tests miss
+
+Five categories of bugs that the `[Flock-Sec]` + `[Flock-E2E]` tracks caught that unit tests had not: wire-format mismatches between server output and client decoder, endpoint status-code drift from the spec (5+ instances), missing admin-bypass in CouchDB validation functions, missing error-message branches in client `Result` handlers, missing duplicate-action 409 responses. Bake negative-test coverage in from the start of any multi-user / multi-tenant feature.
 
 ## Styling
 
