@@ -108,3 +108,18 @@ export function couchAdminFetch(couch, path, init = {}) {
     },
   })
 }
+
+// Hit CouchDB directly authenticated as a real seeded user — this exercises
+// `validate_doc_update` because admin writes bypass it. Caller provides the
+// already-derived password (see `fixtures/auth.js#derivePassword`).
+export function couchUserFetch(couch, email, password, path, init = {}) {
+  const auth = 'Basic ' + Buffer.from(`${email}:${password}`).toString('base64')
+  return fetch(`${couch.baseUrl}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: auth,
+      ...(init.headers || {}),
+    },
+  })
+}
