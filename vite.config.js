@@ -2,7 +2,8 @@ import { defineConfig } from 'vite'
 import elm from 'vite-plugin-elm'
 import path from 'path'
 
-const sha = (process.env.GITHUB_SHA || 'dev').slice(0, 8)
+const commitSha = process.env.CF_PAGES_COMMIT_SHA || process.env.GITHUB_SHA || 'dev'
+const sha = commitSha.slice(0, 8)
 
 export default defineConfig({
   base: '/',
@@ -18,7 +19,7 @@ export default defineConfig({
     },
   },
   define: {
-    __BUILD_SHA__: JSON.stringify(process.env.GITHUB_SHA || 'dev'),
+    __BUILD_SHA__: JSON.stringify(commitSha),
   },
   build: {
     outDir: 'dist',
