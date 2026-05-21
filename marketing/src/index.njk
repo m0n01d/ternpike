@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="{{ meta.lang }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ meta.title }}</title>
+<meta name="description" content="{{ meta.description }}">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,500;1,700&family=DM+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+{% include "partials/nav.njk" %}
+{% include "partials/hero.njk" %}
+{% include "partials/how-it-works.njk" %}
+{% include "partials/features.njk" %}
+{% include "partials/ledger-preview.njk" %}
+{% include "partials/pricing.njk" %}
+{% include "partials/origin.njk" %}
+{% include "partials/comparison.njk" %}
+{% include "partials/open-source.njk" %}
+{% include "partials/email-capture.njk" %}
+{% include "partials/footer.njk" %}
+
+<script src="/main.js"></script>
+
+<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "{{ analytics.cloudflareBeaconToken }}"}'></script>
+
+</body>
+</html>

@@ -1,0 +1,9 @@
+<nav>
+  <a href="#" class="nav-logo">{{ brand.namePrefix }}<span>{{ brand.nameSuffix }}</span></a>
+  <div class="nav-links">
+    {% for link in nav.links %}
+    <a href="{{ link.href }}" class="nav-link">{{ link.label }}</a>
+    {% endfor %}
+    <a href="{{ nav.cta.href }}" class="nav-cta">{{ nav.cta.label }}</a>
+  </div>
+</nav>

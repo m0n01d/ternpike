@@ -1,0 +1,17 @@
+{# Stub: pricing section is filled in by issue #31. Renders nothing until plans are populated. #}
+{% if pricing.plans and pricing.plans.length %}
+<section class="pricing" id="pricing">
+  <div class="section-eyebrow">{{ pricing.eyebrow }}</div>
+  <h2 class="section-h2">{{ pricing.headline }}</h2>
+  <p class="pricing-intro">{{ pricing.intro }}</p>
+  <div class="pricing-grid">
+    {% for plan in pricing.plans %}
+    <div class="pricing-plan">
+      <div class="pricing-plan-name">{{ plan.name }}</div>
+      <div class="pricing-plan-price">{{ plan.price }}</div>
+      <div class="pricing-plan-body">{{ plan.body }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}

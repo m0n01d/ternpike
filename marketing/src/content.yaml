@@ -1,0 +1,199 @@
+meta:
+  title: "Ternpike — Track Every Turn of the Road"
+  description: "Snap a photo of your receipt at camp. Ternpike reads it, logs your GPS, and shows exactly where your budget stands before you pull out tomorrow morning."
+  lang: "en"
+
+brand:
+  name: "Ternpike"
+  namePrefix: "Tern"
+  nameSuffix: "pike"
+  tagline: "Track every turn of the road."
+
+nav:
+  links:
+    - label: "How it works"
+      href: "#how"
+    - label: "Features"
+      href: "#features"
+    - label: "Open Source"
+      href: "#oss"
+  cta:
+    label: "Get Early Access"
+    href: "#signup"
+
+hero:
+  eyebrow: "Road Trip Expense Tracker"
+  headline:
+    prefix: "Tern"
+    suffix: "pike"
+  sub: "Snap a photo of your receipt at camp. We read it, log your GPS, and show exactly where your budget stands before you pull out tomorrow morning."
+  actions:
+    - kind: "primary"
+      label: "Get Early Access →"
+      href: "#signup"
+    - kind: "ghost"
+      label: "See How It Works"
+      href: "#how"
+  proof: "Built on the Alaska Highway · Zero subscription · Your data, your Google Sheet"
+
+howItWorks:
+  eyebrow: "How It Works"
+  headlineHtml: "Three steps.<br>Then go to sleep."
+  steps:
+    - number: "01"
+      icon: "📸"
+      title: "Snap your receipts"
+      body: "Photograph one or a stack at the end of a long driving day. Queue them all at once — Ternpike processes in parallel."
+    - number: "02"
+      icon: "🤖"
+      title: "AI reads them"
+      body: "Claude extracts the amount, merchant, date, and category. Writes a short note and a detailed one. You review and confirm — or edit anything."
+    - number: "03"
+      icon: "📍"
+      title: "Logged with GPS"
+      body: "Every entry gets coordinates — from the photo EXIF, your browser, or a map pin you drop. Your spending trail plots on a map of the whole route."
+
+features:
+  eyebrow: "Features"
+  headlineHtml: "Built for<br>the realities of remote travel."
+  items:
+    - icon: "📶"
+      title: "Works offline"
+      body: "Installable PWA. Queue receipts in the backcountry, sync when you hit signal. Cached data always viewable."
+    - icon: "🗺️"
+      title: "Waypoint map"
+      body: "Every expense with coordinates plots on a live map. Your financial trail and your geographic trail in one view."
+    - icon: "📊"
+      title: "Live stats dashboard"
+      body: "10 live metrics. Daily spending chart. Category breakdown. Cumulative spend curve. Know your burn rate at a glance."
+    - icon: "🔒"
+      title: "Your data, your sheet"
+      body: "One Google Sheet is the entire database. You own it. Export to CSV, run formulas, connect to Looker Studio. We're a UI layer, not a data silo."
+    - icon: "⚡"
+      title: "No account required"
+      body: "Google sign-in only — no passwords, no new accounts. Works without an API key too: photos queue for manual entry."
+    - icon: "🏕️"
+      title: "11 road-trip categories"
+      body: "Fuel · Food · Camp · Ferry · Gear · Lodging · Activities · Shopping · Medical · Transport · Misc. Broad enough for months, specific enough to be useful."
+
+ledgerPreview:
+  eyebrow: "The Ledger"
+  headlineHtml: "Looks like a journal.<br>Works like a spreadsheet."
+  tabs:
+    - label: "Ledger"
+      active: true
+    - label: "Stats"
+      active: false
+    - label: "Map"
+      active: false
+  stats:
+    - label: "Total Spent"
+      value: "$1,247"
+    - label: "Days on Road"
+      value: "14"
+    - label: "Avg / Day"
+      value: "$89"
+    - label: "Top Category"
+      value: "⛽ Fuel"
+  days:
+    - heading: "Aug 2, 2026 · Whitehorse, YT · $134.60"
+      entries:
+        - category: "⛽"
+          merchant: "Petro-Canada — Alaska Hwy"
+          note: "Fill-up before long stretch to Watson Lake"
+          amount: "$67.40"
+          dim: false
+        - category: "🍔"
+          merchant: "Tim Hortons, Whitehorse"
+          note: "Double double, breakfast sandwich"
+          amount: "$11.20"
+          dim: false
+        - category: "⛺"
+          merchant: "Yukon River Camp"
+          note: "Tenting, no hookups — beautiful spot"
+          amount: "$24.00"
+          dim: false
+    - heading: "Aug 1, 2026 · Watson Lake, YT · $98.30"
+      entries:
+        - category: "⛽"
+          merchant: "Shell — Watson Lake"
+          note: "Pricey but no choice, next station 220mi"
+          amount: "$74.30"
+          dim: true
+
+pricing:
+  eyebrow: ""
+  headline: ""
+  intro: ""
+  plans: []
+
+origin:
+  eyebrow: ""
+  headline: ""
+  body: ""
+
+comparison:
+  eyebrow: "Why Ternpike"
+  headline: "The only app that does all four."
+  columns:
+    - kind: "them"
+      heading: "Every other app"
+      rows:
+        - icon: "❌"
+          text: "No AI receipt scanning"
+        - icon: "❌"
+          text: "No GPS logging or route map"
+        - icon: "❌"
+          text: "Your data in their silo"
+        - icon: "❌"
+          text: "Monthly subscription"
+        - icon: "❌"
+          text: "Built for offices, not roads"
+    - kind: "us"
+      heading: "Ternpike"
+      rows:
+        - icon: "✅"
+          text: "AI reads receipts instantly"
+        - icon: "✅"
+          text: "GPS on every entry, live route map"
+        - icon: "✅"
+          text: "Your own Google Sheet, always"
+        - icon: "✅"
+          text: "Free to self-host, forever"
+        - icon: "✅"
+          text: "Built on the Alaska Highway"
+
+openSource:
+  eyebrow: "Open Source"
+  headlineHtml: "Fork it.<br>Self-host it.<br>Make it yours."
+  body: "The full source is on GitHub. Bring your own Google Sheet and API keys and it costs you nothing. If you'd rather skip the setup, a managed version is coming soon."
+  links:
+    - kind: "gh"
+      label: "⭐ Star on GitHub"
+      href: "#"
+    - kind: "docs"
+      label: "Read the Docs →"
+      href: "#"
+
+emailCapture:
+  headlineHtml: "Know before<br>you pull out."
+  sub: "Get notified when the managed version launches — zero setup, just scan and go."
+  placeholder: "your@email.com"
+  buttonLabel: "Notify Me"
+  successLabel: "You're in ✓"
+  successPlaceholder: "See you on the road."
+  fine: "No spam. Unsubscribe anytime. We're building this in public."
+
+footer:
+  links:
+    - label: "GitHub"
+      href: "#"
+    - label: "Docs"
+      href: "#"
+    - label: "Privacy"
+      href: "#"
+    - label: "Contact"
+      href: "#"
+
+analytics:
+  cloudflareBeaconToken: "REPLACE_WITH_CF_ANALYTICS_TOKEN"
