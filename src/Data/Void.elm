@@ -11,16 +11,22 @@ out any expense whose ID is in the set of void targets.
 
 `targetId` is stored as a plain `String` (not `ExpenseId` or `TripId`)
 because the same Void type covers both expense and trip deletions.
+
+`createdBy` records which signed-in user wrote the tombstone — populated for
+every new void; legacy voids without the field decode to `UserId.unknown`.
+
 -}
 
+import Data.UserId as UserId exposing (UserId)
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 
 
 type alias Void =
     { createdAt : String
-    , id        : String
-    , targetId  : String
+    , createdBy : UserId
+    , id : String
+    , targetId : String
     }
 
 
@@ -28,5 +34,6 @@ decoder : D.Decoder Void
 decoder =
     D.succeed Void
         |> Pipeline.required "createdAt" D.string
-        |> Pipeline.required "_id"       D.string
-        |> Pipeline.required "targetId"  D.string
+        |> Pipeline.optional "createdBy" UserId.decoder UserId.unknown
+        |> Pipeline.required "_id" D.string
+        |> Pipeline.required "targetId" D.string
