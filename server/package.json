@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 4000",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "node --test --test-concurrency=1 'test/**/*.spec.js'",
+    "test:server": "node --test --test-concurrency=1 'test/**/*.spec.js'"
   },
   "dependencies": {
     "hono": "^4.6.0",
