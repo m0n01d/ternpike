@@ -1,7 +1,9 @@
 // Cache name is stamped with git SHA by CI — ensures old caches are cleaned up on deploy.
-const CACHE = 'alaska-v1';
+const CACHE = 'ternpike-v1';
 
 const SKIP_CACHE = [
+  'api.ternpike.com',
+  'couch.ternpike.com',
   'googleapis.com',
   'anthropic.com',
   'accounts.google.com',

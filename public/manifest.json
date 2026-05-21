@@ -1,7 +1,7 @@
 {
-  "name": "Alaska Tracker",
-  "short_name": "Alaska",
-  "description": "Road expense log — Florida to Juneau",
+  "name": "Ternpike",
+  "short_name": "Ternpike",
+  "description": "Track expenses on the road",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
