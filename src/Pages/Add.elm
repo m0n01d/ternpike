@@ -1,10 +1,13 @@
 module Pages.Add exposing (viewTab)
 
 import Data.Category as Category exposing (Category)
+import Data.Flock as Flock
+import Data.Flocks as Flocks
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod(..))
 import Data.PendingEntry exposing (AddPageMode(..), PendingEntry, PendingForm(..))
+import Data.Trips as Trips exposing (TripsState(..))
 import Dict
 import Helpers exposing (formatCoord)
 import Html exposing (Html)
@@ -136,6 +139,10 @@ viewLoadingHero =
 
 viewBody : AuthState -> PendingEntry -> Bool -> Html Msg
 viewBody model pending isEditing =
+    let
+        readOnly =
+            isActiveTripReadOnly model
+    in
     Html.div []
         [ viewScanPreview model
         , UI.Rule.kicker "THE BASICS"
@@ -197,10 +204,17 @@ viewBody model pending isEditing =
             ]
         , Html.button
             [ Html.Events.onClick SubmitEntry
-            , Html.Attributes.disabled model.submitting
+            , Html.Attributes.disabled (model.submitting || readOnly)
+            , Html.Attributes.title
+                (if readOnly then
+                    "This flock is read-only."
+
+                 else
+                    ""
+                )
             , Html.Attributes.class
                 ("w-full bg-rust hover:bg-rust-deep text-parchment border-none rounded-lg py-[18px] text-lg font-bold tracking-wide cursor-pointer mt-2 min-h-[56px] "
-                    ++ (if model.submitting then
+                    ++ (if model.submitting || readOnly then
                             "opacity-60 cursor-not-allowed"
 
                         else
@@ -220,6 +234,24 @@ viewBody model pending isEditing =
                 )
             ]
         ]
+
+
+{-| `True` when the route's active trip belongs to a flock whose
+billing status is `Grace` or `Frozen`. Personal trips, unloaded
+trips, and active flocks all return `False`.
+-}
+isActiveTripReadOnly : AuthState -> Bool
+isActiveTripReadOnly model =
+    case ( Routing.routeTripId model.route, model.trips ) of
+        ( Just tripId, TripsLoaded trips ) ->
+            Trips.findTrip tripId trips
+                |> Maybe.andThen .flockId
+                |> Maybe.andThen (\fid -> Flocks.get fid model.flocks)
+                |> Maybe.map Flock.isReadOnly
+                |> Maybe.withDefault False
+
+        _ ->
+            False
 
 
 viewLoadingBody : Html Msg

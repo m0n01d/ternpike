@@ -1,8 +1,11 @@
 module Pages.Scan exposing (viewTab)
 
 import Data.Category as Category
+import Data.Flock as Flock
+import Data.Flocks as Flocks
 import Data.Navigation exposing (Tab(..))
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.Trips as Trips exposing (TripsState(..))
 import Dict
 import File exposing (File)
 import Html exposing (Html)
@@ -28,6 +31,9 @@ viewHero as_ =
     if as_.networkOffline then
         viewOfflineHero
 
+    else if isActiveTripReadOnly as_ then
+        viewReadOnlyHero
+
     else
         Html.label
             [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep cursor-pointer hover:bg-tan/30 transition-colors" ]
@@ -46,6 +52,38 @@ viewHero as_ =
                 ]
                 []
             ]
+
+
+viewReadOnlyHero : Html Msg
+viewReadOnlyHero =
+    Html.div
+        [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep opacity-70"
+        , Html.Attributes.title "This flock is read-only."
+        ]
+        [ Html.div [ Html.Attributes.class "flex justify-center mb-3 text-muted" ]
+            [ UI.Icons.camera "w-12 h-12" ]
+        , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
+            [ Html.text "Scanning is paused" ]
+        , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
+            [ Html.text "This flock is read-only while billing is sorted out." ]
+        ]
+
+
+{-| Mirror of the predicate used on Add / Ledger — single source of
+truth lives in `Data.Flock.isReadOnly`.
+-}
+isActiveTripReadOnly : AuthState -> Bool
+isActiveTripReadOnly model =
+    case ( Routing.routeTripId model.route, model.trips ) of
+        ( Just tripId, TripsLoaded trips ) ->
+            Trips.findTrip tripId trips
+                |> Maybe.andThen .flockId
+                |> Maybe.andThen (\fid -> Flocks.get fid model.flocks)
+                |> Maybe.map Flock.isReadOnly
+                |> Maybe.withDefault False
+
+        _ ->
+            False
 
 
 viewOfflineHero : Html Msg

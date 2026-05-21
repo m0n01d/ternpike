@@ -101,6 +101,7 @@ import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Http
+import Http.FlockApi
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
@@ -118,6 +119,7 @@ import Set
 import Task
 import Time
 import Types exposing (AuthState, GuestState, Model(..), Msg(..))
+import UI.BillingBanner
 import UI.Layout
 import UI.TripPicker
 import Url
@@ -2264,6 +2266,15 @@ updateAuth msg as_ =
         TriggerInstallPrompt ->
             ( AuthModel as_, triggerInstallPrompt () )
 
+        TakeOverBilling flockId ->
+            ( AuthModel as_
+            , Http.FlockApi.transferOwnership
+                as_.creds
+                flockId
+                { newOwnerEmail = as_.creds.email }
+                TransferToFlockResult
+            )
+
         _ ->
             ( AuthModel as_, Cmd.none )
 
@@ -2328,6 +2339,7 @@ viewAuth as_ =
         [ UI.Layout.viewHeader as_
         , UI.Layout.viewOfflineBanner as_.networkOffline
         , UI.Layout.viewErrorBanner as_.error
+        , viewBillingBannerForRoute as_ route
         , Html.div [ Html.Attributes.class "pb-20" ]
             [ UI.Layout.page
                 { actions = tab.actions
@@ -2354,6 +2366,36 @@ viewAuth as_ =
                 Html.text ""
         , UI.Layout.viewToast as_.toast
         ]
+
+
+{-| Resolve the active trip's flock from the route + loaded trips, and
+render `UI.BillingBanner.view` when that flock is in `Grace` or
+`Frozen`. Returns `Html.text ""` for personal trips, non-trip routes
+(Settings, Trips list), and active flocks — see #64 for the matrix.
+-}
+viewBillingBannerForRoute : AuthState -> Route -> Html Msg
+viewBillingBannerForRoute as_ route =
+    case ( Routing.routeTripId route, as_.trips ) of
+        ( Just tripId, TripsLoaded loadedTrips ) ->
+            case Trips.findTrip tripId loadedTrips of
+                Just trip ->
+                    case Maybe.andThen (\fid -> Flocks.get fid as_.flocks) trip.flockId of
+                        Just flock ->
+                            UI.BillingBanner.view
+                                { currentUser = UserId.fromString as_.creds.email
+                                , flock = flock
+                                , tier = as_.tier
+                                , today = as_.today
+                                }
+
+                        Nothing ->
+                            Html.text ""
+
+                Nothing ->
+                    Html.text ""
+
+        _ ->
+            Html.text ""
 
 
 

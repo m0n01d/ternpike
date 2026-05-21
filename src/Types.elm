@@ -329,6 +329,7 @@ type Msg
     | SubmitEntry
     | SubmitInvite
     | SubmitTransfer
+    | TakeOverBilling FlockId
     | ToastExpired
     | ToggleDayIntensity
     | ToggleFlockMembers FlockId

@@ -24,6 +24,7 @@ import Html.Attributes
 import Html.Events
 import Types exposing (AuthState, Msg(..))
 import UI.Avatar
+import UI.BillingBanner
 import UI.Button
 import UI.Card
 import UI.FlockBadge
@@ -118,7 +119,12 @@ viewFlockCard as_ currentUser flock =
                 ]
             , viewMembersStack flock
             ]
-        , viewBillingNotice flock
+        , UI.BillingBanner.viewInline
+            { currentUser = currentUser
+            , flock = flock
+            , tier = as_.tier
+            , today = as_.today
+            }
         , Html.div [ Html.Attributes.class "flex flex-wrap gap-2 mt-3" ]
             (if owner then
                 [ UI.Button.secondary { label = "Invite", onClick = OpenInviteModal flock.id }
@@ -175,21 +181,6 @@ viewMembersList flock =
                         ]
                 )
         )
-
-
-viewBillingNotice : Flock -> Html msg
-viewBillingNotice flock =
-    case flock.billingStatus of
-        Flock.Active ->
-            Html.text ""
-
-        Flock.Grace ->
-            Html.p [ Html.Attributes.class "text-xs text-rust mt-1" ]
-                [ Html.text "Billing is in a grace period. The owner needs to update their card to keep this flock active." ]
-
-        Flock.Frozen ->
-            Html.p [ Html.Attributes.class "text-xs text-danger mt-1" ]
-                [ Html.text "This flock is frozen — billing has lapsed. The owner can restore it from their billing page." ]
 
 
 
