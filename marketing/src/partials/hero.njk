@@ -2,8 +2,6 @@
   <div class="hero-margin"></div>
   <div class="hero-inner">
 
-    <div class="hero-eyebrow">{{ hero.eyebrow }}</div>
-
     <div class="hero-tern">
       <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
         <path d="M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z" fill="var(--color-forest)"/>
@@ -18,13 +16,21 @@
       </svg>
     </div>
 
-    <h1 class="hero-h1">{{ hero.headline.prefix }}<span>{{ hero.headline.suffix }}</span></h1>
+    <h1 class="hero-h1">
+      {% for line in hero.headline.lines %}
+      <span class="hero-h1-line">{{ line }}</span>
+      {% endfor %}
+    </h1>
 
-    <p class="hero-sub">{{ hero.sub }}</p>
+    <div class="hero-sub">
+      {% for paragraph in hero.sub %}
+      <p>{{ paragraph }}</p>
+      {% endfor %}
+    </div>
 
     <div class="hero-actions">
       {% for action in hero.actions %}
-      <a href="{{ action.href }}" class="btn-{{ action.kind }}">{{ action.label }}</a>
+      <a href="{{ action.href }}" class="btn-{{ action.kind }}">{{ action.label }}{% if action.arrow %}<span class="btn-arrow">&rarr;</span>{% endif %}</a>
       {% endfor %}
     </div>
 
