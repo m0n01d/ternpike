@@ -42,6 +42,33 @@ Correct sequence when a stash pop conflicts:
 2. Resolve conflict markers manually, or use `git checkout --theirs <file>` / `git checkout --ours <file>` deliberately.
 3. If a stash is accidentally dropped: `git fsck --lost-found` → find the dangling commit → `git show <sha>:<file>`
 
+## GitHub issues workflow
+
+For any change bigger than a one-commit fix, break the work into GitHub issues **before** writing code. The aim is a planning paper trail that maps cleanly to commits and PRs.
+
+**One issue per logical unit of work.** A unit is "something that could ship and be reviewed on its own." Foundation issues (the blocker everyone else depends on) come first; enhancements come last. Cross-reference dependencies in the issue body ("Depends on #42", "Blocks #45").
+
+**Every issue body uses What / Why / How:**
+
+```markdown
+## What
+One or two sentences. The concrete change being made — file paths, types, ports, endpoints. No fluff.
+
+## Why
+The problem this solves. What's broken or missing today, and what the user-visible outcome is once it ships. If the answer is "because it'd be nice", the issue isn't ready yet.
+
+## How
+Bullet list of the implementation moves. Reference specific files, functions, ports, types. If there are real alternatives, mention them and pick one. If the change touches a documented invariant (architecture.md, this file), call that out.
+```
+
+**Naming:** prefix with the area in square brackets — `[PWA]`, `[Tier]`, `[Stats]`, `[Auth]`. Keep titles under 70 chars.
+
+**Commits cite issues.** Every commit message ends with the issue number it advances: `(fixes #42)` for closing commits, `(#42)` for partial progress. PR titles do the same.
+
+**Don't ladder issues.** A 3-line typo fix doesn't need an issue. A "rewrite the sync layer" task does. If you're not sure, write the What/Why/How — if it takes more than a minute, the issue is justified.
+
+See #42–#47 (the offline-PWA milestone) for a canonical example of how a multi-issue breakdown looks in this repo.
+
 ## Model architecture (GuestModel / AuthModel split)
 
 See `docs/architecture.md` for the full structural description. Key behavioral conventions:
