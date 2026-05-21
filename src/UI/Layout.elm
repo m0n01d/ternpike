@@ -303,6 +303,9 @@ topoPosClass route =
         RouteEditEntry _ _ ->
             "bg-[position:-1820px_-440px]"
 
+        RouteJoinFlock _ ->
+            "bg-[position:-1280px_-80px]"
+
         RouteLedger _ ->
             "bg-[position:-640px_-30px]"
 
