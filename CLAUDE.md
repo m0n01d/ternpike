@@ -32,22 +32,33 @@ Correct sequence when a stash pop conflicts:
 
 ## Subscription tiers
 
-The app is moving toward a two-tier model. Track this on `AuthState` (planned field: `tier : Tier` where `type Tier = Free | Paid`). Tier is server-authoritative — populated from the session/JWT at login, never trusted from the client.
+Three tiers. Tracked on `AuthState` via `tier : Tier` where:
 
-BYO keys (Anthropic / OpenAI / Gemini) are available on **both** tiers — paid does not take that away. Paid is purely additive.
+```elm
+type Tier
+    = Fledgling     -- free
+    | Fly           -- $2.99/mo or $24/yr
+    | Trailblazer   -- $79 one-time, capped at 500
+```
 
-- **Free** — BYO key only. OCR calls go browser → provider directly. One scan in flight at a time (client-side gate via `model.scanInFlight : Maybe ItemId`).
-- **Paid** — everything Free has, plus: access to Ternpike's hosted Anthropic key (proxied through `api.ternpike.com/scan` so the key never touches the browser), and batch scanning. No quotas — paid is paid.
+Tier is server-authoritative — populated from the session at login + refreshed via `/me`, never trusted from the client. BYO keys (Anthropic / OpenAI / Gemini) are available on **all** tiers — paid does not take that away. Paid is purely additive.
+
+- **Fledgling** (free, always) — BYO key only. OCR calls go browser → provider directly. One scan in flight at a time (client-side gate via `model.scanInFlight : Maybe ItemId`).
+- **Fly** ($2.99/mo or $24/yr — saves $12 annually) — everything Fledgling has, plus: access to Ternpike's hosted Anthropic key (proxied through `api.ternpike.com/scan` so the key never touches the browser), and batch scanning. No quotas.
+- **Trailblazer** ($79 one-time, first 500 only) — everything Fly has, no recurring charge ever, all 1.x updates included, and a loyalty discount on v2 when it ships. Feature-equivalent to Fly; the difference is billing mechanics and a permanent flag.
+
+**Feature gating predicate.** For "is this paid?" checks use `Data.Tier.isPaid : Tier -> Bool` which returns True for `Fly` and `Trailblazer`. For UI that surfaces the specific plan (badges, billing screen) branch on the full type so the compiler forces you to handle all three.
 
 **Critical rule:** Ternpike's Anthropic key NEVER ships to the browser. Any feature that uses it must call through the Worker proxy. If you find yourself wanting a Ternpike-owned secret in Elm/JS, you're doing it wrong — add a Worker endpoint instead.
 
 **Feature gating pattern.** When adding a paid-only feature:
-1. Branch in `Main.elm` / page modules on `as_.tier` — render a different UI for `Free` vs `Paid`. The compiler will force you to handle both.
-2. Free fallback for paid features should be either (a) a "Upgrade to use this" prompt, or (b) the BYO-key path if one exists for that feature.
+1. View functions take `tier : Tier` and branch via `Data.Tier.isPaid` for capability, or full `case` when rendering tier-specific UI.
+2. Fledgling fallback should be either (a) an "Upgrade to use this" prompt, or (b) the BYO-key path if one exists for that feature.
 3. Never hide the feature entirely — free users should know what paid unlocks.
 4. Server endpoints back paid features must re-check tier on every request. Client-side gating is UX, not security.
+5. **Trailblazer is permanent.** Webhook code never downgrades a Trailblazer. If you're writing logic that flips Trailblazer → Fledgling, that's a bug.
 
-Tracking issues: #13 (BYO-key infrastructure, foundation for Free tier), #14 (paid-tier proxy + batch scanning), #4 (Cloudflare Worker rewrite, required for #14). Subscription infrastructure breakdown: #16–#22.
+Tracking issues: #13 (BYO-key infrastructure, foundation for Fledgling), #14 (paid-only proxy + batch scanning), #4 (Cloudflare Worker rewrite, required for #14). Subscription infrastructure breakdown: #16–#22.
 
 ## Storage tiers — where data lives
 
