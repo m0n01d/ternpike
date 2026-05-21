@@ -1,40 +1,45 @@
-<section class="preview-section" id="preview">
-  <div class="section-eyebrow">{{ ledgerPreview.eyebrow }}</div>
-  <h2 class="section-h2">{{ ledgerPreview.headlineHtml | safe }}</h2>
+{# Mirrors the real Ledger page. If this falls out of sync with the app, update in lockstep with src/Pages/Ledger.elm. #}
+<section class="ledger-preview-section" id="preview">
+  <div class="ledger-preview-eyebrow">{{ ledgerPreview.sectionLabel }}</div>
+  <h2 class="ledger-preview-headline">{{ ledgerPreview.headline }}</h2>
 
-  <div class="ledger-mock">
-    <div class="mock-nav">
-      <div class="mock-nav-word">{{ brand.namePrefix }}<span>{{ brand.nameSuffix }}</span></div>
-      <div class="mock-tabs">
-        {% for tab in ledgerPreview.tabs %}
-        <div class="mock-tab{% if tab.active %} active{% endif %}">{{ tab.label }}</div>
-        {% endfor %}
+  <div class="ledger-preview-panel topo">
+    <header class="ledger-preview-header">
+      <div class="ledger-preview-title">Ledger</div>
+      <div class="ledger-preview-total-label">{{ ledgerPreview.totalLabel }}</div>
+      <div class="ledger-preview-total-amount">{{ ledgerPreview.totalAmount }}</div>
+      <div class="ledger-preview-total-meta">{{ ledgerPreview.totalMeta }}</div>
+    </header>
+
+    <div class="ledger-preview-list">
+      {% for day in ledgerPreview.ledgerSample %}
+      <div class="ledger-preview-day">
+        <span class="ledger-preview-day-num">Day {{ day.day }}</span>
+        <span class="ledger-preview-day-rule"></span>
+        <span class="ledger-preview-day-date">{{ day.date }}</span>
       </div>
-    </div>
-
-    <div class="mock-stats">
-      {% for stat in ledgerPreview.stats %}
-      <div class="mock-stat">
-        <div class="mock-stat-label">{{ stat.label }}</div>
-        <div class="mock-stat-val">{{ stat.value }}</div>
+      {% for entry in day.entries %}
+      <div class="ledger-preview-row">
+        <div class="ledger-preview-row-main">
+          <div class="ledger-preview-merchant">{{ entry.merchant }}</div>
+          <div class="ledger-preview-meta">
+            <span class="ledger-preview-chip">{{ entry.category }}</span>
+            {% if entry.hasGps %}
+            <span class="ledger-preview-pin" aria-label="Has GPS coordinates" title="Has GPS coordinates">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 22s-7-7.58-7-13a7 7 0 1 1 14 0c0 5.42-7 13-7 13z" />
+                <circle cx="12" cy="9" r="2.5" />
+              </svg>
+            </span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="ledger-preview-amount">{{ entry.amount }}</div>
       </div>
       {% endfor %}
+      {% endfor %}
     </div>
-
-    {% for day in ledgerPreview.days %}
-    <div class="mock-day">{{ day.heading }}</div>
-
-    {% for entry in day.entries %}
-    <div class="mock-entry{% if entry.dim %} mock-entry-dim{% endif %}">
-      <div class="mock-cat">{{ entry.category }}</div>
-      <div class="mock-info">
-        <div class="mock-merchant">{{ entry.merchant }}</div>
-        <div class="mock-note">{{ entry.note }}</div>
-      </div>
-      <div class="mock-pin">📍</div>
-      <div class="mock-amt">{{ entry.amount }}</div>
-    </div>
-    {% endfor %}
-    {% endfor %}
   </div>
+
+  <p class="ledger-preview-caption">{{ ledgerPreview.caption }}</p>
 </section>
