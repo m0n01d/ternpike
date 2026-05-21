@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Seed Mock Flock — Ternpike</title>
+  <script src="https://cdn.jsdelivr.net/npm/pouchdb@9.0.0/dist/pouchdb.min.js"></script>
+  <style>
+    body { font-family: monospace; background: #1a1a1a; color: #d4d4d4; padding: 2rem; max-width: 720px; }
+    h1 { color: #7dd3fc; }
+    h2 { color: #fbbf24; font-size: 0.95rem; font-weight: bold; margin-top: 1.5rem; }
+    #log { white-space: pre-wrap; font-size: 0.85rem; line-height: 1.6; }
+    .ok  { color: #86efac; }
+    .err { color: #f87171; }
+    .hdr { color: #fbbf24; font-weight: bold; }
+    .dim { color: #6b7280; }
+    #done { color: #7dd3fc; font-size: 1.2rem; margin-top: 1rem; display: none; }
+    code { background: #2a2a2a; padding: 0.1rem 0.35rem; border-radius: 3px; color: #fbbf24; }
+  </style>
+</head>
+<body>
+<h1>Ternpike — Mock Flock Seeder</h1>
+<p class="dim">Bumps your account to <code>Fly</code> tier and seeds a "Honeymoon" flock
+   with an Italy trip and four expenses split between two members. Idempotent —
+   safe to run again to reset.</p>
+
+<h2>Prerequisites</h2>
+<p class="dim">You must already be signed in to the app at least once (so
+   <code>auth_creds</code> exists in IndexedDB). If you've never signed in, run
+   <a href="/" style="color:#7dd3fc">the app</a> first.</p>
+
+<h2>Run log</h2>
+<div id="log"></div>
+<div id="done">✓ Done! Reload the app to see the Honeymoon flock.</div>
+
+<script>
+const FLOCK_ID = 'deadbeefcafe'
+const ALICE    = 'alice@test.ternpike.com'
+const BOB      = 'bob@test.ternpike.com'
+const TRIP_ID  = 'trip::2026-05-21T12:00:00Z::italy001'
+
+const EXPENSES = [
+  { who: BOB,   m: 'Tonglen Coffee',           a: 5.50, c: 'food',       d: '2026-05-21' },
+  { who: ALICE, m: 'Trattoria da Mario',       a: 48.20,c: 'food',       d: '2026-05-21' },
+  { who: BOB,   m: 'Vaporetto Line 1',         a: 9.50, c: 'transport',  d: '2026-05-21' },
+  { who: ALICE, m: "Galleria dell'Accademia",  a: 15.00,c: 'activities', d: '2026-05-22' },
+]
+
+const logEl = document.getElementById('log')
+function log(msg, cls = '') {
+  const span = document.createElement('span')
+  span.className = cls
+  span.textContent = msg + '\n'
+  logEl.appendChild(span)
+}
+
+async function openIdbKv() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('alaska-tracker', 1)
+    req.onupgradeneeded = e => {
+      const db = e.target.result
+      if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv')
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function idbGet(db, key) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('kv', 'readonly')
+    const req = tx.objectStore('kv').get(key)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function idbSet(db, key, value) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('kv', 'readwrite')
+    tx.objectStore('kv').put(value, key)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+  })
+}
+
+// Upsert helper — PouchDB rejects put on existing _id without _rev.
+// We want this script to be idempotent so callers can re-run to reset.
+async function upsert(db, doc) {
+  try {
+    const existing = await db.get(doc._id)
+    await db.put({ ...doc, _rev: existing._rev })
+  } catch (err) {
+    if (err && err.status === 404) {
+      await db.put(doc)
+    } else {
+      throw err
+    }
+  }
+}
+
+;(async () => {
+  try {
+    log('1. Bumping auth_creds.tier → Fly', 'hdr')
+    const kv = await openIdbKv()
+    const raw = await idbGet(kv, 'auth_creds')
+    if (!raw) {
+      log('   FAIL: no auth_creds found. Sign in to the app at least once first.', 'err')
+      kv.close()
+      return
+    }
+    const creds = JSON.parse(raw)
+    const previousTier = creds.tier || 'Fledgling'
+    creds.tier = 'Fly'
+    await idbSet(kv, 'auth_creds', JSON.stringify(creds))
+    log(`   ${previousTier} → Fly  (you=${creds.email})`, 'ok')
+    kv.close()
+
+    log('2. Writing user:flocks in personal DB', 'hdr')
+    const personal = new PouchDB('ternpike')
+    await upsert(personal, {
+      _id: 'user:flocks',
+      type: 'userFlocks',
+      flocks: [{ id: FLOCK_ID, name: 'Honeymoon', dbName: `flock-${FLOCK_ID}` }],
+    })
+    log('   ok  (one entry: Honeymoon)', 'ok')
+
+    log('3. Writing flock:meta in flock-local DB', 'hdr')
+    const flock = new PouchDB(`ternpike-flock-${FLOCK_ID}`)
+    await upsert(flock, {
+      _id: 'flock:meta',
+      type: 'flock:meta',
+      flockId: FLOCK_ID,
+      name: 'Honeymoon',
+      members: [ALICE, BOB],
+      billingOwner: ALICE,
+      billingStatus: 'active',
+      billingLapsedAt: null,
+      createdBy: ALICE,
+      createdAt: '2026-05-01T00:00:00Z',
+    })
+    log(`   ok  (owner=${ALICE}, billingStatus=active)`, 'ok')
+
+    log('4. Writing Italy trip in flock-local DB', 'hdr')
+    await upsert(flock, {
+      _id: TRIP_ID,
+      type: 'trip',
+      name: 'Italy',
+      description: 'Honeymoon trip — Venice, Florence, Rome',
+      startDate: '2026-05-21',
+      endDate: '2026-06-02',
+      budget: 4500,
+      coverPhotoUrl: '',
+    })
+    log(`   ok  (tripId=${TRIP_ID.slice(0, 32)}…)`, 'ok')
+
+    log('5. Writing 4 expenses (2 from Alice, 2 from Bob)', 'hdr')
+    for (let i = 0; i < EXPENSES.length; i++) {
+      const e = EXPENSES[i]
+      await upsert(flock, {
+        _id: `expense::2026-05-21T1${i}:00:00Z::seed${i}001`,
+        type: 'expense',
+        tripId: TRIP_ID,
+        amount: e.a,
+        category: e.c,
+        date: e.d,
+        merchant: e.m,
+        note: '',
+        longNote: '',
+        createdAt: `2026-05-21T1${i}:00:00Z`,
+        createdBy: e.who,
+      })
+      log(`   ok  ${e.m.padEnd(28)} $${e.a.toFixed(2).padStart(6)}  by ${e.who.split('@')[0]}`, 'ok')
+    }
+
+    log('')
+    log('Heads up — caveats so this isn\'t mysterious later:', 'hdr')
+    log('  • The flock-local DB will try to live-sync to https://couch.ternpike.com/flock-deadbeefcafe.', 'dim')
+    log('    That request will fail (cert / network) and you may see ERR_CERT_AUTHORITY_INVALID in the', 'dim')
+    log('    console. The local data still works and the UI renders — sync just doesn\'t reach a remote.', 'dim')
+    log('  • Your tier is "Fly" only locally. The server still thinks you\'re Fledgling until #19 /me ships.', 'dim')
+    log('  • To wipe and re-seed: run this page again. To wipe entirely: Settings → Reset local data.', 'dim')
+
+    document.getElementById('done').style.display = 'block'
+  } catch (err) {
+    log(`FAIL: ${err && err.message ? err.message : err}`, 'err')
+    console.error(err)
+  }
+})()
+</script>
+</body>
+</html>

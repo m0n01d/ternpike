@@ -123,11 +123,15 @@ export function attachPouch(app, { creds = null } = {}) {
     handle.sync = handle.local.sync(handle.remote, { live: true, retry: true })
       .on('change', () => emitSync('syncing'))
       .on('paused', err => {
-        if (handle.localName === PERSONAL_KEY && !firstSyncSettled && !err) {
+        if (handle.localName === PERSONAL_KEY && !firstSyncSettled) {
           firstSyncSettled = true
           // Reading user:flocks after the first paused event avoids racing
-          // the initial replication pull — a freshly logged-in client may
-          // not have the doc locally yet.
+          // the initial replication pull. We hydrate on the first pause
+          // *regardless of whether sync succeeded*: a freshly logged-in
+          // client with a working remote will have pulled the doc by now,
+          // and a client without a reachable remote (offline, dev without
+          // CouchDB) still has whatever user:flocks doc was put locally —
+          // gating on `!err` would silently hide flocks from those users.
           hydrateFlocksFromPersonal().catch(e =>
             console.error('[pouch] hydrateFlocks:', e))
         }
@@ -213,6 +217,14 @@ export function attachPouch(app, { creds = null } = {}) {
     emitSync('syncing')
     const personal = openPersonalHandle()
     startHandleSync(personal, dbName)
+    // Eagerly hydrate flocks from whatever's already in local PouchDB.
+    // The paused-event handler will also call this when initial sync
+    // settles — that's the canonical path for fresh sign-ins where
+    // user:flocks arrives via replication. This early call handles
+    // already-seeded users (offline, dev-without-remote, returning
+    // sessions) so flocks render even when sync can't reach the wire.
+    hydrateFlocksFromPersonal().catch(e =>
+      console.error('[pouch] hydrateFlocks (eager):', e))
   }
 
   function stopSync() {
