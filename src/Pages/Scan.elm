@@ -154,7 +154,7 @@ viewHero as_ =
             , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
                 [ Html.text "Tap to add receipts" ]
             , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
-                [ Html.text "Stack them up — Ternpike processes in parallel." ]
+                [ Html.text "Stack them up, or lay them out — Ternpike processes in parallel." ]
             , Html.input
                 [ Html.Attributes.type_ "file"
                 , Html.Attributes.accept "image/*"

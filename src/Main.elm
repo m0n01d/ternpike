@@ -966,7 +966,7 @@ authPending f as_ =
 
 ocrSystemPrompt : String
 ocrSystemPrompt =
-    "You are a receipt parser. Extract expense info and return ONLY raw valid JSON with no markdown, no code fences, no explanation. Format exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
+    "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
 
 
 makeOcrCall : String -> String -> String -> String -> Cmd Msg
@@ -975,7 +975,7 @@ makeOcrCall itemId apiKey base64Data mimeType =
         body =
             E.object
                 [ ( "model", E.string "claude-sonnet-4-6" )
-                , ( "max_tokens", E.int 256 )
+                , ( "max_tokens", E.int 2048 )
                 , ( "system", E.string ocrSystemPrompt )
                 , ( "messages"
                   , E.list identity
@@ -995,7 +995,7 @@ makeOcrCall itemId apiKey base64Data mimeType =
                                         ]
                                     , E.object
                                         [ ( "type", E.string "text" )
-                                        , ( "text", E.string "Extract the expense info from this receipt." )
+                                        , ( "text", E.string "Extract expense info from every receipt visible in this image." )
                                         ]
                                     ]
                               )
@@ -1048,6 +1048,14 @@ ocrDataDecoder =
                 )
             )
             Nothing
+
+
+ocrDataListDecoder : D.Decoder (List OcrData)
+ocrDataListDecoder =
+    D.oneOf
+        [ D.list ocrDataDecoder
+        , D.map List.singleton ocrDataDecoder
+        ]
 
 
 stripCodeFence : String -> String
@@ -1559,26 +1567,60 @@ updateAuth msg as_ =
 
         GotOcrResult itemId result ->
             let
-                ocrData =
+                ocrList =
                     case result of
                         Ok responseBody ->
                             case D.decodeString claudeTextDecoder responseBody of
                                 Ok innerJson ->
-                                    case D.decodeString ocrDataDecoder (stripCodeFence innerJson) of
-                                        Ok data ->
-                                            Just data
+                                    case D.decodeString ocrDataListDecoder (stripCodeFence innerJson) of
+                                        Ok list ->
+                                            list
 
                                         Err _ ->
-                                            Nothing
+                                            []
 
                                 Err _ ->
-                                    Nothing
+                                    []
 
                         Err _ ->
-                            Nothing
+                            []
 
                 updatedQueue =
-                    Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = ocrData })) as_.scanQueue
+                    case ( Dict.get itemId as_.scanQueue, ocrList ) of
+                        ( Just source, first :: second :: rest ) ->
+                            let
+                                splits =
+                                    first :: second :: rest
+
+                                queueWithoutSource =
+                                    Dict.remove itemId as_.scanQueue
+
+                                startIdx =
+                                    Dict.size queueWithoutSource
+
+                                indexed =
+                                    List.indexedMap
+                                        (\i data ->
+                                            ( "scan-" ++ String.fromInt (startIdx + i)
+                                            , { exifDebug = source.exifDebug
+                                              , id = "scan-" ++ String.fromInt (startIdx + i)
+                                              , imageUrl = source.imageUrl
+                                              , locationState = source.locationState
+                                              , ocrData = Just data
+                                              , status = ScanReady
+                                              }
+                                            )
+                                        )
+                                        splits
+                            in
+                            List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
+
+                        _ ->
+                            let
+                                singleData =
+                                    List.head ocrList
+                            in
+                            Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = singleData })) as_.scanQueue
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
 
