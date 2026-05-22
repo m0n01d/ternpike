@@ -73,6 +73,7 @@ import Browser.Navigation as Nav
 import Data.Amendment as Amendment
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category as Category exposing (Category(..))
+import Data.DateField as DateField
 import Data.Entry as Entry
 import Data.Expense as Expense
 import Data.ExpenseId as ExpenseId
@@ -80,8 +81,10 @@ import Data.Flock as Flock
 import Data.FlockId
 import Data.FlockUi as FlockUi
 import Data.Flocks as Flocks
+import Data.GeoPoint as GeoPoint
 import Data.Guest exposing (GuestReason(..), GuestSession)
 import Data.Location exposing (LocationSource(..), LocationState(..))
+import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod
 import Data.PendingEntry exposing (PendingEntry, PendingForm(..))
@@ -917,15 +920,15 @@ defaultPendingEntry today =
 
 expenseToPending : Expense.Expense -> PendingEntry
 expenseToPending e =
-    { amount = String.fromFloat e.amount
+    { amount = Money.toDollarString e.amount
     , category = e.category
-    , date = e.date
+    , date = DateField.toIso e.date
     , locationState =
-        case ( e.lat, e.lon ) of
-            ( Just la, Just lo ) ->
-                LocationGot la lo ManualPin
+        case e.geoPoint of
+            Just point ->
+                LocationGot (GeoPoint.latDegrees point) (GeoPoint.lonDegrees point) ManualPin
 
-            _ ->
+            Nothing ->
                 LocationIdle
     , longNote = e.longNote
     , merchant = e.merchant
@@ -1646,7 +1649,7 @@ updateAuth msg as_ =
             authPending (\p -> { p | paymentMethod = pm }) as_
 
         SubmitEntry ->
-            case String.toFloat (formPending as_.form).amount of
+            case Money.fromDollarString (formPending as_.form).amount of
                 Just _ ->
                     ( AuthModel { as_ | submitting = True, error = Nothing }
                     , Task.perform GotSubmitTime Time.now
@@ -1697,12 +1700,19 @@ updateAuth msg as_ =
                                 amendId =
                                     "amend::" ++ ExpenseId.toString original.id ++ "::" ++ String.left 8 timestamp
 
+                                originalAmountDollars =
+                                    Money.toDollarString original.amount
+
+                                originalDateIso =
+                                    DateField.toIso original.date
+
                                 amend =
                                     { id = amendId
                                     , targetId = original.id
                                     , amount =
-                                        if p.amount /= String.fromFloat original.amount then
-                                            String.toFloat p.amount
+                                        if p.amount /= originalAmountDollars then
+                                            Money.fromDollarString p.amount
+                                                |> Maybe.map (\m -> toFloat (Money.toCents m) / 100)
 
                                         else
                                             Nothing
@@ -1715,7 +1725,7 @@ updateAuth msg as_ =
                                     , createdAt = posixToIso posix
                                     , createdBy = UserId.fromString as_.creds.email
                                     , date =
-                                        if p.date /= original.date then
+                                        if p.date /= originalDateIso then
                                             Just p.date
 
                                         else
@@ -1776,16 +1786,25 @@ updateAuth msg as_ =
                                 expenseId =
                                     "expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp
 
+                                geoPoint =
+                                    case ( eLat, eLon ) of
+                                        ( Just la, Just lo ) ->
+                                            Just (GeoPoint.fromDegrees la lo)
+
+                                        _ ->
+                                            Nothing
+
                                 expense =
                                     { id = ExpenseId.fromString expenseId
                                     , tripId = tripId
-                                    , amount = String.toFloat p.amount |> Maybe.withDefault 0
+                                    , amount =
+                                        Money.fromDollarString p.amount
+                                            |> Maybe.withDefault Money.zero
                                     , category = p.category
-                                    , createdAt = posixToIso posix
+                                    , createdAt = posix
                                     , createdBy = UserId.fromString as_.creds.email
-                                    , date = p.date
-                                    , lat = eLat
-                                    , lon = eLon
+                                    , date = DateField.fromIsoOr (DateField.today Time.utc posix) p.date
+                                    , geoPoint = geoPoint
                                     , longNote = p.longNote
                                     , merchant = p.merchant
                                     , note = p.note
@@ -1865,7 +1884,7 @@ updateAuth msg as_ =
                 duplicate =
                     Expense.snapshotWith
                         { id = newId
-                        , createdAt = posixToIso posix
+                        , createdAt = posix
                         , tripId = expense.tripId
                         }
                         expense
@@ -1931,7 +1950,7 @@ updateAuth msg as_ =
                 moved =
                     Expense.snapshotWith
                         { id = newExpenseId
-                        , createdAt = posixToIso posix
+                        , createdAt = posix
                         , tripId = newTripId
                         }
                         expense
@@ -2078,7 +2097,10 @@ updateAuth msg as_ =
                                 item.ocrData
 
                         newPending =
-                            { amount = ocr.amount |> Maybe.map String.fromFloat |> Maybe.withDefault ""
+                            { amount =
+                                ocr.amount
+                                    |> Maybe.map (\f -> Money.toDollarString (Money.fromCents (round (f * 100))))
+                                    |> Maybe.withDefault ""
                             , category = Maybe.withDefault Fuel ocr.category
                             , date = Maybe.withDefault as_.today ocr.date
                             , locationState = item.locationState

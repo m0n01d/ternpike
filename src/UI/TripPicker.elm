@@ -9,11 +9,12 @@ picker only renders. Each candidate trip is a `<button>` that dispatches
 
 -}
 
+import Data.DateField as DateField
 import Data.Expense exposing (Expense)
 import Data.Flock
 import Data.Flocks exposing (Flocks)
+import Data.Money as Money
 import Data.Trip exposing (Trip)
-import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -108,20 +109,26 @@ rowLabel expense =
             else
                 "this expense"
     in
-    head ++ " · " ++ Helpers.formatAmount expense.amount
+    head ++ " · " ++ Money.format expense.amount
 
 
 dateRange : Trip -> String
 dateRange trip =
+    let
+        formatIso iso =
+            DateField.fromIso iso
+                |> Maybe.map DateField.formatDisplay
+                |> Maybe.withDefault iso
+    in
     case ( trip.startDate, trip.endDate ) of
         ( "", "" ) ->
             ""
 
         ( s, "" ) ->
-            Helpers.formatDateDisplay s
+            formatIso s
 
         ( "", e ) ->
-            Helpers.formatDateDisplay e
+            formatIso e
 
         ( s, e ) ->
-            Helpers.formatDateDisplay s ++ " → " ++ Helpers.formatDateDisplay e
+            formatIso s ++ " → " ++ formatIso e
