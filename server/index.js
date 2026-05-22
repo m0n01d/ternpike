@@ -124,11 +124,14 @@ const STATIC_ORIGINS = new Set([
 const PREVIEW_ORIGIN =
   /^https:\/\/[a-z0-9-]+-ternpike\.dwightdoane\.workers\.dev$/
 
+const LOCAL_DEV_ORIGIN = /^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/
+
 const corsConfig = cors({
   origin: (origin) => {
     if (!origin) return null
     if (STATIC_ORIGINS.has(origin)) return origin
     if (PREVIEW_ORIGIN.test(origin)) return origin
+    if (LOCAL_DEV_ORIGIN.test(origin)) return origin
     return null
   },
   allowMethods: ['POST', 'OPTIONS'],

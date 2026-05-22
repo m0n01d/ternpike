@@ -81,15 +81,23 @@ test.describe('marketing waitlist form (live)', () => {
   test('posts a unique +alias email to production and shows the success UI', async ({ page }) => {
     const email = plusAlias('live')
 
-    const apiResponse = page.waitForResponse(
-      (res) => res.url() === LIVE_API && res.request().method() === 'POST',
-    )
+    page.on('requestfailed', (req) => {
+      // eslint-disable-next-line no-console
+      console.log(`[waitlist-live][requestfailed] ${req.method()} ${req.url()} — ${req.failure()?.errorText}`)
+    })
 
     await page.goto('/')
+    await page.locator('#signup').scrollIntoViewIfNeeded()
     await page.locator('.email-form .email-input').fill(email)
-    await page.locator('.email-form .email-btn').click()
 
-    const res = await apiResponse
+    const [res] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.request().method() === 'POST' && r.url().startsWith(LIVE_API),
+        { timeout: 30_000 },
+      ),
+      page.locator('.email-form .email-btn').click(),
+    ])
+
     const json = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean }
     expect(res.status(), `live endpoint returned an error: ${json.error ?? '(no body)'}`).toBe(200)
     expect(json.ok).toBe(true)
