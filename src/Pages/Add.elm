@@ -444,16 +444,16 @@ viewLocationWidget model pending =
             Html.node "map-picker"
                 [ Html.Attributes.attribute "lat"
                     (case pending.locationState of
-                        LocationGot la _ _ ->
-                            String.fromFloat la
+                        LocationGot point _ ->
+                            String.fromFloat (GeoPoint.latDegrees point)
 
                         _ ->
                             "64.2008"
                     )
                 , Html.Attributes.attribute "lon"
                     (case pending.locationState of
-                        LocationGot _ lo _ ->
-                            String.fromFloat lo
+                        LocationGot point _ ->
+                            String.fromFloat (GeoPoint.lonDegrees point)
 
                         _ ->
                             "-153.4937"
@@ -493,7 +493,7 @@ viewLocationStatus ls =
                     [ Html.text "pin manually" ]
                 ]
 
-        LocationGot lat lon source ->
+        LocationGot point source ->
             let
                 sourceLabel =
                     case source of
@@ -508,7 +508,7 @@ viewLocationStatus ls =
             in
             Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
                 [ Html.span [ Html.Attributes.class "text-moss text-sm" ]
-                    [ Html.text (sourceLabel ++ " — " ++ GeoPoint.format (GeoPoint.fromDegrees lat lon)) ]
+                    [ Html.text (sourceLabel ++ " — " ++ GeoPoint.format point) ]
                 , Html.button
                     [ Html.Events.onClick OpenMapPicker
                     , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
