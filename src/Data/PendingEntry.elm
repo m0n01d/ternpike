@@ -1,4 +1,10 @@
-module Data.PendingEntry exposing (AddPageMode(..), PendingEntry, PendingForm(..))
+module Data.PendingEntry exposing
+    ( AddPageMode(..)
+    , ParsedEntry
+    , PendingEntry
+    , PendingForm(..)
+    , parseEntry
+    )
 
 {-| In-progress expense form on the Add page.
 
@@ -17,11 +23,20 @@ form, or a skeleton while the underlying expense is still being fetched
 from PouchDB. It's derived from the current route and the `PendingForm`
 state by `Pages.Add.addPageMode`.
 
+`ParsedEntry` is what `parseEntry` returns once the String-typed input
+fields have been validated and parsed into their typed counterparts.
+Submit handlers in `Main` consume this — instead of each call site
+re-doing `String.toFloat ... |> Maybe.withDefault 0`, the parsing lives
+in one place that can be tested in isolation.
+
 -}
 
 import Data.Category exposing (Category)
+import Data.DateField as DateField exposing (DateField)
 import Data.ExpenseId exposing (ExpenseId)
-import Data.Location exposing (LocationState)
+import Data.GeoPoint exposing (GeoPoint)
+import Data.Location exposing (LocationState(..))
+import Data.Money as Money exposing (Money)
 import Data.PaymentMethod exposing (PaymentMethod)
 
 
@@ -70,3 +85,103 @@ type AddPageMode
     = AddPageEditing ExpenseId
     | AddPageLoading ExpenseId
     | AddPageNew
+
+
+{-| A `PendingEntry` whose String-typed input fields have been parsed
+and validated. The submit handlers in `Main` consume this — branching
+on the `Result (List String) ParsedEntry` returned by `parseEntry` —
+so the inline `String.toFloat |> Maybe.withDefault 0` pattern lives in
+exactly one place.
+
+`geoPoint` is derived from `PendingEntry.locationState`: only
+`LocationGot point _` contributes a point; every other state collapses
+to `Nothing` (the user either skipped or hasn't resolved yet, both of
+which mean "no location stamped").
+
+-}
+type alias ParsedEntry =
+    { amount : Money
+    , category : Category
+    , date : DateField
+    , geoPoint : Maybe GeoPoint
+    , longNote : String
+    , merchant : String
+    , note : String
+    , paymentMethod : Maybe PaymentMethod
+    }
+
+
+{-| Parse a `PendingEntry` into a `ParsedEntry`, collecting every
+validation failure into the `List String` error case. The two fields
+that can fail today are `amount` (must be a non-empty, parseable dollar
+string) and `date` (must be a non-empty ISO `YYYY-MM-DD`). Every other
+field is already typed in `PendingEntry`, so it passes straight through.
+
+This is intentionally minimal: the goal is to fail loudly on blank-
+amount submit instead of silently saving `$0.00`. Heavier validation
+(date inside trip range, non-negative amount caps, etc) is layered on
+top of this in a future iteration.
+
+-}
+parseEntry : PendingEntry -> Result (List String) ParsedEntry
+parseEntry pe =
+    let
+        amountResult : Result String Money
+        amountResult =
+            case Money.fromDollarString pe.amount of
+                Just m ->
+                    Ok m
+
+                Nothing ->
+                    Err "Enter a valid amount."
+
+        dateResult : Result String DateField
+        dateResult =
+            case DateField.fromIso pe.date of
+                Just d ->
+                    Ok d
+
+                Nothing ->
+                    Err "Enter a valid date."
+
+        geoPoint : Maybe GeoPoint
+        geoPoint =
+            case pe.locationState of
+                LocationGot point _ ->
+                    Just point
+
+                _ ->
+                    Nothing
+
+        errs : List String
+        errs =
+            List.filterMap identity
+                [ errorOf amountResult
+                , errorOf dateResult
+                ]
+    in
+    case ( amountResult, dateResult ) of
+        ( Ok amount, Ok date ) ->
+            Ok
+                { amount = amount
+                , category = pe.category
+                , date = date
+                , geoPoint = geoPoint
+                , longNote = pe.longNote
+                , merchant = pe.merchant
+                , note = pe.note
+                , paymentMethod = pe.paymentMethod
+                }
+
+        _ ->
+            Err errs
+
+
+errorOf : Result e a -> Maybe e
+errorOf r =
+    case r of
+        Ok _ ->
+            Nothing
+
+        Err e ->
+            Just e
