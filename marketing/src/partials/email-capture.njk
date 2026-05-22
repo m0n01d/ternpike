@@ -5,7 +5,8 @@
 
     <div class="email-form mx-auto flex max-w-[460px] gap-2 max-[480px]:flex-col"
          data-success-label="{{ emailCapture.successLabel }}"
-         data-success-placeholder="{{ emailCapture.successPlaceholder }}">
+         data-success-placeholder="{{ emailCapture.successPlaceholder }}"
+         data-error-label="{{ emailCapture.errorLabel }}">
       <input class="email-input flex-1 rounded-lg border border-tan bg-cream px-[18px] py-[14px] font-body text-base text-forest outline-none transition-colors duration-200 placeholder:italic placeholder:text-muted focus:border-moss" type="email" name="email" placeholder="{{ emailCapture.placeholder }}">
       <button class="email-btn whitespace-nowrap rounded-lg bg-rust px-6 py-[14px] font-mono text-[10px] uppercase tracking-[0.15em] text-white transition-all duration-200 hover:-translate-y-px hover:bg-rust-light">{{ emailCapture.buttonLabel }}</button>
     </div>

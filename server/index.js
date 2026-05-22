@@ -139,6 +139,7 @@ const corsConfig = cors({
 app.use('/auth/*', corsConfig)
 app.use('/flocks/*', corsConfig)
 app.use('/flocks', corsConfig)
+app.use('/marketing/*', corsConfig)
 
 app.post('/auth/request-code', async (c) => {
   const env = c.env
@@ -203,6 +204,44 @@ app.post('/auth/verify-code', async (c) => {
     console.error('provision:', err)
     return c.json({ ok: false }, 500)
   }
+})
+
+app.post('/marketing/waitlist', async (c) => {
+  const env = c.env
+  let body
+  try {
+    body = await c.req.json()
+  } catch {
+    body = {}
+  }
+  const { email } = body || {}
+  if (typeof email !== 'string' || !email.includes('@')) {
+    return c.json({ ok: false }, 400)
+  }
+  const normalized = email.toLowerCase()
+  const resend = new Resend(env.RESEND_API_KEY)
+  try {
+    await resend.contacts.create({
+      audienceId: env.RESEND_AUDIENCE_ID,
+      email: normalized,
+      unsubscribed: false,
+    })
+  } catch (err) {
+    console.error('waitlist contact:', err)
+    return c.json({ ok: false }, 500)
+  }
+  try {
+    await resend.emails.send({
+      from: 'Ternpike <noreply@ternpike.com>',
+      to: normalized,
+      subject: "You're on the Ternpike list",
+      text:
+        "Thanks for signing up. We'll let you know when the managed version is ready to scan and go.\n\n— Ternpike\n",
+    })
+  } catch (err) {
+    console.error('waitlist confirm:', err)
+  }
+  return c.json({ ok: true })
 })
 
 registerFlockRoutes(app)

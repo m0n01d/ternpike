@@ -32,4 +32,5 @@ crons = ["0 * * * *"]
 #   COUCH_ADMIN_PASS
 #   SERVER_SECRET
 #   RESEND_API_KEY
+#   RESEND_AUDIENCE_ID    (Resend Audience for the marketing waitlist)
 #   TIER_WEBHOOK_SECRET   (shared with the future Stripe webhook + test hook)
