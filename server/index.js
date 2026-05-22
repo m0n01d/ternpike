@@ -220,25 +220,23 @@ app.post('/marketing/waitlist', async (c) => {
   }
   const normalized = email.toLowerCase()
   const resend = new Resend(env.RESEND_WAITLIST_API_KEY)
-  try {
-    await resend.contacts.create({
-      email: normalized,
-      unsubscribed: false,
-    })
-  } catch (err) {
-    console.error('waitlist contact:', err)
-    return c.json({ ok: false }, 500)
+  const contact = await resend.contacts.create({
+    email: normalized,
+    unsubscribed: false,
+  })
+  if (contact.error) {
+    console.error('waitlist contact:', contact.error)
+    return c.json({ ok: false, error: contact.error.message }, 500)
   }
-  try {
-    await resend.emails.send({
-      from: 'Ternpike <noreply@ternpike.com>',
-      to: normalized,
-      subject: "You're on the Ternpike list",
-      text:
-        "Thanks for signing up. We'll let you know when the managed version is ready to scan and go.\n\n— Ternpike\n",
-    })
-  } catch (err) {
-    console.error('waitlist confirm:', err)
+  const sent = await resend.emails.send({
+    from: 'Ternpike <noreply@ternpike.com>',
+    to: normalized,
+    subject: "You're on the Ternpike list",
+    text:
+      "Thanks for signing up. We'll let you know when the managed version is ready to scan and go.\n\n— Ternpike\n",
+  })
+  if (sent.error) {
+    console.error('waitlist confirm:', sent.error)
   }
   return c.json({ ok: true })
 })
