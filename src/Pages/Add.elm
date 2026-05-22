@@ -8,6 +8,7 @@ import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod(..))
 import Data.PendingEntry exposing (AddPageMode(..), PendingEntry, PendingForm(..))
+import Data.ScanItemId as ScanItemId
 import Data.Trip exposing (Trip)
 import Data.Trips
 import Data.UserId as UserId
@@ -380,7 +381,7 @@ viewScanPreview model =
             Html.text ""
 
         Just id ->
-            case Dict.get id model.scanQueue of
+            case Dict.get (ScanItemId.toString id) model.scanQueue of
                 Just item ->
                     Html.div [ Html.Attributes.class "sticky top-0 z-10 mb-4" ]
                         [ UI.Card.subCard

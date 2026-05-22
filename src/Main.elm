@@ -92,6 +92,7 @@ import Data.PaymentMethod as PaymentMethod
 import Data.PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.ScanItemId as ScanItemId
 import Data.StatsHover as StatsHover
 import Data.Sync exposing (SyncState(..))
 import Data.Tier as Tier
@@ -952,7 +953,7 @@ setLocation ls p =
 freshScanItem : String -> ScanItem
 freshScanItem id =
     { exifDebug = ""
-    , id = id
+    , id = ScanItemId.fromString id
     , imageUrl = ""
     , locationState = LocationCheckingExif
     , ocrData = Nothing
@@ -1032,9 +1033,9 @@ claudeTextDecoder =
 ocrDataDecoder : D.Decoder OcrData
 ocrDataDecoder =
     D.succeed OcrData
-        |> Pipeline.optional "amount" (D.map Just D.float) Nothing
+        |> Pipeline.optional "amount" (D.map Just Money.decoder) Nothing
         |> Pipeline.optional "category" (D.map Just (D.map Category.fromString D.string)) Nothing
-        |> Pipeline.optional "date" (D.map Just D.string) Nothing
+        |> Pipeline.optional "date" (D.map Just DateField.decoder) Nothing
         |> Pipeline.optional "longNote" (D.map Just D.string) Nothing
         |> Pipeline.optional "merchant" (D.map Just D.string) Nothing
         |> Pipeline.optional "note" (D.map Just D.string) Nothing
@@ -1584,9 +1585,13 @@ updateAuth msg as_ =
                                 indexed =
                                     List.indexedMap
                                         (\i data ->
-                                            ( "scan-" ++ String.fromInt (startIdx + i)
+                                            let
+                                                rawId =
+                                                    "scan-" ++ String.fromInt (startIdx + i)
+                                            in
+                                            ( rawId
                                             , { exifDebug = source.exifDebug
-                                              , id = "scan-" ++ String.fromInt (startIdx + i)
+                                              , id = ScanItemId.fromString rawId
                                               , imageUrl = source.imageUrl
                                               , locationState = source.locationState
                                               , ocrData = Just data
@@ -1657,7 +1662,7 @@ updateAuth msg as_ =
                 updatedQueue =
                     case as_.activeScanItemId of
                         Just id ->
-                            Dict.update id (Maybe.map (\i -> { i | status = ScanSubmitted })) as_.scanQueue
+                            Dict.update (ScanItemId.toString id) (Maybe.map (\i -> { i | status = ScanSubmitted })) as_.scanQueue
 
                         Nothing ->
                             as_.scanQueue
@@ -2082,10 +2087,13 @@ updateAuth msg as_ =
                         newPending =
                             { amount =
                                 ocr.amount
-                                    |> Maybe.map (\f -> Money.toDollarString (Money.fromCents (round (f * 100))))
+                                    |> Maybe.map Money.toDollarString
                                     |> Maybe.withDefault ""
                             , category = Maybe.withDefault Fuel ocr.category
-                            , date = Maybe.withDefault as_.today ocr.date
+                            , date =
+                                ocr.date
+                                    |> Maybe.map DateField.toIso
+                                    |> Maybe.withDefault as_.today
                             , locationState = item.locationState
                             , longNote = Maybe.withDefault "" ocr.longNote
                             , merchant = Maybe.withDefault "" ocr.merchant
@@ -2103,7 +2111,7 @@ updateAuth msg as_ =
                     in
                     ( AuthModel
                         { as_
-                            | activeScanItemId = Just itemId
+                            | activeScanItemId = Just (ScanItemId.fromString itemId)
                             , error = Nothing
                             , form = FreshForm newPending
                             , route = newRoute

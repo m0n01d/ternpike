@@ -17,8 +17,11 @@ domain.
 -}
 
 import Data.Category exposing (Category)
+import Data.DateField exposing (DateField)
 import Data.Location exposing (LocationState)
+import Data.Money exposing (Money)
 import Data.PaymentMethod exposing (PaymentMethod)
+import Data.ScanItemId exposing (ScanItemId)
 
 
 {-| Lifecycle stage of one queued receipt.
@@ -47,9 +50,9 @@ correct anything missing or wrong.
 
 -}
 type alias OcrData =
-    { amount : Maybe Float
+    { amount : Maybe Money
     , category : Maybe Category
-    , date : Maybe String
+    , date : Maybe DateField
     , longNote : Maybe String
     , merchant : Maybe String
     , note : Maybe String
@@ -74,7 +77,7 @@ type alias OcrData =
 -}
 type alias ScanItem =
     { exifDebug : String
-    , id : String
+    , id : ScanItemId
     , imageUrl : String
     , locationState : LocationState
     , ocrData : Maybe OcrData

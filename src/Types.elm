@@ -47,6 +47,7 @@ import Data.Navigation exposing (Route)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PendingEntry exposing (PendingForm)
 import Data.Scan exposing (ScanItem)
+import Data.ScanItemId exposing (ScanItemId)
 import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
 import Data.Sync exposing (SyncState)
@@ -155,7 +156,7 @@ project memo.
 
 -}
 type alias AuthState =
-    { activeScanItemId : Maybe String
+    { activeScanItemId : Maybe ScanItemId
     , amendments : Dict String Amendment
     , basePath : String
     , config : AppConfig

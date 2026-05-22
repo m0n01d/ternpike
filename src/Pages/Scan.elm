@@ -3,8 +3,10 @@ module Pages.Scan exposing (viewTab)
 import Data.Category as Category
 import Data.Flock exposing (Flock)
 import Data.Flocks
+import Data.Money as Money
 import Data.Navigation exposing (Tab(..))
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.ScanItemId as ScanItemId
 import Data.Tier
 import Data.Trip as Trip exposing (Trip)
 import Data.Trips
@@ -309,7 +311,7 @@ viewScanCardStatus item =
                     Nothing ->
                         Html.div [ Html.Attributes.class "text-muted text-xs mb-2" ] [ Html.text "Fill manually" ]
                 , Html.button
-                    [ Html.Events.onClick (ReviewScanItem item.id)
+                    [ Html.Events.onClick (ReviewScanItem (ScanItemId.toString item.id))
                     , Html.Attributes.class "w-full py-1.5 rounded-lg bg-rust text-parchment text-xs font-bold cursor-pointer border-none"
                     ]
                     [ Html.text "Review →" ]
@@ -324,7 +326,7 @@ viewOcrSummary : OcrData -> Html Msg
 viewOcrSummary ocr =
     Html.div [ Html.Attributes.class "mb-2" ]
         [ Html.div [ Html.Attributes.class "text-rust font-mono text-sm font-bold" ]
-            [ Html.text (ocr.amount |> Maybe.map (\a -> "$" ++ String.fromFloat a) |> Maybe.withDefault "—") ]
+            [ Html.text (ocr.amount |> Maybe.map Money.format |> Maybe.withDefault "—") ]
         , Html.div [ Html.Attributes.class "text-muted text-xs truncate" ]
             [ Html.text
                 (ocr.merchant
