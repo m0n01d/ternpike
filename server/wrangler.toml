@@ -12,7 +12,7 @@ id = "a3818441349d4138b8898fac4480bf1a"
 # Then paste the returned id below.
 [[kv_namespaces]]
 binding = "TIERS_KV"
-id = "REPLACE_ME_TIERS_KV_ID"
+id = "d95ba1e24a514a6e8a9742cf176a541d"
 
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
@@ -32,5 +32,5 @@ crons = ["0 * * * *"]
 #   COUCH_ADMIN_PASS
 #   SERVER_SECRET
 #   RESEND_API_KEY
-#   RESEND_AUDIENCE_ID    (Resend Audience for the marketing waitlist)
+#   RESEND_WAITLIST_API_KEY  (separate Resend token scoped to the waitlist audience)
 #   TIER_WEBHOOK_SECRET   (shared with the future Stripe webhook + test hook)
