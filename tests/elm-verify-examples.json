@@ -1,3 +1,3 @@
 {
-    "tests": ["Data.Category", "Data.Entry", "Data.FlockId", "Data.Money", "Data.PaymentMethod", "Data.StatsGranularity", "Data.Tier", "Data.UserId"]
+    "tests": ["Data.Category", "Data.DateField", "Data.Entry", "Data.FlockId", "Data.Money", "Data.PaymentMethod", "Data.StatsGranularity", "Data.Tier", "Data.UserId"]
 }
