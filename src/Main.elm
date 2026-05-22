@@ -293,6 +293,13 @@ encodePouchOut msg =
                 , ( "tripId", E.string (TripId.toString id) )
                 ]
 
+        OpenFlock { dbName, flockId } ->
+            E.object
+                [ ( "tag", E.string "OpenFlock" )
+                , ( "flockId", Data.FlockId.encode flockId )
+                , ( "dbName", E.string dbName )
+                ]
+
         SaveAmend target doc ->
             E.object
                 [ ( "tag", E.string "SaveAmend" )
@@ -2097,9 +2104,11 @@ updateAuth msg as_ =
                             , editing = Nothing
                             , endDate = ""
                             , errors = []
+                            , groupNameOverridden = False
                             , name = ""
                             , startDate = as_.today
-                            , target = Trip.Personal
+                            , submitting = False
+                            , target = Trip.ToPersonal
                             }
                 }
             , Cmd.none
@@ -2121,9 +2130,17 @@ updateAuth msg as_ =
                             , editing = Just trip
                             , endDate = trip.endDate
                             , errors = []
+                            , groupNameOverridden = False
                             , name = trip.name
                             , startDate = trip.startDate
-                            , target = Trip.targetForTrip trip
+                            , submitting = False
+                            , target =
+                                case Trip.targetForTrip trip of
+                                    Trip.InFlock fid ->
+                                        Trip.ToExistingFlock fid
+
+                                    Trip.Personal ->
+                                        Trip.ToPersonal
                             }
                 }
             , Cmd.none
@@ -2162,6 +2179,169 @@ updateAuth msg as_ =
             , Cmd.none
             )
 
+        TripGroupNameChanged value ->
+            ( AuthModel
+                { as_
+                    | tripForm =
+                        Maybe.map
+                            (\f ->
+                                case f.target of
+                                    Trip.ToNewFlock draft ->
+                                        { f
+                                            | groupNameOverridden = True
+                                            , target = Trip.ToNewFlock { draft | groupName = value }
+                                        }
+
+                                    _ ->
+                                        f
+                            )
+                            as_.tripForm
+                }
+            , Cmd.none
+            )
+
+        TripInviteeDraftChanged value ->
+            ( AuthModel
+                { as_
+                    | tripForm =
+                        Maybe.map
+                            (\f ->
+                                case f.target of
+                                    Trip.ToNewFlock draft ->
+                                        { f | target = Trip.ToNewFlock { draft | inviteesDraft = value } }
+
+                                    _ ->
+                                        f
+                            )
+                            as_.tripForm
+                }
+            , Cmd.none
+            )
+
+        TripInviteeAdded ->
+            ( AuthModel
+                { as_
+                    | tripForm =
+                        Maybe.map
+                            (\f ->
+                                case f.target of
+                                    Trip.ToNewFlock draft ->
+                                        let
+                                            trimmed =
+                                                String.trim draft.inviteesDraft
+                                        in
+                                        if trimmed == "" || List.member trimmed draft.invitees then
+                                            { f | target = Trip.ToNewFlock { draft | inviteesDraft = "" } }
+
+                                        else
+                                            { f
+                                                | target =
+                                                    Trip.ToNewFlock
+                                                        { draft
+                                                            | invitees = draft.invitees ++ [ trimmed ]
+                                                            , inviteesDraft = ""
+                                                        }
+                                            }
+
+                                    _ ->
+                                        f
+                            )
+                            as_.tripForm
+                }
+            , Cmd.none
+            )
+
+        TripInviteeRemoved index ->
+            ( AuthModel
+                { as_
+                    | tripForm =
+                        Maybe.map
+                            (\f ->
+                                case f.target of
+                                    Trip.ToNewFlock draft ->
+                                        { f
+                                            | target =
+                                                Trip.ToNewFlock
+                                                    { draft
+                                                        | invitees =
+                                                            List.indexedMap Tuple.pair draft.invitees
+                                                                |> List.filter (\( i, _ ) -> i /= index)
+                                                                |> List.map Tuple.second
+                                                    }
+                                        }
+
+                                    _ ->
+                                        f
+                            )
+                            as_.tripForm
+                }
+            , Cmd.none
+            )
+
+        TripCreateFlockResult result ->
+            case ( as_.tripForm, result ) of
+                ( Nothing, _ ) ->
+                    ( AuthModel as_, Cmd.none )
+
+                ( Just form, Err err ) ->
+                    ( AuthModel
+                        { as_
+                            | tripForm =
+                                Just
+                                    { form
+                                        | submitting = False
+                                        , errors = [ flockErrorMessage err ]
+                                    }
+                        }
+                    , Cmd.none
+                    )
+
+                ( Just form, Ok response ) ->
+                    let
+                        invitees =
+                            case form.target of
+                                Trip.ToNewFlock draft ->
+                                    draft.invitees
+
+                                _ ->
+                                    []
+
+                        inviteCmds =
+                            List.indexedMap
+                                (\i email ->
+                                    Http.FlockApi.inviteToFlock
+                                        as_.creds
+                                        response.flockId
+                                        { email = email }
+                                        (TripInviteResult i)
+                                )
+                                invitees
+
+                        updatedForm =
+                            { form | target = Trip.ToExistingFlock response.flockId }
+                    in
+                    ( AuthModel { as_ | tripForm = Just updatedForm }
+                    , Cmd.batch
+                        ([ sendPouch
+                            (OpenFlock
+                                { flockId = response.flockId
+                                , dbName = "flock-" ++ Data.FlockId.toString response.flockId
+                                }
+                            )
+                         , Task.perform GotSaveTripTime Time.now
+                         ]
+                            ++ inviteCmds
+                        )
+                    )
+
+        TripInviteResult _ _ ->
+            -- Fire-and-forget. Invites can't block trip creation — partial
+            -- success is OK (the user can re-invite from Settings on any
+            -- specific failures). Failures get a console line for now;
+            -- a follow-up could surface a small "1 of 3 invites failed"
+            -- toast.
+            ( AuthModel as_, Cmd.none )
+
         SaveTripForm ->
             case as_.tripForm of
                 Nothing ->
@@ -2191,7 +2371,28 @@ updateAuth msg as_ =
                                     )
 
                                 Nothing ->
-                                    ( AuthModel as_, Task.perform GotSaveTripTime Time.now )
+                                    case form.target of
+                                        Trip.ToNewFlock draft ->
+                                            -- New shared trip: create the flock server-side first,
+                                            -- then the response handler chains invites + trip write.
+                                            let
+                                                groupName =
+                                                    if form.groupNameOverridden && String.trim draft.groupName /= "" then
+                                                        String.trim draft.groupName
+
+                                                    else
+                                                        String.trim form.name
+                                            in
+                                            ( AuthModel { as_ | tripForm = Just { form | submitting = True, errors = [] } }
+                                            , Http.FlockApi.createFlock as_.creds { name = groupName } TripCreateFlockResult
+                                            )
+
+                                        _ ->
+                                            -- Personal / existing-flock: same path as before, get a
+                                            -- timestamp then write the trip.
+                                            ( AuthModel { as_ | tripForm = Just { form | submitting = True } }
+                                            , Task.perform GotSaveTripTime Time.now
+                                            )
 
         GotSaveTripTime posix ->
             case as_.tripForm of
@@ -2208,10 +2409,16 @@ updateAuth msg as_ =
 
                         ( newFlockId, target ) =
                             case form.target of
-                                Trip.InFlock fid ->
+                                Trip.ToExistingFlock fid ->
                                     ( Just fid, Trip.InFlock fid )
 
-                                Trip.Personal ->
+                                Trip.ToPersonal ->
+                                    ( Nothing, Trip.Personal )
+
+                                Trip.ToNewFlock _ ->
+                                    -- Should be impossible — SaveTripForm rewrites the target
+                                    -- to ToExistingFlock before this code path runs. Defensive
+                                    -- fallback to Personal so a coding regression doesn't crash.
                                     ( Nothing, Trip.Personal )
 
                         newTrip =
@@ -2385,9 +2592,6 @@ storeFlockError err as_ =
 
         newModal =
             case ui.modal of
-                FlockUi.CreateModal m ->
-                    FlockUi.CreateModal { m | error = Just message }
-
                 FlockUi.InviteModal id m ->
                     FlockUi.InviteModal id { m | error = Just message }
 

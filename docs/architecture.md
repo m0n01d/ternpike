@@ -312,6 +312,7 @@ come back through one `pouchIn` port, also tagged.
 | `SaveExpense` | expense JSON | Upsert expense doc |
 | `SaveAmend` | amendment JSON | Upsert amendment doc |
 | `SaveVoid` | void JSON | Upsert void doc (soft delete) |
+| `OpenFlock` | `{ flockId, dbName }` | Open a flock-local PouchDB handle immediately (used by the New Trip flow after `POST /flocks` succeeds — avoids racing the personal-DB sync that would otherwise hydrate the handle via `reconcileFlocks`). Idempotent. |
 
 Example:
 ```json
@@ -723,15 +724,17 @@ UX, not security.
 
 ### Flocks settings UI
 
-The user-facing surface for create / invite / join / leave / transfer
-lives in `src/Pages/Settings/Flocks.elm` (#62). Its modals and inline
-errors all sit on `AuthState.flockUi : Data.FlockUi.FlockUiState`.
-HTTP wrappers for the five `/flocks/*` endpoints (`createFlock`,
-`inviteToFlock`, `joinFlock`, `leaveFlock`, `transferOwnership`) live
-in `src/Http/FlockApi.elm`. The "Create" button is tier-gated via
-`Data.Tier.isPaid as_.tier` — Fledgling users see a disabled button
-with an upgrade copy card next to it; the actual capability check
-happens server-side.
+`src/Pages/Settings/Flocks.elm` is the **manage** surface — invite,
+leave, transfer ownership for flocks the user already belongs to.
+Modals and inline errors sit on `AuthState.flockUi : Data.FlockUi.FlockUiState`
+and the HTTP wrappers for `inviteToFlock`, `joinFlock`, `leaveFlock`,
+`transferOwnership` live in `src/Http/FlockApi.elm`.
+
+**Creation does not happen here.** The unified "+ New shared trip"
+flow on the Trips page is the only entry point for creating a new
+flock (see the Trip + Ledger UI section below). If the user has zero
+flocks, this section renders an empty-state card pointing back at
+`/trips` rather than offering its own Create button.
 
 Invite links land on a new `RouteJoinFlock String` route at
 `/flocks/join?token=<jwt>` (path-segment-safe — the token has no `:`
@@ -765,12 +768,34 @@ The day-to-day flock chrome lives in five places (#63):
   more than three members.
 - **Trip Picker drawer** — `src/UI/TripPicker.elm` decorates each
   candidate row with the flock badge and avatar stack.
-- **New Trip dialog** — `src/Pages/Trips.elm` `viewTargetPicker`
-  asks "where does this trip live?" with one tile per
-  `Flocks.ownedBy currentUser`. Default selection is `Personal`;
-  the segmented control hides entirely when the user owns no
-  flocks. The choice is captured on `TripForm.target : TripTarget`
-  and threaded into the outbound `SaveTrip` port message.
+- **New Trip dialog** — `src/Pages/Trips.elm` `viewTargetPicker` asks
+  "WHO'S ON THIS TRIP?" with one tile per option:
+  - **Just me** (default) — personal trip, written to the user's
+    solo PouchDB.
+  - **One tile per owned flock** (`Flocks.ownedBy currentUser`) —
+    writes the trip into that existing flock's local DB.
+  - **+ New shared trip** — the unified flock-creation entry point.
+    Expands inline to an emails chip-input + an `Advanced — Group
+    Name` reveal (defaults to the trip name; the override matters
+    when the user wants a reusable group across multiple trips).
+    Fledgling users see this tile but selecting it surfaces a
+    contextual upgrade prompt; the form's Create button stays
+    disabled until they pick a different tile or upgrade. This
+    replaces the old standalone Settings → "Create Flock" button.
+
+  The picker writes to `TripForm.target : Data.Trip.CreateTarget`
+  (`ToPersonal | ToExistingFlock FlockId | ToNewFlock NewFlockDraft`).
+  `CreateTarget` is form-only — by the time the trip actually gets
+  written to PouchDB, the orchestration in `Main.elm`'s submit
+  handler has resolved any `ToNewFlock` to `ToExistingFlock <newId>`
+  by sequencing `Http.FlockApi.createFlock` → `Cmd.batch` of
+  `OpenFlock` port message + `Time.now` + fan-out
+  `Http.FlockApi.inviteToFlock` calls.
+
+  Invite failures are non-blocking — the user can re-invite from
+  Settings if a specific email bounced (server returns 409 for
+  duplicates, the standard signal). Flock-creation failures abort
+  the whole submit and surface in the form's existing error block.
 
 `UI.Avatar` hashes `UserId.toString` into a five-slot palette
 (`bg-rust`, `bg-forest-mid`, `bg-moss`, `bg-rust-deep`, `bg-tan`) so

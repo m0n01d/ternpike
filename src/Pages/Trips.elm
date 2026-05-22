@@ -4,7 +4,8 @@ import Data.Entry as Entry
 import Data.Flock exposing (Flock)
 import Data.Flocks
 import Data.Navigation exposing (Tab(..))
-import Data.Trip as Trip exposing (Trip, TripField(..), TripForm, TripTarget)
+import Data.Tier as Tier
+import Data.Trip as Trip exposing (Trip, TripField(..), TripForm)
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
 import Dict
@@ -12,6 +13,7 @@ import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Json.Decode
 import Routing
 import Set
 import Types exposing (AuthState, Msg(..))
@@ -307,8 +309,8 @@ viewTripForm as_ form =
                 ]
                 []
             )
-        , if isNew && not (List.isEmpty ownedFlocks) then
-            viewTargetPicker form.target ownedFlocks
+        , if isNew then
+            viewTargetPicker as_ form ownedFlocks
 
           else
             Html.text ""
@@ -363,9 +365,23 @@ viewTripForm as_ form =
         , Html.div [ Html.Attributes.class "flex gap-2.5 mt-4" ]
             [ Html.button
                 [ Html.Events.onClick SaveTripForm
-                , Html.Attributes.class "flex-1 bg-rust text-parchment border-none rounded-lg py-3 text-[15px] font-bold cursor-pointer"
+                , Html.Attributes.disabled (saveBlocked as_ form)
+                , Html.Attributes.classList
+                    [ ( "flex-1 bg-rust text-parchment border-none rounded-lg py-3 text-[15px] font-bold cursor-pointer", True )
+                    , ( "opacity-50 cursor-not-allowed", saveBlocked as_ form )
+                    ]
                 ]
-                [ Html.text "Save" ]
+                [ Html.text
+                    (if form.submitting then
+                        "Saving…"
+
+                     else if form.editing == Nothing then
+                        "Create trip"
+
+                     else
+                        "Save"
+                    )
+                ]
             , Html.button
                 [ Html.Events.onClick CloseTripForm
                 , Html.Attributes.class "flex-1 bg-transparent text-muted border border-tan rounded-lg py-3 text-[15px] cursor-pointer"
@@ -381,37 +397,192 @@ at least one owned flock; the spec is to collapse the single-option
 case to the implicit Personal default so the user never sees a
 segmented control with one tile.
 -}
-viewTargetPicker : TripTarget -> List Flock -> Html Msg
-viewTargetPicker selected ownedFlocks =
+viewTargetPicker : AuthState -> TripForm -> List Flock -> Html Msg
+viewTargetPicker as_ form ownedFlocks =
     let
+        selected =
+            form.target
+
         personalTile =
             viewTargetTile
-                { active = selected == Trip.Personal
-                , label = "Personal"
-                , sub = "JUST YOU"
-                , onSelect = TripTargetSelected Trip.Personal
+                { active = selected == Trip.ToPersonal
+                , label = "Just me"
+                , sub = "PERSONAL"
+                , onSelect = TripTargetSelected Trip.ToPersonal
                 }
 
         flockTiles =
             List.map
                 (\flock ->
                     viewTargetTile
-                        { active = selected == Trip.InFlock flock.id
+                        { active = selected == Trip.ToExistingFlock flock.id
                         , label = flock.name
                         , sub = flockTileSub flock
-                        , onSelect = TripTargetSelected (Trip.InFlock flock.id)
+                        , onSelect = TripTargetSelected (Trip.ToExistingFlock flock.id)
                         }
                 )
                 ownedFlocks
+
+        newSharedTile =
+            viewTargetTile
+                { active = isToNewFlock selected
+                , label = "+ New shared trip"
+                , sub = "INVITE PEOPLE"
+                , onSelect = TripTargetSelected (Trip.ToNewFlock Trip.defaultNewFlockDraft)
+                }
     in
-    UI.Layout.formField "WHERE DOES THIS TRIP LIVE?"
+    UI.Layout.formField "WHO'S ON THIS TRIP?"
         (Html.div []
             [ Html.div [ Html.Attributes.class "flex gap-2 flex-wrap" ]
-                (personalTile :: flockTiles)
+                (personalTile :: flockTiles ++ [ newSharedTile ])
+            , viewNewFlockInline as_ form
             , Html.p [ Html.Attributes.class "mt-2 text-[11px] text-muted font-mono tracking-wide italic" ]
                 [ Html.text "This can't be changed later." ]
             ]
         )
+
+
+{-| Submit blocked while a save is in flight OR when a Fledgling user
+has the "+ New shared trip" tile selected (the inline upgrade prompt
+is shown instead).
+-}
+saveBlocked : AuthState -> TripForm -> Bool
+saveBlocked as_ form =
+    form.submitting
+        || (isToNewFlock form.target && not (Tier.isPaid as_.tier))
+
+
+{-| True when the form's currently-selected target is the "+ New shared
+trip" tile, regardless of the draft's contents.
+-}
+isToNewFlock : Trip.CreateTarget -> Bool
+isToNewFlock target =
+    case target of
+        Trip.ToNewFlock _ ->
+            True
+
+        _ ->
+            False
+
+
+{-| The inline panel that appears under the picker when the user has
+selected "+ New shared trip". For Fly+ it exposes the chip-input for
+invitee emails and an optional Group Name override. For Fledgling it
+swaps in an upgrade prompt and the submit button is blocked elsewhere.
+-}
+viewNewFlockInline : AuthState -> TripForm -> Html Msg
+viewNewFlockInline as_ form =
+    case form.target of
+        Trip.ToNewFlock draft ->
+            if Tier.isPaid as_.tier then
+                viewNewFlockFields form draft
+
+            else
+                viewFledglingUpgradePrompt
+
+        _ ->
+            Html.text ""
+
+
+viewFledglingUpgradePrompt : Html Msg
+viewFledglingUpgradePrompt =
+    Html.div [ Html.Attributes.class "mt-3 bg-rust-tint border border-rust/30 rounded-lg px-3 py-2.5" ]
+        [ Html.p [ Html.Attributes.class "text-[13px] text-rust-deep" ]
+            [ Html.text "Sharing requires Fly. "
+            , Html.a
+                [ Html.Attributes.href "/settings#billing"
+                , Html.Attributes.class "underline font-semibold"
+                ]
+                [ Html.text "Upgrade to Fly →" ]
+            ]
+        ]
+
+
+viewNewFlockFields : TripForm -> Trip.NewFlockDraft -> Html Msg
+viewNewFlockFields form draft =
+    let
+        effectiveGroupName =
+            if form.groupNameOverridden then
+                draft.groupName
+
+            else
+                form.name
+    in
+    Html.div [ Html.Attributes.class "mt-3 space-y-3" ]
+        [ UI.Layout.formField "INVITE EMAILS"
+            (viewInviteeChips draft)
+        , Html.details []
+            [ Html.summary
+                [ Html.Attributes.class "text-[11px] font-mono uppercase tracking-widest text-moss cursor-pointer" ]
+                [ Html.text "Advanced — group name" ]
+            , Html.div [ Html.Attributes.class "mt-2" ]
+                [ Html.input
+                    [ Html.Attributes.type_ "text"
+                    , Html.Attributes.value effectiveGroupName
+                    , Html.Events.onInput TripGroupNameChanged
+                    , Html.Attributes.placeholder "Defaults to trip name"
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
+                , Html.p [ Html.Attributes.class "mt-1 text-[11px] text-muted font-mono italic" ]
+                    [ Html.text "Name the group to reuse it for future trips." ]
+                ]
+            ]
+        ]
+
+
+viewInviteeChips : Trip.NewFlockDraft -> Html Msg
+viewInviteeChips draft =
+    Html.div [ Html.Attributes.class "flex flex-wrap items-center gap-1.5" ]
+        (List.indexedMap viewInviteeChip draft.invitees
+            ++ [ Html.input
+                    [ Html.Attributes.type_ "email"
+                    , Html.Attributes.value draft.inviteesDraft
+                    , Html.Events.onInput TripInviteeDraftChanged
+                    , Html.Events.on "keydown" inviteeKeyDecoder
+                    , Html.Attributes.placeholder
+                        (if List.isEmpty draft.invitees then
+                            "name@example.com"
+
+                         else
+                            "add another…"
+                        )
+                    , Html.Attributes.class "flex-1 min-w-[140px] bg-parchment border border-tan rounded-lg px-2 py-1.5 text-[13px] focus:outline-none focus:border-moss"
+                    ]
+                    []
+               ]
+        )
+
+
+viewInviteeChip : Int -> String -> Html Msg
+viewInviteeChip index email =
+    Html.span
+        [ Html.Attributes.class "inline-flex items-center gap-1 rounded-full bg-rust-tint border border-rust/30 px-2 py-0.5 text-[12px] text-rust-deep" ]
+        [ Html.text email
+        , Html.button
+            [ Html.Attributes.type_ "button"
+            , Html.Attributes.attribute "aria-label" ("Remove " ++ email)
+            , Html.Events.onClick (TripInviteeRemoved index)
+            , Html.Attributes.class "text-rust-deep/70 hover:text-rust-deep cursor-pointer"
+            ]
+            [ Html.text "×" ]
+        ]
+
+
+{-| Commit the in-progress invitee-draft input on Enter, Tab, or comma —
+matches the chip-input idiom common to email forms.
+-}
+inviteeKeyDecoder : Json.Decode.Decoder Msg
+inviteeKeyDecoder =
+    Json.Decode.field "key" Json.Decode.string
+        |> Json.Decode.andThen
+            (\k ->
+                if k == "Enter" || k == "Tab" || k == "," then
+                    Json.Decode.succeed TripInviteeAdded
+
+                else
+                    Json.Decode.fail "ignored"
+            )
 
 
 viewTargetTile :

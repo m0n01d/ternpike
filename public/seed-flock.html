@@ -109,8 +109,10 @@ async function upsert(db, doc) {
       return
     }
     const creds = JSON.parse(raw)
-    const previousTier = creds.tier || 'Fledgling'
-    creds.tier = 'Fly'
+    const previousTier = creds.tier || 'fledgling'
+    // Lowercase — `Data.Tier.fromString` only accepts the lowercase constructor
+    // names, and a capitalised 'Fly' silently falls through to Fledgling.
+    creds.tier = 'fly'
     await idbSet(kv, 'auth_creds', JSON.stringify(creds))
     log(`   ${previousTier} → Fly  (you=${creds.email})`, 'ok')
     kv.close()

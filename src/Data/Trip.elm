@@ -1,5 +1,7 @@
 module Data.Trip exposing
-    ( TierContext
+    ( CreateTarget(..)
+    , NewFlockDraft
+    , TierContext
     , Trip
     , TripField(..)
     , TripForm
@@ -7,6 +9,7 @@ module Data.Trip exposing
     , canBatchScan
     , canUseProxiedOCR
     , decoder
+    , defaultNewFlockDraft
     , effectiveTier
     , encodeTarget
     , encoder
@@ -96,9 +99,11 @@ type alias TripForm =
     , editing : Maybe Trip
     , endDate : String
     , errors : List String
+    , groupNameOverridden : Bool
     , name : String
     , startDate : String
-    , target : TripTarget
+    , submitting : Bool
+    , target : CreateTarget
     }
 
 
@@ -122,6 +127,49 @@ side so legacy / not-yet-targeted call sites keep working.
 type TripTarget
     = InFlock Data.FlockId.FlockId
     | Personal
+
+
+{-| Form-only target tag used by the New Trip dialog's "Who's on this
+trip?" picker. Distinct from `TripTarget` (which is the wire/runtime
+type used by the port layer) so the encoder doesn't have to handle the
+"this flock doesn't exist yet" case.
+
+The `ToNewFlock` arm is resolved by the submit orchestration in
+`Main.elm`: it fires `POST /flocks`, sends invites, opens the new
+flock-local PouchDB, then rewrites the form's target to
+`ToExistingFlock <newId>` so the standard trip-write path takes over.
+
+-}
+type CreateTarget
+    = ToPersonal
+    | ToExistingFlock Data.FlockId.FlockId
+    | ToNewFlock NewFlockDraft
+
+
+{-| Draft of the new flock that the "+ New shared trip" tile collects.
+
+`groupName` defaults to the trip name (synced as the user types in the
+trip-name field, unless they've explicitly overridden it). `invitees`
+is the committed chip list; `inviteesDraft` is the in-progress text
+input that becomes a chip on enter/tab.
+
+-}
+type alias NewFlockDraft =
+    { groupName : String
+    , invitees : List String
+    , inviteesDraft : String
+    }
+
+
+{-| The empty draft used when the user first picks the "+ New shared
+trip" tile. `groupName` is filled in from the trip name at view time.
+-}
+defaultNewFlockDraft : NewFlockDraft
+defaultNewFlockDraft =
+    { groupName = ""
+    , invitees = []
+    , inviteesDraft = ""
+    }
 
 
 validator : Validate.Validator String TripForm

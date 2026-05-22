@@ -42,7 +42,6 @@ view as_ =
     in
     Html.div []
         [ UI.Rule.kicker "FLOCKS"
-        , viewCreateRow as_
         , if List.isEmpty joined then
             viewEmptyState
 
@@ -55,41 +54,13 @@ viewEmptyState : Html Msg
 viewEmptyState =
     UI.Card.subCard
         [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-            [ Html.text "You're not in any flocks yet. Create one above or accept an invite link to join." ]
-        ]
-
-
-viewCreateRow : AuthState -> Html Msg
-viewCreateRow as_ =
-    let
-        canCreate =
-            Tier.isPaid as_.tier
-    in
-    UI.Card.subCard
-        [ Html.div [ Html.Attributes.class "flex items-start justify-between gap-4" ]
-            [ Html.div [ Html.Attributes.class "flex-1" ]
-                [ Html.p [ Html.Attributes.class "text-sm text-ink font-bold mb-1" ]
-                    [ Html.text "Create a flock" ]
-                , Html.p [ Html.Attributes.class "text-xs text-muted" ]
-                    [ Html.text
-                        (if canCreate then
-                            "Log expenses together with a partner or household."
-
-                         else
-                            "Flocks let you log expenses together with a partner. Upgrade to Fly to create one."
-                        )
-                    ]
+            [ Html.text "You're not in any flocks yet. Start a "
+            , Html.a
+                [ Html.Attributes.href "/trips"
+                , Html.Attributes.class "text-rust-deep underline"
                 ]
-            , if canCreate then
-                UI.Button.primary { label = "Create", onClick = OpenCreateFlockModal }
-
-              else
-                Html.button
-                    [ Html.Attributes.type_ "button"
-                    , Html.Attributes.disabled True
-                    , Html.Attributes.class "bg-rust/40 text-parchment/80 font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg border-none cursor-not-allowed"
-                    ]
-                    [ Html.text "Create" ]
+                [ Html.text "shared trip" ]
+            , Html.text " on the Trips page to create one, or accept an invite link to join."
             ]
         ]
 
@@ -192,26 +163,6 @@ viewModal as_ =
     case as_.flockUi.modal of
         FlockUi.NoModal ->
             Html.text ""
-
-        FlockUi.CreateModal { error, name } ->
-            modalShell "New Flock"
-                [ formField "FLOCK NAME"
-                    (Html.input
-                        [ Html.Attributes.type_ "text"
-                        , Html.Attributes.value name
-                        , Html.Events.onInput CreateFlockNameChanged
-                        , Html.Attributes.placeholder "Honeymoon"
-                        , textInputStyle
-                        ]
-                        []
-                    )
-                , viewError error
-                , modalActions
-                    { confirm = ( "Create", SubmitCreateFlock )
-                    , cancel = ( "Cancel", CloseFlockModal )
-                    , inFlight = as_.flockUi.inFlight
-                    }
-                ]
 
         FlockUi.InviteModal _ { email, error } ->
             modalShell "Invite to flock"

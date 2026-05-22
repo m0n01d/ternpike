@@ -314,6 +314,21 @@ export function attachPouch(app, { creds = null } = {}) {
           break
         }
 
+        case 'OpenFlock': {
+          // Targeted open used by the New Trip form when the user creates a
+          // brand-new shared trip: we open the flock-local PouchDB
+          // immediately rather than waiting for reconcileFlocks to fire off
+          // the personal-DB sync round-trip. Idempotent — openFlockHandle
+          // no-ops on a name already in `handles`.
+          if (msg.flockId && msg.dbName) {
+            const handle = openFlockHandle(msg.flockId, msg.dbName)
+            if (handle && !handle.sync) {
+              startHandleSync(handle, msg.dbName)
+            }
+          }
+          break
+        }
+
         case 'GetTripExpenses': {
           const handle = targetHandle(msg.target)
           if (!handle) break

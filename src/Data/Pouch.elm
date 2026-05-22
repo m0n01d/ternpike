@@ -54,6 +54,7 @@ type PouchOutbound
     = GetAllTrips
     | GetExpense TripTarget ExpenseId
     | GetTripExpenses TripTarget TripId
+    | OpenFlock { dbName : String, flockId : FlockId }
     | SaveAmend TripTarget Json.Decode.Value
     | SaveExpense TripTarget Json.Decode.Value
     | SaveTrip TripTarget Json.Decode.Value

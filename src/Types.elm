@@ -270,8 +270,6 @@ type Msg
     | CloseTripForm
     | CodeInputChanged String
     | ConfirmDeleteTrip Trip
-    | CreateFlockNameChanged String
-    | CreateFlockResult (Result Http.Error Http.FlockApi.CreateFlockResponse)
     | DateChanged String
     | DeleteTrip Trip
     | DismissError
@@ -305,7 +303,6 @@ type Msg
     | MoveEntry Expense TripId
     | NetworkStatusChanged Bool
     | NoteChanged String
-    | OpenCreateFlockModal
     | OpenEditTripForm Trip
     | OpenInviteModal FlockId
     | OpenLeaveConfirmModal FlockId
@@ -326,7 +323,6 @@ type Msg
     | SignOutClicked
     | SkipLocation
     | SubmitCode
-    | SubmitCreateFlock
     | SubmitEmail
     | SubmitEntry
     | SubmitInvite
@@ -340,8 +336,14 @@ type Msg
     | TransferTargetChanged String
     | TransferToFlockResult (Result Http.Error ())
     | TriggerInstallPrompt
+    | TripCreateFlockResult (Result Http.Error Http.FlockApi.CreateFlockResponse)
     | TripFieldChanged TripField String
-    | TripTargetSelected Data.Trip.TripTarget
+    | TripGroupNameChanged String
+    | TripInviteResult Int (Result Http.Error ())
+    | TripInviteeAdded
+    | TripInviteeDraftChanged String
+    | TripInviteeRemoved Int
+    | TripTargetSelected Data.Trip.CreateTarget
     | UrlChanged Url.Url
     | VerifyCodeResult (Result Http.Error Creds)
     | VoidEntry Expense
