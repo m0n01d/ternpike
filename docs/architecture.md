@@ -436,7 +436,7 @@ snapshot (`Helpers.effectiveEntryToExpense`). `update` performs
 `Task.perform Time.now`, and `GotDuplicateTime` calls
 `Expense.snapshotWith { id, createdAt, tripId }` to mint a new expense doc that
 copies every user-visible field (date, amount, category, merchant, note,
-longNote, paymentMethod, lat, lon) onto a fresh `ExpenseId` and `createdAt`,
+longNote, paymentMethod, geoPoint) onto a fresh `ExpenseId` and `createdAt`,
 with the *same* `tripId`. The duplicate is then sent through `SaveExpense` and
 optimistically inserted into the destination trip's inner dict — the same path
 as a brand-new expense.

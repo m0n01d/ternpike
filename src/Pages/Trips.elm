@@ -1,15 +1,16 @@
 module Pages.Trips exposing (viewTab)
 
+import Data.DateField as DateField
 import Data.Entry as Entry
 import Data.Flock exposing (Flock)
 import Data.Flocks
+import Data.Money as Money
 import Data.Navigation exposing (Tab(..))
 import Data.Tier as Tier
 import Data.Trip as Trip exposing (Trip, TripField(..), TripForm)
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
 import Dict
-import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -120,7 +121,7 @@ viewTripHero : Maybe Flock -> Trip -> List Entry.EffectiveEntry -> Html Msg
 viewTripHero maybeFlock activeTrip entries =
     let
         totalSpent =
-            List.sum (List.map .amount entries)
+            Money.sum (List.map .amount entries)
 
         hasStart =
             activeTrip.startDate /= ""
@@ -128,25 +129,31 @@ viewTripHero maybeFlock activeTrip entries =
         hasEnd =
             activeTrip.endDate /= ""
 
+        formatIso iso =
+            DateField.fromIso iso
+                |> Maybe.map DateField.formatDisplay
+                |> Maybe.withDefault iso
+
         dateLine =
             if hasStart && hasEnd then
-                Helpers.formatDateDisplay activeTrip.startDate
+                formatIso activeTrip.startDate
                     ++ " — "
-                    ++ Helpers.formatDateDisplay activeTrip.endDate
+                    ++ formatIso activeTrip.endDate
 
             else if hasStart then
-                Helpers.formatDateDisplay activeTrip.startDate
+                formatIso activeTrip.startDate
 
             else
                 ""
 
         totalDays =
             if hasStart && hasEnd then
-                Basics.max 1
-                    (Helpers.isoToDayCount activeTrip.endDate
-                        - Helpers.isoToDayCount activeTrip.startDate
-                        + 1
-                    )
+                case ( DateField.fromIso activeTrip.startDate, DateField.fromIso activeTrip.endDate ) of
+                    ( Just start, Just end ) ->
+                        Basics.max 1 (DateField.diffDays start end + 1)
+
+                    _ ->
+                        0
 
             else
                 0
@@ -191,7 +198,10 @@ viewTripHero maybeFlock activeTrip entries =
                     Html.text ""
             ]
         , if activeTrip.budget > 0 then
-            UI.BudgetBar.view { spent = totalSpent, budget = activeTrip.budget }
+            UI.BudgetBar.view
+                { spent = toFloat (Money.toCents totalSpent) / 100
+                , budget = activeTrip.budget
+                }
 
           else
             Html.text ""
@@ -254,7 +264,12 @@ viewOtherTripRow as_ trip =
             , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
                 [ if trip.startDate /= "" then
                     Html.p [ Html.Attributes.class "text-[11px] text-moss font-mono" ]
-                        [ Html.text (Helpers.formatDateDisplay trip.startDate) ]
+                        [ Html.text
+                            (DateField.fromIso trip.startDate
+                                |> Maybe.map DateField.formatDisplay
+                                |> Maybe.withDefault trip.startDate
+                            )
+                        ]
 
                   else
                     Html.text ""

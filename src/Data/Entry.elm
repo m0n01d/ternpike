@@ -40,16 +40,20 @@ surviving expense is run through `applyAmends`, which sorts amendments by
 
 -}
 
-import Data.Amendment as Amendment exposing (Amendment)
+import Data.Amendment exposing (Amendment)
 import Data.Category as Category exposing (Category)
-import Data.Expense as Expense exposing (Expense)
+import Data.DateField as DateField exposing (DateField)
+import Data.Expense exposing (Expense)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
-import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
-import Data.TripId as TripId exposing (TripId)
+import Data.GeoPoint exposing (GeoPoint)
+import Data.Money as Money exposing (Money)
+import Data.PaymentMethod exposing (PaymentMethod)
+import Data.TripId exposing (TripId)
 import Data.UserId exposing (UserId)
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import Set
+import Time
 
 
 {-| An expense as the user sees it right now: the original fields with all
@@ -57,15 +61,14 @@ amendments applied. `isAmended` is `True` if at least one amendment was
 folded in, so the UI can render an "edited" indicator.
 -}
 type alias EffectiveEntry =
-    { amount : Float
+    { amount : Money
     , category : Category
-    , createdAt : String
+    , createdAt : Time.Posix
     , createdBy : UserId
-    , date : String
+    , date : DateField
+    , geoPoint : Maybe GeoPoint
     , id : ExpenseId
     , isAmended : Bool
-    , lat : Maybe Float
-    , lon : Maybe Float
     , longNote : String
     , merchant : String
     , note : String
@@ -115,7 +118,7 @@ resolve expenses amendments voids activeTripId =
     expenses
         |> List.filter (\e -> e.tripId == activeTripId && not (Set.member (ExpenseId.toString e.id) voidedIds))
         |> List.map applyAmends
-        |> List.sortBy .date
+        |> List.sortWith (\a b -> DateField.compare a.date b.date)
 
 
 toEffectiveEntry : Bool -> Expense -> EffectiveEntry
@@ -125,10 +128,9 @@ toEffectiveEntry isAmended e =
     , createdAt = e.createdAt
     , createdBy = e.createdBy
     , date = e.date
+    , geoPoint = e.geoPoint
     , id = e.id
     , isAmended = isAmended
-    , lat = e.lat
-    , lon = e.lon
     , longNote = e.longNote
     , merchant = e.merchant
     , note = e.note
@@ -139,15 +141,30 @@ toEffectiveEntry isAmended e =
 
 applyAmendment : EffectiveEntry -> Amendment -> EffectiveEntry
 applyAmendment e a =
-    { amount = Maybe.withDefault e.amount a.amount
+    { amount =
+        case a.amount of
+            Just dollars ->
+                -- TODO #94: Amendment.amount is still Maybe Float — R3
+                -- will flip it to Maybe Money and we can drop this shim.
+                Money.fromCents (round (dollars * 100))
+
+            Nothing ->
+                e.amount
     , category = Maybe.withDefault e.category a.category
     , createdAt = e.createdAt
     , createdBy = e.createdBy
-    , date = Maybe.withDefault e.date a.date
+    , date =
+        case a.date of
+            Just iso ->
+                -- TODO #94: Amendment.date is still Maybe String — R3
+                -- will flip it to Maybe DateField and we can drop this shim.
+                DateField.fromIsoOr e.date iso
+
+            Nothing ->
+                e.date
+    , geoPoint = e.geoPoint
     , id = e.id
     , isAmended = True
-    , lat = e.lat
-    , lon = e.lon
     , longNote = Maybe.withDefault e.longNote a.longNote
     , merchant = Maybe.withDefault e.merchant a.merchant
     , note = Maybe.withDefault e.note a.note
@@ -161,28 +178,30 @@ applyAmendment e a =
     }
 
 
-uniqueDates : List EffectiveEntry -> List String
+uniqueDates : List EffectiveEntry -> List DateField
 uniqueDates entries =
     entries
         |> List.map .date
         |> List.foldr
             (\d acc ->
-                if List.member d acc then
+                if List.any (\x -> DateField.compare x d == EQ) acc then
                     acc
 
                 else
                     d :: acc
             )
             []
-        |> List.sort
+        |> List.sortWith DateField.compare
         |> List.reverse
 
 
-medianAmount : List EffectiveEntry -> Float
+medianAmount : List EffectiveEntry -> Money
 medianAmount entries =
     let
         amounts =
-            List.sort (List.map .amount entries)
+            entries
+                |> List.map .amount
+                |> List.sortBy Money.toCents
 
         n =
             List.length amounts
@@ -191,20 +210,20 @@ medianAmount entries =
             n // 2
     in
     if n == 0 then
-        0
+        Money.zero
 
     else if remainderBy 2 n == 1 then
-        amounts |> List.drop mid |> List.head |> Maybe.withDefault 0
+        amounts |> List.drop mid |> List.head |> Maybe.withDefault Money.zero
 
     else
         let
             a =
-                amounts |> List.drop (mid - 1) |> List.head |> Maybe.withDefault 0
+                amounts |> List.drop (mid - 1) |> List.head |> Maybe.withDefault Money.zero
 
             b =
-                amounts |> List.drop mid |> List.head |> Maybe.withDefault 0
+                amounts |> List.drop mid |> List.head |> Maybe.withDefault Money.zero
         in
-        (a + b) / 2
+        Money.fromCents ((Money.toCents a + Money.toCents b) // 2)
 
 
 topCategory : List EffectiveEntry -> Maybe Category
@@ -216,14 +235,14 @@ topCategory entries =
                 , entries
                     |> List.filter (\e -> e.category == cat)
                     |> List.map .amount
-                    |> List.sum
+                    |> Money.sum
                 )
             )
-        |> List.sortBy (negate << Tuple.second)
+        |> List.sortBy (negate << Money.toCents << Tuple.second)
         |> List.head
         |> Maybe.andThen
             (\( cat, total ) ->
-                if total > 0 then
+                if Money.toCents total > 0 then
                     Just cat
 
                 else
@@ -231,19 +250,19 @@ topCategory entries =
             )
 
 
-biggestDay : List EffectiveEntry -> Maybe ( String, Float )
+biggestDay : List EffectiveEntry -> Maybe ( DateField, Money )
 biggestDay entries =
     uniqueDates entries
         |> List.map
             (\date ->
                 ( date
                 , entries
-                    |> List.filter (\e -> e.date == date)
+                    |> List.filter (\e -> DateField.compare e.date date == EQ)
                     |> List.map .amount
-                    |> List.sum
+                    |> Money.sum
                 )
             )
-        |> List.sortBy (negate << Tuple.second)
+        |> List.sortBy (negate << Money.toCents << Tuple.second)
         |> List.head
 
 
@@ -253,10 +272,13 @@ Used by the Ledger's day-spending tint to compare each day against the trip's
 median. Pairs naturally with `tripMedian` and `spendBand`.
 
 -}
-dailyTotals : List EffectiveEntry -> Dict String Float
+dailyTotals : List EffectiveEntry -> Dict String Money
 dailyTotals entries =
     List.foldr
-        (\e -> Dict.update e.date (Just << (+) e.amount << Maybe.withDefault 0))
+        (\e ->
+            Dict.update (DateField.toIso e.date)
+                (Just << Money.add e.amount << Maybe.withDefault Money.zero)
+        )
         Dict.empty
         entries
 
@@ -268,11 +290,12 @@ trip's span don't pull the baseline down — the comparison is "vs. a normal
 spending day on this trip."
 
 -}
-tripMedian : Dict String Float -> Float
+tripMedian : Dict String Money -> Money
 tripMedian totals =
     let
         sorted =
-            List.sort (Dict.values totals)
+            Dict.values totals
+                |> List.sortBy Money.toCents
 
         n =
             List.length sorted
@@ -281,20 +304,20 @@ tripMedian totals =
             n // 2
     in
     if n == 0 then
-        0
+        Money.zero
 
     else if remainderBy 2 n == 1 then
-        sorted |> List.drop mid |> List.head |> Maybe.withDefault 0
+        sorted |> List.drop mid |> List.head |> Maybe.withDefault Money.zero
 
     else
         let
             a =
-                sorted |> List.drop (mid - 1) |> List.head |> Maybe.withDefault 0
+                sorted |> List.drop (mid - 1) |> List.head |> Maybe.withDefault Money.zero
 
             b =
-                sorted |> List.drop mid |> List.head |> Maybe.withDefault 0
+                sorted |> List.drop mid |> List.head |> Maybe.withDefault Money.zero
         in
-        (a + b) / 2
+        Money.fromCents ((Money.toCents a + Money.toCents b) // 2)
 
 
 {-| Five-step scale for how a day's total compares to the trip's median
@@ -314,34 +337,43 @@ type Band
 Edge cases — zero or negative median (single-day trips, no spend at all) —
 fall back to `Typical` so the UI stays neutral.
 
-    spendBand 100 30
+    import Data.Money
+
+    spendBand (Data.Money.fromCents 10000) (Data.Money.fromCents 3000)
     --> Frugal
 
-    spendBand 100 70
+    spendBand (Data.Money.fromCents 10000) (Data.Money.fromCents 7000)
     --> Below
 
-    spendBand 100 100
+    spendBand (Data.Money.fromCents 10000) (Data.Money.fromCents 10000)
     --> Typical
 
-    spendBand 100 150
+    spendBand (Data.Money.fromCents 10000) (Data.Money.fromCents 15000)
     --> Above
 
-    spendBand 100 250
+    spendBand (Data.Money.fromCents 10000) (Data.Money.fromCents 25000)
     --> Splurge
 
-    spendBand 0 50
+    spendBand Data.Money.zero (Data.Money.fromCents 5000)
     --> Typical
 
 -}
-spendBand : Float -> Float -> Band
+spendBand : Money -> Money -> Band
 spendBand median daily =
-    if median <= 0 then
+    let
+        medianCents =
+            Money.toCents median
+
+        dailyCents =
+            Money.toCents daily
+    in
+    if medianCents <= 0 then
         Typical
 
     else
         let
             ratio =
-                daily / median
+                toFloat dailyCents / toFloat medianCents
         in
         if ratio < 0.5 then
             Frugal

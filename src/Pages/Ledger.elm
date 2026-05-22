@@ -1,16 +1,18 @@
 module Pages.Ledger exposing (viewTab)
 
 import Data.Category as Category
+import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
 import Data.ExpenseId as ExpenseId
 import Data.Flock
 import Data.Flocks
 import Data.Ledger exposing (LedgerMode(..))
+import Data.Money as Money exposing (Money)
 import Data.TripId as TripId
 import Data.Trips
 import Data.UserId as UserId exposing (UserId)
 import Dict exposing (Dict)
-import Helpers exposing (effectiveEntryToExpense, encodeWaypoints, formatAmount, formatDateDisplay)
+import Helpers exposing (effectiveEntryToExpense, encodeWaypoints)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -110,7 +112,7 @@ viewLedgerHero : Float -> List Entry.EffectiveEntry -> Html Msg
 viewLedgerHero budget entries =
     let
         total =
-            List.sum (List.map .amount entries)
+            Money.sum (List.map .amount entries)
 
         entryCount =
             List.length entries
@@ -139,12 +141,12 @@ viewLedgerHero budget entries =
             [ Html.text "RUNNING TOTAL" ]
         , Html.div
             [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
-            [ Html.text (formatAmount total) ]
+            [ Html.text (Money.format total) ]
         , Html.div
             [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
             [ Html.text kickerText ]
         , if budget > 0 then
-            UI.BudgetBar.viewSubtle { spent = total, budget = budget }
+            UI.BudgetBar.viewSubtle { spent = toFloat (Money.toCents total) / 100, budget = budget }
 
           else
             Html.text ""
@@ -301,19 +303,22 @@ viewEntries opts entries =
 
         bandFor date =
             if opts.showIntensity then
-                Just (Entry.spendBand median (Dict.get date totals |> Maybe.withDefault 0))
+                Just (Entry.spendBand median (Dict.get date totals |> Maybe.withDefault Money.zero))
 
             else
                 Nothing
 
         groupBlock ( date, dayN ) =
             let
+                dateIso =
+                    DateField.toIso date
+
                 dayEntries =
-                    List.filter (\e -> e.date == date) entries
+                    List.filter (\e -> DateField.compare e.date date == EQ) entries
             in
-            ( date
+            ( dateIso
             , Html.div [ Html.Attributes.class "mt-6 mb-4" ]
-                [ viewDayKicker (bandFor date) dayN date
+                [ viewDayKicker (bandFor dateIso) dayN date
                 , Keyed.node "div"
                     [ Html.Attributes.class "animate-stagger-row" ]
                     (List.map
@@ -321,7 +326,7 @@ viewEntries opts entries =
                         dayEntries
                     )
                 , if List.length dayEntries > 1 then
-                    viewDayTotal (Dict.get date totals |> Maybe.withDefault 0)
+                    viewDayTotal (Dict.get dateIso totals |> Maybe.withDefault Money.zero)
 
                   else
                     Html.text ""
@@ -331,16 +336,16 @@ viewEntries opts entries =
     Keyed.node "div" [] (List.map groupBlock indexedDates)
 
 
-viewDayTotal : Float -> Html Msg
+viewDayTotal : Money -> Html Msg
 viewDayTotal total =
     Html.div
         [ Html.Attributes.class "mt-3 pt-2 text-center font-mono text-xs tracking-widest text-forest" ]
         [ Html.text "DAY TOTAL  "
-        , Html.text (formatAmount total)
+        , Html.text (Money.format total)
         ]
 
 
-viewDayKicker : Maybe Entry.Band -> Int -> String -> Html Msg
+viewDayKicker : Maybe Entry.Band -> Int -> DateField -> Html Msg
 viewDayKicker maybeBand dayN date =
     Html.div [ Html.Attributes.class "sticky top-14 z-[9] bg-parchment border-t border-tan/40 -mx-5 px-5 py-3 flex items-center gap-3" ]
         [ Html.span
@@ -349,7 +354,7 @@ viewDayKicker maybeBand dayN date =
         , Html.span [ Html.Attributes.class (railClass maybeBand) ] []
         , Html.span
             [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-moss" ]
-            [ Html.text (String.toUpper (formatDateDisplay date)) ]
+            [ Html.text (String.toUpper (DateField.formatDisplay date)) ]
         ]
 
 
@@ -438,7 +443,7 @@ viewEntryRow opts entry =
                         , Html.Attributes.attribute "aria-hidden" "true"
                         ]
                         [ Html.text (Category.icon entry.category) ]
-                    , case entry.lat of
+                    , case entry.geoPoint of
                         Just _ ->
                             Html.span
                                 [ Html.Attributes.class "text-moss"
@@ -453,7 +458,7 @@ viewEntryRow opts entry =
                 ]
             , Html.div
                 [ Html.Attributes.class "font-mono text-base text-forest tabular-nums shrink-0" ]
-                [ Html.text (formatAmount entry.amount) ]
+                [ Html.text (Money.format entry.amount) ]
             ]
         , viewRowMenuButton entry
         , if isOpen then

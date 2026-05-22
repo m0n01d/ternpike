@@ -34,9 +34,8 @@ Wire format on PouchDB / CouchDB is still `Float` dollars (`12.30`, not
 `encoder` emits `Float` dollars. The migration is purely in the type
 layer; the on-disk shape is unchanged.
 
-`format` replaces `Helpers.formatAmount` and matches its byte-for-byte
-output. `Helpers.formatAmount` stays in place for this issue — R1 deletes
-it once the record refactors land.
+`format` replaces the old `Helpers.formatAmount` (deleted in #92) and matches
+its byte-for-byte output.
 
 -}
 

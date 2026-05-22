@@ -3,6 +3,7 @@ module Pages.Add exposing (viewTab)
 import Data.Category as Category exposing (Category)
 import Data.Flock exposing (Flock)
 import Data.Flocks
+import Data.GeoPoint as GeoPoint
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod(..))
@@ -11,7 +12,6 @@ import Data.Trip exposing (Trip)
 import Data.Trips
 import Data.UserId as UserId
 import Dict
-import Helpers exposing (formatCoord)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -507,7 +507,7 @@ viewLocationStatus ls =
             in
             Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
                 [ Html.span [ Html.Attributes.class "text-moss text-sm" ]
-                    [ Html.text (sourceLabel ++ " — " ++ formatCoord lat lon) ]
+                    [ Html.text (sourceLabel ++ " — " ++ GeoPoint.format (GeoPoint.fromDegrees lat lon)) ]
                 , Html.button
                     [ Html.Events.onClick OpenMapPicker
                     , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"

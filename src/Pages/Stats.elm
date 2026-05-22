@@ -5,14 +5,15 @@ import Chart.Attributes as CA
 import Chart.Events as CE
 import Chart.Item as CI
 import Data.Category as Category
+import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
+import Data.Money as Money exposing (Money)
 import Data.Stats exposing (StatsMode(..))
 import Data.StatsGranularity as StatsGranularity exposing (Granularity(..))
 import Data.StatsHover exposing (CumulativePoint, DailyDay)
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
 import Dict
-import Helpers exposing (formatAmount, isoToDayCount)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -103,7 +104,7 @@ viewHeroReady : AuthState -> List Entry.EffectiveEntry -> Html Msg
 viewHeroReady model entries =
     let
         total =
-            List.sum (List.map .amount entries)
+            Money.sum (List.map .amount entries)
 
         numDays =
             List.length (Entry.uniqueDates entries)
@@ -111,19 +112,22 @@ viewHeroReady model entries =
         numEntries =
             List.length entries
 
+        totalCents =
+            Money.toCents total
+
         avgPerDay =
             if numDays > 0 then
-                total / toFloat numDays
+                Money.fromCents (totalCents // numDays)
 
             else
-                0
+                Money.zero
 
         avgPerEntry =
             if numEntries > 0 then
-                total / toFloat numEntries
+                Money.fromCents (totalCents // numEntries)
 
             else
-                0
+                Money.zero
 
         activeTrip =
             case ( Routing.routeTripId model.route, model.trips ) of
@@ -133,7 +137,7 @@ viewHeroReady model entries =
                 _ ->
                     Nothing
 
-        tripStart =
+        tripStartIso =
             activeTrip
                 |> Maybe.map .startDate
                 |> Maybe.withDefault ""
@@ -144,11 +148,7 @@ viewHeroReady model entries =
                 |> Maybe.withDefault 0
 
         daysIn =
-            if tripStart /= "" && model.today /= "" then
-                isoToDayCount model.today - isoToDayCount tripStart + 1
-
-            else
-                0
+            tripDaysIn tripStartIso model.today
 
         dayOfTripStr =
             if daysIn > 0 then
@@ -166,22 +166,37 @@ viewHeroReady model entries =
         , Html.div [ Html.Attributes.class "flex items-end justify-between gap-4" ]
             [ Html.div []
                 [ Html.div [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
-                    [ Html.text (formatAmount total) ]
+                    [ Html.text (Money.format total) ]
                 , Html.div [ Html.Attributes.class "mt-2 text-xs font-mono tracking-wide text-muted" ]
                     [ Html.text (String.fromInt numEntries ++ " ENTRIES · DAY " ++ dayOfTripStr) ]
                 ]
             , sparkline last7
             ]
         , if budget > 0 then
-            UI.BudgetBar.viewLine { spent = total, budget = budget }
+            UI.BudgetBar.viewLine { spent = toFloat totalCents / 100, budget = budget }
 
           else
             UI.Rule.dashedRule
         , Html.div [ Html.Attributes.class "flex gap-6" ]
-            [ statBlock "DAILY BURN" (formatAmount avgPerDay)
-            , statBlock "AVG / ENTRY" (formatAmount avgPerEntry)
+            [ statBlock "DAILY BURN" (Money.format avgPerDay)
+            , statBlock "AVG / ENTRY" (Money.format avgPerEntry)
             ]
         ]
+
+
+{-| Number of inclusive days from the trip's start date to "today",
+both passed as ISO strings (since `Trip.startDate` and `AuthState.today`
+are still String for now — R5/R7 convert them). Returns 0 when either
+is missing or unparseable.
+-}
+tripDaysIn : String -> String -> Int
+tripDaysIn tripStartIso todayIso =
+    case ( DateField.fromIso tripStartIso, DateField.fromIso todayIso ) of
+        ( Just startDate, Just today ) ->
+            DateField.diffDays startDate today + 1
+
+        _ ->
+            0
 
 
 statBlock : String -> String -> Html Msg
@@ -199,16 +214,19 @@ last7DaysValues entries =
     let
         dates =
             Entry.uniqueDates entries
-                |> List.sort
+                |> List.sortWith DateField.compare
                 |> List.reverse
                 |> List.take 7
                 |> List.reverse
 
         totalForDate d =
             entries
-                |> List.filter (\e -> e.date == d)
+                |> List.filter (\e -> DateField.compare e.date d == EQ)
                 |> List.map .amount
-                |> List.sum
+                |> Money.sum
+                |> Money.toCents
+                |> toFloat
+                |> (\c -> c / 100)
     in
     List.map totalForDate dates
 
@@ -311,18 +329,15 @@ viewEmptyState =
 viewBodyReady : AuthState -> List Entry.EffectiveEntry -> Html Msg
 viewBodyReady model entries =
     let
-        total =
-            List.sum (List.map .amount entries)
-
         numDays =
             List.length (Entry.uniqueDates entries)
 
         numEntries =
             List.length entries
 
-        avgPerDay =
+        avgPerDayCents =
             if numDays > 0 then
-                total / toFloat numDays
+                Money.toCents (Money.sum (List.map .amount entries)) // numDays
 
             else
                 0
@@ -338,10 +353,10 @@ viewBodyReady model entries =
 
         top5 =
             entries
-                |> List.sortBy (\e -> negate e.amount)
+                |> List.sortBy (\e -> negate (Money.toCents e.amount))
                 |> List.take 5
 
-        tripStart =
+        tripStartIso =
             case model.trips of
                 TripsLoaded trips ->
                     (Trips.selectedTrip trips).startDate
@@ -350,17 +365,13 @@ viewBodyReady model entries =
                     ""
 
         daysIn =
-            if tripStart /= "" && model.today /= "" then
-                isoToDayCount model.today - isoToDayCount tripStart + 1
-
-            else
-                0
+            tripDaysIn tripStartIso model.today
     in
     Html.div []
         [ UI.Rule.kicker "AT A GLANCE"
         , UI.Card.subCard
             [ Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3" ]
-                [ statCard "MEDIAN" (formatAmount median)
+                [ statCard "MEDIAN" (Money.format median)
                 , statCard "TOP CATEGORY"
                     (topCat
                         |> Maybe.map (\c -> Category.icon c ++ " " ++ Category.label c)
@@ -369,7 +380,7 @@ viewBodyReady model entries =
                 , if numDays > 1 then
                     statCard "BIGGEST DAY"
                         (bigDay
-                            |> Maybe.map (\( d, t ) -> String.slice 5 10 d ++ "  " ++ formatAmount t)
+                            |> Maybe.map (\( d, t ) -> String.slice 5 10 (DateField.toIso d) ++ "  " ++ Money.format t)
                             |> Maybe.withDefault "—"
                         )
 
@@ -383,8 +394,8 @@ viewBodyReady model entries =
                         "—"
                     )
                 , statCard "PROJ / 30 DAYS"
-                    (if avgPerDay > 0 then
-                        formatAmount (avgPerDay * 30)
+                    (if avgPerDayCents > 0 then
+                        Money.format (Money.fromCents (avgPerDayCents * 30))
 
                      else
                         "—"
@@ -461,10 +472,10 @@ viewBodyReady model entries =
                                                     Category.label entry.category
                                                 )
                                             ]
-                                        , Html.div [ Html.Attributes.class "text-[11px] text-muted" ] [ Html.text entry.date ]
+                                        , Html.div [ Html.Attributes.class "text-[11px] text-muted" ] [ Html.text (DateField.toIso entry.date) ]
                                         ]
                                     , Html.span [ Html.Attributes.class "font-mono text-rust text-base" ]
-                                        [ Html.text (formatAmount entry.amount) ]
+                                        [ Html.text (Money.format entry.amount) ]
                                     ]
                             )
                             top5
@@ -496,15 +507,15 @@ viewCategoryList entries =
                             entries
                                 |> List.filter (\e -> e.category == cat)
                                 |> List.map .amount
-                                |> List.sum
+                                |> Money.sum
                         }
                     )
-                |> List.filter (\r -> r.total > 0)
-                |> List.sortBy (\r -> negate r.total)
+                |> List.filter (\r -> Money.toCents r.total > 0)
+                |> List.sortBy (\r -> negate (Money.toCents r.total))
 
-        maxTotal =
+        maxTotalCents =
             rows
-                |> List.map .total
+                |> List.map (\r -> Money.toCents r.total)
                 |> List.maximum
                 |> Maybe.withDefault 1
     in
@@ -517,7 +528,7 @@ viewCategoryList entries =
                 (\i r ->
                     categoryRow
                         { isLast = i == List.length rows - 1
-                        , maxTotal = maxTotal
+                        , maxTotalCents = maxTotalCents
                         , row = r
                         }
                 )
@@ -527,15 +538,15 @@ viewCategoryList entries =
 
 categoryRow :
     { isLast : Bool
-    , maxTotal : Float
-    , row : { cat : Category.Category, total : Float }
+    , maxTotalCents : Int
+    , row : { cat : Category.Category, total : Money }
     }
     -> Html Msg
-categoryRow { isLast, maxTotal, row } =
+categoryRow { isLast, maxTotalCents, row } =
     let
         pct =
-            if maxTotal > 0 then
-                100 * row.total / maxTotal
+            if maxTotalCents > 0 then
+                100 * toFloat (Money.toCents row.total) / toFloat maxTotalCents
 
             else
                 0
@@ -558,7 +569,7 @@ categoryRow { isLast, maxTotal, row } =
         , Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
             [ categoryBar (Category.color row.cat) pct ]
         , Html.span [ Html.Attributes.class "font-mono text-sm text-rust w-20 text-right shrink-0" ]
-            [ Html.text (formatAmount row.total) ]
+            [ Html.text (Money.format row.total) ]
         ]
 
 
@@ -597,10 +608,10 @@ viewDailyChart resolved hovered entries =
             Entry.uniqueDates entries |> List.reverse
 
         firstDate =
-            List.head sortedDates |> Maybe.withDefault ""
+            List.head sortedDates |> Maybe.map DateField.toIso |> Maybe.withDefault ""
 
         lastDate =
-            sortedDates |> List.reverse |> List.head |> Maybe.withDefault ""
+            sortedDates |> List.reverse |> List.head |> Maybe.map DateField.toIso |> Maybe.withDefault ""
 
         days : List DailyDay
         days =
@@ -634,7 +645,7 @@ viewDailyChart resolved hovered entries =
             [ C.grid [ CA.color UI.Theme.colorTan, CA.dashed [ 2, 3 ] ]
             , C.yLabels
                 [ CA.amount 4
-                , CA.format (\v -> formatAmount v)
+                , CA.format formatDollars
                 , CA.fontSize 10
                 , CA.color UI.Theme.colorMuted
                 , CA.withGrid
@@ -714,7 +725,7 @@ dailyTooltipContent resolved d =
     [ Html.div [ Html.Attributes.class "font-mono text-[11px] text-moss" ]
         [ Html.text header ]
     , Html.div [ Html.Attributes.class "font-mono text-sm text-rust" ]
-        [ Html.text (formatAmount d.total) ]
+        [ Html.text (formatDollars d.total) ]
     ]
 
 
@@ -729,7 +740,7 @@ spanDays entries =
     in
     case ( List.head sorted, sorted |> List.reverse |> List.head ) of
         ( Just first, Just last ) ->
-            isoToDayCount last - isoToDayCount first + 1
+            DateField.diffDays first last + 1
 
         _ ->
             0
@@ -747,52 +758,71 @@ binEntries resolved entries =
             Entry.uniqueDates entries |> List.reverse
 
         firstDate =
-            List.head sortedDates |> Maybe.withDefault ""
+            List.head sortedDates
 
         lastDate =
-            sortedDates |> List.reverse |> List.head |> Maybe.withDefault ""
+            sortedDates |> List.reverse |> List.head
 
-        totalBetween : String -> String -> Float
-        totalBetween startIso endIso =
+        totalBetweenIso : String -> String -> Float
+        totalBetweenIso startIso endIso =
             entries
-                |> List.filter (\e -> e.date >= startIso && e.date <= endIso)
+                |> List.filter
+                    (\e ->
+                        let
+                            iso =
+                                DateField.toIso e.date
+                        in
+                        iso >= startIso && iso <= endIso
+                    )
                 |> List.map .amount
-                |> List.sum
+                |> Money.sum
+                |> Money.toCents
+                |> toFloat
+                |> (\c -> c / 100)
     in
     case resolved of
         Daily ->
             sortedDates
                 |> List.map
                     (\date ->
-                        { date = date
-                        , endDate = date
-                        , total = totalBetween date date
+                        let
+                            iso =
+                                DateField.toIso date
+                        in
+                        { date = iso
+                        , endDate = iso
+                        , total = totalBetweenIso iso iso
                         }
                     )
 
         Weekly ->
-            if firstDate == "" then
-                []
+            case ( firstDate, lastDate ) of
+                ( Just first, Just last ) ->
+                    buildWeeklyBins first last totalBetweenIso
 
-            else
-                buildWeeklyBins firstDate lastDate totalBetween
+                _ ->
+                    []
 
         Monthly ->
-            if firstDate == "" then
-                []
+            case ( firstDate, lastDate ) of
+                ( Just first, Just last ) ->
+                    buildMonthlyBins (DateField.toIso first) (DateField.toIso last) totalBetweenIso
 
-            else
-                buildMonthlyBins firstDate lastDate totalBetween
+                _ ->
+                    []
 
 
-buildWeeklyBins : String -> String -> (String -> String -> Float) -> List DailyDay
+buildWeeklyBins : DateField -> DateField -> (String -> String -> Float) -> List DailyDay
 buildWeeklyBins firstDate lastDate totalBetween =
     let
+        firstIso =
+            DateField.toIso firstDate
+
         firstCount =
-            isoToDayCount firstDate
+            isoToNaiveDayCount firstIso
 
         lastCount =
-            isoToDayCount lastDate
+            isoToNaiveDayCount (DateField.toIso lastDate)
 
         weekCount =
             (lastCount - firstCount) // 7 + 1
@@ -884,20 +914,37 @@ formatIso y m d =
         ++ String.padLeft 2 '0' (String.fromInt d)
 
 
-{-| Inverse of `Helpers.isoToDayCount`.
+{-| Naive day-count used by the weekly-bin code: `y * 365 + monthOffset + d`,
+no leap years. Matches the now-deleted `Helpers.isoToDayCount` byte-for-byte
+so the weekly-bin layout doesn't shift during the typed-primitives
+migration. R5 may revisit this once `Trip.startDate` / `today` move to
+`DateField` — at that point we can use `DateField.diffDays` end-to-end and
+drop these naive helpers.
+-}
+isoToNaiveDayCount : String -> Int
+isoToNaiveDayCount s =
+    case List.filterMap String.toInt (String.split "-" s) of
+        [ y, m, d ] ->
+            let
+                monthOffsets =
+                    [ 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 ]
 
-`isoToDayCount` uses a naive `y * 365 + monthOffset + d` calendar (no leap
-years). We invert the same way: year is `(count - 1) // 365` and the
-remainder picks the month/day off the same `monthOffsets` table. The
-calendar is fictional but self-consistent — adding 7 to a day count and
-piping back through `dayCountToIso` reliably advances the ISO string by
-exactly seven entries, which is all the weekly-bin code needs.
+                offset =
+                    List.drop (m - 1) monthOffsets |> List.head |> Maybe.withDefault 0
+            in
+            y * 365 + offset + d
 
-    dayCountToIso (Helpers.isoToDayCount "2026-04-30")
-    --> "2026-04-30"
+        _ ->
+            0
 
-    dayCountToIso (Helpers.isoToDayCount "2026-04-30" + 7)
-    --> "2026-05-07"
+
+{-| Inverse of `isoToNaiveDayCount`.
+
+Year is `(count - 1) // 365` and the remainder picks the month/day off the
+same `monthOffsets` table. The calendar is fictional but self-consistent —
+adding 7 to a day count and piping back through `dayCountToIso` reliably
+advances the ISO string by exactly seven entries, which is all the
+weekly-bin code needs.
 
 -}
 dayCountToIso : Int -> String
@@ -955,22 +1002,25 @@ viewCumulativeChart hovered entries =
         points =
             List.indexedMap
                 (\i date ->
-                    { date = date
+                    { date = DateField.toIso date
                     , x = toFloat (i + 1)
                     , y =
                         entries
-                            |> List.filter (\e -> e.date <= date)
+                            |> List.filter (\e -> DateField.compare e.date date /= GT)
                             |> List.map .amount
-                            |> List.sum
+                            |> Money.sum
+                            |> Money.toCents
+                            |> toFloat
+                            |> (\c -> c / 100)
                     }
                 )
                 sorted
 
         firstDate =
-            List.head sorted |> Maybe.withDefault ""
+            List.head sorted |> Maybe.map DateField.toIso |> Maybe.withDefault ""
 
         lastDate =
-            sorted |> List.reverse |> List.head |> Maybe.withDefault ""
+            sorted |> List.reverse |> List.head |> Maybe.map DateField.toIso |> Maybe.withDefault ""
 
         finalTotal =
             points
@@ -990,7 +1040,7 @@ viewCumulativeChart hovered entries =
             ]
             [ C.yLabels
                 [ CA.amount 4
-                , CA.format (\v -> formatAmount v)
+                , CA.format formatDollars
                 , CA.fontSize 10
                 , CA.color UI.Theme.colorMuted
                 , CA.withGrid
@@ -1029,7 +1079,7 @@ viewCumulativeChart hovered entries =
                 , CA.color UI.Theme.colorRust
                 , CA.alignRight
                 ]
-                [ Svg.text (formatAmount finalTotal) ]
+                [ Svg.text (formatDollars finalTotal) ]
             , C.each hovered <|
                 \_ item ->
                     [ C.tooltip item
@@ -1046,7 +1096,7 @@ cumulativeTooltipContent p =
     [ Html.div [ Html.Attributes.class "font-mono text-[11px] text-moss" ]
         [ Html.text (formatDateShort p.date) ]
     , Html.div [ Html.Attributes.class "font-mono text-sm text-rust" ]
-        [ Html.text (formatAmount p.y) ]
+        [ Html.text (formatDollars p.y) ]
     ]
 
 
@@ -1058,6 +1108,20 @@ formatDateShort iso =
 
         _ ->
             iso
+
+
+{-| Format a chart-axis Float (already in dollars) as `"$X.YY"`. Mirrors
+`Money.format` but works on the `Float`-flavoured `total` / `y` fields
+that the elm-charts API requires. R5 may flip the chart records to
+`Money` and let us drop this.
+-}
+formatDollars : Float -> String
+formatDollars dollars =
+    let
+        cents =
+            round (dollars * 100)
+    in
+    Money.format (Money.fromCents cents)
 
 
 monthAbbr : String -> String
