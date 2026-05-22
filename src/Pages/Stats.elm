@@ -137,18 +137,17 @@ viewHeroReady model entries =
                 _ ->
                     Nothing
 
-        tripStartIso =
+        tripStart =
             activeTrip
                 |> Maybe.map .startDate
-                |> Maybe.withDefault ""
 
         budget =
             activeTrip
                 |> Maybe.map .budget
-                |> Maybe.withDefault 0
+                |> Maybe.withDefault Money.zero
 
         daysIn =
-            tripDaysIn tripStartIso model.today
+            tripDaysIn tripStart model.today
 
         dayOfTripStr =
             if daysIn > 0 then
@@ -172,8 +171,8 @@ viewHeroReady model entries =
                 ]
             , sparkline last7
             ]
-        , if budget > 0 then
-            UI.BudgetBar.viewLine { spent = toFloat totalCents / 100, budget = budget }
+        , if not (Money.isZero budget) then
+            UI.BudgetBar.viewLine { budget = budget, spent = total }
 
           else
             UI.Rule.dashedRule
@@ -184,16 +183,22 @@ viewHeroReady model entries =
         ]
 
 
-{-| Number of inclusive days from the trip's start date to "today",
-both passed as ISO strings (since `Trip.startDate` and `AuthState.today`
-are still String for now — R5/R7 convert them). Returns 0 when either
-is missing or unparseable.
+{-| Number of inclusive days from the trip's start date to "today".
+`tripStart` is a `Maybe DateField` because the active trip is itself a
+`Maybe Trip` (no selection yet). `todayIso` is still String because
+`AuthState.today` moves to `DateField` in R5/R7 — until then this is
+the boundary. Returns 0 when start is missing, today is unparseable,
+or the trip's start is the legacy epoch sentinel ("no start date set").
 -}
-tripDaysIn : String -> String -> Int
-tripDaysIn tripStartIso todayIso =
-    case ( DateField.fromIso tripStartIso, DateField.fromIso todayIso ) of
-        ( Just startDate, Just today ) ->
-            DateField.diffDays startDate today + 1
+tripDaysIn : Maybe DateField -> String -> Int
+tripDaysIn tripStart todayIso =
+    case ( tripStart, DateField.fromIso todayIso ) of
+        ( Just start, Just today ) ->
+            if DateField.toIso start == "1970-01-01" then
+                0
+
+            else
+                DateField.diffDays start today + 1
 
         _ ->
             0
@@ -356,16 +361,16 @@ viewBodyReady model entries =
                 |> List.sortBy (\e -> negate (Money.toCents e.amount))
                 |> List.take 5
 
-        tripStartIso =
+        tripStart =
             case model.trips of
                 TripsLoaded trips ->
-                    (Trips.selectedTrip trips).startDate
+                    Just (Trips.selectedTrip trips).startDate
 
                 _ ->
-                    ""
+                    Nothing
 
         daysIn =
-            tripDaysIn tripStartIso model.today
+            tripDaysIn tripStart model.today
     in
     Html.div []
         [ UI.Rule.kicker "AT A GLANCE"

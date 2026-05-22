@@ -40,16 +40,16 @@ viewTab as_ =
     }
 
 
-activeBudget : AuthState -> Float
+activeBudget : AuthState -> Money
 activeBudget as_ =
     case ( Routing.routeTripId as_.route, as_.trips ) of
         ( Just tripId, Data.Trips.TripsLoaded trips ) ->
             Data.Trips.findTrip tripId trips
                 |> Maybe.map .budget
-                |> Maybe.withDefault 0
+                |> Maybe.withDefault Money.zero
 
         _ ->
-            0
+            Money.zero
 
 
 
@@ -97,7 +97,7 @@ viewActions model =
     ]
 
 
-viewHero : Float -> LedgerMode -> Html Msg
+viewHero : Money -> LedgerMode -> Html Msg
 viewHero budget mode =
     case mode of
         LedgerReady entries ->
@@ -108,7 +108,7 @@ viewHero budget mode =
                 [ Html.text "—" ]
 
 
-viewLedgerHero : Float -> List Entry.EffectiveEntry -> Html Msg
+viewLedgerHero : Money -> List Entry.EffectiveEntry -> Html Msg
 viewLedgerHero budget entries =
     let
         total =
@@ -145,8 +145,8 @@ viewLedgerHero budget entries =
         , Html.div
             [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
             [ Html.text kickerText ]
-        , if budget > 0 then
-            UI.BudgetBar.viewSubtle { spent = toFloat (Money.toCents total) / 100, budget = budget }
+        , if not (Money.isZero budget) then
+            UI.BudgetBar.viewSubtle { budget = budget, spent = total }
 
           else
             Html.text ""

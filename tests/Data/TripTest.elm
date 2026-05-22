@@ -1,14 +1,17 @@
 module Data.TripTest exposing (suite)
 
+import Data.DateField as DateField exposing (DateField)
 import Data.Flock exposing (BillingStatus(..), Flock)
 import Data.FlockId as FlockId exposing (FlockId)
 import Data.Flocks as Flocks
+import Data.Money as Money
 import Data.Tier as Tier
 import Data.Trip as Trip exposing (Trip)
 import Data.TripId as TripId
 import Data.UserId as UserId exposing (UserId)
 import Expect
 import Test exposing (Test, describe, test)
+import Time
 
 
 suite : Test
@@ -139,28 +142,37 @@ suite =
 
 personalTrip : String -> Trip
 personalTrip id =
-    { budget = 0
+    { budget = Money.zero
     , coverPhotoUrl = ""
     , description = ""
-    , endDate = ""
+    , endDate = epoch
     , flockId = Nothing
     , id = TripId.fromString id
     , name = "Personal"
-    , startDate = ""
+    , startDate = epoch
     }
 
 
 flockTrip : String -> FlockId -> Trip
 flockTrip id fid =
-    { budget = 0
+    { budget = Money.zero
     , coverPhotoUrl = ""
     , description = ""
-    , endDate = ""
+    , endDate = epoch
     , flockId = Just fid
     , id = TripId.fromString id
     , name = "Flock"
-    , startDate = ""
+    , startDate = epoch
     }
+
+
+{-| Test-only sentinel for "no date set" — mirrors the production
+behaviour where `DateField.decoder` falls back to the epoch for empty
+or malformed wire values.
+-}
+epoch : DateField
+epoch =
+    DateField.today Time.utc (Time.millisToPosix 0)
 
 
 {-| A known-good 12-char hex FlockId used across the test fixtures. We

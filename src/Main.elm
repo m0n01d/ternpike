@@ -1179,6 +1179,52 @@ monthNum month =
 
 
 
+-- TRIP FORM PARSERS
+
+
+{-| Parse a trip-form budget input into a `Money`. An empty / unparseable
+string falls back to `Money.zero`, mirroring the pre-R2 behaviour where
+`String.toFloat form.budget |> Maybe.withDefault 0` stored a zero budget
+for "no budget set". `Trip.validator` already rejects non-empty inputs
+that don't parse, so the fallback is only reached for genuinely-empty
+inputs.
+-}
+parseFormBudget : String -> Money.Money
+parseFormBudget raw =
+    Money.fromDollarString raw
+        |> Maybe.withDefault Money.zero
+
+
+{-| Parse a trip-form date input into a `DateField`. An empty /
+unparseable string falls back to the epoch (`1970-01-01`), matching the
+legacy `""` sentinel that the pre-R2 code stored for "date not set" —
+downstream code asks `Trip.startDate /= ""` against the legacy shape;
+post-R2 the equivalent is "is this exactly the epoch?", which the view
+code in `Pages/Trips.elm` already handles via `DateField.compare`.
+
+`Trip.validator` rejects out-of-order date pairs at the String level so
+we never reach this code with a syntactically-valid but logically-bad
+date.
+
+-}
+parseFormDate : String -> DateField.DateField
+parseFormDate raw =
+    DateField.fromIsoOr epochDate raw
+
+
+{-| The DateField equivalent of the legacy `""` sentinel — used as the
+fallback when a trip-form date input is empty or unparseable. The epoch
+choice mirrors `Data.DateField.decoder`'s silent-default for malformed
+wire values, and is what `DateField.fromIsoOr` falls back to inside the
+module itself.
+-}
+epochDate : DateField.DateField
+epochDate =
+    DateField.fromIso "1970-01-01"
+        |> Maybe.withDefault (DateField.today Time.utc (Time.millisToPosix 0))
+
+
+
 -- INIT
 
 
@@ -2184,19 +2230,19 @@ updateAuth msg as_ =
                     | tripForm =
                         Just
                             { budget =
-                                if trip.budget > 0 then
-                                    String.fromFloat trip.budget
+                                if Money.isZero trip.budget then
+                                    ""
 
                                 else
-                                    ""
+                                    Money.toDollarString trip.budget
                             , coverPhotoUrl = trip.coverPhotoUrl
                             , description = trip.description
                             , editing = Just trip
-                            , endDate = trip.endDate
+                            , endDate = DateField.toIso trip.endDate
                             , errors = []
                             , groupNameOverridden = False
                             , name = trip.name
-                            , startDate = trip.startDate
+                            , startDate = DateField.toIso trip.startDate
                             , submitting = False
                             , target =
                                 case Trip.targetForTrip trip of
@@ -2422,12 +2468,12 @@ updateAuth msg as_ =
                                     let
                                         updated =
                                             { existing
-                                                | budget = String.toFloat form.budget |> Maybe.withDefault 0
+                                                | budget = parseFormBudget form.budget
                                                 , coverPhotoUrl = form.coverPhotoUrl
                                                 , description = form.description
-                                                , endDate = form.endDate
+                                                , endDate = parseFormDate form.endDate
                                                 , name = form.name
-                                                , startDate = form.startDate
+                                                , startDate = parseFormDate form.startDate
                                             }
                                     in
                                     ( AuthModel { as_ | tripForm = Nothing, trips = upsertTripIntoState updated as_.trips }
@@ -2486,14 +2532,14 @@ updateAuth msg as_ =
                                     ( Nothing, Trip.Personal )
 
                         newTrip =
-                            { budget = String.toFloat form.budget |> Maybe.withDefault 0
+                            { budget = parseFormBudget form.budget
                             , coverPhotoUrl = form.coverPhotoUrl
                             , description = form.description
-                            , endDate = form.endDate
+                            , endDate = parseFormDate form.endDate
                             , flockId = newFlockId
                             , id = tripId
                             , name = form.name
-                            , startDate = form.startDate
+                            , startDate = parseFormDate form.startDate
                             }
 
                         newTrips =

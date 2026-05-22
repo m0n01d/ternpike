@@ -124,36 +124,26 @@ viewTripHero maybeFlock activeTrip entries =
             Money.sum (List.map .amount entries)
 
         hasStart =
-            activeTrip.startDate /= ""
+            not (isEpochDate activeTrip.startDate)
 
         hasEnd =
-            activeTrip.endDate /= ""
-
-        formatIso iso =
-            DateField.fromIso iso
-                |> Maybe.map DateField.formatDisplay
-                |> Maybe.withDefault iso
+            not (isEpochDate activeTrip.endDate)
 
         dateLine =
             if hasStart && hasEnd then
-                formatIso activeTrip.startDate
+                DateField.formatDisplay activeTrip.startDate
                     ++ " — "
-                    ++ formatIso activeTrip.endDate
+                    ++ DateField.formatDisplay activeTrip.endDate
 
             else if hasStart then
-                formatIso activeTrip.startDate
+                DateField.formatDisplay activeTrip.startDate
 
             else
                 ""
 
         totalDays =
             if hasStart && hasEnd then
-                case ( DateField.fromIso activeTrip.startDate, DateField.fromIso activeTrip.endDate ) of
-                    ( Just start, Just end ) ->
-                        Basics.max 1 (DateField.diffDays start end + 1)
-
-                    _ ->
-                        0
+                Basics.max 1 (DateField.diffDays activeTrip.startDate activeTrip.endDate + 1)
 
             else
                 0
@@ -197,10 +187,10 @@ viewTripHero maybeFlock activeTrip entries =
                 Nothing ->
                     Html.text ""
             ]
-        , if activeTrip.budget > 0 then
+        , if not (Money.isZero activeTrip.budget) then
             UI.BudgetBar.view
-                { spent = toFloat (Money.toCents totalSpent) / 100
-                , budget = activeTrip.budget
+                { budget = activeTrip.budget
+                , spent = totalSpent
                 }
 
           else
@@ -262,14 +252,9 @@ viewOtherTripRow as_ trip =
             , Html.p [ Html.Attributes.class "text-[15px] font-semibold mb-0.5 truncate" ]
                 [ Html.text trip.name ]
             , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
-                [ if trip.startDate /= "" then
+                [ if not (isEpochDate trip.startDate) then
                     Html.p [ Html.Attributes.class "text-[11px] text-moss font-mono" ]
-                        [ Html.text
-                            (DateField.fromIso trip.startDate
-                                |> Maybe.map DateField.formatDisplay
-                                |> Maybe.withDefault trip.startDate
-                            )
-                        ]
+                        [ Html.text (DateField.formatDisplay trip.startDate) ]
 
                   else
                     Html.text ""
@@ -641,3 +626,14 @@ flockTileSub flock =
 
     else
         "OWNER + " ++ String.fromInt (count - 1)
+
+
+{-| True when a `DateField` is the epoch sentinel (`1970-01-01`).
+After R2, trip dates that were stored as the legacy `""` empty-string
+sentinel parse to the epoch (via `DateField.decoder`'s built-in fallback,
+or via `Main.parseFormDate` for newly-submitted forms). The view code
+treats the epoch as "no date set" — same as the pre-R2 `/= ""` check.
+-}
+isEpochDate : DateField.DateField -> Bool
+isEpochDate d =
+    DateField.toIso d == "1970-01-01"
