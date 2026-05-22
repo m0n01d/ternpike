@@ -37,6 +37,7 @@ import Chart.Item as CI
 import Data.Amendment exposing (Amendment)
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category)
+import Data.DateField exposing (DateField)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
 import Data.FlockId exposing (FlockId)
@@ -100,7 +101,7 @@ type alias GuestState =
     , pendingJoinToken : Maybe String
     , session : GuestSession
     , showSettings : Bool
-    , today : String
+    , today : DateField
     , version : String
     }
 
@@ -187,7 +188,7 @@ type alias AuthState =
     , syncState : SyncState
     , tier : Tier
     , toast : Maybe String
-    , today : String
+    , today : DateField
     , tripForm : Maybe TripForm
     , tripLoaded : Set String
     , trips : TripsState
@@ -217,9 +218,12 @@ Location: `GotGpsCoords`, `GeolocationDenied`, `OpenMapPicker`,
 
 Trip CRUD: `OpenNewTripForm`, `OpenEditTripForm`, `TripFieldChanged`,
 `SaveTripForm`, `GotSaveTripTime`, `CloseTripForm`,
-`ConfirmDeleteTrip`, `CancelDeleteTrip`, `DeleteTrip`.
+`ConfirmDeleteTrip`, `CancelDeleteTrip`, `DeleteTrip`,
+`GotDeleteTripTime` — `DeleteTrip` fires a `Time.now` task so the void
+tombstone's `createdAt` is the actual instant, not the calendar day.
 
-Expense submit/void: `SubmitEntry`, `GotSubmitTime`, `VoidEntry`.
+Expense submit/void: `SubmitEntry`, `GotSubmitTime`, `VoidEntry`,
+`GotVoidTime` — same `Time.now` pattern for the void tombstone.
 
 Expense duplicate: `DuplicateEntry`, `GotDuplicateTime` — snapshot the
 effective state into a brand-new expense doc in the same trip.
@@ -279,15 +283,17 @@ type Msg
     | EmailInputChanged String
     | FilesSelected (List File)
     | GeolocationDenied
+    | GotDeleteTripTime Trip Time.Posix
+    | GotDuplicateTime Expense Time.Posix
     | GotExifCoords String (Maybe Float) (Maybe Float) String
     | GotFileUrl String String
     | GotGpsCoords Float Float
-    | GotOcrResult String (Result Http.Error String)
-    | GotDuplicateTime Expense Time.Posix
     | GotMoveTime Expense TripId Time.Posix
+    | GotOcrResult String (Result Http.Error String)
     | GotPouchMsg Json.Decode.Value
     | GotSaveTripTime Time.Posix
     | GotSubmitTime Time.Posix
+    | GotVoidTime Expense Time.Posix
     | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
     | HoverDailyBars (List (CI.One DailyDay CI.Bar))
     | InviteEmailChanged String

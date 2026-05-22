@@ -74,7 +74,7 @@ import Data.Amendment as Amendment
 import Data.AmendmentId as AmendmentId
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category as Category exposing (Category(..))
-import Data.DateField as DateField
+import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
 import Data.Expense as Expense
 import Data.ExpenseId as ExpenseId
@@ -908,11 +908,16 @@ removeTripFromState id state =
 -- APP STATE HELPERS
 
 
-defaultPendingEntry : String -> PendingEntry
+{-| Build a blank Add-page form pre-seeded with the user's calendar
+today. The `DateField` is rendered back to the legacy `YYYY-MM-DD`
+String for `PendingEntry.date` because the form input remains a String
+input (R7 will tighten that field).
+-}
+defaultPendingEntry : DateField -> PendingEntry
 defaultPendingEntry today =
     { amount = ""
     , category = Fuel
-    , date = today
+    , date = DateField.toIso today
     , locationState = LocationIdle
     , longNote = ""
     , merchant = ""
@@ -1186,6 +1191,10 @@ init flagsJson url key =
                 |> Maybe.andThen Tier.fromString
                 |> Maybe.withDefault Tier.Fledgling
 
+        initialToday =
+            D.decodeValue (D.field "today" DateField.decoder) flagsJson
+                |> Result.withDefault epochDate
+
         cfg =
             { anthropicKey = dec "anthropicKey"
             , backendUrl = dec "backendUrl"
@@ -1204,7 +1213,7 @@ init flagsJson url key =
             , pendingJoinToken = Nothing
             , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
-            , today = dec "today"
+            , today = initialToday
             , version = dec "version"
             }
     in
@@ -1820,9 +1829,17 @@ updateAuth msg as_ =
                             ( AuthModel { as_ | submitting = False }, Cmd.none )
 
         VoidEntry expense ->
+            ( AuthModel { as_ | openLedgerMenu = Nothing }
+            , Task.perform (GotVoidTime expense) Time.now
+            )
+
+        GotVoidTime expense posix ->
             let
                 voidId =
                     "void::" ++ ExpenseId.toString expense.id ++ "::del"
+
+                createdAtIso =
+                    Iso8601.fromPosix posix
 
                 createdBy =
                     UserId.fromString as_.creds.email
@@ -1833,21 +1850,17 @@ updateAuth msg as_ =
                 optimisticVoid =
                     { id = voidId
                     , targetId = ExpenseId.toString expense.id
-                    , createdAt = as_.today
+                    , createdAt = createdAtIso
                     , createdBy = createdBy
                     }
             in
-            ( AuthModel
-                { as_
-                    | openLedgerMenu = Nothing
-                    , voids = Dict.insert voidId optimisticVoid as_.voids
-                }
+            ( AuthModel { as_ | voids = Dict.insert voidId optimisticVoid as_.voids }
             , sendPouch
                 (SaveVoid (targetForTripId expense.tripId as_)
                     (E.object
                         [ ( "_id", E.string voidId )
                         , ( "targetId", E.string (ExpenseId.toString expense.id) )
-                        , ( "createdAt", E.string as_.today )
+                        , ( "createdAt", E.string createdAtIso )
                         , ( "createdBy", UserId.encode createdBy )
                         , ( "type", E.string "void" )
                         ]
@@ -1946,13 +1959,16 @@ updateAuth msg as_ =
                 voidId =
                     "void::" ++ ExpenseId.toString expense.id ++ "::del"
 
+                createdAtIso =
+                    Iso8601.fromPosix posix
+
                 createdBy =
                     UserId.fromString as_.creds.email
 
                 optimisticVoid =
                     { id = voidId
                     , targetId = ExpenseId.toString expense.id
-                    , createdAt = as_.today
+                    , createdAt = createdAtIso
                     , createdBy = createdBy
                     }
 
@@ -1982,7 +1998,7 @@ updateAuth msg as_ =
                         (E.object
                             [ ( "_id", E.string voidId )
                             , ( "targetId", E.string (ExpenseId.toString expense.id) )
-                            , ( "createdAt", E.string as_.today )
+                            , ( "createdAt", E.string createdAtIso )
                             , ( "createdBy", UserId.encode createdBy )
                             , ( "type", E.string "void" )
                             ]
@@ -2092,8 +2108,8 @@ updateAuth msg as_ =
                             , category = Maybe.withDefault Fuel ocr.category
                             , date =
                                 ocr.date
-                                    |> Maybe.map DateField.toIso
                                     |> Maybe.withDefault as_.today
+                                    |> DateField.toIso
                             , locationState = item.locationState
                             , longNote = Maybe.withDefault "" ocr.longNote
                             , merchant = Maybe.withDefault "" ocr.merchant
@@ -2161,7 +2177,7 @@ updateAuth msg as_ =
                             , errors = []
                             , groupNameOverridden = False
                             , name = ""
-                            , startDate = as_.today
+                            , startDate = DateField.toIso as_.today
                             , submitting = False
                             , target = Trip.ToPersonal
                             }
@@ -2516,23 +2532,10 @@ updateAuth msg as_ =
             ( AuthModel { as_ | confirmDeleteTrip = Nothing }, Cmd.none )
 
         DeleteTrip trip ->
-            let
-                voidId =
-                    "void::" ++ TripId.toString trip.id ++ "::del"
-
-                voidCmd =
-                    sendPouch
-                        (SaveVoid (Trip.targetForTrip trip)
-                            (E.object
-                                [ ( "_id", E.string voidId )
-                                , ( "targetId", E.string (TripId.toString trip.id) )
-                                , ( "createdAt", E.string as_.today )
-                                , ( "createdBy", UserId.encode (UserId.fromString as_.creds.email) )
-                                , ( "type", E.string "void" )
-                                ]
-                            )
-                        )
-            in
+            -- Local-state transitions (selection / route) happen
+            -- immediately; the void tombstone's `createdAt` is filled in
+            -- by GotDeleteTripTime once the runtime hands us a real
+            -- `Time.Posix` instant.
             case removeTripFromState trip.id as_.trips of
                 TripsLoaded trips ->
                     let
@@ -2546,7 +2549,7 @@ updateAuth msg as_ =
                             , trips = TripsLoaded trips
                         }
                     , Cmd.batch
-                        [ voidCmd
+                        [ Task.perform (GotDeleteTripTime trip) Time.now
                         , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath nextHead.id LedgerTab)
                         ]
                     )
@@ -2558,13 +2561,38 @@ updateAuth msg as_ =
                             , route = RouteTrips
                             , trips = NoTripsYet
                         }
-                    , Cmd.batch [ voidCmd, Nav.pushUrl as_.key (as_.basePath ++ "trips") ]
+                    , Cmd.batch
+                        [ Task.perform (GotDeleteTripTime trip) Time.now
+                        , Nav.pushUrl as_.key (as_.basePath ++ "trips")
+                        ]
                     )
 
                 other ->
                     ( AuthModel { as_ | confirmDeleteTrip = Nothing, trips = other }
-                    , voidCmd
+                    , Task.perform (GotDeleteTripTime trip) Time.now
                     )
+
+        GotDeleteTripTime trip posix ->
+            let
+                voidId =
+                    "void::" ++ TripId.toString trip.id ++ "::del"
+
+                createdAtIso =
+                    Iso8601.fromPosix posix
+            in
+            ( AuthModel as_
+            , sendPouch
+                (SaveVoid (Trip.targetForTrip trip)
+                    (E.object
+                        [ ( "_id", E.string voidId )
+                        , ( "targetId", E.string (TripId.toString trip.id) )
+                        , ( "createdAt", E.string createdAtIso )
+                        , ( "createdBy", UserId.encode (UserId.fromString as_.creds.email) )
+                        , ( "type", E.string "void" )
+                        ]
+                    )
+                )
+            )
 
         HoverCumulativePoints items ->
             ( AuthModel { as_ | statsHover = StatsHover.setCumulative as_.statsHover items }

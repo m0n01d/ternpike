@@ -26,6 +26,7 @@ don't need to gate, but doing so saves a DOM node.
 
 -}
 
+import Data.DateField as DateField exposing (DateField)
 import Data.Flock as Flock exposing (BillingStatus(..), Flock)
 import Data.Tier as Tier exposing (Tier)
 import Data.UserId as UserId exposing (UserId)
@@ -46,13 +47,13 @@ graceWindowDays =
 {-| Full-bleed banner for flock-scoped trip pages. Takes the
 current-user `UserId` so role (owner / member) can be derived, the
 viewer's own `Tier` so the Fly+ vs Fledgling member split can render
-the right CTA, and `today` (ISO date) so the countdown can be
+the right CTA, and `today` (calendar date) so the countdown can be
 computed.
 
 Returns `Html.text ""` when the flock is `Active` — the common case.
 
 -}
-view : { currentUser : UserId, flock : Flock, tier : Tier, today : String } -> Html Msg
+view : { currentUser : UserId, flock : Flock, tier : Tier, today : DateField } -> Html Msg
 view opts =
     let
         role =
@@ -81,7 +82,7 @@ view opts =
 chrome — sits inside an already-padded card. Returns `Html.text ""`
 when the flock is `Active`.
 -}
-viewInline : { currentUser : UserId, flock : Flock, tier : Tier, today : String } -> Html Msg
+viewInline : { currentUser : UserId, flock : Flock, tier : Tier, today : DateField } -> Html Msg
 viewInline opts =
     let
         role =
@@ -193,53 +194,28 @@ frozenCopy role flock =
 
 
 {-| Floor-at-zero days remaining in the grace window. Falls back to 0
-when `billingLapsedAt` is missing (the server should always set it for
-Grace, but we don't crash if it doesn't).
+when `billingLapsedAt` is missing or unparseable (the server should
+always set it for Grace, but we don't crash if it doesn't).
+`billingLapsedAt` is the legacy `"YYYY-MM-DDTHH:MM:SSZ"` ISO timestamp
+on `Data.Flock.Flock`; we only care about the calendar-day portion for
+the countdown, so we trim to the date and parse with `DateField.fromIso`.
 -}
-daysRemaining : String -> Flock -> Int
+daysRemaining : DateField -> Flock -> Int
 daysRemaining today flock =
-    case flock.billingLapsedAt of
+    case Maybe.andThen (\iso -> DateField.fromIso (String.left 10 iso)) flock.billingLapsedAt of
         Nothing ->
             0
 
-        Just iso ->
+        Just lapsedDate ->
             let
-                lapsedDay =
-                    isoDayCount (String.left 10 iso)
-
-                todayDay =
-                    isoDayCount (String.left 10 today)
-
                 remaining =
-                    (lapsedDay + graceWindowDays) - todayDay
+                    graceWindowDays - DateField.diffDays lapsedDate today
             in
             if remaining < 0 then
                 0
 
             else
                 remaining
-
-
-{-| Local copy of `Helpers.isoToDayCount` — kept inline so the banner
-module doesn't reach into Helpers. Same algorithm: y\*365 + month
-offset + day. Accurate enough for "how many days until X" UX over a
-14-day window; not calendar-precise for leap years across decades.
--}
-isoDayCount : String -> Int
-isoDayCount s =
-    case List.filterMap String.toInt (String.split "-" s) of
-        [ y, m, d ] ->
-            let
-                monthOffsets =
-                    [ 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 ]
-
-                offset =
-                    List.drop (m - 1) monthOffsets |> List.head |> Maybe.withDefault 0
-            in
-            y * 365 + offset + d
-
-        _ ->
-            0
 
 
 
