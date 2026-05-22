@@ -15,9 +15,12 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `npm run build && npx wrangler dev --port ${port}`,
+    // `npm install` is a no-op once marketing/node_modules matches the
+    // lockfile — included so a fresh checkout doesn't trip on a missing
+    // nunjucks / wrangler.
+    command: `npm install --no-audit --no-fund --silent && npm run build && npx wrangler dev --port ${port}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 90_000,
+    timeout: 180_000,
     url: `http://127.0.0.1:${port}`,
   },
   workers: 1,
