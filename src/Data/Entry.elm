@@ -112,7 +112,7 @@ resolve expenses amendments voids activeTripId =
 
                 Just amends ->
                     amends
-                        |> List.sortBy .createdAt
+                        |> List.sortBy (Time.posixToMillis << .createdAt)
                         |> List.foldl (\a acc -> applyAmendment acc a) (toEffectiveEntry True expense)
     in
     expenses
@@ -141,27 +141,11 @@ toEffectiveEntry isAmended e =
 
 applyAmendment : EffectiveEntry -> Amendment -> EffectiveEntry
 applyAmendment e a =
-    { amount =
-        case a.amount of
-            Just dollars ->
-                -- TODO #94: Amendment.amount is still Maybe Float — R3
-                -- will flip it to Maybe Money and we can drop this shim.
-                Money.fromCents (round (dollars * 100))
-
-            Nothing ->
-                e.amount
+    { amount = Maybe.withDefault e.amount a.amount
     , category = Maybe.withDefault e.category a.category
     , createdAt = e.createdAt
     , createdBy = e.createdBy
-    , date =
-        case a.date of
-            Just iso ->
-                -- TODO #94: Amendment.date is still Maybe String — R3
-                -- will flip it to Maybe DateField and we can drop this shim.
-                DateField.fromIsoOr e.date iso
-
-            Nothing ->
-                e.date
+    , date = Maybe.withDefault e.date a.date
     , geoPoint = e.geoPoint
     , id = e.id
     , isAmended = True

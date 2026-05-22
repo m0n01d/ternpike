@@ -71,6 +71,7 @@ import Browser
 import Browser.Dom
 import Browser.Navigation as Nav
 import Data.Amendment as Amendment
+import Data.AmendmentId as AmendmentId
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category as Category exposing (Category(..))
 import Data.DateField as DateField
@@ -83,6 +84,7 @@ import Data.FlockUi as FlockUi
 import Data.Flocks as Flocks
 import Data.GeoPoint as GeoPoint
 import Data.Guest exposing (GuestReason(..), GuestSession)
+import Data.Iso8601 as Iso8601
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
@@ -729,7 +731,7 @@ handleDbChange change as_ =
         as1 =
             case change of
                 AmendChanged a ->
-                    { as_ | amendments = Dict.insert a.id a as_.amendments }
+                    { as_ | amendments = Dict.insert (AmendmentId.toString a.id) a as_.amendments }
 
                 ExpenseChanged e ->
                     { as_
@@ -1108,74 +1110,6 @@ getMimeType dataUrl =
 
     else
         "image/jpeg"
-
-
-
--- TIME
-
-
-posixToIso : Time.Posix -> String
-posixToIso posix =
-    let
-        y =
-            String.fromInt (Time.toYear Time.utc posix)
-
-        m =
-            String.fromInt (monthNum (Time.toMonth Time.utc posix)) |> String.padLeft 2 '0'
-
-        d =
-            String.fromInt (Time.toDay Time.utc posix) |> String.padLeft 2 '0'
-
-        h =
-            String.fromInt (Time.toHour Time.utc posix) |> String.padLeft 2 '0'
-
-        mi =
-            String.fromInt (Time.toMinute Time.utc posix) |> String.padLeft 2 '0'
-
-        s =
-            String.fromInt (Time.toSecond Time.utc posix) |> String.padLeft 2 '0'
-    in
-    y ++ "-" ++ m ++ "-" ++ d ++ "T" ++ h ++ ":" ++ mi ++ ":" ++ s ++ "Z"
-
-
-monthNum : Time.Month -> Int
-monthNum month =
-    case month of
-        Time.Jan ->
-            1
-
-        Time.Feb ->
-            2
-
-        Time.Mar ->
-            3
-
-        Time.Apr ->
-            4
-
-        Time.May ->
-            5
-
-        Time.Jun ->
-            6
-
-        Time.Jul ->
-            7
-
-        Time.Aug ->
-            8
-
-        Time.Sep ->
-            9
-
-        Time.Oct ->
-            10
-
-        Time.Nov ->
-            11
-
-        Time.Dec ->
-            12
 
 
 
@@ -1744,7 +1678,8 @@ updateAuth msg as_ =
                         Just original ->
                             let
                                 amendId =
-                                    "amend::" ++ ExpenseId.toString original.id ++ "::" ++ String.left 8 timestamp
+                                    AmendmentId.fromString
+                                        ("amend::" ++ ExpenseId.toString original.id ++ "::" ++ String.left 8 timestamp)
 
                                 originalAmountDollars =
                                     Money.toDollarString original.amount
@@ -1758,7 +1693,6 @@ updateAuth msg as_ =
                                     , amount =
                                         if p.amount /= originalAmountDollars then
                                             Money.fromDollarString p.amount
-                                                |> Maybe.map (\m -> toFloat (Money.toCents m) / 100)
 
                                         else
                                             Nothing
@@ -1768,11 +1702,14 @@ updateAuth msg as_ =
 
                                         else
                                             Nothing
-                                    , createdAt = posixToIso posix
+                                    , createdAt = posix
                                     , createdBy = UserId.fromString as_.creds.email
                                     , date =
+                                        -- `p.date : String` is from the `<input type=date>` form,
+                                        -- always `YYYY-MM-DD` or empty. The empty case parses to
+                                        -- `Nothing` here, which correctly means "no date change."
                                         if p.date /= originalDateIso then
-                                            Just p.date
+                                            DateField.fromIso p.date
 
                                         else
                                             Nothing
@@ -1830,7 +1767,7 @@ updateAuth msg as_ =
                                     (Trips.selectedTrip loadedTrips).id
 
                                 expenseId =
-                                    "expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp
+                                    "expense::" ++ Iso8601.fromPosix posix ++ "::" ++ String.left 8 timestamp
 
                                 geoPoint =
                                     case ( eLat, eLon ) of
@@ -1925,7 +1862,7 @@ updateAuth msg as_ =
 
                 newId =
                     ExpenseId.fromString
-                        ("expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp)
+                        ("expense::" ++ Iso8601.fromPosix posix ++ "::" ++ String.left 8 timestamp)
 
                 duplicate =
                     Expense.snapshotWith
@@ -1991,7 +1928,7 @@ updateAuth msg as_ =
 
                 newExpenseId =
                     ExpenseId.fromString
-                        ("expense::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp)
+                        ("expense::" ++ Iso8601.fromPosix posix ++ "::" ++ String.left 8 timestamp)
 
                 moved =
                     Expense.snapshotWith
@@ -2515,7 +2452,7 @@ updateAuth msg as_ =
                             String.fromInt (Time.posixToMillis posix)
 
                         tripId =
-                            TripId.fromString ("trip::" ++ posixToIso posix ++ "::" ++ String.left 8 timestamp)
+                            TripId.fromString ("trip::" ++ Iso8601.fromPosix posix ++ "::" ++ String.left 8 timestamp)
 
                         ( newFlockId, target ) =
                             case form.target of
