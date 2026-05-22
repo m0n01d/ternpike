@@ -46,7 +46,7 @@ import Data.Flocks
 import Data.Guest exposing (GuestSession)
 import Data.Navigation exposing (Route)
 import Data.PaymentMethod exposing (PaymentMethod)
-import Data.PendingEntry exposing (PendingForm)
+import Data.PendingEntry exposing (ParsedEntry, PendingForm)
 import Data.Scan exposing (ScanItem)
 import Data.ScanItemId exposing (ScanItemId)
 import Data.StatsGranularity exposing (Granularity)
@@ -292,7 +292,7 @@ type Msg
     | GotOcrResult String (Result Http.Error String)
     | GotPouchMsg Json.Decode.Value
     | GotSaveTripTime Time.Posix
-    | GotSubmitTime Time.Posix
+    | GotSubmitTime ParsedEntry Time.Posix
     | GotVoidTime Expense Time.Posix
     | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
     | HoverDailyBars (List (CI.One DailyDay CI.Bar))

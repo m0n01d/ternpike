@@ -89,7 +89,7 @@ import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod
-import Data.PendingEntry exposing (PendingEntry, PendingForm(..))
+import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
@@ -1643,30 +1643,19 @@ updateAuth msg as_ =
             authPending (\p -> { p | paymentMethod = pm }) as_
 
         SubmitEntry ->
-            case Money.fromDollarString (formPending as_.form).amount of
-                Just _ ->
+            case PendingEntry.parseEntry (formPending as_.form) of
+                Ok parsed ->
                     ( AuthModel { as_ | submitting = True, error = Nothing }
-                    , Task.perform GotSubmitTime Time.now
+                    , Task.perform (GotSubmitTime parsed) Time.now
                     )
 
-                Nothing ->
-                    ( AuthModel { as_ | error = Just "Enter a valid amount." }, Cmd.none )
+                Err errs ->
+                    ( AuthModel { as_ | error = Just (String.join " " errs) }, Cmd.none )
 
-        GotSubmitTime posix ->
+        GotSubmitTime parsed posix ->
             let
-                p =
-                    formPending as_.form
-
                 timestamp =
                     String.fromInt (Time.posixToMillis posix)
-
-                maybeGeoPoint =
-                    case p.locationState of
-                        LocationGot point _ ->
-                            Just point
-
-                        _ ->
-                            Nothing
 
                 updatedQueue =
                     case as_.activeScanItemId of
@@ -1695,59 +1684,50 @@ updateAuth msg as_ =
                                     AmendmentId.fromString
                                         ("amend::" ++ ExpenseId.toString original.id ++ "::" ++ String.left 8 timestamp)
 
-                                originalAmountDollars =
-                                    Money.toDollarString original.amount
-
-                                originalDateIso =
-                                    DateField.toIso original.date
-
                                 amend =
                                     { id = amendId
                                     , targetId = original.id
                                     , amount =
-                                        if p.amount /= originalAmountDollars then
-                                            Money.fromDollarString p.amount
+                                        if parsed.amount /= original.amount then
+                                            Just parsed.amount
 
                                         else
                                             Nothing
                                     , category =
-                                        if p.category /= original.category then
-                                            Just p.category
+                                        if parsed.category /= original.category then
+                                            Just parsed.category
 
                                         else
                                             Nothing
                                     , createdAt = posix
                                     , createdBy = UserId.fromString as_.creds.email
                                     , date =
-                                        -- `p.date : String` is from the `<input type=date>` form,
-                                        -- always `YYYY-MM-DD` or empty. The empty case parses to
-                                        -- `Nothing` here, which correctly means "no date change."
-                                        if p.date /= originalDateIso then
-                                            DateField.fromIso p.date
+                                        if parsed.date /= original.date then
+                                            Just parsed.date
 
                                         else
                                             Nothing
                                     , longNote =
-                                        if p.longNote /= original.longNote then
-                                            Just p.longNote
+                                        if parsed.longNote /= original.longNote then
+                                            Just parsed.longNote
 
                                         else
                                             Nothing
                                     , merchant =
-                                        if p.merchant /= original.merchant then
-                                            Just p.merchant
+                                        if parsed.merchant /= original.merchant then
+                                            Just parsed.merchant
 
                                         else
                                             Nothing
                                     , note =
-                                        if p.note /= original.note then
-                                            Just p.note
+                                        if parsed.note /= original.note then
+                                            Just parsed.note
 
                                         else
                                             Nothing
                                     , paymentMethod =
-                                        if p.paymentMethod /= original.paymentMethod then
-                                            p.paymentMethod
+                                        if parsed.paymentMethod /= original.paymentMethod then
+                                            parsed.paymentMethod
 
                                         else
                                             Nothing
@@ -1786,18 +1766,16 @@ updateAuth msg as_ =
                                 expense =
                                     { id = ExpenseId.fromString expenseId
                                     , tripId = tripId
-                                    , amount =
-                                        Money.fromDollarString p.amount
-                                            |> Maybe.withDefault Money.zero
-                                    , category = p.category
+                                    , amount = parsed.amount
+                                    , category = parsed.category
                                     , createdAt = posix
                                     , createdBy = UserId.fromString as_.creds.email
-                                    , date = DateField.fromIsoOr (DateField.today Time.utc posix) p.date
-                                    , geoPoint = maybeGeoPoint
-                                    , longNote = p.longNote
-                                    , merchant = p.merchant
-                                    , note = p.note
-                                    , paymentMethod = p.paymentMethod
+                                    , date = parsed.date
+                                    , geoPoint = parsed.geoPoint
+                                    , longNote = parsed.longNote
+                                    , merchant = parsed.merchant
+                                    , note = parsed.note
+                                    , paymentMethod = parsed.paymentMethod
                                     }
 
                                 nextRoute =
