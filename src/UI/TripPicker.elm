@@ -115,20 +115,31 @@ rowLabel expense =
 dateRange : Trip -> String
 dateRange trip =
     let
-        formatIso iso =
-            DateField.fromIso iso
-                |> Maybe.map DateField.formatDisplay
-                |> Maybe.withDefault iso
+        hasStart =
+            not (isEpochDate trip.startDate)
+
+        hasEnd =
+            not (isEpochDate trip.endDate)
     in
-    case ( trip.startDate, trip.endDate ) of
-        ( "", "" ) ->
-            ""
+    if hasStart && hasEnd then
+        DateField.formatDisplay trip.startDate ++ " → " ++ DateField.formatDisplay trip.endDate
 
-        ( s, "" ) ->
-            formatIso s
+    else if hasStart then
+        DateField.formatDisplay trip.startDate
 
-        ( "", e ) ->
-            formatIso e
+    else if hasEnd then
+        DateField.formatDisplay trip.endDate
 
-        ( s, e ) ->
-            formatIso s ++ " → " ++ formatIso e
+    else
+        ""
+
+
+{-| True when a `DateField` is the epoch sentinel (`1970-01-01`).
+After R2, trip dates that were stored as the legacy `""` empty-string
+sentinel parse to the epoch via `DateField.decoder`'s built-in
+fallback. The view code treats the epoch as "no date set" — same as
+the pre-R2 `== ""` check.
+-}
+isEpochDate : DateField.DateField -> Bool
+isEpochDate d =
+    DateField.toIso d == "1970-01-01"

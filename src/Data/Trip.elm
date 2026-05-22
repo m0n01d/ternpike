@@ -26,7 +26,9 @@ Four types live here:
     rarely edited and the data is small).
   - `TripForm` — the in-progress draft used by the new/edit modal.
     Strings rather than typed fields so the user can type freely; the
-    `validator` is what gates submission.
+    `validator` is what gates submission. The submit handler in
+    `Main.elm` parses the strings into typed `DateField` / `Money`
+    values when constructing the `Trip` record.
   - `TripField` — the tag passed to `TripFieldChanged` so one `Msg`
     handler can route updates to the right field on `TripForm`.
   - `TripTarget` — the routing tag carried on every outbound `Save*`
@@ -34,6 +36,22 @@ Four types live here:
     doc to. `Personal` writes to the user's solo handle; `InFlock`
     writes to the flock's handle. Derived from a trip's `flockId` via
     `targetForTrip`.
+
+
+# Field types (#93)
+
+The typed-primitives refactor flipped three fields:
+
+  - `budget : Data.Money.Money` — was `Float`. Encoder still emits
+    `Float` dollars so the wire format is unchanged. The "no budget
+    set" sentinel is now `Money.zero`; consumers check via
+    `Money.isZero` rather than `> 0`.
+  - `startDate : Data.DateField.DateField` — was ISO `String`.
+    Encoder still emits the ISO `YYYY-MM-DD` shape. The legacy `""`
+    sentinel decodes to the epoch (`1970-01-01`) via
+    `DateField.decoder`'s built-in fallback; consumers check
+    `DateField.toIso d == "1970-01-01"` for "no date set".
+  - `endDate : DateField` — same treatment as `startDate`.
 
 
 # Asymmetry: `flockId`
@@ -68,9 +86,11 @@ in `billingStatus` for the lapsed / frozen edge cases (#64).
 
 -}
 
+import Data.DateField as DateField exposing (DateField)
 import Data.Flock exposing (Flock)
 import Data.FlockId
 import Data.Flocks exposing (Flocks)
+import Data.Money as Money exposing (Money)
 import Data.Tier exposing (Tier(..))
 import Data.TripId as TripId exposing (TripId)
 import Data.UserId exposing (UserId)
@@ -81,14 +101,14 @@ import Validate
 
 
 type alias Trip =
-    { budget : Float
+    { budget : Money
     , coverPhotoUrl : String
     , description : String
-    , endDate : String
+    , endDate : DateField
     , flockId : Maybe Data.FlockId.FlockId
     , id : TripId
     , name : String
-    , startDate : String
+    , startDate : DateField
     }
 
 
@@ -172,25 +192,51 @@ defaultNewFlockDraft =
     }
 
 
+{-| Form validator.
+
+The form keeps `String`-typed inputs (bound directly to `<input>` elements), so
+the validator works on the raw text. The submit handler in `Main.elm` parses
+the strings into typed `DateField` / `Money` values when constructing the
+`Trip` record; the validator's job is just to gate that conversion.
+
+Budget rule: an empty budget is allowed (treated as "no budget set" downstream),
+but a non-empty budget must parse via `Data.Money.fromDollarString`.
+
+Date rule: when both dates are filled in, end must be ≥ start chronologically.
+Empty strings are tolerated so a half-filled draft can still validate while the
+user is in mid-input — both blanks become `Money.zero` / epoch downstream and
+the form's other guards take over.
+
+-}
 validator : Validate.Validator String TripForm
 validator =
     Validate.all
         [ Validate.ifBlank .name "Trip name is required."
-        , Validate.ifTrue (\f -> f.budget /= "" && String.toFloat f.budget == Nothing) "Budget must be a number."
-        , Validate.ifTrue (\f -> f.endDate /= "" && f.endDate < f.startDate) "End date must be after start date."
+        , Validate.ifTrue (\f -> f.budget /= "" && Money.fromDollarString f.budget == Nothing) "Budget must be a number."
+        , Validate.ifTrue datesOutOfOrder "End date must be after start date."
         ]
+
+
+datesOutOfOrder : TripForm -> Bool
+datesOutOfOrder f =
+    case ( DateField.fromIso f.startDate, DateField.fromIso f.endDate ) of
+        ( Just start, Just end ) ->
+            DateField.compare end start == LT
+
+        _ ->
+            False
 
 
 encoder : Trip -> E.Value
 encoder t =
     E.object
         [ ( "_id", TripId.encode t.id )
-        , ( "budget", E.float t.budget )
+        , ( "budget", Money.encoder t.budget )
         , ( "coverPhotoUrl", E.string t.coverPhotoUrl )
         , ( "description", E.string t.description )
-        , ( "endDate", E.string t.endDate )
+        , ( "endDate", DateField.encoder t.endDate )
         , ( "name", E.string t.name )
-        , ( "startDate", E.string t.startDate )
+        , ( "startDate", DateField.encoder t.startDate )
         , ( "type", E.string "trip" )
         ]
 
@@ -198,14 +244,14 @@ encoder t =
 decoder : D.Decoder Trip
 decoder =
     D.succeed Trip
-        |> Pipeline.required "budget" D.float
+        |> Pipeline.required "budget" Money.decoder
         |> Pipeline.required "coverPhotoUrl" D.string
         |> Pipeline.required "description" D.string
-        |> Pipeline.required "endDate" D.string
+        |> Pipeline.required "endDate" DateField.decoder
         |> Pipeline.optional "flockId" (D.nullable Data.FlockId.decoder) Nothing
         |> Pipeline.required "_id" TripId.decode
         |> Pipeline.required "name" D.string
-        |> Pipeline.required "startDate" D.string
+        |> Pipeline.required "startDate" DateField.decoder
 
 
 

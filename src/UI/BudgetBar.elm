@@ -14,18 +14,23 @@ Three variants, same color logic (rust fill, danger when over budget):
   - `viewLine` — Stats-style: a thin un-labelled bar sitting in flow as a
     divider, intended as a drop-in replacement for `UI.Rule.dashedRule`.
 
-Render nothing for `budget <= 0` upstream; this module assumes a positive
+Render nothing for a zero budget upstream; this module assumes a positive
 budget.
+
+Spent + budget are `Data.Money.Money` (#93): the labels render via
+`Money.format` so the displayed values match the rest of the hero
+chrome byte-for-byte.
 
 -}
 
+import Data.Money as Money exposing (Money)
 import Html exposing (Html)
 import Html.Attributes
 import UI.Rule
 
 
-view : { spent : Float, budget : Float } -> Html msg
-view { spent, budget } =
+view : { budget : Money, spent : Money } -> Html msg
+view { budget, spent } =
     let
         st =
             state spent budget
@@ -43,13 +48,13 @@ view { spent, budget } =
         , Html.div [ Html.Attributes.class "mt-2 flex justify-between items-baseline gap-3" ]
             [ Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
                 [ Html.span [ Html.Attributes.class spentAmountClass ]
-                    [ Html.text ("$" ++ String.fromInt (round spent)) ]
+                    [ Html.text (formatWholeDollars spent) ]
                 , Html.span [ Html.Attributes.class labelClass ]
                     [ Html.text "spent" ]
                 ]
             , Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
                 [ Html.span [ Html.Attributes.class "text-sm font-semibold text-forest" ]
-                    [ Html.text ("$" ++ String.fromInt (round budget)) ]
+                    [ Html.text (formatWholeDollars budget) ]
                 , Html.span [ Html.Attributes.class labelClass ]
                     [ Html.text "budget" ]
                 ]
@@ -57,14 +62,14 @@ view { spent, budget } =
         ]
 
 
-viewSubtle : { spent : Float, budget : Float } -> Html msg
-viewSubtle { spent, budget } =
+viewSubtle : { budget : Money, spent : Money } -> Html msg
+viewSubtle { budget, spent } =
     track (state spent budget)
         "absolute bottom-0 left-0 right-0 h-1 bg-cream-deep"
 
 
-viewLine : { spent : Float, budget : Float } -> Html msg
-viewLine { spent, budget } =
+viewLine : { budget : Money, spent : Money } -> Html msg
+viewLine { budget, spent } =
     track (state spent budget)
         "h-1 bg-cream-deep rounded-full overflow-hidden my-4"
 
@@ -79,15 +84,48 @@ type alias BarState =
     }
 
 
-state : Float -> Float -> BarState
+state : Money -> Money -> BarState
 state spent budget =
     let
+        budgetCents =
+            Money.toCents budget
+
+        spentCents =
+            Money.toCents spent
+
         pct =
-            Basics.min 1.0 (spent / budget)
+            if budgetCents <= 0 then
+                1.0
+
+            else
+                Basics.min 1.0 (toFloat spentCents / toFloat budgetCents)
     in
     { isOver = pct >= 1.0
     , pctInt = round (pct * 100)
     }
+
+
+{-| Whole-dollar render for the labelled hero bar — matches the pre-#93
+output where the spent/budget chips dropped cents via `round` (so
+`12.50` → `13`, not `12`). The small-text "spent / budget" labels sit
+next to the amount and a cents tail would break the line height. Use
+`Money.format` elsewhere when you want the canonical `$X.XX` shape.
+-}
+formatWholeDollars : Money -> String
+formatWholeDollars m =
+    let
+        cents =
+            Money.toCents m
+
+        -- Round-half-up, sign-preserving — matches the pre-#93 `round (Float dollars)`.
+        whole =
+            if cents >= 0 then
+                (cents + 50) // 100
+
+            else
+                negate ((negate cents + 50) // 100)
+    in
+    "$" ++ String.fromInt whole
 
 
 track : BarState -> String -> Html msg
