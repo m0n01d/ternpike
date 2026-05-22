@@ -20,24 +20,39 @@ contains the actual changes. `createdBy` is required-with-fallback: writes
 always include it (sourced from the signed-in user), and legacy documents
 without the field decode to `UserId.unknown`.
 
+Field types reflect the typed-primitives refactor (#94 — R3):
+
+  - `amount : Maybe Data.Money.Money` — was `Maybe Float`. Encoder still
+    emits `Float` dollars so the wire format is unchanged.
+  - `createdAt : Time.Posix` — was `String`. Wire format remains the
+    legacy ISO `"YYYY-MM-DDTHH:MM:SSZ"` string for backward compatibility.
+  - `date : Maybe Data.DateField.DateField` — was `Maybe String`. Wire
+    format remains ISO `"YYYY-MM-DD"`.
+  - `id : Data.AmendmentId.AmendmentId` — was `String`.
+
 -}
 
+import Data.AmendmentId as AmendmentId exposing (AmendmentId)
 import Data.Category as Category exposing (Category)
+import Data.DateField as DateField exposing (DateField)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.Iso8601 as Iso8601
+import Data.Money as Money exposing (Money)
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Data.UserId as UserId exposing (UserId)
-import Json.Decode as D
+import Json.Decode
 import Json.Decode.Pipeline as Pipeline
-import Json.Encode as E
+import Json.Encode
+import Time
 
 
 type alias Amendment =
-    { amount : Maybe Float
+    { amount : Maybe Money
     , category : Maybe Category
-    , createdAt : String
+    , createdAt : Time.Posix
     , createdBy : UserId
-    , date : Maybe String
-    , id : String
+    , date : Maybe DateField
+    , id : AmendmentId
     , longNote : Maybe String
     , merchant : Maybe String
     , note : Maybe String
@@ -46,60 +61,60 @@ type alias Amendment =
     }
 
 
-encoder : Amendment -> E.Value
+encoder : Amendment -> Json.Encode.Value
 encoder a =
-    E.object
-        ([ ( "_id", E.string a.id )
+    Json.Encode.object
+        ([ ( "_id", AmendmentId.encode a.id )
          , ( "targetId", ExpenseId.encode a.targetId )
-         , ( "createdAt", E.string a.createdAt )
+         , ( "createdAt", Json.Encode.string (Iso8601.fromPosix a.createdAt) )
          , ( "createdBy", UserId.encode a.createdBy )
-         , ( "type", E.string "amend" )
+         , ( "type", Json.Encode.string "amend" )
          ]
             ++ (case a.amount of
                     Just v ->
-                        [ ( "amount", E.float v ) ]
+                        [ ( "amount", Money.encoder v ) ]
 
                     Nothing ->
                         []
                )
             ++ (case a.category of
                     Just v ->
-                        [ ( "category", E.string (Category.label v) ) ]
+                        [ ( "category", Json.Encode.string (Category.label v) ) ]
 
                     Nothing ->
                         []
                )
             ++ (case a.date of
                     Just v ->
-                        [ ( "date", E.string v ) ]
+                        [ ( "date", DateField.encoder v ) ]
 
                     Nothing ->
                         []
                )
             ++ (case a.longNote of
                     Just v ->
-                        [ ( "longNote", E.string v ) ]
+                        [ ( "longNote", Json.Encode.string v ) ]
 
                     Nothing ->
                         []
                )
             ++ (case a.merchant of
                     Just v ->
-                        [ ( "merchant", E.string v ) ]
+                        [ ( "merchant", Json.Encode.string v ) ]
 
                     Nothing ->
                         []
                )
             ++ (case a.note of
                     Just v ->
-                        [ ( "note", E.string v ) ]
+                        [ ( "note", Json.Encode.string v ) ]
 
                     Nothing ->
                         []
                )
             ++ (case a.paymentMethod of
                     Just v ->
-                        [ ( "paymentMethod", E.string (PaymentMethod.toString v) ) ]
+                        [ ( "paymentMethod", Json.Encode.string (PaymentMethod.toString v) ) ]
 
                     Nothing ->
                         []
@@ -107,47 +122,61 @@ encoder a =
         )
 
 
-decoder : D.Decoder Amendment
+decoder : Json.Decode.Decoder Amendment
 decoder =
-    D.succeed Amendment
+    Json.Decode.succeed Amendment
         |> Pipeline.optional "amount"
-            (D.nullable D.float)
+            (Json.Decode.nullable Money.decoder)
             Nothing
         |> Pipeline.optional "category"
-            (D.nullable
-                (D.string
-                    |> D.andThen
+            (Json.Decode.nullable
+                (Json.Decode.string
+                    |> Json.Decode.andThen
                         (\s ->
                             case Category.fromStringMaybe s of
                                 Just c ->
-                                    D.succeed c
+                                    Json.Decode.succeed c
 
                                 Nothing ->
-                                    D.fail ("Unknown category: " ++ s)
+                                    Json.Decode.fail ("Unknown category: " ++ s)
                         )
                 )
             )
             Nothing
-        |> Pipeline.required "createdAt" D.string
+        |> Pipeline.required "createdAt" createdAtDecoder
         |> Pipeline.optional "createdBy" UserId.decoder UserId.unknown
-        |> Pipeline.optional "date" (D.nullable D.string) Nothing
-        |> Pipeline.required "_id" D.string
-        |> Pipeline.optional "longNote" (D.nullable D.string) Nothing
-        |> Pipeline.optional "merchant" (D.nullable D.string) Nothing
-        |> Pipeline.optional "note" (D.nullable D.string) Nothing
+        |> Pipeline.optional "date" (Json.Decode.nullable DateField.decoder) Nothing
+        |> Pipeline.required "_id" AmendmentId.decode
+        |> Pipeline.optional "longNote" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "merchant" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "note" (Json.Decode.nullable Json.Decode.string) Nothing
         |> Pipeline.optional "paymentMethod"
-            (D.nullable
-                (D.string
-                    |> D.andThen
+            (Json.Decode.nullable
+                (Json.Decode.string
+                    |> Json.Decode.andThen
                         (\s ->
                             case PaymentMethod.fromString s of
                                 Just pm ->
-                                    D.succeed pm
+                                    Json.Decode.succeed pm
 
                                 Nothing ->
-                                    D.fail ("Unknown paymentMethod: " ++ s)
+                                    Json.Decode.fail ("Unknown paymentMethod: " ++ s)
                         )
                 )
             )
             Nothing
         |> Pipeline.required "targetId" ExpenseId.decode
+
+
+
+-- INTERNAL
+
+
+{-| Decode the legacy `"YYYY-MM-DDTHH:MM:SSZ"` createdAt string into a
+`Time.Posix`. Failed parses fall back to the epoch via `Data.Iso8601.toPosix`,
+matching the silent-default pattern used elsewhere for malformed legacy values.
+-}
+createdAtDecoder : Json.Decode.Decoder Time.Posix
+createdAtDecoder =
+    Json.Decode.string
+        |> Json.Decode.map Iso8601.toPosix
