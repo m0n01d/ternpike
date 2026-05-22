@@ -5,7 +5,8 @@ from `ianmackenzie/elm-units` — wrapped in an opaque constructor so that
 "lat without lon is meaningless" is a type error rather than a convention.
 
 Replaces the previous pair of `Maybe Float` fields (`expense.lat` /
-`expense.lon`) and the `Float Float` payload of `Data.Location.LocationGot`.
+`expense.lon`) and the `Float Float` payload of `Data.Location.LocationGot`
+(both migrated; the latter now carries a `GeoPoint` directly).
 Callers that only need a quick degrees value out for display or serialisation
 use `latDegrees` / `lonDegrees`; the rest of the module is a thin shim around
 the legacy `{ lat, lon }` wire format.

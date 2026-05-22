@@ -17,6 +17,8 @@ The Add page and the Scan queue both reuse this type — see
 
 -}
 
+import Data.GeoPoint exposing (GeoPoint)
+
 
 {-| Where the captured lat/lon came from. Surfaced in the UI as a small
 provenance label ("from photo", "GPS", "pinned") so the user knows
@@ -35,15 +37,16 @@ type LocationSource
   - `LocationCheckingExif` / `LocationFetching` — async work in flight
     (EXIF parse or browser geolocation).
   - `LocationNoExifGps` — EXIF returned no GPS; user can still pin.
-  - `LocationGot lat lon source` — terminal success state, ready to be
-    stamped onto the expense.
+  - `LocationGot point source` — terminal success state, ready to be
+    stamped onto the expense. `point` is the resolved `GeoPoint`;
+    "lat without lon" is no longer representable.
   - `LocationSkipped` — user explicitly opted out; don't keep retrying.
 
 -}
 type LocationState
     = LocationCheckingExif
     | LocationFetching
-    | LocationGot Float Float LocationSource
+    | LocationGot GeoPoint LocationSource
     | LocationIdle
     | LocationNoExifGps
     | LocationSkipped

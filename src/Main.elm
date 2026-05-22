@@ -934,7 +934,7 @@ expenseToPending e =
     , locationState =
         case e.geoPoint of
             Just point ->
-                LocationGot (GeoPoint.latDegrees point) (GeoPoint.lonDegrees point) ManualPin
+                LocationGot point ManualPin
 
             Nothing ->
                 LocationIdle
@@ -1660,13 +1660,13 @@ updateAuth msg as_ =
                 timestamp =
                     String.fromInt (Time.posixToMillis posix)
 
-                ( eLat, eLon ) =
+                maybeGeoPoint =
                     case p.locationState of
-                        LocationGot la lo _ ->
-                            ( Just la, Just lo )
+                        LocationGot point _ ->
+                            Just point
 
                         _ ->
-                            ( Nothing, Nothing )
+                            Nothing
 
                 updatedQueue =
                     case as_.activeScanItemId of
@@ -1783,14 +1783,6 @@ updateAuth msg as_ =
                                 expenseId =
                                     "expense::" ++ Iso8601.fromPosix posix ++ "::" ++ String.left 8 timestamp
 
-                                geoPoint =
-                                    case ( eLat, eLon ) of
-                                        ( Just la, Just lo ) ->
-                                            Just (GeoPoint.fromDegrees la lo)
-
-                                        _ ->
-                                            Nothing
-
                                 expense =
                                     { id = ExpenseId.fromString expenseId
                                     , tripId = tripId
@@ -1801,7 +1793,7 @@ updateAuth msg as_ =
                                     , createdAt = posix
                                     , createdBy = UserId.fromString as_.creds.email
                                     , date = DateField.fromIsoOr (DateField.today Time.utc posix) p.date
-                                    , geoPoint = geoPoint
+                                    , geoPoint = maybeGeoPoint
                                     , longNote = p.longNote
                                     , merchant = p.merchant
                                     , note = p.note
@@ -2040,7 +2032,7 @@ updateAuth msg as_ =
             ( AuthModel { as_ | error = Nothing }, Cmd.none )
 
         GotGpsCoords lat lon ->
-            authPending (setLocation (LocationGot lat lon BrowserGeo)) as_
+            authPending (setLocation (LocationGot (GeoPoint.fromDegrees lat lon) BrowserGeo)) as_
 
         GeolocationDenied ->
             ( AuthModel { as_ | geoBlocked = True, form = mapForm (setLocation LocationIdle) as_.form }
@@ -2051,7 +2043,7 @@ updateAuth msg as_ =
             ( AuthModel { as_ | showMapPicker = True }, Cmd.none )
 
         MapPickerConfirmed lat lon ->
-            ( AuthModel { as_ | form = mapForm (setLocation (LocationGot lat lon ManualPin)) as_.form, showMapPicker = False }
+            ( AuthModel { as_ | form = mapForm (setLocation (LocationGot (GeoPoint.fromDegrees lat lon) ManualPin)) as_.form, showMapPicker = False }
             , Cmd.none
             )
 
@@ -2079,7 +2071,7 @@ updateAuth msg as_ =
             ( AuthModel { as_ | toast = Nothing }, Cmd.none )
 
         GotExifCoords itemId (Just lat) (Just lon) _ ->
-            ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map (\i -> { i | locationState = LocationGot lat lon ExifGps })) as_.scanQueue }
+            ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map (\i -> { i | locationState = LocationGot (GeoPoint.fromDegrees lat lon) ExifGps })) as_.scanQueue }
             , Cmd.none
             )
 
