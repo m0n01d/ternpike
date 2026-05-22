@@ -280,7 +280,10 @@ viewTripForm as_ form =
         isNew =
             form.editing == Nothing
     in
-    Html.div [ Html.Attributes.class "bg-cream border border-tan rounded-xl p-4" ]
+    Html.form
+        [ Html.Attributes.class "bg-cream border border-tan rounded-xl p-4"
+        , Html.Events.onSubmit SaveTripForm
+        ]
         [ Html.p [ Html.Attributes.class "text-[15px] font-bold text-rust font-display mb-4" ]
             [ Html.text
                 (if isNew then
@@ -364,7 +367,7 @@ viewTripForm as_ form =
             )
         , Html.div [ Html.Attributes.class "flex gap-2.5 mt-4" ]
             [ Html.button
-                [ Html.Events.onClick SaveTripForm
+                [ Html.Attributes.type_ "submit"
                 , Html.Attributes.disabled (saveBlocked as_ form)
                 , Html.Attributes.classList
                     [ ( "flex-1 bg-rust text-parchment border-none rounded-lg py-3 text-[15px] font-bold cursor-pointer", True )
@@ -383,7 +386,8 @@ viewTripForm as_ form =
                     )
                 ]
             , Html.button
-                [ Html.Events.onClick CloseTripForm
+                [ Html.Attributes.type_ "button"
+                , Html.Events.onClick CloseTripForm
                 , Html.Attributes.class "flex-1 bg-transparent text-muted border border-tan rounded-lg py-3 text-[15px] cursor-pointer"
                 ]
                 [ Html.text "Cancel" ]
@@ -539,7 +543,7 @@ viewInviteeChips draft =
                     [ Html.Attributes.type_ "email"
                     , Html.Attributes.value draft.inviteesDraft
                     , Html.Events.onInput TripInviteeDraftChanged
-                    , Html.Events.on "keydown" inviteeKeyDecoder
+                    , Html.Events.preventDefaultOn "keydown" inviteeKeyDecoder
                     , Html.Attributes.placeholder
                         (if List.isEmpty draft.invitees then
                             "name@example.com"
@@ -570,15 +574,17 @@ viewInviteeChip index email =
 
 
 {-| Commit the in-progress invitee-draft input on Enter, Tab, or comma —
-matches the chip-input idiom common to email forms.
+matches the chip-input idiom common to email forms. Returns
+`(Msg, preventDefault)` so the Enter key adds a chip without bubbling
+up to the parent `<form>` and submitting the trip.
 -}
-inviteeKeyDecoder : Json.Decode.Decoder Msg
+inviteeKeyDecoder : Json.Decode.Decoder ( Msg, Bool )
 inviteeKeyDecoder =
     Json.Decode.field "key" Json.Decode.string
         |> Json.Decode.andThen
             (\k ->
                 if k == "Enter" || k == "Tab" || k == "," then
-                    Json.Decode.succeed TripInviteeAdded
+                    Json.Decode.succeed ( TripInviteeAdded, True )
 
                 else
                     Json.Decode.fail "ignored"
