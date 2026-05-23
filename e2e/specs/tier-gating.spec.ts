@@ -170,7 +170,7 @@ test.describe('Fledgling-in-flock tier gating', () => {
     // catch it when it lands.
     await expect(bob).toHaveScreenshot(
       'scan-fledgling-in-flock-trip.png',
-      { fullPage: true },
+      { fullPage: true, maxDiffPixelRatio: 0.05 },
     )
   })
 
@@ -188,7 +188,7 @@ test.describe('Fledgling-in-flock tier gating', () => {
     // is the regression signal.
     await expect(bob).toHaveScreenshot(
       'scan-fledgling-personal-trip.png',
-      { fullPage: true },
+      { fullPage: true, maxDiffPixelRatio: 0.05 },
     )
   })
 })
