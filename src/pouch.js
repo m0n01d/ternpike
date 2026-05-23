@@ -55,10 +55,14 @@ export function attachPouch(app, { creds = null } = {}) {
             console.error('[pouch] reconcileFlocks:', err))
           return
         }
-        if (doc.type === 'flock:meta') {
+        if (change.id === 'flock:meta') {
           // Route flock metadata up as a typed FlockMeta event so Elm can
           // decode it through Data.Flock.decoder rather than the
           // expense/trip-shaped DbChange channel.
+          // NOTE: the document's _id is 'flock:meta' and its type field is
+          // 'flock' (the CouchDB wire type). We match on _id (change.id)
+          // rather than doc.type so this works regardless of the type field
+          // value, which is not 'flock:meta'.
           app.ports.pouchIn.send({ tag: 'FlockMeta', doc })
           return
         }

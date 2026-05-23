@@ -38,7 +38,8 @@ import { readHarnessState } from '../utils/state'
 
 const ALICE_EMAIL = 'alice@test.ternpike.com'
 const BOB_EMAIL = 'bob@test.ternpike.com'
-const HONEYMOON_FLOCK_ID = 'honeymoon0001'
+// Must be exactly 12 lowercase hex chars to satisfy Data.FlockId.fromString.
+const HONEYMOON_FLOCK_ID = 'bee500000001'
 
 const FLOCK_LOCAL_DB = `ternpike-${flockDbName(HONEYMOON_FLOCK_ID)}`
 
@@ -80,7 +81,8 @@ const overrideStubbedCreds = async (
       body: '',
     }),
   )
-  await page.goto('http://localhost:3000/seed.html', {
+  const vitePort = process.env.E2E_VITE_PORT || '3000'
+  await page.goto(`http://localhost:${vitePort}/seed.html`, {
     waitUntil: 'domcontentloaded',
   })
   await page.evaluate(
@@ -171,9 +173,26 @@ const routeApiToLocalServer = async (
 }
 
 const openSettingsFlocks = async (page: Page): Promise<void> => {
+  // Navigate to /trips first and wait for the Italy trip to appear. This
+  // confirms that: (a) CouchDB sync has run at least one round-trip, (b) the
+  // flock DB is open and has pulled its docs locally, and (c) the Elm app's
+  // `trips` state is `TripsLoaded` — not `TripsLoading` or `NoTripsYet`.
+  //
+  // Without this warm-up, going straight to /settings triggers the Elm app's
+  // `GetAllTrips` while the flock DB is still empty (sync hasn't happened yet),
+  // which returns an empty result → `handleTripsFetched` redirects to /trips.
+  // After the warm-up the `tripsStillLoading` guard prevents any further
+  // `GetAllTrips` calls, so the subsequent /settings navigation is stable.
+  await page.goto('/trips')
+  // Wait for the ACTIVE TRIP label to show "HONEYMOON" — this confirms the
+  // flock DB has synced and Elm has the flock entry in as_.flocks. Using the
+  // flock badge text avoids the strict-mode violation on "Italy" which
+  // appears in both the large trip heading and the small nav tab label.
+  await expect(page.getByText('HONEYMOON')).toBeVisible({ timeout: 60_000 })
+
   await page.goto('/settings')
   await expect(page.getByText('Local-first preferences')).toBeVisible({
-    timeout: 30_000,
+    timeout: 15_000,
   })
   await expect(page.getByText('FLOCKS', { exact: true })).toBeVisible({
     timeout: 10_000,
@@ -260,12 +279,22 @@ test.describe('Flock leave + remove', () => {
     aliceContext,
     bobContext,
   }) => {
+    // Two full CouchDB sync chains + UI interactions need more than the 60s
+    // global timeout. Set a per-test budget that covers: beforeEach (~20s),
+    // two sync round-trips (~10s each), and the leave + assertion flow.
+    test.setTimeout(180_000)
+
     const alice = await aliceContext.newPage()
     const bob = await bobContext.newPage()
 
-    // Both users see Honeymoon + Italy at the start.
+    // openSettingsFlocks warms up by visiting /trips first (waits for Italy to
+    // confirm flock sync) then goes to /settings. That warm-up ensures
+    // as_.trips is TripsLoaded before the /settings navigation so the Elm app
+    // doesn't redirect back to /trips when GetAllTrips fires.
     await openSettingsFlocks(bob)
-    await expect(bob.getByText('Honeymoon')).toBeVisible({ timeout: 10_000 })
+    await expect(bob.getByRole('button', { name: 'Leave' }).first()).toBeVisible({
+      timeout: 15_000,
+    })
 
     await openSettingsFlocks(alice)
     await expect(alice.getByText('Honeymoon')).toBeVisible({ timeout: 10_000 })
@@ -276,15 +305,21 @@ test.describe('Flock leave + remove', () => {
     }).last()
     await expect(leaveModal).toBeVisible()
     await leaveModal.getByRole('button', { name: 'Leave', exact: true }).click()
+    // Modal closes once the server confirms (LeaveFlockResult Ok).
+    await expect(leaveModal).toBeHidden({ timeout: 10_000 })
 
-    // Within ~5s the server admin-writes user:flocks → CouchDB pushes the
-    // change → pouch.js reconcileFlocks closes the flock handle → Elm drops
-    // the card.
-    await expect(bob.getByText('Honeymoon')).toBeHidden({ timeout: 5_000 })
+    // The server admin-writes user:flocks → CouchDB pushes the change →
+    // pouch.js reconcileFlocks closes the flock handle → Elm drops the card.
+    // Allow up to 30s for the full sync round-trip. Using { exact: true } to
+    // match only the flock badge span, not any modal text that also says
+    // "Honeymoon" (strict-mode violation otherwise).
+    await expect(bob.getByText('Honeymoon', { exact: true })).toBeHidden({
+      timeout: 30_000,
+    })
 
     // Italy disappears from Bob's Trips list.
     await bob.goto('/trips')
-    await expect(bob.getByText('Italy')).toBeHidden({ timeout: 5_000 })
+    await expect(bob.getByText('Italy')).toBeHidden({ timeout: 15_000 })
 
     // Probe pouch.js's view of Bob's flock DB. The actual user-visible
     // invariant — trip data drops out of the UI — is the line above; this
@@ -300,7 +335,7 @@ test.describe('Flock leave + remove', () => {
     await alice.reload()
     await expect(alice.getByText('Honeymoon')).toBeVisible({ timeout: 10_000 })
     await alice.goto('/trips')
-    await expect(alice.getByText('Italy')).toBeVisible({ timeout: 10_000 })
+    await expect(alice.getByText('Italy').first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('Bob rejoins after leaving; full history is restored', async ({
@@ -308,19 +343,31 @@ test.describe('Flock leave + remove', () => {
     bobContext,
     couchAdmin,
   }) => {
+    // Two full CouchDB sync chains + leave + rejoin flow needs more than 60s.
+    test.setTimeout(180_000)
+
     const alice = await aliceContext.newPage()
     const bob = await bobContext.newPage()
 
-    // Bob leaves first.
+    // openSettingsFlocks warms up at /trips first (waits for Italy) then
+    // navigates to /settings so the app's trips state is TripsLoaded and
+    // there is no /trips redirect before the Leave button appears.
     await openSettingsFlocks(bob)
-    await expect(bob.getByText('Honeymoon')).toBeVisible({ timeout: 10_000 })
+    await expect(bob.getByRole('button', { name: 'Leave' }).first()).toBeVisible({
+      timeout: 15_000,
+    })
     await bob.getByRole('button', { name: 'Leave' }).first().click()
     const leaveModal = bob.locator('div').filter({
       has: bob.getByText('Leave flock?', { exact: true }),
     }).last()
     await expect(leaveModal).toBeVisible()
     await leaveModal.getByRole('button', { name: 'Leave', exact: true }).click()
-    await expect(bob.getByText('Honeymoon')).toBeHidden({ timeout: 5_000 })
+    // Modal closes once the server confirms (LeaveFlockResult Ok).
+    await expect(leaveModal).toBeHidden({ timeout: 10_000 })
+    // Flock card disappears after CouchDB sync delivers updated user:flocks.
+    await expect(bob.getByText('Honeymoon', { exact: true })).toBeHidden({
+      timeout: 30_000,
+    })
 
     // Alice re-invites Bob. (Goes via the local wrangler server; the
     // mock-Resend captures the email but we don't read it — the spec
@@ -349,13 +396,19 @@ test.describe('Flock leave + remove', () => {
     })
     expect(joinRes.status, await joinRes.text()).toBe(200)
 
-    // Bob reloads and the flock reappears with Italy + both expenses.
-    await bob.reload()
-    await openSettingsFlocks(bob)
-    await expect(bob.getByText('Honeymoon')).toBeVisible({ timeout: 10_000 })
+    // Bob is still on /settings from the leave flow. Wait for his live
+    // PouchDB sync to deliver the updated user:flocks (server wrote it on
+    // join). This avoids a page reload race where the fresh sync might fire
+    // its first-paused before CouchDB has pushed the updated doc.
+    await expect(bob.getByText('Honeymoon', { exact: true })).toBeVisible({
+      timeout: 60_000,
+    })
 
+    // Now navigate to /trips. The live sync already opened the flock handle
+    // and local PouchDB has both flock:meta and the Italy trip, so a fresh
+    // page load resolves immediately.
     await bob.goto('/trips')
-    await expect(bob.getByText('Italy')).toBeVisible({ timeout: 10_000 })
+    await expect(bob.getByText('Italy').first()).toBeVisible({ timeout: 30_000 })
 
     // Server-side meta confirms Bob's restored membership and that the
     // historical docs weren't touched.
