@@ -258,6 +258,20 @@ Concretely, before kicking off N agents, the conductor should do all of:
 
 This is 10–15 minutes of conductor work that pays back across the whole wave.
 
+### Read this checklist before dispatching — don't just nod at it
+
+To future you: the failure mode of the E2E-fix wave wasn't that the rules were missing. The rules were here. The failure was that you skipped half of them in the moment and then re-derived the same lessons from scar tissue an hour later. **Writing a new rule into CLAUDE.md does not retroactively make the rule have worked.** Apply the rule at dispatch time, not at retro time.
+
+Before launching any agent — even one — open this file, run down the checklist above, and tick each item. It takes five minutes; skipping it costs an hour. Specific moves you reliably skip and shouldn't:
+
+- `pkill -f "vite preview"; pkill -f "wrangler dev"` before any e2e run, conductor-side or in agent prompts. Stale port squats cost 30+ minutes when missed and produce confidently-wrong "tests passed" reports from agents.
+- Pre-anchor parallel agents' case insertions at named locations (see the `updateAuth` subsection below). Telling two agents to land in the same `case msg of` block without saying where guarantees a manual merge.
+- Pre-reproduce each failing test on the conductor branch and paste the actual assertion text + trace path into every agent prompt — Wave 1 prompts in this session, Wave 2 prompts in this session, every wave going forward.
+- Move the issue Backlog → In Progress on the project board at spawn time. If `gh` CLI isn't available, use the GitHub MCP server — don't just shrug and let the board drift out of sync.
+- Re-run the relevant spec(s) yourself on the conductor branch after cherry-picking each agent commit, before pushing. Trust the diff, not the agent's report.
+
+And one diagnostic shortcut that would have saved 25 minutes here: when the source looks correct, `dist/` contains your changes, but the rendered DOM doesn't, your first move is `ps -ef | grep -E "vite|wrangler"` — not reading Elm. "Right bits in the bundle, wrong runtime behavior" almost always means a stale process is serving the request. Process table first; Elm-code second.
+
 ### Stale `vite preview` / `wrangler dev` from worktrees squats ports 3000/4000
 
 The single biggest time-sink of the E2E-fix wave: an agent worktree's `vite preview` (spawned by `e2e/global-setup.ts`) survived past the agent's exit and kept squatting port 3000. Every subsequent test run — from the conductor's main checkout, from sibling agent worktrees, anywhere — silently connected to that stale server and got served the old bundle. **Agent self-verification got false positives from the same squat.** Tests "passed" against code that didn't exist in the agent's worktree, because the bundle being served was from a completely different branch.
