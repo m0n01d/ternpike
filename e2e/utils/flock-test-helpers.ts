@@ -151,7 +151,8 @@ export const provisionFlockDb = async (
   const owner = args.ownerEmail.toLowerCase()
   const meta = {
     _id: 'flock:meta',
-    type: 'flock',
+    type: 'flock:meta',
+    flockId: args.flockId,
     name: args.name,
     members: [owner],
     billingOwner: owner,

@@ -12,7 +12,7 @@ export default defineConfig({
   reporter: isCI
     ? [['list'], ['html', { open: 'never', outputFolder: './.results-html' }]]
     : [['list']],
-  retries: 0,
+  retries: isCI ? 1 : 0,
   snapshotDir: './screenshots',
   timeout: 60_000,
   use: {

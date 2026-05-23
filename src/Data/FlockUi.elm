@@ -48,7 +48,8 @@ one is shown at a time. Each variant carries the input/error state
 specific to its form.
 -}
 type FlockModal
-    = InviteModal FlockId { email : String, error : Maybe String }
+    = CreateModal { error : Maybe String, name : String }
+    | InviteModal FlockId { email : String, error : Maybe String }
     | LeaveConfirmModal FlockId { error : Maybe String }
     | NoModal
     | TransferModal FlockId { error : Maybe String, target : String }

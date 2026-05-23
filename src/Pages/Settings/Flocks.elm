@@ -42,11 +42,39 @@ view as_ =
     in
     Html.div []
         [ UI.Rule.kicker "FLOCKS"
+        , viewCreateRow as_.tier
         , if List.isEmpty joined then
             viewEmptyState
 
           else
             Html.div [] (List.map (viewFlockCard as_ currentUser) joined)
+        ]
+
+
+viewCreateRow : Tier.Tier -> Html Msg
+viewCreateRow tier =
+    UI.Card.subCard
+        [ Html.div [ Html.Attributes.class "flex items-start justify-between gap-3" ]
+            [ Html.p [ Html.Attributes.class "text-xs text-muted flex-1" ]
+                [ Html.text
+                    (if Tier.isPaid tier then
+                        "Log expenses together with a partner or household."
+
+                     else
+                        "Flocks let you log expenses together with a partner. Upgrade to Fly to create one."
+                    )
+                ]
+            , if Tier.isPaid tier then
+                UI.Button.primary { label = "Create", onClick = OpenCreateFlockModal }
+
+              else
+                Html.button
+                    [ Html.Attributes.type_ "button"
+                    , Html.Attributes.disabled True
+                    , Html.Attributes.class "shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg bg-cream-deep text-muted border border-tan cursor-not-allowed"
+                    ]
+                    [ Html.text "Create" ]
+            ]
         ]
 
 
@@ -163,6 +191,28 @@ viewModal as_ =
     case as_.flockUi.modal of
         FlockUi.NoModal ->
             Html.text ""
+
+        FlockUi.CreateModal { error, name } ->
+            modalShell "New Flock"
+                [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
+                    [ Html.text "Give your flock a name. You can invite people once it's created." ]
+                , formField "NAME"
+                    (Html.input
+                        [ Html.Attributes.type_ "text"
+                        , Html.Attributes.value name
+                        , Html.Events.onInput CreateFlockNameChanged
+                        , Html.Attributes.placeholder "Honeymoon"
+                        , textInputStyle
+                        ]
+                        []
+                    )
+                , viewError error
+                , modalActions
+                    { confirm = ( "Create", SubmitCreateFlock )
+                    , cancel = ( "Cancel", CloseFlockModal )
+                    , inFlight = as_.flockUi.inFlight
+                    }
+                ]
 
         FlockUi.InviteModal _ { email, error } ->
             modalShell "Invite to flock"

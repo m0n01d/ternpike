@@ -202,9 +202,10 @@ export const seedFlock = async (
     billingStatus: 'active',
     createdAt: new Date().toISOString(),
     createdBy: seed.owner.toLowerCase(),
+    flockId: seed.flockId,
     members: seed.members.map((m) => m.toLowerCase()),
     name: seed.name,
-    type: 'flock',
+    type: 'flock:meta',
   }
   const security = {
     admins: { names: [], roles: [] },

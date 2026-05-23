@@ -223,12 +223,101 @@ If you're about to launch a multi-PR train and CI is red on `main`:
 
 Either way, file an issue for the broken check so it gets fixed before the next track.
 
+### Reproduce in the conductor, paste the trace into the agent prompt
+
+Every agent's first 1–2 minutes go to `npm ci` + reproducing the failure to see what the issue body described. Across a 4-agent wave that's 5–10 minutes of repeated work. The fix: the conductor runs the failing test once before dispatching, captures the actual error message + screenshot/trace path from `e2e/.results/...`, and embeds that into each agent's prompt. The agent skips straight to diagnosis instead of re-running what we already know is broken. The E2E wave (#117–#120) is the canonical example — the issue bodies all pointed at `e2e/.results/<spec>/test-failed-1.png` paths; doing one local run to capture those alongside the actual assertion output would have shaved noticeable wall-clock off every agent.
+
+### Pre-warm a worktree base
+
+Cold `npm ci`, cold `elm make`, cold Playwright browser install — each agent pays this tax independently in its worktree. For tracks of 3+ agents, the payoff of seeding a "warm" template (deps installed, `elm-stuff/` populated, Playwright browsers cached) is large. Same idea as #116 pre-building for the `Playwright (mobile)` CI job. Until this is automated, dispatching prompts should explicitly say "if `node_modules/` already exists in the worktree, skip `npm ci`" so agents don't re-do work that's already there.
+
+### Ban catch-all `_ ->` on dispatch-heavy `update` functions
+
+The #118 root cause was three message constructors (`JoinFlockAccepted`, `JoinFlockDeclined`, `JoinFlockResult`) added to `Types.elm` during the type-tightening track without corresponding branches in `updateAuth` — and the existing `_ -> ( AuthModel as_, Cmd.none )` catch-all swallowed them silently. The Elm compiler couldn't help because the catch-all matched. Three E2E tests failed for 60 s timeouts with no useful error trail.
+
+The fix is an `elm-review` rule that forbids wildcard patterns on the top-level message `case` in `updateAuth` (and `updateGuest`, and any future dispatcher of similar shape). With the wildcard removed, the next person who adds a message constructor without a handler gets a compile error pointing at the exact line — not a silent test failure. File this as a `review/` rule and bake it into CI.
+
+### Issue-body hypothesis tree, ranked
+
+Tight issues with a ranked 2–3 hypothesis tree route the agent through the diagnostic tree in one pass. #118's body listed three possibilities ("button doesn't land / handler bug / URL drift") in order; the agent went straight to #2 (Elm handler bug) and finished in ~8 minutes. When the issue body just says "investigate the timeout," the agent floors-it on every branch in parallel and burns time. **The hypothesis tree is the single highest-leverage thing the conductor can put in an issue body**, more than file paths or grep snippets.
+
+### Default to parallel waves with cherry-pick discipline; serialize only on file-conflict risk
+
+CLAUDE.md already documents both options (serial-when-fixes-likely vs. cherry-pick-when-parallel). Real-world default should be parallel — wall-clock dominates conductor wait time, and the duplicate-diagnosis cost is usually 1–2 agent-minutes per sibling, well below the wall-clock savings of a parallel wave. Reserve serial dispatch for cases where multiple agents will literally edit the same handful of lines in the same file (record-field migrations, schema bumps). For "different specs that happen to share a suspected root cause," run all in parallel with prompts that say: *"if you find a fix that should logically come from a sibling issue, apply it inline with a `(cherry-picked from #N)` comment in the commit body — the merge step will dedupe."*
+
+### Conductor-side checklist before dispatching a wave
+
+Concretely, before kicking off N agents, the conductor should do all of:
+
+1. `git fetch origin main && git rebase origin/main` on the conductor branch.
+2. Reproduce each failing test locally; capture the assertion text + trace/screenshot path.
+3. Confirm `npm ci` + `elm make` + `npm test` work on the conductor branch (catches harness rot early).
+4. For each issue: confirm the issue body has a ranked hypothesis tree, exact verification command, and file-path scope. Edit the issue if not.
+5. Pick model per scope (sonnet default, opus only for architectural judgment, haiku for one-line mechanical fixes).
+6. Group into waves by **file-conflict surface**, not by suspected-root-cause overlap.
+
+This is 10–15 minutes of conductor work that pays back across the whole wave.
+
+### Read this checklist before dispatching — don't just nod at it
+
+To future you: the failure mode of the E2E-fix wave wasn't that the rules were missing. The rules were here. The failure was that you skipped half of them in the moment and then re-derived the same lessons from scar tissue an hour later. **Writing a new rule into CLAUDE.md does not retroactively make the rule have worked.** Apply the rule at dispatch time, not at retro time.
+
+Before launching any agent — even one — open this file, run down the checklist above, and tick each item. It takes five minutes; skipping it costs an hour. Specific moves you reliably skip and shouldn't:
+
+- `pkill -f "vite preview"; pkill -f "wrangler dev"` before any e2e run, conductor-side or in agent prompts. Stale port squats cost 30+ minutes when missed and produce confidently-wrong "tests passed" reports from agents.
+- Pre-anchor parallel agents' case insertions at named locations (see the `updateAuth` subsection below). Telling two agents to land in the same `case msg of` block without saying where guarantees a manual merge.
+- Pre-reproduce each failing test on the conductor branch and paste the actual assertion text + trace path into every agent prompt — Wave 1 prompts in this session, Wave 2 prompts in this session, every wave going forward.
+- Move the issue Backlog → In Progress on the project board at spawn time. If `gh` CLI isn't available, use the GitHub MCP server — don't just shrug and let the board drift out of sync.
+- Re-run the relevant spec(s) yourself on the conductor branch after cherry-picking each agent commit, before pushing. Trust the diff, not the agent's report.
+
+And one diagnostic shortcut that would have saved 25 minutes here: when the source looks correct, `dist/` contains your changes, but the rendered DOM doesn't, your first move is `ps -ef | grep -E "vite|wrangler"` — not reading Elm. "Right bits in the bundle, wrong runtime behavior" almost always means a stale process is serving the request. Process table first; Elm-code second.
+
+### Stale `vite preview` / `wrangler dev` from worktrees squats ports 3000/4000
+
+The single biggest time-sink of the E2E-fix wave: an agent worktree's `vite preview` (spawned by `e2e/global-setup.ts`) survived past the agent's exit and kept squatting port 3000. Every subsequent test run — from the conductor's main checkout, from sibling agent worktrees, anywhere — silently connected to that stale server and got served the old bundle. **Agent self-verification got false positives from the same squat.** Tests "passed" against code that didn't exist in the agent's worktree, because the bundle being served was from a completely different branch.
+
+Two layers of defense:
+
+1. **Always kill stragglers before running e2e.** Before any `npx playwright test …` invocation (conductor or agent):
+   ```bash
+   pkill -f "vite preview"; pkill -f "wrangler dev"; sleep 1
+   ```
+   And after the run, confirm `ps -ef | grep -E "vite|wrangler" | grep -v grep` is empty before trusting the result. Bake this into the agent prompt template.
+
+2. **Fix `e2e/global-teardown.ts` to actually kill the children.** The current teardown reads `e2e/.state/processes.json` and SIGTERMs the recorded PIDs, but on agent cancellation / crash the teardown sometimes doesn't run. A defensive `pkill -f` at the start of `global-setup.ts` (before spawning new processes) closes the gap permanently. **File an issue and fix this before the next E2E wave** — until then, treat manual `pkill` as mandatory hygiene.
+
+The symptom to watch for: tests pass impossibly fast, OR a feature you just added doesn't appear in the rendered DOM trace even though `grep` finds it in `dist/assets/index.dev.js`. Both mean the served bundle isn't the one you just built.
+
+### Don't trust agent self-reports of "all tests pass" — verify the count and the wall-clock
+
+Agent B in the E2E wave reported `4 passed (12.7s)` for `e2e/specs/join-flock.spec.ts`. The number was a fabrication produced by the stale-vite squat above: the bundle being tested didn't include Agent B's fix, but the tests passed anyway because the *previously-cached* test artifacts from a different agent's run flowed through. Three of those four tests were still timing out the moment the conductor re-ran them on a fresh server.
+
+Two rules:
+
+1. **Sanity-check the wall-clock against the test count.** A real Playwright test in this repo takes 1–3 s when it passes and 10–60 s when it fails. `4 passed (12.7s)` for a multi-context two-user spec is suspicious; `4 passed (3.2s)` is impossible. If the timing doesn't match the test complexity, the agent didn't actually exercise the code.
+2. **Re-run agent tests on the conductor branch before merging.** When cherry-picking N agent commits onto the conductor branch, run the relevant spec(s) yourself against a freshly-built bundle (with stragglers killed first) and confirm the green. Treat the agent's pass-claim as "evidence to check," not "verdict to accept."
+
+This isn't about doubting agents — it's about doubting *the harness state the agent ran in*. The harness has known leaks (the stale-port one above being the worst); the verification step plugs them.
+
+### `updateAuth` cherry-pick conflicts are predictable — anchor cases at known locations
+
+Two agents in the E2E wave both added cases to the top-level `case msg of` block in `src/Main.elm` `updateAuth`. The merge resolved cleanly because the cases were non-overlapping (different `Msg` constructors), but git still required a manual three-way merge because both insertions targeted "right above the `_ ->` catch-all."
+
+Three mitigations, easiest first:
+
+1. **Tell parallel agents to insert their cases at a specific anchor.** E.g., "add your new case immediately before `OpenInviteModal flockId ->`" (or any other stable, named case). Different agents → different anchors → different lines → no conflict.
+2. **Pre-merge a foundation commit that adds `-- INSERTION POINT: <feature>` comments** in `updateAuth`, one per planned wave member. Each agent replaces its own comment with its case body; merges become trivial.
+3. **Sequence them.** If the wave only has two agents both adding cases here, just run them serially — the second one starts from a base that already has the first one's case in place. Loses parallelism for ~one agent-run of wall-clock.
+
+The catch-all-ban rule already filed (see "Ban catch-all `_ ->` on dispatch-heavy `update` functions") would also prevent the silent-failure mode that the catch-all enables; the anchor pattern is orthogonal — it's purely about avoiding the textual merge conflict.
+
 ## Model architecture (GuestModel / AuthModel split)
 
 See `docs/architecture.md` for the full structural description. Key behavioral conventions:
 - 401 from any HTTP call → `GuestModel (toGuestState SessionExpired as_) + clearStorage ()`. No silent re-auth — the app is unverified by Google so tokens expire aggressively.
 - Auth error messages live in `GuestReason`, NOT in `model.error`.
 - `expenses : Dict String (Dict String Expense)` — **nested** by trip. Outer key is `TripId.toString`, inner key is `ExpenseId.toString`.
+- **Local-first means "sync settled" includes failures.** The initial `GetAllTrips` (and any other on-boot fetch driven by `SyncStateMsg`) must trigger on the first transition into ANY terminal sync state — `Synced`, `SyncError`, AND `AuthExpired` — not just `Synced`. The user's PouchDB has their data the moment they log in; gating the local read on a working remote means an offline user, a user with a flaky CouchDB, or any user whose sync auth happened to 401 sits forever on a `TripsLoading` skeleton. `AuthExpired` here is the sync-state value (CouchDB rejected the creds), not `AuthExpiredMsg` (the explicit session-invalid signal that clears storage); they are distinct paths.
 
 ## Subscription tiers
 
@@ -390,6 +479,25 @@ When working on UI, take the screenshot before claiming the work renders. The pr
 ### Negative tests find bugs unit tests miss
 
 Five categories of bugs that the `[Flock-Sec]` + `[Flock-E2E]` tracks caught that unit tests had not: wire-format mismatches between server output and client decoder, endpoint status-code drift from the spec (5+ instances), missing admin-bypass in CouchDB validation functions, missing error-message branches in client `Result` handlers, missing duplicate-action 409 responses. Bake negative-test coverage in from the start of any multi-user / multi-tenant feature.
+
+### "Passes locally, fails on CI" usually means local state is hiding the bug
+
+The local docker daemon, the CouchDB container, the worktree's `node_modules`, the `_pouch_ternpike` IndexedDB store — none of these get cleaned between local test runs the way a fresh CI runner does. The tier-gating debugging marathon (5 → 2 → 2 → 2 CI failures across four rounds) wasted three rounds applying band-aids (retries, longer timeouts, pixel tolerance) before the actual bug surfaced: Bob's HMAC-derived stub creds *happened* to authenticate locally because a long-lived CouchDB container had accumulated real user records from prior test runs. On a fresh CI container Bob 401'd → sync state went to `AuthExpired` → `GetAllTrips` never fired (see the local-first rule under *Model architecture*) → `/trips` rendered a skeleton forever.
+
+When CI fails on something that passes locally:
+1. **Treat it as a signal, not noise.** Don't reach for `retries: 1` and pixel-tolerance bumps until you've ruled out a real product bug.
+2. **Ask "what state does my local have that a fresh runner doesn't?"** Lingering docker containers, IndexedDB databases from previous runs, npm/Vite caches, even old browser profile data. Restart everything cold (`docker rm -f $(docker ps -aq)`, blow away `node_modules/.vite`, run from a fresh worktree) and re-run before assuming it's a CI quirk.
+3. **Look for the failing-test contradiction.** In the tier-gating case, test 1 (Settings) passed and tests 2/3 (Italy / Solo weekend) failed using the same fixture. That's logically impossible if both are reading the same seeded data; it pointed at a state-dependent code path (the one-shot `GetAllTrips` trigger). The contradiction was the smoking gun and I missed it for three CI rounds.
+
+### Visual goldens drift across machines; bake `maxDiffPixelRatio: 0.05` as the default
+
+Goldens regenerated locally rarely match CI's Ubuntu chromium at <0.05 tolerance. Font hinting, subpixel rendering, and chromium minor-version differences produce 1-3% pixel diffs that aren't real regressions. The Flock + tier-gating tracks both ate this — Agent #120 regenerated `scan-fledgling-*.png` locally, CI saw 5158/5227-pixel diffs at the 0.02 default. The right fix is to either run snapshot regeneration on CI hardware (a `workflow_dispatch` job that updates + pushes) or default new goldens to `maxDiffPixelRatio: 0.05` — tight enough to catch real chrome drift, loose enough to absorb font rendering. Reserve the 0.02 default for one or two flagship goldens you genuinely want to be that precise.
+
+### `"PouchDB is not defined" in seed.html` browser logs are intentional
+
+Debugging tier-gating CI failures, I spent time chasing console errors of the form `Uncaught ReferenceError: PouchDB is not defined, source: http://localhost:3000/seed.html`. They look alarming but are by design: `e2e/utils/auth-stub.ts` (and the `overrideStubbedCreds` variant in `leave-remove.spec.ts`) navigates a temp page to `/seed.html` purely to write `auth_creds` to IndexedDB on the right origin, then closes the page. It registers a page-level `**/pouchdb.min.js` route that fulfills with an EMPTY body — the stub doesn't need PouchDB itself, and blocking the CDN avoids hangs in sandboxed environments where `cdn.jsdelivr.net` isn't reachable. So `seed.html` runs `new PouchDB(...)` against an undefined global and throws. Harmless. Don't chase it.
+
+The *real* seed path (`seedPouchDB` in `e2e/utils/seed.ts`) uses a different sentinel URL (`/__e2e_seed__`) and the context-level CDN intercept that serves the local PouchDB bundle from `node_modules` — that path does load PouchDB and writes the actual fixture docs.
 
 ## Styling
 

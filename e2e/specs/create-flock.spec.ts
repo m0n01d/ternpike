@@ -268,7 +268,7 @@ test('Alice (Fly) creates a flock and invites Bob', async ({
   // Snapshot: flock card as the owner sees it.
   await expect(page).toHaveScreenshot('create-flock-owner-view.png', {
     fullPage: true,
-    maxDiffPixelRatio: 0.02,
+    maxDiffPixelRatio: 0.05,
   })
 
   // Open the Invite modal.

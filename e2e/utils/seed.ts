@@ -258,13 +258,27 @@ export const seedPouchDB = async (
     { timeout: 10_000 },
   )
   const docs = buildDocs(data)
-  await page.evaluate(async (allDocs) => {
+  const written = await page.evaluate(async (allDocs) => {
     const PouchDB = (window as unknown as { PouchDB: new (n: string) => unknown }).PouchDB
     const db = new PouchDB('ternpike') as {
+      allDocs: (opts: unknown) => Promise<{ total_rows: number }>
       bulkDocs: (docs: unknown[]) => Promise<unknown>
+      close: () => Promise<void>
     }
     await db.bulkDocs(allDocs)
+    // Re-read to ensure the IDB transaction has committed before the seed
+    // page closes. Without this verify-step on CI we sometimes saw a race
+    // where the app's freshly-opened PouchDB instance read an empty store
+    // back, despite bulkDocs having "resolved".
+    const verify = await db.allDocs({ include_docs: false })
+    await db.close()
+    return verify.total_rows
   }, docs as unknown as Record<string, unknown>[])
+  if (written < docs.length) {
+    throw new Error(
+      `seedPouchDB verify: expected ${docs.length} docs in PouchDB, saw ${written}`,
+    )
+  }
   await page.close()
   await context.unroute(sentinel)
 }
