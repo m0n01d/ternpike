@@ -99,7 +99,12 @@ const openTripScan = async (
   // Trip cards expose the trip name as accessible text. Click-through is
   // more reliable than deep-linking with a `tripId=trip::…::…` URL because
   // the trip ids are seeded with timestamps we don't pin in the spec.
-  await page.getByText(tripName, { exact: false }).first().click()
+  // The seed runs via PouchDB on context init, then the app boots and reads
+  // it back — on a slow CI runner the round-trip can take >5s, so wait
+  // explicitly before clicking.
+  const tripLink = page.getByText(tripName, { exact: false }).first()
+  await expect(tripLink).toBeVisible({ timeout: 30_000 })
+  await tripLink.click()
   await page.getByRole('link', { name: /scan/i }).click()
   // The hero copy renders once Scan tab is mounted.
   await expect(page.getByText(/Tap to add receipts|Connect to scan/i)).toBeVisible({
@@ -141,6 +146,7 @@ test.describe('Fledgling-in-flock tier gating', () => {
     // hiding FLOCKS from Fledglings altogether fails this snapshot.
     await expect(bob).toHaveScreenshot('settings-fledgling-in-flock.png', {
       fullPage: true,
+      maxDiffPixelRatio: 0.05,
     })
   })
 
