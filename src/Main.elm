@@ -1470,8 +1470,17 @@ updateAuth msg as_ =
 
                 Ok (SyncStateMsg state) ->
                     let
+                        -- Fire the initial trip load once sync has had its
+                        -- first chance to settle — whether it succeeded
+                        -- (Synced) or failed (SyncError). The app is
+                        -- local-first; we shouldn't wait on a working remote
+                        -- before showing the user the data already in their
+                        -- own PouchDB.
+                        syncSettled s =
+                            s == Synced || s == SyncError
+
                         syncSettledEdge =
-                            state == Synced && as_.syncState /= Synced
+                            syncSettled state && not (syncSettled as_.syncState)
 
                         tripsStillLoading =
                             case as_.trips of
