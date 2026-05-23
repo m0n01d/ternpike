@@ -1472,12 +1472,12 @@ updateAuth msg as_ =
                     let
                         -- Fire the initial trip load once sync has had its
                         -- first chance to settle — whether it succeeded
-                        -- (Synced) or failed (SyncError). The app is
-                        -- local-first; we shouldn't wait on a working remote
-                        -- before showing the user the data already in their
-                        -- own PouchDB.
+                        -- (Synced) or failed (SyncError, AuthExpired). The
+                        -- app is local-first; we shouldn't wait on a working
+                        -- remote before showing the user the data already in
+                        -- their own PouchDB.
                         syncSettled s =
-                            s == Synced || s == SyncError
+                            s == Synced || s == SyncError || s == AuthExpired
 
                         syncSettledEdge =
                             syncSettled state && not (syncSettled as_.syncState)
