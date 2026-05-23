@@ -223,6 +223,41 @@ If you're about to launch a multi-PR train and CI is red on `main`:
 
 Either way, file an issue for the broken check so it gets fixed before the next track.
 
+### Reproduce in the conductor, paste the trace into the agent prompt
+
+Every agent's first 1–2 minutes go to `npm ci` + reproducing the failure to see what the issue body described. Across a 4-agent wave that's 5–10 minutes of repeated work. The fix: the conductor runs the failing test once before dispatching, captures the actual error message + screenshot/trace path from `e2e/.results/...`, and embeds that into each agent's prompt. The agent skips straight to diagnosis instead of re-running what we already know is broken. The E2E wave (#117–#120) is the canonical example — the issue bodies all pointed at `e2e/.results/<spec>/test-failed-1.png` paths; doing one local run to capture those alongside the actual assertion output would have shaved noticeable wall-clock off every agent.
+
+### Pre-warm a worktree base
+
+Cold `npm ci`, cold `elm make`, cold Playwright browser install — each agent pays this tax independently in its worktree. For tracks of 3+ agents, the payoff of seeding a "warm" template (deps installed, `elm-stuff/` populated, Playwright browsers cached) is large. Same idea as #116 pre-building for the `Playwright (mobile)` CI job. Until this is automated, dispatching prompts should explicitly say "if `node_modules/` already exists in the worktree, skip `npm ci`" so agents don't re-do work that's already there.
+
+### Ban catch-all `_ ->` on dispatch-heavy `update` functions
+
+The #118 root cause was three message constructors (`JoinFlockAccepted`, `JoinFlockDeclined`, `JoinFlockResult`) added to `Types.elm` during the type-tightening track without corresponding branches in `updateAuth` — and the existing `_ -> ( AuthModel as_, Cmd.none )` catch-all swallowed them silently. The Elm compiler couldn't help because the catch-all matched. Three E2E tests failed for 60 s timeouts with no useful error trail.
+
+The fix is an `elm-review` rule that forbids wildcard patterns on the top-level message `case` in `updateAuth` (and `updateGuest`, and any future dispatcher of similar shape). With the wildcard removed, the next person who adds a message constructor without a handler gets a compile error pointing at the exact line — not a silent test failure. File this as a `review/` rule and bake it into CI.
+
+### Issue-body hypothesis tree, ranked
+
+Tight issues with a ranked 2–3 hypothesis tree route the agent through the diagnostic tree in one pass. #118's body listed three possibilities ("button doesn't land / handler bug / URL drift") in order; the agent went straight to #2 (Elm handler bug) and finished in ~8 minutes. When the issue body just says "investigate the timeout," the agent floors-it on every branch in parallel and burns time. **The hypothesis tree is the single highest-leverage thing the conductor can put in an issue body**, more than file paths or grep snippets.
+
+### Default to parallel waves with cherry-pick discipline; serialize only on file-conflict risk
+
+CLAUDE.md already documents both options (serial-when-fixes-likely vs. cherry-pick-when-parallel). Real-world default should be parallel — wall-clock dominates conductor wait time, and the duplicate-diagnosis cost is usually 1–2 agent-minutes per sibling, well below the wall-clock savings of a parallel wave. Reserve serial dispatch for cases where multiple agents will literally edit the same handful of lines in the same file (record-field migrations, schema bumps). For "different specs that happen to share a suspected root cause," run all in parallel with prompts that say: *"if you find a fix that should logically come from a sibling issue, apply it inline with a `(cherry-picked from #N)` comment in the commit body — the merge step will dedupe."*
+
+### Conductor-side checklist before dispatching a wave
+
+Concretely, before kicking off N agents, the conductor should do all of:
+
+1. `git fetch origin main && git rebase origin/main` on the conductor branch.
+2. Reproduce each failing test locally; capture the assertion text + trace/screenshot path.
+3. Confirm `npm ci` + `elm make` + `npm test` work on the conductor branch (catches harness rot early).
+4. For each issue: confirm the issue body has a ranked hypothesis tree, exact verification command, and file-path scope. Edit the issue if not.
+5. Pick model per scope (sonnet default, opus only for architectural judgment, haiku for one-line mechanical fixes).
+6. Group into waves by **file-conflict surface**, not by suspected-root-cause overlap.
+
+This is 10–15 minutes of conductor work that pays back across the whole wave.
+
 ## Model architecture (GuestModel / AuthModel split)
 
 See `docs/architecture.md` for the full structural description. Key behavioral conventions:
