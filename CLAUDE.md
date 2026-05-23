@@ -317,6 +317,7 @@ See `docs/architecture.md` for the full structural description. Key behavioral c
 - 401 from any HTTP call → `GuestModel (toGuestState SessionExpired as_) + clearStorage ()`. No silent re-auth — the app is unverified by Google so tokens expire aggressively.
 - Auth error messages live in `GuestReason`, NOT in `model.error`.
 - `expenses : Dict String (Dict String Expense)` — **nested** by trip. Outer key is `TripId.toString`, inner key is `ExpenseId.toString`.
+- **Local-first means "sync settled" includes failures.** The initial `GetAllTrips` (and any other on-boot fetch driven by `SyncStateMsg`) must trigger on the first transition into ANY terminal sync state — `Synced`, `SyncError`, AND `AuthExpired` — not just `Synced`. The user's PouchDB has their data the moment they log in; gating the local read on a working remote means an offline user, a user with a flaky CouchDB, or any user whose sync auth happened to 401 sits forever on a `TripsLoading` skeleton. `AuthExpired` here is the sync-state value (CouchDB rejected the creds), not `AuthExpiredMsg` (the explicit session-invalid signal that clears storage); they are distinct paths.
 
 ## Subscription tiers
 
@@ -478,6 +479,25 @@ When working on UI, take the screenshot before claiming the work renders. The pr
 ### Negative tests find bugs unit tests miss
 
 Five categories of bugs that the `[Flock-Sec]` + `[Flock-E2E]` tracks caught that unit tests had not: wire-format mismatches between server output and client decoder, endpoint status-code drift from the spec (5+ instances), missing admin-bypass in CouchDB validation functions, missing error-message branches in client `Result` handlers, missing duplicate-action 409 responses. Bake negative-test coverage in from the start of any multi-user / multi-tenant feature.
+
+### "Passes locally, fails on CI" usually means local state is hiding the bug
+
+The local docker daemon, the CouchDB container, the worktree's `node_modules`, the `_pouch_ternpike` IndexedDB store — none of these get cleaned between local test runs the way a fresh CI runner does. The tier-gating debugging marathon (5 → 2 → 2 → 2 CI failures across four rounds) wasted three rounds applying band-aids (retries, longer timeouts, pixel tolerance) before the actual bug surfaced: Bob's HMAC-derived stub creds *happened* to authenticate locally because a long-lived CouchDB container had accumulated real user records from prior test runs. On a fresh CI container Bob 401'd → sync state went to `AuthExpired` → `GetAllTrips` never fired (see the local-first rule under *Model architecture*) → `/trips` rendered a skeleton forever.
+
+When CI fails on something that passes locally:
+1. **Treat it as a signal, not noise.** Don't reach for `retries: 1` and pixel-tolerance bumps until you've ruled out a real product bug.
+2. **Ask "what state does my local have that a fresh runner doesn't?"** Lingering docker containers, IndexedDB databases from previous runs, npm/Vite caches, even old browser profile data. Restart everything cold (`docker rm -f $(docker ps -aq)`, blow away `node_modules/.vite`, run from a fresh worktree) and re-run before assuming it's a CI quirk.
+3. **Look for the failing-test contradiction.** In the tier-gating case, test 1 (Settings) passed and tests 2/3 (Italy / Solo weekend) failed using the same fixture. That's logically impossible if both are reading the same seeded data; it pointed at a state-dependent code path (the one-shot `GetAllTrips` trigger). The contradiction was the smoking gun and I missed it for three CI rounds.
+
+### Visual goldens drift across machines; bake `maxDiffPixelRatio: 0.05` as the default
+
+Goldens regenerated locally rarely match CI's Ubuntu chromium at <0.05 tolerance. Font hinting, subpixel rendering, and chromium minor-version differences produce 1-3% pixel diffs that aren't real regressions. The Flock + tier-gating tracks both ate this — Agent #120 regenerated `scan-fledgling-*.png` locally, CI saw 5158/5227-pixel diffs at the 0.02 default. The right fix is to either run snapshot regeneration on CI hardware (a `workflow_dispatch` job that updates + pushes) or default new goldens to `maxDiffPixelRatio: 0.05` — tight enough to catch real chrome drift, loose enough to absorb font rendering. Reserve the 0.02 default for one or two flagship goldens you genuinely want to be that precise.
+
+### `"PouchDB is not defined" in seed.html` browser logs are intentional
+
+Debugging tier-gating CI failures, I spent time chasing console errors of the form `Uncaught ReferenceError: PouchDB is not defined, source: http://localhost:3000/seed.html`. They look alarming but are by design: `e2e/utils/auth-stub.ts` (and the `overrideStubbedCreds` variant in `leave-remove.spec.ts`) navigates a temp page to `/seed.html` purely to write `auth_creds` to IndexedDB on the right origin, then closes the page. It registers a page-level `**/pouchdb.min.js` route that fulfills with an EMPTY body — the stub doesn't need PouchDB itself, and blocking the CDN avoids hangs in sandboxed environments where `cdn.jsdelivr.net` isn't reachable. So `seed.html` runs `new PouchDB(...)` against an undefined global and throws. Harmless. Don't chase it.
+
+The *real* seed path (`seedPouchDB` in `e2e/utils/seed.ts`) uses a different sentinel URL (`/__e2e_seed__`) and the context-level CDN intercept that serves the local PouchDB bundle from `node_modules` — that path does load PouchDB and writes the actual fixture docs.
 
 ## Styling
 
