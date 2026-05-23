@@ -117,6 +117,7 @@ import Pages.JoinFlock
 import Pages.Ledger
 import Pages.Scan
 import Pages.Settings
+import Pages.Settings.Flocks
 import Pages.Stats
 import Pages.Trips
 import Process
@@ -2608,6 +2609,176 @@ updateAuth msg as_ =
                 TransferToFlockResult
             )
 
+        -- FLOCK MODAL MESSAGES
+        CloseFlockModal ->
+            ( AuthModel (setFlockModal FlockUi.NoModal as_), Cmd.none )
+
+        ToggleFlockMembers flockId ->
+            let
+                ui =
+                    as_.flockUi
+            in
+            ( AuthModel { as_ | flockUi = FlockUi.toggleExpanded flockId ui }
+            , Cmd.none
+            )
+
+        OpenCreateFlockModal ->
+            ( AuthModel (setFlockModal (FlockUi.CreateModal { error = Nothing, name = "" }) as_)
+            , Cmd.none
+            )
+
+        CreateFlockNameChanged name ->
+            let
+                ui =
+                    as_.flockUi
+            in
+            case ui.modal of
+                FlockUi.CreateModal m ->
+                    ( AuthModel { as_ | flockUi = { ui | modal = FlockUi.CreateModal { m | name = name } } }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        SubmitCreateFlock ->
+            let
+                ui =
+                    as_.flockUi
+            in
+            case ui.modal of
+                FlockUi.CreateModal { name } ->
+                    let
+                        trimmed =
+                            String.trim name
+                    in
+                    if trimmed == "" then
+                        let
+                            newModal =
+                                FlockUi.CreateModal { error = Just "Name is required.", name = name }
+                        in
+                        ( AuthModel { as_ | flockUi = { ui | modal = newModal } }
+                        , Cmd.none
+                        )
+
+                    else
+                        ( AuthModel (setFlockInFlight True as_)
+                        , Http.FlockApi.createFlock as_.creds { name = trimmed } CreateFlockResult
+                        )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        CreateFlockResult (Err err) ->
+            ( AuthModel (storeFlockError err as_), Cmd.none )
+
+        CreateFlockResult (Ok _) ->
+            ( AuthModel
+                (setFlockModal FlockUi.NoModal
+                    { as_
+                        | toast = Just "Flock created. It'll show up here once sync settles."
+                    }
+                )
+            , toastFor "Flock created."
+            )
+
+        OpenInviteModal flockId ->
+            ( AuthModel (setFlockModal (FlockUi.InviteModal flockId { email = "", error = Nothing }) as_)
+            , Cmd.none
+            )
+
+        InviteEmailChanged email ->
+            let
+                ui =
+                    as_.flockUi
+            in
+            case ui.modal of
+                FlockUi.InviteModal id m ->
+                    ( AuthModel { as_ | flockUi = { ui | modal = FlockUi.InviteModal id { m | email = email } } }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        SubmitInvite ->
+            case as_.flockUi.modal of
+                FlockUi.InviteModal flockId { email } ->
+                    ( AuthModel (setFlockInFlight True as_)
+                    , Http.FlockApi.inviteToFlock as_.creds flockId { email = email } InviteToFlockResult
+                    )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        InviteToFlockResult (Err err) ->
+            ( AuthModel (storeFlockError err as_), Cmd.none )
+
+        InviteToFlockResult (Ok ()) ->
+            ( AuthModel
+                (setFlockModal FlockUi.NoModal
+                    { as_
+                        | toast = Just "Invite sent."
+                    }
+                )
+            , toastFor "Invite sent."
+            )
+
+        OpenLeaveConfirmModal flockId ->
+            ( AuthModel (setFlockModal (FlockUi.LeaveConfirmModal flockId { error = Nothing }) as_)
+            , Cmd.none
+            )
+
+        LeaveFlockConfirmed flockId ->
+            ( AuthModel (setFlockInFlight True as_)
+            , Http.FlockApi.leaveFlock as_.creds flockId LeaveFlockResult
+            )
+
+        LeaveFlockResult (Err err) ->
+            ( AuthModel (storeFlockError err as_), Cmd.none )
+
+        LeaveFlockResult (Ok ()) ->
+            ( AuthModel (setFlockModal FlockUi.NoModal { as_ | toast = Just "Left flock." })
+            , toastFor "Left flock."
+            )
+
+        OpenTransferModal flockId ->
+            ( AuthModel (setFlockModal (FlockUi.TransferModal flockId { error = Nothing, target = "" }) as_)
+            , Cmd.none
+            )
+
+        TransferTargetChanged target ->
+            let
+                ui =
+                    as_.flockUi
+            in
+            case ui.modal of
+                FlockUi.TransferModal id m ->
+                    ( AuthModel { as_ | flockUi = { ui | modal = FlockUi.TransferModal id { m | target = target } } }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        SubmitTransfer ->
+            case as_.flockUi.modal of
+                FlockUi.TransferModal flockId { target } ->
+                    ( AuthModel (setFlockInFlight True as_)
+                    , Http.FlockApi.transferOwnership as_.creds flockId { newOwnerEmail = target } TransferToFlockResult
+                    )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        TransferToFlockResult (Err err) ->
+            ( AuthModel (storeFlockError err as_), Cmd.none )
+
+        TransferToFlockResult (Ok ()) ->
+            ( AuthModel (setFlockModal FlockUi.NoModal { as_ | toast = Just "Ownership transferred." })
+            , toastFor "Ownership transferred."
+            )
+
         _ ->
             ( AuthModel as_, Cmd.none )
 
@@ -2645,6 +2816,9 @@ storeFlockError err as_ =
 
         newModal =
             case ui.modal of
+                FlockUi.CreateModal m ->
+                    FlockUi.CreateModal { m | error = Just message }
+
                 FlockUi.InviteModal id m ->
                     FlockUi.InviteModal id { m | error = Just message }
 
@@ -2793,6 +2967,7 @@ viewAuth as_ =
 
             _ ->
                 Html.text ""
+        , Pages.Settings.Flocks.viewModal as_
         , UI.Layout.viewToast as_.toast
         ]
 

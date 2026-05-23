@@ -270,6 +270,8 @@ type Msg
     | CategorySelected Category
     | ClearDoneItems
     | CloseFlockModal
+    | CreateFlockNameChanged String
+    | CreateFlockResult (Result Http.Error Http.FlockApi.CreateFlockResponse)
     | CloseLedgerMenu
     | CloseMovePicker
     | CloseTripForm
@@ -311,6 +313,7 @@ type Msg
     | NetworkStatusChanged Bool
     | NoteChanged String
     | OpenEditTripForm Trip
+    | OpenCreateFlockModal
     | OpenInviteModal FlockId
     | OpenLeaveConfirmModal FlockId
     | OpenLedgerMenu ExpenseId
@@ -332,6 +335,7 @@ type Msg
     | SubmitCode
     | SubmitEmail
     | SubmitEntry
+    | SubmitCreateFlock
     | SubmitInvite
     | SubmitTransfer
     | TakeOverBilling FlockId
