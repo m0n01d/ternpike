@@ -118,7 +118,7 @@ export default async function globalSetup(): Promise<void> {
   viteProcess = spawnService(
     'vite',
     'npx',
-    ['vite', '--port', String(vitePort), '--strictPort'],
+    ['vite', 'preview', '--port', String(vitePort), '--strictPort'],
     ROOT,
     process.env,
   )

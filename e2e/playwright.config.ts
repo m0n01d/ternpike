@@ -10,7 +10,7 @@ export default defineConfig({
   globalTeardown: require.resolve('./global-teardown.ts'),
   outputDir: './.results',
   reporter: isCI
-    ? [['list'], ['html', { open: 'never', outputFolder: './.results/html' }]]
+    ? [['list'], ['html', { open: 'never', outputFolder: './.results-html' }]]
     : [['list']],
   retries: 0,
   snapshotDir: './screenshots',

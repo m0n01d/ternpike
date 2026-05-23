@@ -14,9 +14,9 @@
     "format:check": "elm-format src --validate",
     "review": "elm-review",
     "review:fix": "elm-review --fix-all",
-    "e2e": "playwright test --config=e2e/playwright.config.ts",
-    "e2e:headed": "playwright test --config=e2e/playwright.config.ts --headed",
-    "e2e:update-snapshots": "playwright test --config=e2e/playwright.config.ts --update-snapshots",
+    "e2e": "vite build && playwright test --config=e2e/playwright.config.ts",
+    "e2e:headed": "vite build && playwright test --config=e2e/playwright.config.ts --headed",
+    "e2e:update-snapshots": "vite build && playwright test --config=e2e/playwright.config.ts --update-snapshots",
     "e2e:marketing": "playwright test --config=marketing/playwright.config.ts",
     "e2e:marketing:live": "WAITLIST_LIVE=1 playwright test --config=marketing/playwright.config.ts --grep live"
   },
