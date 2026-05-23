@@ -2779,6 +2779,31 @@ updateAuth msg as_ =
             , toastFor "Ownership transferred."
             )
 
+        JoinFlockAccepted token ->
+            ( AuthModel as_
+            , Http.FlockApi.joinFlock as_.creds { token = token } JoinFlockResult
+            )
+
+        JoinFlockDeclined ->
+            ( AuthModel { as_ | route = RouteTrips }
+            , Nav.pushUrl as_.key (as_.basePath ++ "trips")
+            )
+
+        JoinFlockResult (Ok response) ->
+            ( AuthModel
+                { as_
+                    | route = RouteSettings
+                    , toast = Just ("Joined " ++ response.name ++ ".")
+                }
+            , Cmd.batch
+                [ Nav.pushUrl as_.key (as_.basePath ++ "settings")
+                , toastFor ("Joined " ++ response.name ++ ".")
+                ]
+            )
+
+        JoinFlockResult (Err err) ->
+            ( AuthModel { as_ | error = Just (joinErrorMessage err) }, Cmd.none )
+
         _ ->
             ( AuthModel as_, Cmd.none )
 
