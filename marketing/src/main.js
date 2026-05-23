@@ -18,16 +18,43 @@ const input = form && form.querySelector('.email-input');
 if (form && btn && input) {
   const successLabel = form.dataset.successLabel || "You're in";
   const successPlaceholder = form.dataset.successPlaceholder || '';
+  const errorLabel = form.dataset.errorLabel || 'Something went wrong — try again?';
+  const originalButtonLabel = btn.textContent;
+  const originalPlaceholder = input.placeholder;
 
-  btn.addEventListener('click', () => {
-    if (input.value.includes('@')) {
+  const flashError = () => {
+    input.classList.add('is-error');
+    setTimeout(() => input.classList.remove('is-error'), 1000);
+  };
+
+  btn.addEventListener('click', async () => {
+    const email = input.value.trim();
+    if (!email.includes('@')) {
+      flashError();
+      return;
+    }
+    if (btn.disabled) return;
+    btn.disabled = true;
+    try {
+      const res = await fetch('https://api.ternpike.com/marketing/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) throw new Error('waitlist signup failed: ' + res.status);
       btn.textContent = successLabel;
       btn.classList.add('is-success');
       input.value = '';
       input.placeholder = successPlaceholder;
-    } else {
-      input.classList.add('is-error');
-      setTimeout(() => input.classList.remove('is-error'), 1000);
+    } catch (err) {
+      console.error(err);
+      flashError();
+      btn.textContent = errorLabel;
+      btn.disabled = false;
+      setTimeout(() => {
+        btn.textContent = originalButtonLabel;
+        input.placeholder = originalPlaceholder;
+      }, 3000);
     }
   });
 }

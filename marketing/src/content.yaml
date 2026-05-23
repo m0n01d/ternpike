@@ -227,6 +227,7 @@ emailCapture:
   buttonLabel: "Notify me"
   successLabel: "You're in ✓"
   successPlaceholder: "See you on the road."
+  errorLabel: "Something went wrong — try again?"
   fine: "No spam. We're building this in public."
 
 footer:
