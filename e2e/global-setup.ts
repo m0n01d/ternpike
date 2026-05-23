@@ -118,7 +118,18 @@ export default async function globalSetup(): Promise<void> {
   viteProcess = spawnService(
     'vite',
     'npx',
-    ['vite', 'preview', '--port', String(vitePort), '--strictPort'],
+    // Bind explicitly to 127.0.0.1: on Node 22 CI runners, `localhost`
+    // resolves to `::1` first, vite preview ends up listening on IPv6
+    // only, and `waitForHttp(http://127.0.0.1:…)` below can never connect.
+    [
+      'vite',
+      'preview',
+      '--port',
+      String(vitePort),
+      '--strictPort',
+      '--host',
+      '127.0.0.1',
+    ],
     ROOT,
     process.env,
   )
