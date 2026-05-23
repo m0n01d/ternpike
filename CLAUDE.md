@@ -71,11 +71,71 @@ Bullet list of the implementation moves. Reference specific files, functions, po
 
 **Don't ladder issues.** A 3-line typo fix doesn't need an issue. A "rewrite the sync layer" task does. If you're not sure, write the What/Why/How — if it takes more than a minute, the issue is justified.
 
-See #42–#47 (the offline-PWA milestone) for a canonical example of how a multi-issue breakdown looks in this repo.
+**Spec `Maybe X` for source-empty fields when migrating types.** During the type-tightening track (#88–#114), issue #93 said `Trip.startDate : String → DateField`. The agent followed literally. Problem: the legacy field stored `""` for "user hasn't filled it in," and `DateField.decoder`'s migration shim maps `""` to the 1970-01-01 epoch — so the new type ended up overloaded ("epoch" meaning both "actual Jan 1 1970" and "no date set"), forcing an `isEpochDate` sentinel predicate. The honest target was `Maybe DateField`. **When the source field has any "unset" representation (empty string, zero Float, etc.), the migration spec should be `Maybe X`, not `X`-with-a-sentinel.** Sentinels are a regression in type fidelity.
+
+See #42–#47 (the offline-PWA milestone) or #88–#114 (the type-tightening track) for canonical examples of how a multi-issue breakdown looks in this repo.
+
+## Project board
+
+Every repo issue — past, present, future — lives on the **[Ternpike board](https://github.com/users/m0n01d/projects/2)** (`gh project view 2 --owner m0n01d`). The board is the canonical view of "what's done, what's queued, what's blocked." Keep it in sync with reality so the user can glance at it mid-track and know exactly where work stands without reading the conversation history.
+
+### Columns
+
+The Status field has five columns, left-to-right:
+
+1. **Backlog** — Filed but not actionable. Dependencies unmet, deferred future work, or untriaged. New issues land here.
+2. **Ready** — Dependencies merged; no blockers; could be spawned right now. The spawn queue.
+3. **In Progress** — Subagent running, OR a branch is pushed but no PR yet.
+4. **In Review** — PR is open; CI running or awaiting merge.
+5. **Done** — Merged to `main`, issue closed.
+
+### State transitions the conductor owns
+
+| Trigger | Move |
+|---|---|
+| Issue filed (manually or by an agent) | Lands in **Backlog** (auto-add) |
+| A blocker merges and unblocks an issue | **Backlog → Ready** the same moment the blocker lands, not later — the user's view of "what's next" depends on this |
+| Spawning the agent | **Ready → In Progress** in the same tool turn as the Agent call |
+| Agent reports back with a PR URL | **In Progress → In Review** |
+| PR merges (with `Closes #N`) | **In Review → Done** automatically via the project's "Item closed" / "Pull request merged" workflows |
+
+The "Item closed" and "Pull request merged" workflows are already enabled at the project level, so the final transition is automatic. Every other transition is the conductor's responsibility.
+
+### Useful commands
+
+```bash
+# View the board, or one column:
+gh project view 2 --owner m0n01d
+gh project item-list 2 --owner m0n01d --limit 500 --format json \
+  --jq '.items[] | select(.status == "Ready") | "\(.content.number)\t\(.content.title)"'
+
+# Move an issue's status (need the item ID from item-list):
+gh project item-edit --id <PVTI_…> \
+  --project-id PVT_kwHOAFkjQc4BYjND \
+  --field-id PVTSSF_lAHOAFkjQc4BYjNDzhToTek \
+  --single-select-option-id <option-id>
+
+# Status option IDs:
+#   Backlog      f75ad846
+#   Ready        ada030c1
+#   In Progress  47fc9ee4
+#   In Review    cc426850
+#   Done         98236657
+```
+
+### Mid-track snapshot the user should see
+
+At any moment during an active track, the board should show: `Done` filling up, **exactly one** issue in `In Progress` (the active agent's — or N if a wave is running in parallel), `In Review` populated when a PR is open awaiting merge, and `Ready` showing what's next up. If the user looks and sees five things stuck in `In Progress` with no PRs open, the conductor has fallen out of sync — fix that before launching the next agent.
+
+### One-time UI setup
+
+The **Auto-add to project** workflow (filter-based, not exposed by the GraphQL API) is configured in the project's Workflows tab: filter `repo:m0n01d/ternpike is:issue`. Toggle it on once so every newly-filed repo issue lands in Backlog without a CLI step. If you see new issues in the repo that *aren't* on the board, this workflow is off — fix that first.
 
 ## Subagent orchestration on multi-issue tracks
 
-This section codifies what we learned running 21 parallel subagents on the Flock feature track. Read before launching any agent on a non-trivial task; read in full before launching three or more.
+This section codifies what we learned running 21 parallel subagents on the Flock feature track and 11 sequential subagents on the type-tightening track. Read before launching any agent on a non-trivial task; read in full before launching three or more.
+
+**Move the active issue on the board at every transition** (Ready → In Progress when you spawn, In Progress → In Review when the agent reports back, Done is automatic on merge). See § *Project board* for the column meanings and the option-id table. The board is what the user is watching during a long track.
 
 ### Branch lineage is fragile — verify the base
 
@@ -99,6 +159,18 @@ Project-level `elm-format` and editor hooks fire in the main checkout when an ag
 - **Agents should never write to `/home/user/ternpike/...` paths** — only to their worktree. Have prompts include a `pwd` check before any write.
 - **The orchestrator's main checkout will accumulate cross-contamination.** Stash + discard at end of session; don't commit it.
 
+### "Parallel-safe" foundations need truly disjoint files
+
+The type-tightening track launched four "foundation" agents in parallel (#88–#91), each creating new modules under `src/Data/`. Two of them (#88 DateField, #90 GeoPoint) silently conflicted on `tests/elm-verify-examples.json` — both wanted to append their module to the same JSON array — and #90 also conflicted with #88 on `elm.json` because both added a new entry to `dependencies.direct`. The conflicts surfaced only at merge time, requiring manual three-way rebase on each.
+
+**Before kicking off parallel foundation agents, scan their issue bodies for any shared manifest files they all touch** (`elm.json`, `tests/elm-verify-examples.json`, `package.json`, `vite.config.js`, etc.). Either:
+
+- **Pre-merge a manifest-extension commit** that adds every future module name as a placeholder, so foundation agents only *replace* their slot, never *append*.
+- **Serialize the manifest edits** — one foundation lands first, then the others rebase as part of their own work.
+- **Confine each agent's edits to net-new files**, and have a single orchestrator commit at the end that batches all manifest additions.
+
+Without one of these, "parallel-safe" is a lie that surfaces as a merge conflict you have to resolve by hand.
+
 ### Issue body quality is the single biggest predictor of agent success
 
 Tight What/Why/How issues with code snippets, file paths, and verification commands produced agents that shipped clean work in one shot. Loose issues produced agents that floundered, made wrong architectural choices, or had to be re-prompted. The cost of a careful issue body is paid back many times over by not having to re-spawn the agent or untangle its output.
@@ -118,7 +190,9 @@ The 21-issue Flock track had a hard dependency DAG: #57+#58 → #59 → #60 → 
 
 ### Each agent run is expensive — budget accordingly
 
-Substantial issues (multi-file, with verification) ran 700–2000+ seconds. The 21-issue Flock track took ~4 hours of wall-clock from kickoff to last completion. Choose to spawn an agent only when the work justifies the cost; for one-file edits or quick lookups, do it inline.
+Substantial issues (multi-file, with verification) ran 700–2000+ seconds. The 21-issue Flock track took ~4 hours of wall-clock from kickoff to last completion. The 11-issue type-tightening track took ~3 hours. Choose to spawn an agent only when the work justifies the cost; for one-file edits or quick lookups, do it inline.
+
+**Match model to issue scope.** The type-tightening track inherited Opus 4.7 for all 11 agents because nothing was specified. The narrow-scope issues (#95 Scan in 15 min, #97 LocationState in 11 min) would have been fine on Sonnet 4.6 at roughly 5× lower cost. Default to `model: "sonnet"` on the Agent tool for mechanical migration work; escalate to `opus` only when the issue body is heavy on architectural judgment (new module APIs, ambiguity about layering, decisions about backwards compatibility).
 
 ### Negative tests catch real bugs
 
@@ -127,6 +201,27 @@ The `[Flock-Sec]` track found 6 endpoint-guard bugs (in #68), 3 validator bugs (
 ### Force-push for branch-tip recovery is sometimes necessary
 
 When a commit lands but the branch ref doesn't update (the `6bb9ccc` incident), the recovery is `git push --force-with-lease origin <commit-sha>:refs/heads/<branch>`. This requires user authorization — surface what's being preserved (nothing destroyed: the old tip is on a sibling branch anyway), get an explicit OK via AskUserQuestion, then push. Don't force-push silently.
+
+### Wire-format-preserving migrations enable safe multi-PR trains
+
+The type-tightening track shipped 11 sequential PRs that flipped every primitive field type in every persisted record (`Expense.amount : Float → Money`, `.date : String → DateField`, `.lat/.lon : Float → GeoPoint`, etc.) without ever breaking PouchDB sync or losing a doc. The enabling pattern, baked into every foundation module:
+
+- **`decoder` accepts the legacy wire shape AND the new shape.** `Data.Money.decoder` reads a JSON `Float` (legacy dollars) and rounds to `Int` cents. `Data.DateField.decoder` reads a JSON `"YYYY-MM-DD"` string and produces a `Date`. `Data.GeoPoint.decoderPair` reads two sibling `lat`/`lon` fields and produces a single `GeoPoint`. Old PouchDB docs still decode after the migration lands.
+- **`encoder` emits the legacy wire shape.** `Money.encoder` writes back a JSON `Float` dollars; `DateField.encoder` writes the ISO string. CouchDB-synced docs stay decodable by older clients still in the wild during rollout.
+- **Each downstream migration issue (#92–#98) reuses the foundation's shim,** so the conversion happens at the wire boundary, never in the middle of the codebase.
+
+**The corollary:** if your migration changes the wire format too (renaming a field, splitting a field into two, etc.), you can't use this pattern — you need a real data migration. Don't conflate the two. The "flip a primitive to an opaque newtype" track is safe; the "reshape the document schema" track is not.
+
+### Confirm pre-existing CI failures *before* merging through them
+
+The type-tightening track landed 11 PRs through a red `Playwright (mobile)` CI check that had been broken on `main` since six commits before the track started (Vite dev-server startup timeout + a Playwright reporter folder-clash config bug — both unrelated to anything the type track touched). I admin-squash-merged through it. **If any of those PRs had broken Playwright in a new way, the regression would have been invisible** under the noise of the preexisting failure.
+
+If you're about to launch a multi-PR train and CI is red on `main`:
+
+1. **Fix CI first** (it's almost always a 30-minute investment that pays back across the whole train), or
+2. **Confirm the failure is genuinely preexisting and unrelated** — fetch the failure log on the `main` HEAD, save the fingerprint (error message + line numbers), and check that fingerprint against every PR's CI before merging. Drift = stop the train.
+
+Either way, file an issue for the broken check so it gets fixed before the next track.
 
 ## Model architecture (GuestModel / AuthModel split)
 
