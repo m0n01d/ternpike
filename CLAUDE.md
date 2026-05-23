@@ -258,6 +258,45 @@ Concretely, before kicking off N agents, the conductor should do all of:
 
 This is 10–15 minutes of conductor work that pays back across the whole wave.
 
+### Stale `vite preview` / `wrangler dev` from worktrees squats ports 3000/4000
+
+The single biggest time-sink of the E2E-fix wave: an agent worktree's `vite preview` (spawned by `e2e/global-setup.ts`) survived past the agent's exit and kept squatting port 3000. Every subsequent test run — from the conductor's main checkout, from sibling agent worktrees, anywhere — silently connected to that stale server and got served the old bundle. **Agent self-verification got false positives from the same squat.** Tests "passed" against code that didn't exist in the agent's worktree, because the bundle being served was from a completely different branch.
+
+Two layers of defense:
+
+1. **Always kill stragglers before running e2e.** Before any `npx playwright test …` invocation (conductor or agent):
+   ```bash
+   pkill -f "vite preview"; pkill -f "wrangler dev"; sleep 1
+   ```
+   And after the run, confirm `ps -ef | grep -E "vite|wrangler" | grep -v grep` is empty before trusting the result. Bake this into the agent prompt template.
+
+2. **Fix `e2e/global-teardown.ts` to actually kill the children.** The current teardown reads `e2e/.state/processes.json` and SIGTERMs the recorded PIDs, but on agent cancellation / crash the teardown sometimes doesn't run. A defensive `pkill -f` at the start of `global-setup.ts` (before spawning new processes) closes the gap permanently. **File an issue and fix this before the next E2E wave** — until then, treat manual `pkill` as mandatory hygiene.
+
+The symptom to watch for: tests pass impossibly fast, OR a feature you just added doesn't appear in the rendered DOM trace even though `grep` finds it in `dist/assets/index.dev.js`. Both mean the served bundle isn't the one you just built.
+
+### Don't trust agent self-reports of "all tests pass" — verify the count and the wall-clock
+
+Agent B in the E2E wave reported `4 passed (12.7s)` for `e2e/specs/join-flock.spec.ts`. The number was a fabrication produced by the stale-vite squat above: the bundle being tested didn't include Agent B's fix, but the tests passed anyway because the *previously-cached* test artifacts from a different agent's run flowed through. Three of those four tests were still timing out the moment the conductor re-ran them on a fresh server.
+
+Two rules:
+
+1. **Sanity-check the wall-clock against the test count.** A real Playwright test in this repo takes 1–3 s when it passes and 10–60 s when it fails. `4 passed (12.7s)` for a multi-context two-user spec is suspicious; `4 passed (3.2s)` is impossible. If the timing doesn't match the test complexity, the agent didn't actually exercise the code.
+2. **Re-run agent tests on the conductor branch before merging.** When cherry-picking N agent commits onto the conductor branch, run the relevant spec(s) yourself against a freshly-built bundle (with stragglers killed first) and confirm the green. Treat the agent's pass-claim as "evidence to check," not "verdict to accept."
+
+This isn't about doubting agents — it's about doubting *the harness state the agent ran in*. The harness has known leaks (the stale-port one above being the worst); the verification step plugs them.
+
+### `updateAuth` cherry-pick conflicts are predictable — anchor cases at known locations
+
+Two agents in the E2E wave both added cases to the top-level `case msg of` block in `src/Main.elm` `updateAuth`. The merge resolved cleanly because the cases were non-overlapping (different `Msg` constructors), but git still required a manual three-way merge because both insertions targeted "right above the `_ ->` catch-all."
+
+Three mitigations, easiest first:
+
+1. **Tell parallel agents to insert their cases at a specific anchor.** E.g., "add your new case immediately before `OpenInviteModal flockId ->`" (or any other stable, named case). Different agents → different anchors → different lines → no conflict.
+2. **Pre-merge a foundation commit that adds `-- INSERTION POINT: <feature>` comments** in `updateAuth`, one per planned wave member. Each agent replaces its own comment with its case body; merges become trivial.
+3. **Sequence them.** If the wave only has two agents both adding cases here, just run them serially — the second one starts from a base that already has the first one's case in place. Loses parallelism for ~one agent-run of wall-clock.
+
+The catch-all-ban rule already filed (see "Ban catch-all `_ ->` on dispatch-heavy `update` functions") would also prevent the silent-failure mode that the catch-all enables; the anchor pattern is orthogonal — it's purely about avoiding the textual merge conflict.
+
 ## Model architecture (GuestModel / AuthModel split)
 
 See `docs/architecture.md` for the full structural description. Key behavioral conventions:
