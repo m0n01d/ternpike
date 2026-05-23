@@ -9,6 +9,7 @@ import {
   readFlockMeta,
   seedFlock,
 } from '../utils/flockSetup'
+import { purgeUserFlocks } from '../utils/flock-test-helpers'
 import { readHarnessState } from '../utils/state'
 
 /*
@@ -227,6 +228,14 @@ test.describe('Flock leave + remove', () => {
     const bob = await provisionUser(couchAdmin, BOB_EMAIL)
     aliceCreds.password = alice.password
     bobCreds.password = bob.password
+
+    // Purge any user:flocks docs left by earlier specs in the same run
+    // (e.g. join-flock leaves Bob a member of 'aabbccddeeff'). Without
+    // this, Bob's reconcileFlocks ends up tracking a flock from the
+    // prior spec while the new Honeymoon is being set up here, and the
+    // race makes the "Honeymoon disappears after leave" assertion flaky.
+    await purgeUserFlocks(couchAdmin, ALICE_EMAIL)
+    await purgeUserFlocks(couchAdmin, BOB_EMAIL)
 
     // 2. Replace the harness's placeholder auth_creds with the real ones.
     await overrideStubbedCreds(
