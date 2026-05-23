@@ -75,9 +75,67 @@ Bullet list of the implementation moves. Reference specific files, functions, po
 
 See #42–#47 (the offline-PWA milestone) or #88–#114 (the type-tightening track) for canonical examples of how a multi-issue breakdown looks in this repo.
 
+## Project board
+
+Every repo issue — past, present, future — lives on the **[Ternpike board](https://github.com/users/m0n01d/projects/2)** (`gh project view 2 --owner m0n01d`). The board is the canonical view of "what's done, what's queued, what's blocked." Keep it in sync with reality so the user can glance at it mid-track and know exactly where work stands without reading the conversation history.
+
+### Columns
+
+The Status field has five columns, left-to-right:
+
+1. **Backlog** — Filed but not actionable. Dependencies unmet, deferred future work, or untriaged. New issues land here.
+2. **Ready** — Dependencies merged; no blockers; could be spawned right now. The spawn queue.
+3. **In Progress** — Subagent running, OR a branch is pushed but no PR yet.
+4. **In Review** — PR is open; CI running or awaiting merge.
+5. **Done** — Merged to `main`, issue closed.
+
+### State transitions the conductor owns
+
+| Trigger | Move |
+|---|---|
+| Issue filed (manually or by an agent) | Lands in **Backlog** (auto-add) |
+| A blocker merges and unblocks an issue | **Backlog → Ready** the same moment the blocker lands, not later — the user's view of "what's next" depends on this |
+| Spawning the agent | **Ready → In Progress** in the same tool turn as the Agent call |
+| Agent reports back with a PR URL | **In Progress → In Review** |
+| PR merges (with `Closes #N`) | **In Review → Done** automatically via the project's "Item closed" / "Pull request merged" workflows |
+
+The "Item closed" and "Pull request merged" workflows are already enabled at the project level, so the final transition is automatic. Every other transition is the conductor's responsibility.
+
+### Useful commands
+
+```bash
+# View the board, or one column:
+gh project view 2 --owner m0n01d
+gh project item-list 2 --owner m0n01d --limit 500 --format json \
+  --jq '.items[] | select(.status == "Ready") | "\(.content.number)\t\(.content.title)"'
+
+# Move an issue's status (need the item ID from item-list):
+gh project item-edit --id <PVTI_…> \
+  --project-id PVT_kwHOAFkjQc4BYjND \
+  --field-id PVTSSF_lAHOAFkjQc4BYjNDzhToTek \
+  --single-select-option-id <option-id>
+
+# Status option IDs:
+#   Backlog      f75ad846
+#   Ready        ada030c1
+#   In Progress  47fc9ee4
+#   In Review    cc426850
+#   Done         98236657
+```
+
+### Mid-track snapshot the user should see
+
+At any moment during an active track, the board should show: `Done` filling up, **exactly one** issue in `In Progress` (the active agent's — or N if a wave is running in parallel), `In Review` populated when a PR is open awaiting merge, and `Ready` showing what's next up. If the user looks and sees five things stuck in `In Progress` with no PRs open, the conductor has fallen out of sync — fix that before launching the next agent.
+
+### One-time UI setup
+
+The **Auto-add to project** workflow (filter-based, not exposed by the GraphQL API) is configured in the project's Workflows tab: filter `repo:m0n01d/ternpike is:issue`. Toggle it on once so every newly-filed repo issue lands in Backlog without a CLI step. If you see new issues in the repo that *aren't* on the board, this workflow is off — fix that first.
+
 ## Subagent orchestration on multi-issue tracks
 
-This section codifies what we learned running 21 parallel subagents on the Flock feature track. Read before launching any agent on a non-trivial task; read in full before launching three or more.
+This section codifies what we learned running 21 parallel subagents on the Flock feature track and 11 sequential subagents on the type-tightening track. Read before launching any agent on a non-trivial task; read in full before launching three or more.
+
+**Move the active issue on the board at every transition** (Ready → In Progress when you spawn, In Progress → In Review when the agent reports back, Done is automatic on merge). See § *Project board* for the column meanings and the option-id table. The board is what the user is watching during a long track.
 
 ### Branch lineage is fragile — verify the base
 
