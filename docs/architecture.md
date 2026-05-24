@@ -416,6 +416,72 @@ This is how synced remote changes appear in the UI without a page reload.
 
 ---
 
+## Receipt scanning + OCR
+
+Receipts go through Anthropic's vision model via `Main.makeOcrCall`. The
+system prompt (`Main.ocrSystemPrompt`) asks Claude to extract one JSON
+object per receipt in the image, with these fields (every one optional —
+Claude returns `null` for whatever it couldn't read):
+
+- `address` — street address printed on the receipt (added in #150).
+- `amount`, `category`, `date`, `longNote`, `merchant`, `note`,
+  `paymentMethod`.
+
+The raw OCR result lands on `ScanItem.ocrData : Maybe OcrData`
+(`src/Data/Scan.elm`). On batch images, `Main.GotOcrResult` splits one
+source item into multiple `ScanReady` items, one per OCR result. The
+Scan queue UI (`src/Pages/Scan.elm`) surfaces all of this — amount,
+category pill, merchant, the extracted date with provenance ("📅 May
+21" vs. "📅 Today · no date on receipt"), and the address — so a week's
+worth of batch-scanned receipts are visibly distributed across the
+right days before you tap Review on each one.
+
+### Location precedence
+
+`Data.Location.LocationSource` has four constructors, in preference
+order:
+
+1. `ExifGps` — coordinates pulled from the receipt photo's EXIF GPS
+   tag. Most accurate (the photo was taken at the receipt's location).
+2. `Geocoded` — paid-tier `POST /geocode` resolved the OCR'd address
+   to lat/lon via Nominatim. Wins over browser geo / manual when EXIF
+   is absent; EXIF always trumps it. See "Geocoding" below.
+3. `BrowserGeo` — `navigator.geolocation` fired when the user landed
+   on the Add tab. Fallback when EXIF and Geocoded both miss.
+4. `ManualPin` — the user tapped the map picker.
+
+The `GotGeocodeResult` handler in `Main.elm` enforces the EXIF-wins
+rule: it only promotes an item to `LocationGot _ Geocoded` if the
+current `locationState` is not already `LocationGot _ ExifGps`.
+
+### Geocoding
+
+The `POST /geocode` Worker endpoint (`server/geocode.js`, #152) is a
+paid-tier Nominatim proxy. The browser cannot call Nominatim directly:
+OSM's usage policy requires a real `User-Agent` with contact info, a
+global 1 req/sec ceiling, and modest caching. The Worker centralizes
+all of that.
+
+| Concern | Where it lives |
+|---|---|
+| Auth | HTTP Basic with HMAC-derived password (same scheme as `/sharedtrips`). Lives in `server/auth.js`. |
+| Tier gate | `getTier(env, email)` → `isPaidTier(tier)` → 403 `paid_tier_required` for Tern. |
+| Per-user rate limit | `GEOCODE_RL_KV`, key `rl:<email>`, TTL 60s (KV's minimum). Effectively 1 geocode/min/user. Second call within window → 429 `rate_limited`. |
+| Response cache | `GEOCODE_CACHE_KV`, key `addr:<sha256(normalized address)>`. 30d for hits, 1d for no-match. Shared across users (address resolves to the same point regardless of who asks). |
+| Upstream | `${NOMINATIM_BASE_URL or default}/search?q=…&format=json&limit=1`, `User-Agent: Ternpike/<APP_VERSION> (contact@ternpike.com)`. |
+| Response | `{ ok: true, lat, lon, source: 'nominatim' }` on hit; `{ ok: true, lat: null, lon: null }` on no-match; `502 { ok: false, error: 'upstream' }` on Nominatim failure. |
+
+The client side is `src/Http/GeocodeApi.elm`. `Main.GotOcrResult` fires
+one `geocode` Cmd per touched scan item that has a non-empty extracted
+address on a paid-tier trip; `GotGeocodeResult` applies the result with
+the precedence rule above.
+
+Free-tier (Tern) users get the address as plain text on the expense and
+can pin manually via the Add page map picker — the geocode Cmd is never
+fired for them.
+
+---
+
 ## Saving a new expense
 
 1. User submits form on the Add page.
@@ -452,7 +518,8 @@ Expenses are never mutated. Instead, an **amendment** document is created:
 
 ```elm
 type alias Amendment =
-    { amount    : Maybe Float      -- only the fields the user changed
+    { address   : Maybe String     -- merchant address (#150)
+    , amount    : Maybe Float      -- only the fields the user changed
     , category  : Maybe Category
     , createdAt : String
     , createdBy : UserId            -- which signed-in user wrote the patch
@@ -896,10 +963,13 @@ types never need to carry it.
 
 | I want to... | Look here |
 |---|---|
-| Add a field to Expense | `src/Data/Expense.elm` — update type, `encode`, `decoder` |
+| Add a field to Expense | `src/Data/Expense.elm` — update type, `encode`, `decoder`. Also `Amendment`, `OcrData`, `PendingEntry`/`ParsedEntry`, `EffectiveEntry`, `Helpers.effectiveEntryToExpense`, and the inline records in `Main.defaultPendingEntry`/`expenseToPending`/`ReviewScanItem`/`GotSubmitTime` |
 | Add a new page | `src/Pages/`, wire into `Routing.elm` and `Main.elm` `view`/`update` |
 | Change how PouchDB is queried | `src/pouch.js` |
 | Add a new port | `src/Main.elm` (port declaration) + `src/main.js` (JS handler) |
 | Change sync settings | `src/pouch.js` `startSync` handler |
 | Understand what `EffectiveEntry` looks like | `src/Data/Entry.elm` |
 | See how amendments are applied | `src/Data/Entry.elm` `resolve` function |
+| Add an extracted field to the OCR prompt | `src/Main.elm` `ocrSystemPrompt`, `src/Data/Scan.elm` `OcrData` + `ocrDataDecoder` |
+| Add a new Worker endpoint | `server/<name>.js` exporting `register<Name>Routes(app)`; wire from `server/index.js`. Reuse `server/auth.js` for authenticateCaller / getTier / isPaidTier |
+| Change the Ledger map | `src/Helpers.elm` `encodeWaypoints` for the JSON wire shape; `src/main.js` `WaypointMap` for the Leaflet rendering |
