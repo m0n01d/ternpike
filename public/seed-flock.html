@@ -19,7 +19,7 @@
 </head>
 <body>
 <h1>Ternpike — Mock Flock Seeder</h1>
-<p class="dim">Bumps your account to <code>Fly</code> tier and seeds a "Honeymoon" flock
+<p class="dim">Bumps your account to <code>Osprey</code> tier and seeds a "Honeymoon" flock
    with an Italy trip and four expenses split between two members. Idempotent —
    safe to run again to reset.</p>
 
@@ -100,7 +100,7 @@ async function upsert(db, doc) {
 
 ;(async () => {
   try {
-    log('1. Bumping auth_creds.tier → Fly', 'hdr')
+    log('1. Bumping auth_creds.tier → Osprey', 'hdr')
     const kv = await openIdbKv()
     const raw = await idbGet(kv, 'auth_creds')
     if (!raw) {
@@ -109,12 +109,12 @@ async function upsert(db, doc) {
       return
     }
     const creds = JSON.parse(raw)
-    const previousTier = creds.tier || 'fledgling'
-    // Lowercase — `Data.Tier.fromString` only accepts the lowercase constructor
-    // names, and a capitalised 'Fly' silently falls through to Fledgling.
-    creds.tier = 'fly'
+    const previousTier = creds.tier || 'tern'
+    // Lowercase — `Data.Tier.fromString` only accepts the lowercase wire
+    // strings; anything else silently falls through to Tern.
+    creds.tier = 'osprey'
     await idbSet(kv, 'auth_creds', JSON.stringify(creds))
-    log(`   ${previousTier} → Fly  (you=${creds.email})`, 'ok')
+    log(`   ${previousTier} → Osprey  (you=${creds.email})`, 'ok')
     kv.close()
 
     log('2. Writing user:flocks in personal DB', 'hdr')
@@ -179,7 +179,7 @@ async function upsert(db, doc) {
     log('  • The flock-local DB will try to live-sync to https://couch.ternpike.com/flock-deadbeefcafe.', 'dim')
     log('    That request will fail (cert / network) and you may see ERR_CERT_AUTHORITY_INVALID in the', 'dim')
     log('    console. The local data still works and the UI renders — sync just doesn\'t reach a remote.', 'dim')
-    log('  • Your tier is "Fly" only locally. The server still thinks you\'re Fledgling until #19 /me ships.', 'dim')
+    log('  • Your tier is "Osprey" only locally. The server still thinks you\'re Tern until #19 /me ships.', 'dim')
     log('  • To wipe and re-seed: run this page again. To wipe entirely: Settings → Reset local data.', 'dim')
 
     document.getElementById('done').style.display = 'block'

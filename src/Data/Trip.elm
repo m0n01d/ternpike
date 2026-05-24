@@ -91,7 +91,7 @@ import Data.Flock exposing (Flock)
 import Data.FlockId
 import Data.Flocks exposing (Flocks)
 import Data.Money as Money exposing (Money)
-import Data.Tier exposing (Tier(..))
+import Data.Tier exposing (Tier)
 import Data.TripId as TripId exposing (TripId)
 import Data.UserId exposing (UserId)
 import Json.Decode as D
@@ -300,7 +300,7 @@ tier governs this trip's paid features?"
 
   - `currentUser` — the session's `UserId`, derived in `Main.elm` from
     `as_.creds.email`. Used to detect the owner-is-me case so the
-    session's tier is preferred over the optimistic Fly fallback.
+    session's tier is preferred over the optimistic Osprey fallback.
   - `flocks` — the loaded flock cache, looked up by `trip.flockId`.
   - `tier` — the session's tier, used both as the personal-trip
     answer and as the owner-is-me answer.
@@ -313,8 +313,8 @@ type alias TierContext a =
 {-| The tier that gates paid features on this trip.
 
 For personal trips this is the user's own tier. For flock trips this
-is the **billing owner's** tier — so a free Fledgling member of a
-flock owned by a Fly user gets paid features inside that flock's
+is the **billing owner's** tier — so a free Tern member of a
+flock owned by an Osprey user gets paid features inside that flock's
 trips. If the trip claims a `flockId` we don't recognise (transient
 race during sync, stale doc), we conservatively fall back to the
 caller's own tier.
@@ -339,7 +339,8 @@ effectiveTier trip ctx =
 we use the session's tier directly; otherwise we optimistically treat
 the flock as paid — the owner must have been paid to create it, and
 billing-lapsed flocks are surfaced separately via `billingStatus`
-(handled by #64).
+(handled by #64). Falls back to `Osprey` (optimistic paid) when the
+owner is someone else.
 -}
 ownerTier : Flock -> TierContext a -> Tier
 ownerTier flock ctx =
@@ -347,7 +348,7 @@ ownerTier flock ctx =
         ctx.tier
 
     else
-        Fly
+        Data.Tier.Osprey
 
 
 {-| True if the trip can use the Ternpike-hosted Anthropic proxy for

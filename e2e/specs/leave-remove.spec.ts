@@ -59,12 +59,12 @@ test.use({
   aliceSpec: {
     email: ALICE_EMAIL,
     seed: { trips: [] },
-    tier: 'Fly',
+    tier: 'Osprey',
   },
   bobSpec: {
     email: BOB_EMAIL,
     seed: { trips: [] },
-    tier: 'Fledgling',
+    tier: 'Tern',
   },
 })
 

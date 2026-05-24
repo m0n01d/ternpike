@@ -129,10 +129,10 @@ async function authenticateCaller(c) {
 }
 
 async function getTier(env, email) {
-  if (!env.TIERS_KV) return 'fledgling'
+  if (!env.TIERS_KV) return 'tern'
   const v = await env.TIERS_KV.get(email.toLowerCase())
-  if (v === 'fly' || v === 'trailblazer') return v
-  return 'fledgling'
+  if (v === 'osprey' || v === 'trailblazer') return v
+  return 'tern'
 }
 
 async function setTier(env, email, tier) {
@@ -140,7 +140,7 @@ async function setTier(env, email, tier) {
   await env.TIERS_KV.put(email.toLowerCase(), tier)
 }
 
-const isPaidTier = (tier) => tier === 'fly' || tier === 'trailblazer'
+const isPaidTier = (tier) => tier === 'osprey' || tier === 'trailblazer'
 
 async function couchGetJson(env, path) {
   const r = await couchAdmin(env, path)
@@ -619,7 +619,7 @@ export function registerFlockRoutes(app) {
     const tier = typeof body.tier === 'string' ? body.tier : ''
     if (
       !email.includes('@') ||
-      !['fledgling', 'fly', 'trailblazer'].includes(tier)
+      !['tern', 'osprey', 'trailblazer'].includes(tier)
     ) {
       return c.json({ ok: false, error: 'invalid_payload' }, 400)
     }

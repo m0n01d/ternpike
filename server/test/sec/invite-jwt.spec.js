@@ -39,9 +39,9 @@ after(async () => {
 beforeEach(async () => {
   env = buildEnv(couch)
   resend.reset()
-  await seedUser(env, couch, ALICE, 'fly')
-  await seedUser(env, couch, BOB, 'fly')
-  await seedUser(env, couch, CAROL, 'fly')
+  await seedUser(env, couch, ALICE, 'osprey')
+  await seedUser(env, couch, BOB, 'osprey')
+  await seedUser(env, couch, CAROL, 'osprey')
 })
 
 const authed = async (email) => ({

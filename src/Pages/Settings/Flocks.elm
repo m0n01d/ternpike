@@ -3,7 +3,7 @@ module Pages.Settings.Flocks exposing (view, viewModal)
 {-| The "Flocks" subsection of the Settings page (#62).
 
 Renders one card per flock the user belongs to plus a "Create flock"
-button at the top with a Fledgling-friendly upgrade hint. Owner cards
+button at the top with a Tern-friendly upgrade hint. Owner cards
 get Invite / Transfer-ownership / Leave buttons; member cards only
 get Leave. A "View members" toggle expands the inline avatar stack
 into a full email list.

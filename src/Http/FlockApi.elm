@@ -148,7 +148,7 @@ joinFlockResponseDecoder =
 
 
 {-| `POST /flocks` — create a flock. The server is responsible for
-checking the tier (Fly+) and rejecting Fledgling creators.
+checking the tier (Osprey+) and rejecting Tern creators.
 -}
 createFlock :
     Creds
@@ -244,7 +244,7 @@ leaveFlock creds flockId toMsg =
 
 {-| `POST /flocks/:id/transfer` — transfer ownership to another member
 by email. The server re-checks that the target is a current member
-and is on Fly+ before accepting.
+and is on Osprey+ before accepting.
 -}
 transferOwnership :
     Creds

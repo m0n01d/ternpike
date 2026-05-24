@@ -76,7 +76,7 @@ test.use({
         },
       ],
     },
-    tier: 'Fledgling',
+    tier: 'Tern',
   },
 })
 

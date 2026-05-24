@@ -20,14 +20,14 @@ suite =
         [ test "personal trip returns the user's own tier" <|
             \_ ->
                 Trip.effectiveTier (personalTrip "trip::1::aaaaaaaa")
-                    { currentUser = member, tier = Tier.Fledgling, flocks = Flocks.empty }
-                    |> Expect.equal Tier.Fledgling
-        , test "personal trip for a paid user returns Fly" <|
+                    { currentUser = member, tier = Tier.Tern, flocks = Flocks.empty }
+                    |> Expect.equal Tier.Tern
+        , test "personal trip for a paid user returns Osprey" <|
             \_ ->
                 Trip.effectiveTier (personalTrip "trip::2::bbbbbbbb")
-                    { currentUser = member, tier = Tier.Fly, flocks = Flocks.empty }
-                    |> Expect.equal Tier.Fly
-        , test "active flock trip elevates a Fledgling member to Fly" <|
+                    { currentUser = member, tier = Tier.Osprey, flocks = Flocks.empty }
+                    |> Expect.equal Tier.Osprey
+        , test "active flock trip elevates a Tern member to Osprey" <|
             \_ ->
                 let
                     fid =
@@ -35,13 +35,13 @@ suite =
 
                     state =
                         { currentUser = member
-                        , tier = Tier.Fledgling
+                        , tier = Tier.Tern
                         , flocks = Flocks.fromList [ flockWith fid Active ]
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::3::cccccccc" fid) state
-                    |> Expect.equal Tier.Fly
-        , test "active flock trip for a Fly owner stays at Fly" <|
+                    |> Expect.equal Tier.Osprey
+        , test "active flock trip for an Osprey owner stays at Osprey" <|
             \_ ->
                 let
                     fid =
@@ -49,12 +49,12 @@ suite =
 
                     state =
                         { currentUser = owner
-                        , tier = Tier.Fly
+                        , tier = Tier.Osprey
                         , flocks = Flocks.fromList [ flockWith fid Active ]
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::4::dddddddd" fid) state
-                    |> Expect.equal Tier.Fly
+                    |> Expect.equal Tier.Osprey
         , test "grace flock as the owner returns the owner's own tier" <|
             \_ ->
                 let
@@ -63,7 +63,7 @@ suite =
 
                     state =
                         { currentUser = owner
-                        , tier = Tier.Fledgling
+                        , tier = Tier.Tern
                         , flocks = Flocks.fromList [ flockWith fid Grace ]
                         }
                 in
@@ -71,8 +71,8 @@ suite =
                 -- the lapsed-billing banner (#64) handles UX. Owner-is-me path
                 -- returns ctx.tier so a downgraded owner sees their actual tier.
                 Trip.effectiveTier (flockTrip "trip::5::eeeeeeee" fid) state
-                    |> Expect.equal Tier.Fledgling
-        , test "frozen flock as a Fly owner stays Fly" <|
+                    |> Expect.equal Tier.Tern
+        , test "frozen flock as an Osprey owner stays Osprey" <|
             \_ ->
                 let
                     fid =
@@ -80,12 +80,12 @@ suite =
 
                     state =
                         { currentUser = owner
-                        , tier = Tier.Fly
+                        , tier = Tier.Osprey
                         , flocks = Flocks.fromList [ flockWith fid Frozen ]
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::6::ffffffff" fid) state
-                    |> Expect.equal Tier.Fly
+                    |> Expect.equal Tier.Osprey
         , test "trip references a flock that isn't in flocks → user's tier" <|
             \_ ->
                 let
@@ -94,13 +94,13 @@ suite =
 
                     state =
                         { currentUser = member
-                        , tier = Tier.Fledgling
+                        , tier = Tier.Tern
                         , flocks = Flocks.empty
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::7::99999999" fid) state
-                    |> Expect.equal Tier.Fledgling
-        , test "canUseProxiedOCR is True on an active flock trip for a Fledgling member" <|
+                    |> Expect.equal Tier.Tern
+        , test "canUseProxiedOCR is True on an active flock trip for a Tern member" <|
             \_ ->
                 let
                     fid =
@@ -108,18 +108,18 @@ suite =
 
                     state =
                         { currentUser = member
-                        , tier = Tier.Fledgling
+                        , tier = Tier.Tern
                         , flocks = Flocks.fromList [ flockWith fid Active ]
                         }
                 in
                 Trip.canUseProxiedOCR (flockTrip "trip::8::88888888" fid) state
                     |> Expect.equal True
-        , test "canUseProxiedOCR is False on a personal trip for a Fledgling" <|
+        , test "canUseProxiedOCR is False on a personal trip for a Tern" <|
             \_ ->
                 Trip.canUseProxiedOCR (personalTrip "trip::9::77777777")
-                    { currentUser = member, tier = Tier.Fledgling, flocks = Flocks.empty }
+                    { currentUser = member, tier = Tier.Tern, flocks = Flocks.empty }
                     |> Expect.equal False
-        , test "canBatchScan is True on an active flock trip for a Fledgling member" <|
+        , test "canBatchScan is True on an active flock trip for a Tern member" <|
             \_ ->
                 let
                     fid =
@@ -127,7 +127,7 @@ suite =
 
                     state =
                         { currentUser = member
-                        , tier = Tier.Fledgling
+                        , tier = Tier.Tern
                         , flocks = Flocks.fromList [ flockWith fid Active ]
                         }
                 in

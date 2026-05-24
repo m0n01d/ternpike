@@ -59,13 +59,13 @@ const SYNC_TIMEOUT_MS = 5_000
 test.use({
   aliceSpec: {
     email: 'alice@test.ternpike.com',
-    tier: 'Fly',
+    tier: 'Osprey',
   },
   bobSpec: {
     email: 'bob@test.ternpike.com',
-    // Explicitly Fledgling — also verifies "Fledgling in a flock can write"
+    // Explicitly Tern — also verifies "Tern in a flock can write"
     // (paid OCR is owner-funded, but write access doesn't require paid tier).
-    tier: 'Fledgling',
+    tier: 'Tern',
   },
 })
 
