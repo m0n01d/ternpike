@@ -47,23 +47,22 @@ export function attachPouch(app, { creds = null } = {}) {
         })
       } else if (change.doc) {
         const { _rev, ...doc } = change.doc
-        if (handle.localName === PERSONAL_KEY && change.id === 'user:flocks') {
-          // Server admin-writes user:flocks on create/join/leave; re-derive
+        if (handle.localName === PERSONAL_KEY && change.id === 'user:sharedtrips') {
+          // Server admin-writes user:sharedtrips on create/join/leave; re-derive
           // the open-handle set on every update so adds and removes both
           // converge without a reload.
           reconcileFlocks(doc).catch(err =>
             console.error('[pouch] reconcileFlocks:', err))
           return
         }
-        if (change.id === 'flock:meta') {
-          // Route flock metadata up as a typed FlockMeta event so Elm can
-          // decode it through Data.Flock.decoder rather than the
+        if (change.id === 'sharedtrip:meta') {
+          // Route shared trip metadata up as a typed SharedTripMeta event so Elm can
+          // decode it through Data.SharedTrip.decoder rather than the
           // expense/trip-shaped DbChange channel.
-          // NOTE: the document's _id is 'flock:meta' and its type field is
-          // 'flock' (the CouchDB wire type). We match on _id (change.id)
-          // rather than doc.type so this works regardless of the type field
-          // value, which is not 'flock:meta'.
-          app.ports.pouchIn.send({ tag: 'FlockMeta', doc })
+          // NOTE: the document's _id is 'sharedtrip:meta' and its type field is
+          // 'sharedtrip:meta' (the CouchDB wire type). We match on _id (change.id)
+          // rather than doc.type so this works regardless of the type field value.
+          app.ports.pouchIn.send({ tag: 'SharedTripMeta', doc })
           return
         }
         const tagged = handle.flockId != null && doc.type === 'trip'
@@ -98,7 +97,7 @@ export function attachPouch(app, { creds = null } = {}) {
     return handle
   }
 
-  function openFlockHandle(flockId, dbName) {
+  function openSharedTripHandle(flockId, dbName) {
     const localName = `ternpike-${dbName}`
     if (handles.has(localName)) return handles.get(localName)
     const local = new PouchDB(localName, { auto_compaction: true })
@@ -136,8 +135,8 @@ export function attachPouch(app, { creds = null } = {}) {
           // and a client without a reachable remote (offline, dev without
           // CouchDB) still has whatever user:flocks doc was put locally —
           // gating on `!err` would silently hide flocks from those users.
-          hydrateFlocksFromPersonal().catch(e =>
-            console.error('[pouch] hydrateFlocks:', e))
+          hydrateSharedTripsFromPersonal().catch(e =>
+            console.error('[pouch] hydrateSharedTrips:', e))
         }
         emitSync(err ? 'error' : 'synced')
       })
@@ -148,12 +147,12 @@ export function attachPouch(app, { creds = null } = {}) {
       )
   }
 
-  async function hydrateFlocksFromPersonal() {
+  async function hydrateSharedTripsFromPersonal() {
     const personal = handles.get(PERSONAL_KEY)
     if (!personal) return
     let doc
     try {
-      doc = await personal.local.get('user:flocks')
+      doc = await personal.local.get('user:sharedtrips')
     } catch (e) {
       if (e.status === 404) return
       throw e
@@ -188,29 +187,29 @@ export function attachPouch(app, { creds = null } = {}) {
 
     for (const [localName, { flockId, dbName }] of wanted.entries()) {
       if (!handles.has(localName)) {
-        const handle = openFlockHandle(flockId, dbName)
+        const handle = openSharedTripHandle(flockId, dbName)
         startHandleSync(handle, dbName)
       }
     }
 
-    // Tell Elm which flocks the user belongs to right now so it can drop
-    // any cached entries for flocks they've left.
+    // Tell Elm which shared trips the user belongs to right now so it can drop
+    // any cached entries for shared trips they've left.
     app.ports.pouchIn.send({
-      tag: 'FlocksReconciled',
+      tag: 'SharedTripsReconciled',
       flockIds: Array.from(wanted.values()).map(w => w.flockId),
     })
 
-    // Best-effort initial hydration of flock:meta from each flock's local DB.
+    // Best-effort initial hydration of sharedtrip:meta from each shared trip's local DB.
     // The live-changes feed will keep them up to date afterwards.
     for (const [localName, { flockId }] of wanted.entries()) {
       const handle = handles.get(localName)
       if (!handle) continue
-      handle.local.get('flock:meta').then(meta => {
+      handle.local.get('sharedtrip:meta').then(meta => {
         const { _rev, ...doc } = meta
-        app.ports.pouchIn.send({ tag: 'FlockMeta', doc })
+        app.ports.pouchIn.send({ tag: 'SharedTripMeta', doc })
       }).catch(err => {
         if (err && err.status === 404) return
-        console.warn('[pouch] flock:meta get failed', flockId, err)
+        console.warn('[pouch] sharedtrip:meta get failed', flockId, err)
       })
     }
   }
@@ -221,14 +220,14 @@ export function attachPouch(app, { creds = null } = {}) {
     emitSync('syncing')
     const personal = openPersonalHandle()
     startHandleSync(personal, dbName)
-    // Eagerly hydrate flocks from whatever's already in local PouchDB.
+    // Eagerly hydrate shared trips from whatever's already in local PouchDB.
     // The paused-event handler will also call this when initial sync
     // settles — that's the canonical path for fresh sign-ins where
-    // user:flocks arrives via replication. This early call handles
+    // user:sharedtrips arrives via replication. This early call handles
     // already-seeded users (offline, dev-without-remote, returning
-    // sessions) so flocks render even when sync can't reach the wire.
-    hydrateFlocksFromPersonal().catch(e =>
-      console.error('[pouch] hydrateFlocks (eager):', e))
+    // sessions) so shared trips render even when sync can't reach the wire.
+    hydrateSharedTripsFromPersonal().catch(e =>
+      console.error('[pouch] hydrateSharedTrips (eager):', e))
   }
 
   function stopSync() {
@@ -318,14 +317,14 @@ export function attachPouch(app, { creds = null } = {}) {
           break
         }
 
-        case 'OpenFlock': {
+        case 'OpenSharedTrip': {
           // Targeted open used by the New Trip form when the user creates a
-          // brand-new shared trip: we open the flock-local PouchDB
+          // brand-new shared trip: we open the sharedtrip-local PouchDB
           // immediately rather than waiting for reconcileFlocks to fire off
-          // the personal-DB sync round-trip. Idempotent — openFlockHandle
+          // the personal-DB sync round-trip. Idempotent — openSharedTripHandle
           // no-ops on a name already in `handles`.
           if (msg.flockId && msg.dbName) {
-            const handle = openFlockHandle(msg.flockId, msg.dbName)
+            const handle = openSharedTripHandle(msg.flockId, msg.dbName)
             if (handle && !handle.sync) {
               startHandleSync(handle, msg.dbName)
             }

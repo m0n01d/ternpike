@@ -21,7 +21,7 @@ structural invariant: there is no value of `SharedTrip` for which the owner
 isn't in the members set. `members` derives the flat list on demand,
 which is provably non-empty by construction.
 
-On the wire (PouchDB `flock:meta`) the field is flat: a single
+On the wire (PouchDB `sharedtrip:meta`) the field is flat: a single
 `members` array containing every member including the billing owner.
 The decoder picks the owner out and assembles `otherMembers = members ∖
 {billingOwner}`. The decoder hard-rejects (`Json.Decode.fail`) any
@@ -172,14 +172,14 @@ transferOwnership newOwner sharedTrip =
 -- JSON
 
 
-{-| Encode a `SharedTrip` to the on-disk `flock:meta` wire format. Flattens
+{-| Encode a `SharedTrip` to the on-disk `sharedtrip:meta` wire format. Flattens
 the structural `billingOwner :: otherMembers` split back to a single
 `members` array.
 -}
 encode : SharedTrip -> Json.Encode.Value
 encode sharedTrip =
     Json.Encode.object
-        [ ( "_id", Json.Encode.string "flock:meta" )
+        [ ( "_id", Json.Encode.string "sharedtrip:meta" )
         , ( "billingLapsedAt"
           , sharedTrip.billingLapsedAt
                 |> Maybe.map Json.Encode.string
@@ -192,18 +192,18 @@ encode sharedTrip =
         , ( "flockId", Data.SharedTripId.encode sharedTrip.id )
         , ( "members", Json.Encode.list Data.UserId.encode (members sharedTrip) )
         , ( "name", Json.Encode.string sharedTrip.name )
-        , ( "type", Json.Encode.string "flock:meta" )
+        , ( "type", Json.Encode.string "sharedtrip:meta" )
         ]
 
 
-{-| Decode a `flock:meta` document. Hard-rejects via `Json.Decode.fail`
+{-| Decode a `sharedtrip:meta` document. Hard-rejects via `Json.Decode.fail`
 when `billingOwner` is not in the flat `members` array — that doc is
 malformed and we'd rather see the error than silently paper over it.
 -}
 decoder : Json.Decode.Decoder SharedTrip
 decoder =
-    -- `_id` on the PouchDB doc is the literal `"flock:meta"` (one meta
-    -- doc per per-flock DB), not the SharedTripId — so we read the per-flock
+    -- `_id` on the PouchDB doc is the literal `"sharedtrip:meta"` (one meta
+    -- doc per per-sharedtrip DB), not the SharedTripId — so we read the per-sharedtrip
     -- identifier off the `flockId` field the server writes alongside it.
     Json.Decode.succeed RawSharedTrip
         |> Pipeline.optional "billingLapsedAt" (Json.Decode.nullable Json.Decode.string) Nothing

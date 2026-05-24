@@ -3,27 +3,27 @@ import { type BrowserContext, type Page } from '@playwright/test'
 import { test, expect } from '../fixtures/twoUsers'
 import {
   authServerBaseUrl,
-  flockDbName,
   mintInviteJwt,
   provisionUser,
-  readFlockMeta,
-  seedFlock,
-} from '../utils/flockSetup'
-import { purgeUserFlocks } from '../utils/flock-test-helpers'
+  readSharedTripMeta,
+  seedSharedTrip,
+  sharedTripDbName,
+} from '../utils/sharedTripSetup'
+import { purgeUserSharedTrips } from '../utils/shared-trip-test-helpers'
 import { readHarnessState } from '../utils/state'
 
 /*
  * Issue #78 — voluntary leave + owner-driven remove flows.
  *
- * Pre-state per the issue: a "Honeymoon" flock owned by Alice (Fly) with
- * Bob as a member, and a shared "Italy" trip carrying expenses from both
- * users. Setup is admin-side via the CouchDB client in
- * `utils/flockSetup.ts` so the spec doesn't pay six email round-trips per
- * test just to reach the pre-state.
+ * Pre-state per the issue: a "Honeymoon" shared trip owned by Alice (Fly)
+ * with Bob as a member, and a shared "Italy" trip carrying expenses from
+ * both users. Setup is admin-side via the CouchDB client in
+ * `utils/sharedTripSetup.ts` so the spec doesn't pay six email round-trips
+ * per test just to reach the pre-state.
  *
  * What ships today:
  *   - Voluntary leave (Bob): UI-driven, full revocation assertions.
- *   - Rejoin: drives `/flocks/join` directly with a freshly minted JWT
+ *   - Rejoin: drives `/sharedtrips/join` directly with a freshly minted JWT
  *     (the in-app accept screen is covered by #73; here we only need the
  *     rejoin's data-restoration side effect).
  *   - Owner self-leave: API-level only — the Settings UI from #62 does
@@ -32,17 +32,17 @@ import { readHarnessState } from '../utils/state'
  *
  * What's deferred (test.fixme):
  *   - Owner kick / remove-member: neither the Settings UI from #62 nor
- *     the server (`server/flocks.js`) ships a per-member removal path.
- *     The button and `DELETE /flocks/:id/members/:email` (or equivalent)
+ *     the server (`server/sharedTrips.js`) ships a per-member removal path.
+ *     The button and `DELETE /sharedtrips/:id/members/:email` (or equivalent)
  *     need to land first.
  */
 
 const ALICE_EMAIL = 'alice@test.ternpike.com'
 const BOB_EMAIL = 'bob@test.ternpike.com'
-// Must be exactly 12 lowercase hex chars to satisfy Data.FlockId.fromString.
+// Must be exactly 12 lowercase hex chars to satisfy Data.SharedTripId.fromString.
 const HONEYMOON_FLOCK_ID = 'bee500000001'
 
-const FLOCK_LOCAL_DB = `ternpike-${flockDbName(HONEYMOON_FLOCK_ID)}`
+const FLOCK_LOCAL_DB = `ternpike-${sharedTripDbName(HONEYMOON_FLOCK_ID)}`
 
 const aliceCreds = {
   email: ALICE_EMAIL,
@@ -176,18 +176,19 @@ const routeApiToLocalServer = async (
 const openSettingsFlocks = async (page: Page): Promise<void> => {
   // Navigate to /trips first and wait for the Italy trip to appear. This
   // confirms that: (a) CouchDB sync has run at least one round-trip, (b) the
-  // flock DB is open and has pulled its docs locally, and (c) the Elm app's
-  // `trips` state is `TripsLoaded` — not `TripsLoading` or `NoTripsYet`.
+  // shared trip DB is open and has pulled its docs locally, and (c) the Elm
+  // app's `trips` state is `TripsLoaded` — not `TripsLoading` or `NoTripsYet`.
   //
   // Without this warm-up, going straight to /settings triggers the Elm app's
-  // `GetAllTrips` while the flock DB is still empty (sync hasn't happened yet),
-  // which returns an empty result → `handleTripsFetched` redirects to /trips.
-  // After the warm-up the `tripsStillLoading` guard prevents any further
-  // `GetAllTrips` calls, so the subsequent /settings navigation is stable.
+  // `GetAllTrips` while the shared trip DB is still empty (sync hasn't
+  // happened yet), which returns an empty result → `handleTripsFetched`
+  // redirects to /trips. After the warm-up the `tripsStillLoading` guard
+  // prevents any further `GetAllTrips` calls, so the subsequent /settings
+  // navigation is stable.
   await page.goto('/trips')
   // Wait for the ACTIVE TRIP label to show "HONEYMOON" — this confirms the
-  // flock DB has synced and Elm has the flock entry in as_.flocks. Using the
-  // flock badge text avoids the strict-mode violation on "Italy" which
+  // shared trip DB has synced and Elm has the entry in as_.flocks. Using the
+  // badge text avoids the strict-mode violation on "Italy" which
   // appears in both the large trip heading and the small nav tab label.
   await expect(page.getByText('HONEYMOON')).toBeVisible({ timeout: 60_000 })
 
@@ -201,7 +202,7 @@ const openSettingsFlocks = async (page: Page): Promise<void> => {
 }
 
 /**
- * Probes the page's IndexedDB for a `_pouch_ternpike-flock-<id>` entry.
+ * Probes the page's IndexedDB for a `_pouch_ternpike-sharedtrip-<id>` entry.
  *
  * Note: `pouch.js` calls `handle.local.close()` on leave, not
  * `local.destroy()`, so the IndexedDB database persists (PouchDB's design —
@@ -212,7 +213,7 @@ const openSettingsFlocks = async (page: Page): Promise<void> => {
  * as a logging hook and so the spec documents what the issue wording
  * actually means in practice.
  */
-const localFlockDbExists = async (page: Page): Promise<boolean> => {
+const localSharedTripDbExists = async (page: Page): Promise<boolean> => {
   return page.evaluate(async (target) => {
     const dbs = await indexedDB.databases()
     return dbs.some(
@@ -221,7 +222,7 @@ const localFlockDbExists = async (page: Page): Promise<boolean> => {
   }, FLOCK_LOCAL_DB)
 }
 
-test.describe('Flock leave + remove', () => {
+test.describe('Shared trip leave + remove', () => {
   test.beforeEach(async ({ aliceContext, bobContext, couchAdmin }) => {
     // 1. Provision real CouchDB users so sync can actually authenticate.
     const alice = await provisionUser(couchAdmin, ALICE_EMAIL)
@@ -229,13 +230,13 @@ test.describe('Flock leave + remove', () => {
     aliceCreds.password = alice.password
     bobCreds.password = bob.password
 
-    // Purge any user:flocks docs left by earlier specs in the same run
+    // Purge any user:sharedtrips docs left by earlier specs in the same run
     // (e.g. join-flock leaves Bob a member of 'aabbccddeeff'). Without
-    // this, Bob's reconcileFlocks ends up tracking a flock from the
-    // prior spec while the new Honeymoon is being set up here, and the
+    // this, Bob's reconcileSharedTrips ends up tracking a shared trip from
+    // the prior spec while the new Honeymoon is being set up here, and the
     // race makes the "Honeymoon disappears after leave" assertion flaky.
-    await purgeUserFlocks(couchAdmin, ALICE_EMAIL)
-    await purgeUserFlocks(couchAdmin, BOB_EMAIL)
+    await purgeUserSharedTrips(couchAdmin, ALICE_EMAIL)
+    await purgeUserSharedTrips(couchAdmin, BOB_EMAIL)
 
     // 2. Replace the harness's placeholder auth_creds with the real ones.
     await overrideStubbedCreds(
@@ -255,8 +256,8 @@ test.describe('Flock leave + remove', () => {
     await routeApiToLocalServer(aliceContext)
     await routeApiToLocalServer(bobContext)
 
-    // 4. Seed the Honeymoon flock with Italy + two expenses.
-    await seedFlock(couchAdmin, {
+    // 4. Seed the Honeymoon shared trip with Italy + two expenses.
+    await seedSharedTrip(couchAdmin, {
       expenses: [
         {
           amount: 12500,
@@ -275,7 +276,7 @@ test.describe('Flock leave + remove', () => {
           note: 'Lunch',
         },
       ],
-      flockId: HONEYMOON_FLOCK_ID,
+      sharedTripId: HONEYMOON_FLOCK_ID,
       members: [ALICE_EMAIL, BOB_EMAIL],
       name: 'Honeymoon',
       owner: ALICE_EMAIL,
@@ -297,7 +298,7 @@ test.describe('Flock leave + remove', () => {
     const bob = await bobContext.newPage()
 
     // openSettingsFlocks warms up by visiting /trips first (waits for Italy to
-    // confirm flock sync) then goes to /settings. That warm-up ensures
+    // confirm shared trip sync) then goes to /settings. That warm-up ensures
     // as_.trips is TripsLoaded before the /settings navigation so the Elm app
     // doesn't redirect back to /trips when GetAllTrips fires.
     await openSettingsFlocks(bob)
@@ -317,10 +318,10 @@ test.describe('Flock leave + remove', () => {
     // Modal closes once the server confirms (LeaveFlockResult Ok).
     await expect(leaveModal).toBeHidden({ timeout: 10_000 })
 
-    // The server admin-writes user:flocks → CouchDB pushes the change →
-    // pouch.js reconcileFlocks closes the flock handle → Elm drops the card.
+    // The server admin-writes user:sharedtrips → CouchDB pushes the change →
+    // pouch.js reconcileSharedTrips closes the handle → Elm drops the card.
     // Allow up to 30s for the full sync round-trip. Using { exact: true } to
-    // match only the flock badge span, not any modal text that also says
+    // match only the badge span, not any modal text that also says
     // "Honeymoon" (strict-mode violation otherwise).
     await expect(bob.getByText('Honeymoon', { exact: true })).toBeHidden({
       timeout: 30_000,
@@ -330,14 +331,14 @@ test.describe('Flock leave + remove', () => {
     await bob.goto('/trips')
     await expect(bob.getByText('Italy')).toBeHidden({ timeout: 15_000 })
 
-    // Probe pouch.js's view of Bob's flock DB. The actual user-visible
+    // Probe pouch.js's view of Bob's shared trip DB. The actual user-visible
     // invariant — trip data drops out of the UI — is the line above; this
-    // is a diagnostic. See `localFlockDbExists` JSDoc for why the database
-    // entry can persist after a clean leave.
-    const stillHasFlockDb = await localFlockDbExists(bob)
+    // is a diagnostic. See `localSharedTripDbExists` JSDoc for why the
+    // database entry can persist after a clean leave.
+    const stillHasSharedTripDb = await localSharedTripDbExists(bob)
     test.info().annotations.push({
       type: 'pouchdb-leave-state',
-      description: `flock IndexedDB present after leave: ${String(stillHasFlockDb)}`,
+      description: `shared trip IndexedDB present after leave: ${String(stillHasSharedTripDb)}`,
     })
 
     // Alice still sees Honeymoon and Italy with full data.
@@ -373,7 +374,7 @@ test.describe('Flock leave + remove', () => {
     await leaveModal.getByRole('button', { name: 'Leave', exact: true }).click()
     // Modal closes once the server confirms (LeaveFlockResult Ok).
     await expect(leaveModal).toBeHidden({ timeout: 10_000 })
-    // Flock card disappears after CouchDB sync delivers updated user:flocks.
+    // Card disappears after CouchDB sync delivers updated user:sharedtrips.
     await expect(bob.getByText('Honeymoon', { exact: true })).toBeHidden({
       timeout: 30_000,
     })
@@ -388,10 +389,10 @@ test.describe('Flock leave + remove', () => {
     await alice.getByRole('button', { name: 'Send invite' }).click()
 
     // Drive the join HTTP endpoint directly. Mirrors what #73 covers
-    // through the UI — that flow ends with the same /flocks/join call.
+    // through the UI — that flow ends with the same /sharedtrips/join call.
     const token = mintInviteJwt(HONEYMOON_FLOCK_ID, BOB_EMAIL, ALICE_EMAIL)
     const baseUrl = authServerBaseUrl()
-    const joinRes = await fetch(`${baseUrl}/flocks/join`, {
+    const joinRes = await fetch(`${baseUrl}/sharedtrips/join`, {
       method: 'POST',
       headers: {
         Authorization:
@@ -406,22 +407,22 @@ test.describe('Flock leave + remove', () => {
     expect(joinRes.status, await joinRes.text()).toBe(200)
 
     // Bob is still on /settings from the leave flow. Wait for his live
-    // PouchDB sync to deliver the updated user:flocks (server wrote it on
-    // join). This avoids a page reload race where the fresh sync might fire
-    // its first-paused before CouchDB has pushed the updated doc.
+    // PouchDB sync to deliver the updated user:sharedtrips (server wrote
+    // it on join). This avoids a page reload race where the fresh sync
+    // might fire its first-paused before CouchDB has pushed the updated doc.
     await expect(bob.getByText('Honeymoon', { exact: true })).toBeVisible({
       timeout: 60_000,
     })
 
-    // Now navigate to /trips. The live sync already opened the flock handle
-    // and local PouchDB has both flock:meta and the Italy trip, so a fresh
-    // page load resolves immediately.
+    // Now navigate to /trips. The live sync already opened the shared trip
+    // handle and local PouchDB has both sharedtrip:meta and the Italy trip,
+    // so a fresh page load resolves immediately.
     await bob.goto('/trips')
     await expect(bob.getByText('Italy').first()).toBeVisible({ timeout: 30_000 })
 
     // Server-side meta confirms Bob's restored membership and that the
     // historical docs weren't touched.
-    const meta = await readFlockMeta(couchAdmin, HONEYMOON_FLOCK_ID)
+    const meta = await readSharedTripMeta(couchAdmin, HONEYMOON_FLOCK_ID)
     expect(meta.members.sort()).toEqual([ALICE_EMAIL, BOB_EMAIL].sort())
   })
 
@@ -434,7 +435,7 @@ test.describe('Flock leave + remove', () => {
     // string the eventual owner-Leave button would render once it exists.
     const baseUrl = authServerBaseUrl()
     const res = await fetch(
-      `${baseUrl}/flocks/${HONEYMOON_FLOCK_ID}/leave`,
+      `${baseUrl}/sharedtrips/${HONEYMOON_FLOCK_ID}/leave`,
       {
         method: 'POST',
         headers: {
@@ -451,7 +452,7 @@ test.describe('Flock leave + remove', () => {
     expect(body).toEqual({ error: 'transfer_ownership_first', ok: false })
 
     // No state change: Alice + Bob are still both members.
-    const meta = await readFlockMeta(couchAdmin, HONEYMOON_FLOCK_ID)
+    const meta = await readSharedTripMeta(couchAdmin, HONEYMOON_FLOCK_ID)
     expect(meta.members.sort()).toEqual([ALICE_EMAIL, BOB_EMAIL].sort())
     expect(meta.billingOwner).toBe(ALICE_EMAIL)
   })
@@ -460,15 +461,15 @@ test.describe('Flock leave + remove', () => {
     'owner kick: Alice removes Bob from Honeymoon',
     async () => {
       // BLOCKED: neither the Settings UI (Pages/Settings/Flocks.elm, #62)
-      // nor the auth server (server/flocks.js, #57) currently ships a
+      // nor the auth server (server/sharedTrips.js, #57) currently ships a
       // per-member removal path. The members panel renders the avatar
       // stack only — there is no per-row "Remove" affordance, and no
-      // `DELETE /flocks/:id/members/:email` endpoint to back one.
+      // `DELETE /sharedtrips/:id/members/:email` endpoint to back one.
       //
       // Unblock requires:
       //   - Server: a new owner-only endpoint (auth caller must be
       //     billingOwner; rewrites meta.members, _security, and the
-      //     ex-member's `user:flocks`).
+      //     ex-member's `user:sharedtrips`).
       //   - Client: a "Remove" button on each row of `viewMembersList`
       //     gated on `Flock.isOwner currentUser flock`.
       //

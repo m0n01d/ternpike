@@ -1,4 +1,4 @@
-export const FLOCK_VALIDATOR_SOURCE = `
+export const SHARED_TRIP_VALIDATOR_SOURCE = `
 function (newDoc, oldDoc, userCtx, secObj) {
   function reject(reason) { throw({ forbidden: reason }); }
   function unauthorized(reason) { throw({ unauthorized: reason }); }
@@ -19,8 +19,8 @@ function (newDoc, oldDoc, userCtx, secObj) {
     return;
   }
 
-  if (newDoc._id === 'flock:meta') {
-    if (!isAdmin) reject('flock:meta is admin-only');
+  if (newDoc._id === 'sharedtrip:meta') {
+    if (!isAdmin) reject('sharedtrip:meta is admin-only');
     return;
   }
 
@@ -51,7 +51,7 @@ function (newDoc, oldDoc, userCtx, secObj) {
   if (!newDoc.type || typeof newDoc.type !== 'string') {
     reject('missing type');
   }
-  var allowedTypes = ['expense', 'trip', 'amend', 'void', 'flock', 'userFlocks'];
+  var allowedTypes = ['expense', 'trip', 'amend', 'void', 'sharedtrip', 'userFlocks'];
   var typeOk = false;
   for (var t = 0; t < allowedTypes.length; t++) {
     if (allowedTypes[t] === newDoc.type) { typeOk = true; break; }
@@ -86,13 +86,13 @@ function (newDoc, oldDoc, userCtx, secObj) {
 }
 `.trim()
 
-export const FLOCK_DESIGN_DOC_ID = '_design/flock_validator'
+export const SHARED_TRIP_DESIGN_DOC_ID = '_design/sharedtrip_validator'
 
-export function buildFlockDesignDoc(rev) {
+export function buildSharedTripDesignDoc(rev) {
   const doc = {
-    _id: FLOCK_DESIGN_DOC_ID,
+    _id: SHARED_TRIP_DESIGN_DOC_ID,
     language: 'javascript',
-    validate_doc_update: FLOCK_VALIDATOR_SOURCE,
+    validate_doc_update: SHARED_TRIP_VALIDATOR_SOURCE,
   }
   if (rev) doc._rev = rev
   return doc

@@ -47,9 +47,9 @@ const authed = async (email) => ({
   Authorization: await basicAuthHeader(email, env.SERVER_SECRET),
 })
 
-describe('POST /flocks', () => {
+describe('POST /sharedtrips', () => {
   test('fledgling caller is rejected with 403', async () => {
-    const res = await request(env, 'POST', '/flocks', {
+    const res = await request(env, 'POST', '/sharedtrips', {
       headers: await authed(EVE),
       body: { name: 'eve-flock' },
     })
@@ -58,18 +58,18 @@ describe('POST /flocks', () => {
   })
 
   test('fly caller can create a flock (201)', async () => {
-    const res = await request(env, 'POST', '/flocks', {
+    const res = await request(env, 'POST', '/sharedtrips', {
       headers: await authed(ALICE),
       body: { name: 'alaska' },
     })
     assert.equal(res.status, 201)
     assert.ok(res.body.flockId)
-    assert.equal(res.body.dbName, `flock-${res.body.flockId}`)
+    assert.equal(res.body.dbName, `sharedtrip-${res.body.flockId}`)
   })
 
   test('trailblazer caller can create a flock (201)', async () => {
     await setTier(env, ALICE, 'trailblazer')
-    const res = await request(env, 'POST', '/flocks', {
+    const res = await request(env, 'POST', '/sharedtrips', {
       headers: await authed(ALICE),
       body: { name: 'tb-flock' },
     })
@@ -78,14 +78,14 @@ describe('POST /flocks', () => {
   })
 
   test('missing authorization header returns 401', async () => {
-    const res = await request(env, 'POST', '/flocks', {
+    const res = await request(env, 'POST', '/sharedtrips', {
       body: { name: 'no-auth' },
     })
     assert.equal(res.status, 401)
   })
 
   test('tampered basic-auth password returns 401', async () => {
-    const res = await request(env, 'POST', '/flocks', {
+    const res = await request(env, 'POST', '/sharedtrips', {
       headers: { Authorization: tamperedAuthHeader(ALICE) },
       body: { name: 'tampered' },
     })
@@ -93,7 +93,7 @@ describe('POST /flocks', () => {
   })
 
   test('server ignores tier asserted in the request body', async () => {
-    const res = await request(env, 'POST', '/flocks', {
+    const res = await request(env, 'POST', '/sharedtrips', {
       headers: await authed(EVE),
       body: { name: 'sneaky', tier: 'osprey' },
     })
@@ -102,7 +102,7 @@ describe('POST /flocks', () => {
   })
 })
 
-describe('POST /flocks/:id/invite', () => {
+describe('POST /sharedtrips/:id/invite', () => {
   let flockId
   let dbName
 
@@ -117,7 +117,7 @@ describe('POST /flocks/:id/invite', () => {
   })
 
   test('non-member caller is rejected (404, not 403)', async () => {
-    const res = await request(env, 'POST', `/flocks/${flockId}/invite`, {
+    const res = await request(env, 'POST', `/sharedtrips/${flockId}/invite`, {
       headers: await authed(BOB),
       body: { inviteeEmail: 'newbie@test.ternpike.com' },
     })
@@ -132,7 +132,7 @@ describe('POST /flocks/:id/invite', () => {
       owner: ALICE,
       members: [ALICE, BOB],
     })
-    const res = await request(env, 'POST', `/flocks/${f2.flockId}/invite`, {
+    const res = await request(env, 'POST', `/sharedtrips/${f2.flockId}/invite`, {
       headers: await authed(BOB),
       body: { inviteeEmail: 'newbie@test.ternpike.com' },
     })
@@ -141,7 +141,7 @@ describe('POST /flocks/:id/invite', () => {
   })
 
   test('owner caller can invite and the email is delivered', async () => {
-    const res = await request(env, 'POST', `/flocks/${flockId}/invite`, {
+    const res = await request(env, 'POST', `/sharedtrips/${flockId}/invite`, {
       headers: await authed(ALICE),
       body: { inviteeEmail: 'newbie@test.ternpike.com' },
     })
@@ -151,7 +151,7 @@ describe('POST /flocks/:id/invite', () => {
   })
 
   test('invalid email format returns 400', async () => {
-    const res = await request(env, 'POST', `/flocks/${flockId}/invite`, {
+    const res = await request(env, 'POST', `/sharedtrips/${flockId}/invite`, {
       headers: await authed(ALICE),
       body: { inviteeEmail: 'not-an-email' },
     })
@@ -160,14 +160,14 @@ describe('POST /flocks/:id/invite', () => {
   })
 
   test('missing authorization header returns 401', async () => {
-    const res = await request(env, 'POST', `/flocks/${flockId}/invite`, {
+    const res = await request(env, 'POST', `/sharedtrips/${flockId}/invite`, {
       body: { inviteeEmail: 'newbie@test.ternpike.com' },
     })
     assert.equal(res.status, 401)
   })
 
   test('unknown flock id returns 404', async () => {
-    const res = await request(env, 'POST', '/flocks/nope-not-a-flock/invite', {
+    const res = await request(env, 'POST', '/sharedtrips/nope-not-a-sharedtrip/invite', {
       headers: await authed(ALICE),
       body: { inviteeEmail: 'newbie@test.ternpike.com' },
     })
@@ -179,7 +179,7 @@ describe('POST /flocks/:id/invite', () => {
   })
 })
 
-describe('POST /flocks/:id/leave', () => {
+describe('POST /sharedtrips/:id/leave', () => {
   let flockId
   let dbName
 
@@ -194,7 +194,7 @@ describe('POST /flocks/:id/leave', () => {
   })
 
   test('non-member caller is rejected', async () => {
-    const res = await request(env, 'POST', `/flocks/${flockId}/leave`, {
+    const res = await request(env, 'POST', `/sharedtrips/${flockId}/leave`, {
       headers: await authed(CAROL),
     })
     // Spec: should be 404 not 403 — don't confirm existence to outsiders.
@@ -204,7 +204,7 @@ describe('POST /flocks/:id/leave', () => {
   })
 
   test('member-not-owner can leave; security members shrinks', async () => {
-    const res = await request(env, 'POST', `/flocks/${flockId}/leave`, {
+    const res = await request(env, 'POST', `/sharedtrips/${flockId}/leave`, {
       headers: await authed(BOB),
     })
     assert.equal(res.status, 200)
@@ -215,7 +215,7 @@ describe('POST /flocks/:id/leave', () => {
   })
 
   test('owner self-leave while others remain returns 409', async () => {
-    const res = await request(env, 'POST', `/flocks/${flockId}/leave`, {
+    const res = await request(env, 'POST', `/sharedtrips/${flockId}/leave`, {
       headers: await authed(ALICE),
     })
     assert.equal(res.status, 409)
@@ -228,7 +228,7 @@ describe('POST /flocks/:id/leave', () => {
       owner: CAROL,
       members: [CAROL],
     })
-    const res = await request(env, 'POST', `/flocks/${solo.flockId}/leave`, {
+    const res = await request(env, 'POST', `/sharedtrips/${solo.flockId}/leave`, {
       headers: await authed(CAROL),
     })
     // Documented gap: delete-flock is out of scope for v1. The endpoint
@@ -237,12 +237,12 @@ describe('POST /flocks/:id/leave', () => {
   })
 
   test('missing authorization header returns 401', async () => {
-    const res = await request(env, 'POST', `/flocks/${flockId}/leave`)
+    const res = await request(env, 'POST', `/sharedtrips/${flockId}/leave`)
     assert.equal(res.status, 401)
   })
 })
 
-describe('POST /flocks/:id/transfer-ownership', () => {
+describe('POST /sharedtrips/:id/transfer-ownership', () => {
   let flockId
   let dbName
 
@@ -260,7 +260,7 @@ describe('POST /flocks/:id/transfer-ownership', () => {
     const res = await request(
       env,
       'POST',
-      `/flocks/${flockId}/transfer-ownership`,
+      `/sharedtrips/${flockId}/transfer-ownership`,
       {
         headers: await authed(BOB),
         body: { newOwnerEmail: BOB },
@@ -274,7 +274,7 @@ describe('POST /flocks/:id/transfer-ownership', () => {
     const res = await request(
       env,
       'POST',
-      `/flocks/${flockId}/transfer-ownership`,
+      `/sharedtrips/${flockId}/transfer-ownership`,
       {
         headers: await authed(ALICE),
         body: { newOwnerEmail: CAROL },
@@ -288,7 +288,7 @@ describe('POST /flocks/:id/transfer-ownership', () => {
     const res = await request(
       env,
       'POST',
-      `/flocks/${flockId}/transfer-ownership`,
+      `/sharedtrips/${flockId}/transfer-ownership`,
       {
         headers: await authed(ALICE),
         body: { newOwnerEmail: EVE },
@@ -302,7 +302,7 @@ describe('POST /flocks/:id/transfer-ownership', () => {
     const res = await request(
       env,
       'POST',
-      `/flocks/${flockId}/transfer-ownership`,
+      `/sharedtrips/${flockId}/transfer-ownership`,
       {
         headers: await authed(ALICE),
         body: { newOwnerEmail: BOB },
@@ -320,7 +320,7 @@ describe('POST /flocks/:id/transfer-ownership', () => {
     const res = await request(
       env,
       'POST',
-      `/flocks/${flockId}/transfer-ownership`,
+      `/sharedtrips/${flockId}/transfer-ownership`,
       {
         headers: await authed(ALICE),
         body: { newOwnerEmail: ALICE },
@@ -334,7 +334,7 @@ describe('POST /flocks/:id/transfer-ownership', () => {
     const res = await request(
       env,
       'POST',
-      `/flocks/${flockId}/transfer-ownership`,
+      `/sharedtrips/${flockId}/transfer-ownership`,
       {
         headers: await authed(ALICE),
         body: { newOwnerEmail: 'not-an-email' },
@@ -348,21 +348,21 @@ describe('POST /flocks/:id/transfer-ownership', () => {
     const res = await request(
       env,
       'POST',
-      `/flocks/${flockId}/transfer-ownership`,
+      `/sharedtrips/${flockId}/transfer-ownership`,
       { body: { newOwnerEmail: BOB } },
     )
     assert.equal(res.status, 401)
   })
 })
 
-describe('POST /flocks/join (positive control via real invite)', () => {
+describe('POST /sharedtrips/join (positive control via real invite)', () => {
   test('inviting and joining round-trips end-to-end', async () => {
     const f = await provisionFlock(couch, {
       name: 'join-rt',
       owner: ALICE,
       members: [ALICE],
     })
-    const invite = await request(env, 'POST', `/flocks/${f.flockId}/invite`, {
+    const invite = await request(env, 'POST', `/sharedtrips/${f.flockId}/invite`, {
       headers: await authed(ALICE),
       body: { inviteeEmail: BOB },
     })
@@ -372,7 +372,7 @@ describe('POST /flocks/join (positive control via real invite)', () => {
     const match = sentText.match(/token=([^\s]+)/)
     assert.ok(match, 'expected join link in email body')
     const token = decodeURIComponent(match[1])
-    const join = await request(env, 'POST', '/flocks/join', {
+    const join = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token },
     })

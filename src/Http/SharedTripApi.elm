@@ -13,11 +13,11 @@ module Http.SharedTripApi exposing
 
 These wrap the endpoints introduced in #57:
 
-  - `POST /flocks` — create.
-  - `POST /flocks/:id/invite` — invite a user by email.
-  - `POST /flocks/join` — redeem an invite JWT.
-  - `POST /flocks/:id/leave` — leave a shared trip (non-owner only).
-  - `POST /flocks/:id/transfer` — transfer ownership to another member.
+  - `POST /sharedtrips` — create.
+  - `POST /sharedtrips/:id/invite` — invite a user by email.
+  - `POST /sharedtrips/join` — redeem an invite JWT.
+  - `POST /sharedtrips/:id/leave` — leave a shared trip (non-owner only).
+  - `POST /sharedtrips/:id/transfer` — transfer ownership to another member.
 
 Every request uses HTTP Basic with the per-user CouchDB credentials
 already stored in `Data.Auth.Creds` — same shape the app uses to talk
@@ -116,15 +116,15 @@ encodeBasic input =
     go bytes
 
 
-{-| Response from `POST /flocks`: just the new shared trip's id. The full
-`flock:meta` document lands separately through the live changes feed.
+{-| Response from `POST /sharedtrips`: just the new shared trip's id. The full
+`sharedtrip:meta` document lands separately through the live changes feed.
 -}
 type alias CreateSharedTripResponse =
     { sharedTripId : SharedTripId
     }
 
 
-{-| Response from `POST /flocks/join`: enough to render a success
+{-| Response from `POST /sharedtrips/join`: enough to render a success
 toast (the name) and navigate (the id). The full membership update
 lands through the live changes feed.
 -}
@@ -147,7 +147,7 @@ joinSharedTripResponseDecoder =
         |> Pipeline.required "flockId" SharedTripId.decoder
 
 
-{-| `POST /flocks` — create a shared trip. The server is responsible for
+{-| `POST /sharedtrips` — create a shared trip. The server is responsible for
 checking the tier (Osprey+) and rejecting Tern creators.
 -}
 createSharedTrip :
@@ -159,7 +159,7 @@ createSharedTrip creds { name } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/flocks"
+        , url = baseUrl ++ "/sharedtrips"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -171,7 +171,7 @@ createSharedTrip creds { name } toMsg =
         }
 
 
-{-| `POST /flocks/:id/invite` — owner-only invite by email. Server
+{-| `POST /sharedtrips/:id/invite` — owner-only invite by email. Server
 sends the JWT-bearing invite email via Resend and returns `204`.
 -}
 inviteToSharedTrip :
@@ -184,7 +184,7 @@ inviteToSharedTrip creds sharedTripId { email } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/flocks/" ++ SharedTripId.toString sharedTripId ++ "/invite"
+        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/invite"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -196,7 +196,7 @@ inviteToSharedTrip creds sharedTripId { email } toMsg =
         }
 
 
-{-| `POST /flocks/join` — redeem an invite JWT. The server validates
+{-| `POST /sharedtrips/join` — redeem an invite JWT. The server validates
 the token's recipient against the calling user's email and 403s on
 mismatch.
 -}
@@ -209,7 +209,7 @@ joinSharedTrip creds { token } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/flocks/join"
+        , url = baseUrl ++ "/sharedtrips/join"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -221,7 +221,7 @@ joinSharedTrip creds { token } toMsg =
         }
 
 
-{-| `POST /flocks/:id/leave` — leave a shared trip. The server rejects the
+{-| `POST /sharedtrips/:id/leave` — leave a shared trip. The server rejects the
 billing owner attempting to leave while other members remain (must
 `transferOwnership` first).
 -}
@@ -234,7 +234,7 @@ leaveSharedTrip creds sharedTripId toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/flocks/" ++ SharedTripId.toString sharedTripId ++ "/leave"
+        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/leave"
         , body = Http.emptyBody
         , expect = Http.expectWhatever toMsg
         , timeout = Nothing
@@ -242,7 +242,7 @@ leaveSharedTrip creds sharedTripId toMsg =
         }
 
 
-{-| `POST /flocks/:id/transfer` — transfer ownership to another member
+{-| `POST /sharedtrips/:id/transfer` — transfer ownership to another member
 by email. The server re-checks that the target is a current member
 and is on Osprey+ before accepting.
 -}
@@ -256,7 +256,7 @@ transferOwnership creds sharedTripId { newOwnerEmail } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/flocks/" ++ SharedTripId.toString sharedTripId ++ "/transfer"
+        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/transfer"
         , body =
             Http.jsonBody
                 (Json.Encode.object

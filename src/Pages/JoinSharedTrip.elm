@@ -1,12 +1,12 @@
 module Pages.JoinSharedTrip exposing (viewAuth)
 
-{-| The `/flocks/join?token=<jwt>` redemption page.
+{-| The `/sharedtrips/join?token=<jwt>` redemption page.
 
 Two surfaces:
 
   - **Guest** — the user is signed out. The token is held in
     `GuestState.pendingJoinToken` and the sign-in flow knows to navigate
-    back to `/flocks/join?token=...` once auth succeeds.
+    back to `/sharedtrips/join?token=...` once auth succeeds.
   - **Auth** — the user is signed in. We decode the JWT payload
     (display only — the server checks the signature), show a
     confirmation card ("Alice invited you to join Honeymoon"), and on
