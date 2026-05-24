@@ -14,10 +14,10 @@ id = "a3818441349d4138b8898fac4480bf1a"
 binding = "TIERS_KV"
 id = "d95ba1e24a514a6e8a9742cf176a541d"
 
-# Geocode endpoint per-user rate limit (key: `rl:<email>`, value: any,
-# TTL: 60s — KV minimum). Effectively 1 geocode call per minute per
-# user, which keeps OSM Nominatim's global 1-req/sec policy headroom
-# comfortable at our user volume. Provision with:
+# Geocode endpoint per-user rate limit. Token bucket stored as JSON
+# (`{count, windowStart}`), 100 calls per rolling 60s window. Sized
+# for typical batch-scanned road-trip volume (~30-50 receipts) plus
+# runaway-loop defense. Provision with:
 #   wrangler kv:namespace create GEOCODE_RL_KV
 [[kv_namespaces]]
 binding = "GEOCODE_RL_KV"
@@ -57,3 +57,4 @@ crons = ["0 * * * *"]
 #   RESEND_WAITLIST_API_KEY  (separate Resend token scoped to the waitlist audience)
 #   TIER_WEBHOOK_SECRET   (shared with the future Stripe webhook + test hook)
 #   ADMIN_SECRET          (gates /admin/* — required by the ternpike-admin TUI)
+#   GOOGLE_GEOCODING_API_KEY  (Geocoding API key from the Google Cloud project — see issue #171)

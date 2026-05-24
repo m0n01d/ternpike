@@ -470,8 +470,9 @@ order:
 1. `ExifGps` — coordinates pulled from the receipt photo's EXIF GPS
    tag. Most accurate (the photo was taken at the receipt's location).
 2. `Geocoded` — paid-tier `POST /geocode` resolved the OCR'd address
-   to lat/lon via Nominatim. Wins over browser geo / manual when EXIF
-   is absent; EXIF always trumps it. See "Geocoding" below.
+   to lat/lon via the Google Maps Geocoding API. Wins over browser geo
+   / manual when EXIF is absent; EXIF always trumps it. See "Geocoding"
+   below.
 3. `BrowserGeo` — `navigator.geolocation` fired when the user landed
    on the Add tab. Fallback when EXIF and Geocoded both miss.
 4. `ManualPin` — the user tapped the map picker.
@@ -482,20 +483,21 @@ current `locationState` is not already `LocationGot _ ExifGps`.
 
 ### Geocoding
 
-The `POST /geocode` Worker endpoint (`server/geocode.js`, #152) is a
-paid-tier Nominatim proxy. The browser cannot call Nominatim directly:
-OSM's usage policy requires a real `User-Agent` with contact info, a
-global 1 req/sec ceiling, and modest caching. The Worker centralizes
-all of that.
+The `POST /geocode` Worker endpoint (`server/geocode.js`, #152, #169)
+is a paid-tier address → lat/lon proxy. We use Google Maps Geocoding
+API rather than letting browsers hit Google directly so the API key
+never reaches the client and we get one consistent cache + rate-limit
+story across users.
 
 | Concern | Where it lives |
 |---|---|
 | Auth | HTTP Basic with HMAC-derived password (same scheme as `/sharedtrips`). Lives in `server/auth.js`. |
 | Tier gate | `getTier(env, email)` → `isPaidTier(tier)` → 403 `paid_tier_required` for Tern. |
-| Per-user rate limit | `GEOCODE_RL_KV`, key `rl:<email>`, TTL 60s (KV's minimum). Effectively 1 geocode/min/user. Second call within window → 429 `rate_limited`. |
+| Per-user rate limit | `GEOCODE_RL_KV`, key `rl:<email>`, JSON token bucket `{count, windowStart}`. 100 calls per rolling 60s window — sized for typical batch-scanned road-trip volume (30–50 receipts) plus runaway-loop defense. Over the cap → 429 `rate_limited`. |
 | Response cache | `GEOCODE_CACHE_KV`, key `addr:<sha256(normalized address)>`. 30d for hits, 1d for no-match. Shared across users (address resolves to the same point regardless of who asks). |
-| Upstream | `${NOMINATIM_BASE_URL or default}/search?q=…&format=json&limit=1`, `User-Agent: Ternpike/<APP_VERSION> (contact@ternpike.com)`. |
-| Response | `{ ok: true, lat, lon, source: 'nominatim' }` on hit; `{ ok: true, lat: null, lon: null }` on no-match; `502 { ok: false, error: 'upstream' }` on Nominatim failure. |
+| Upstream | `${GOOGLE_GEOCODING_BASE_URL or default}/maps/api/geocode/json?address=…&key=$GOOGLE_GEOCODING_API_KEY`. Key set via `wrangler secret put` (see issue #171 for provisioning). |
+| Response | `{ ok: true, lat, lon, source: 'google' }` on hit; `{ ok: true, lat: null, lon: null }` on `ZERO_RESULTS`; `502 { ok: false, error: 'upstream' }` on any other Google status (`OVER_QUERY_LIMIT`, `REQUEST_DENIED`, `INVALID_REQUEST`, `UNKNOWN_ERROR`) or HTTP error. Google returns `lng`; we translate to `lon` at the boundary. |
+| Cost model | Free tier 10k requests/month, then ~$5 per 1k. With the cache, distinct addresses (not receipts) drive the bill. See issue #172 for the paid-user-vs-cost curve and the switch-to-self-hosted-Nominatim / LocationIQ thresholds. |
 
 The client side is `src/Http/GeocodeApi.elm`. `Main.GotOcrResult` fires
 one `geocode` Cmd per touched scan item that has a non-empty extracted
