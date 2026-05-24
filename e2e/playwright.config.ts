@@ -14,6 +14,10 @@ export default defineConfig({
     : [['list']],
   retries: isCI ? 1 : 0,
   snapshotDir: './screenshots',
+  // Create missing snapshots on first run (e.g. after a rebrand deletes stale
+  // goldens). Existing snapshots are still compared strictly so regressions are
+  // caught. Only updates when the file is literally absent.
+  updateSnapshots: 'missing',
   timeout: 60_000,
   use: {
     // Mirrors `E2E_VITE_PORT` in `global-setup.ts`. Defaults to 3000 (CI).

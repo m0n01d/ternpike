@@ -84,9 +84,9 @@ const waitForSettings = async (page: import('@playwright/test').Page): Promise<v
   await expect(page.getByText('Local-first preferences')).toBeVisible({
     timeout: 30_000,
   })
-  // Flocks section header is the cheapest sentinel that flock-rendering
-  // has had a chance to run (it sits beneath the regular settings panel).
-  await expect(page.getByText('FLOCKS', { exact: true })).toBeVisible({
+  // Shared trips section header is the cheapest sentinel that shared-trip
+  // rendering has had a chance to run (it sits beneath the regular settings panel).
+  await expect(page.getByText('SHARED TRIPS', { exact: true })).toBeVisible({
     timeout: 30_000,
   })
 }
@@ -120,17 +120,17 @@ test.describe('Fledgling-in-flock tier gating', () => {
     await bob.goto('/settings')
     await waitForSettings(bob)
 
-    // #76 step 2 — Create Flock is rendered but disabled. This is the
+    // #76 step 2 — Share a trip is rendered but disabled. This is the
     // primary regression net: it's gated on `Data.Tier.isPaid as_.tier`,
-    // so swapping Bob's tier to Fly (or flipping the predicate) flips
+    // so swapping Bob's tier to Osprey (or flipping the predicate) flips
     // this assertion.
-    const createButton = bob.getByRole('button', { name: 'Create' })
+    const createButton = bob.getByRole('button', { name: 'Share a trip' }).first()
     await expect(createButton).toBeVisible()
     await expect(createButton).toBeDisabled()
 
     // #76 step 2 — adjacent upgrade copy is visible.
     await expect(
-      bob.getByText(/Upgrade to Fly to create one/i),
+      bob.getByText(/Upgrade to Osprey to start one/i),
     ).toBeVisible()
 
     // #76 steps 3 & 4 — Honeymoon flock card + Leave button are deferred

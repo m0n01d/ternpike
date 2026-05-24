@@ -86,7 +86,7 @@ test.describe('Billing lapse → read-only → recovery', () => {
   // ────────────────────────────────────────────────────────────────
   // Single positive control that runs without B1-B4 unblocked.
   // ────────────────────────────────────────────────────────────────
-  test('both contexts boot into Settings showing their Fly badge', async ({
+  test('both contexts boot into Settings showing their Osprey badge', async ({
     aliceContext,
     bobContext,
   }) => {
@@ -135,7 +135,7 @@ test.describe('Billing lapse → read-only → recovery', () => {
   )
 
   test.fixme(
-    'Bob (member) Add submit is pre-disabled when flock is in grace',
+    'Bob (member) Add submit is pre-disabled when shared trip is in grace',
     async ({ bobContext }) => {
       // BLOCKER B1+B3+B4: same as above. Once the flock is visible and
       // in 'grace' status, Add page's submit button gets `disabled` via
@@ -156,7 +156,7 @@ test.describe('Billing lapse → read-only → recovery', () => {
   // Grace → Active (Bob takes over billing).
   // ────────────────────────────────────────────────────────────────
   test.fixme(
-    'Fly+ member can transfer billing to themselves and recover writes',
+    'Osprey+ member can transfer billing to themselves and recover writes',
     async ({ aliceContext, bobContext }) => {
       // BLOCKER B1+B3+B4. Plus depends on the previous test
       // establishing the grace state.
@@ -177,7 +177,7 @@ test.describe('Billing lapse → read-only → recovery', () => {
   // Negative — both members Fledgling, no CTA visible.
   // ────────────────────────────────────────────────────────────────
   test.fixme(
-    'banner shows no transfer CTA when no member is Fly+',
+    'banner shows no transfer CTA when no member is Osprey+',
     async ({ aliceContext, bobContext }) => {
       // BLOCKER B1+B3+B4.
       //
