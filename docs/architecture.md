@@ -441,6 +441,27 @@ category pill, merchant, the extracted date with provenance ("📅 May
 worth of batch-scanned receipts are visibly distributed across the
 right days before you tap Review on each one.
 
+When OCR fails (HTTP error from Anthropic, refusal, unparseable JSON,
+or no receipts detected), the failure reason is captured on
+`ScanItem.ocrError : Maybe String` and rendered on the Scan card below
+the "OCR failed — fill manually" header. `Main.makeOcrCall` uses
+`Http.expectStringResponse` (not `expectString`) so non-2xx bodies are
+preserved — that's where Anthropic's `error.message` lives, and
+surfacing it lets the user tell a rate-limit from a corrupt-image from
+a paymentMethod the decoder didn't recognize.
+
+Every picked image goes through the `prepareOcrImage` /
+`ocrImagePrepared` port pair (`src/main.js`) before reaching the OCR
+call. Anthropic caps base64 image payloads at 5 MiB and phone JPEGs
+routinely run 6–8 MB, so without this every real-world receipt photo
+would 400. The JS handler draws to a canvas at max 1568px on the long
+edge (Claude's recommended size), iterates JPEG quality from 0.85
+down, then shrinks dimensions if needed, until the encoded byte count
+fits `ocrMaxBase64Bytes` (4 MiB — comfortably under the 5 MiB cap).
+The resized data URL replaces `ScanItem.imageUrl` and feeds the OCR
+call; EXIF GPS extraction runs on the *original* data URL in parallel
+(exifr needs the unmodified bytes).
+
 ### Location precedence
 
 `Data.Location.LocationSource` has four constructors, in preference

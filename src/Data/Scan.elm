@@ -75,6 +75,11 @@ type alias OcrData =
     extraction port.
   - `ocrData` — `Nothing` until OCR returns; `Just` even if the model
     extracted nothing (so we know it ran).
+  - `ocrError` — human-readable reason the most recent OCR attempt
+    failed (HTTP error, refusal, unparseable JSON, etc.). `Nothing`
+    while OCR is in flight or after a successful read; surfaced on the
+    Scan card so the user can tell why an item is in fill-manually
+    mode instead of guessing.
   - `status` — the lifecycle stage above.
 
 -}
@@ -84,42 +89,71 @@ type alias ScanItem =
     , imageUrl : String
     , locationState : LocationState
     , ocrData : Maybe OcrData
+    , ocrError : Maybe String
     , status : ScanStatus
     }
 
 
 {-| Decode one OCR JSON object into an `OcrData`. Every field is
-optional — Anthropic's "best effort" parser may omit any of them, and a
-missing field falls through to `Nothing` rather than failing the whole
-parse. `address` was added in #150 so receipts batch-scanned at home
-can be geocoded to where they were actually issued (paid tier) or
-manually pinned (free tier).
+optional — Anthropic's "best effort" parser may omit any of them, return
+JSON `null`, or hand back a value the strict per-field decoder doesn't
+recognize (e.g. `"paymentMethod": "visa"` when the type only models
+`cash` / `credit`). All such cases collapse to `Nothing` on that one
+field rather than failing the whole receipt — which would otherwise
+fail `Json.Decode.list` and lose every receipt in a batch photo. The
+Add-page review step is where the user fills anything that came back
+empty.
+
+`address` was added in #150 so receipts batch-scanned at home can be
+geocoded to where they were actually issued (paid tier) or manually
+pinned (free tier).
+
 -}
 ocrDataDecoder : Json.Decode.Decoder OcrData
 ocrDataDecoder =
     Json.Decode.succeed OcrData
-        |> Pipeline.optional "address" (Json.Decode.map Just Json.Decode.string) Nothing
-        |> Pipeline.optional "amount" (Json.Decode.map Just Money.decoder) Nothing
+        |> Pipeline.optional "address" (lenient Json.Decode.string) Nothing
+        |> Pipeline.optional "amount" (lenient Money.decoder) Nothing
         |> Pipeline.optional "category" (Json.Decode.map Just (Json.Decode.map Category.fromString Json.Decode.string)) Nothing
-        |> Pipeline.optional "date" (Json.Decode.map Just DateField.decoder) Nothing
-        |> Pipeline.optional "longNote" (Json.Decode.map Just Json.Decode.string) Nothing
-        |> Pipeline.optional "merchant" (Json.Decode.map Just Json.Decode.string) Nothing
-        |> Pipeline.optional "note" (Json.Decode.map Just Json.Decode.string) Nothing
-        |> Pipeline.optional "paymentMethod"
-            (Json.Decode.nullable
-                (Json.Decode.string
-                    |> Json.Decode.andThen
-                        (\s ->
-                            case PaymentMethod.fromString s of
-                                Just pm ->
-                                    Json.Decode.succeed pm
+        |> Pipeline.optional "date" (lenient DateField.decoder) Nothing
+        |> Pipeline.optional "longNote" (lenient Json.Decode.string) Nothing
+        |> Pipeline.optional "merchant" (lenient Json.Decode.string) Nothing
+        |> Pipeline.optional "note" (lenient Json.Decode.string) Nothing
+        |> Pipeline.optional "paymentMethod" (lenient paymentMethodDecoder) Nothing
 
-                                Nothing ->
-                                    Json.Decode.fail ("Unknown paymentMethod: " ++ s)
-                        )
-                )
+
+{-| Wrap a strict decoder so that JSON `null`, the wrong JSON type, or
+any other decode failure on this single field collapses to `Nothing`
+instead of failing the surrounding object. Used on every field of
+`OcrData` whose strict decoder could otherwise reject Anthropic's
+output and take the whole list with it.
+-}
+lenient : Json.Decode.Decoder a -> Json.Decode.Decoder (Maybe a)
+lenient strict =
+    Json.Decode.oneOf
+        [ Json.Decode.null Nothing
+        , Json.Decode.map Just strict
+        , Json.Decode.succeed Nothing
+        ]
+
+
+{-| Map an Anthropic-returned payment-method string to a
+`PaymentMethod`. Anything outside the recognized set causes a decode
+failure here, but `lenient` upstream converts that into a `Nothing`
+field so the rest of the receipt still parses.
+-}
+paymentMethodDecoder : Json.Decode.Decoder PaymentMethod
+paymentMethodDecoder =
+    Json.Decode.string
+        |> Json.Decode.andThen
+            (\s ->
+                case PaymentMethod.fromString s of
+                    Just pm ->
+                        Json.Decode.succeed pm
+
+                    Nothing ->
+                        Json.Decode.fail ("Unknown paymentMethod: " ++ s)
             )
-            Nothing
 
 
 {-| Decode either a single OCR object or a JSON array of them into a

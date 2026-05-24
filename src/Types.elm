@@ -298,7 +298,7 @@ type Msg
     | GotGeocodeResult String (Result Http.Error Http.GeocodeApi.GeocodeResponse)
     | GotGpsCoords Float Float
     | GotMoveTime Expense TripId Time.Posix
-    | GotOcrResult String (Result Http.Error String)
+    | GotOcrResult String (Result String String)
     | GotPouchMsg Json.Decode.Value
     | GotSaveTripTime Time.Posix
     | GotSubmitTime ParsedEntry Time.Posix
@@ -319,6 +319,7 @@ type Msg
     | MoveEntry Expense TripId
     | NetworkStatusChanged Bool
     | NoteChanged String
+    | OcrImagePrepared { dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int }
     | OpenEditTripForm Trip
     | OpenCreateSharedTripModal
     | OpenInviteModal SharedTripId
