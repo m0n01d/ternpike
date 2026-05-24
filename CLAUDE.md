@@ -415,22 +415,56 @@ encoders, decoders, and HTML-returning functions don't need examples.
 
 ## UI vetting
 
-**The user works from iPad, iPhone, and Mac interchangeably. Claude Code web sessions have no port forwarding, so the Vite dev server is never directly accessible. Screenshots are the dev loop regardless of device. Take them early and often — not just at the end.**
+**The user works from iPad, iPhone, and Mac interchangeably. Claude Code web sessions have no port forwarding, so the Vite dev server is never directly accessible. Screenshots are the dev loop regardless of device. More screenshots is always better.**
 
-Run the `playwright-ui` skill whenever any of these are true:
+### When to take screenshots
 
+Run the `playwright-ui` skill whenever any of these are true — don't wait to be asked:
+
+- You're about to start a UI task (capture current state so there's a before)
 - You touched a `view` function, a `viewFoo` helper, or any `Html`-returning function
 - You changed Tailwind classes, theme tokens in `src/theme.css`, or `src/global.css`
 - You added, removed, or rearranged a UI component
-- You're about to start a UI task and the user hasn't seen the current state yet
-- You finished a UI task and are about to report it done
+- You finished a UI task (capture the result before reporting done)
 - The user asks "how does X look?" or "what does Y look like?"
 
-One screenshot before starting + one after finishing is the minimum for any UI change. For iterative work, screenshot after each meaningful step so the user can redirect before you go further.
+For iterative changes, screenshot after each meaningful step. The user can redirect mid-task; that only works if they can see what's happening.
+
+Capture every affected route — not just the happy path. A Ledger change gets: Ledger with expenses, Ledger empty state, Ledger edit mode. A Scan change gets: Scan on Fledgling (BYO key prompt) and Scan on Fly (hosted key). Cover the surface.
+
+### Committing screenshots
+
+Save every screenshot to `docs/screenshots/<descriptive-name>.png` and commit it to the branch. Use route + state in the name:
+
+```
+docs/screenshots/ledger-empty-state.png
+docs/screenshots/ledger-with-expenses.png
+docs/screenshots/scan-fledgling-byo-prompt.png
+docs/screenshots/trips-list-before.png
+docs/screenshots/trips-list-after.png
+```
+
+Not timestamps. Not `screenshot1.png`. Names that make the PR review self-explanatory.
+
+### Screenshots in PRs
+
+Every PR that touches view code gets a `## Screenshots` section. Use before/after pairs. Reference images via raw GitHub URL so they render inline in the PR:
+
+```markdown
+## Screenshots
+
+| Before | After |
+|--------|-------|
+| ![](https://github.com/m0n01d/ternpike/blob/<branch>/docs/screenshots/foo-before.png?raw=true) | ![](https://github.com/m0n01d/ternpike/blob/<branch>/docs/screenshots/foo-after.png?raw=true) |
+```
+
+Add one row per affected route. More rows is better. The PR description is the visual record of what changed.
+
+### Mechanics
 
 The skill handles the awkward parts: seeding PouchDB, stubbing `auth_creds` so auth-gated routes render, intercepting the blocked `cdn.jsdelivr.net` PouchDB CDN with the local copy from `node_modules`, and the click-through-`/trips` navigation that's more reliable than deep-linking with `tripId=trip::...::...`.
 
-Send every screenshot with `SendUserFile`. Don't describe pixels in prose when you can show them — "the button is now forest green" is not a substitute for showing it. Delete the generated `scripts/` folder before ending the turn (see the untracked-files note in Git discipline above).
+Send every screenshot with `SendUserFile` so it appears inline in the conversation. Don't describe pixels in prose — "the button is now forest green" is not a substitute for showing it. Delete the generated `scripts/` folder before ending the turn (see the untracked-files note in Git discipline above).
 
 ## End-to-end + security test patterns
 
