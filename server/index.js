@@ -228,6 +228,7 @@ app.post('/marketing/waitlist', async (c) => {
   const normalized = email.toLowerCase()
   const resend = new Resend(env.RESEND_WAITLIST_API_KEY)
   const contact = await resend.contacts.create({
+    audienceId: env.RESEND_AUDIENCE_ID,
     email: normalized,
     unsubscribed: false,
   })
