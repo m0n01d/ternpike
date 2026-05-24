@@ -25,7 +25,6 @@ import UI.BudgetBar
 import UI.Button
 import UI.Icons
 import UI.Mascot
-import UI.Skeleton
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -598,10 +597,4 @@ viewEmptyState =
 
 viewSkeleton : Html Msg
 viewSkeleton =
-    Html.div [ Html.Attributes.class "space-y-2" ]
-        [ UI.Skeleton.row
-        , UI.Skeleton.row
-        , UI.Skeleton.row
-        , UI.Skeleton.row
-        , UI.Skeleton.row
-        ]
+    UI.Mascot.loading

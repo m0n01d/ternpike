@@ -23,6 +23,7 @@ import UI.Button
 import UI.Card
 import UI.FlockBadge
 import UI.Layout
+import UI.Mascot
 import UI.Rule
 import UI.Skeleton
 
@@ -128,17 +129,7 @@ viewHero pending =
 
 viewLoadingHero : Html Msg
 viewLoadingHero =
-    Html.div [ Html.Attributes.class "py-2" ]
-        [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
-            [ Html.text "AMOUNT" ]
-        , Html.div [ Html.Attributes.class "h-[3rem] flex items-start gap-3" ]
-            [ Html.span
-                [ Html.Attributes.class "font-display text-5xl font-black text-forest leading-none opacity-40" ]
-                [ Html.text "$" ]
-            , Html.div [ Html.Attributes.class "flex-1 pt-2" ]
-                [ UI.Skeleton.text "w-40 h-10" ]
-            ]
-        ]
+    UI.Mascot.loading
 
 
 viewBody : AuthState -> PendingEntry -> Bool -> Html Msg

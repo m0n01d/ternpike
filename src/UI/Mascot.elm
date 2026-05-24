@@ -1,6 +1,7 @@
-module UI.Mascot exposing (ternSvg)
+module UI.Mascot exposing (loading, ternSvg)
 
 import Html exposing (Html)
+import Html.Attributes
 import Svg
 import Svg.Attributes
 import Types exposing (Msg)
@@ -75,4 +76,17 @@ ternSvg className =
             , Svg.Attributes.fill UI.Theme.colorInk
             ]
             []
+        ]
+
+
+{-| The tern mascot playing the soar animation, for use as a loading indicator.
+-}
+loading : Html Msg
+loading =
+    Html.div
+        [ Html.Attributes.class "flex flex-col items-center justify-center gap-3 py-8" ]
+        [ ternSvg "w-16 h-auto animate-soar"
+        , Html.span
+            [ Html.Attributes.class "text-xs font-mono tracking-widest text-muted uppercase" ]
+            [ Html.text "Loading…" ]
         ]

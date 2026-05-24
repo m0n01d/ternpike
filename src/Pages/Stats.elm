@@ -79,25 +79,7 @@ viewHero model mode =
 
 viewSkeletonHero : Html Msg
 viewSkeletonHero =
-    Html.div [ Html.Attributes.class "py-2" ]
-        [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
-            [ Html.text "TOTAL SPENT" ]
-        , UI.Skeleton.text "h-12 w-40"
-        , UI.Skeleton.text "h-3 w-32 mt-2"
-        , UI.Rule.dashedRule
-        , Html.div [ Html.Attributes.class "flex gap-6" ]
-            [ skeletonStatBlock
-            , skeletonStatBlock
-            ]
-        ]
-
-
-skeletonStatBlock : Html Msg
-skeletonStatBlock =
-    Html.div [ Html.Attributes.class "flex-1" ]
-        [ UI.Skeleton.text "h-3 w-16 mb-2"
-        , UI.Skeleton.text "h-5 w-20"
-        ]
+    UI.Mascot.loading
 
 
 viewHeroReady : AuthState -> List Entry.EffectiveEntry -> Html Msg
