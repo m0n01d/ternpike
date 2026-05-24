@@ -79,10 +79,18 @@ export function attachPouch(app, { creds = null } = {}) {
     })
   }
 
-  function openPersonalHandle() {
+  // Safari's IndexedDB aborts transactions with `indexed_db_went_bad` /
+  // "The operation was aborted" when too many operations land on a brand-new
+  // PouchDB instance before its IDB connection has fully opened. We used to
+  // queue an explicit `local.compact()`, a live `changes()` feed, and a
+  // bidirectional `sync()` all on the same tick — Chrome shrugged, Safari
+  // choked. Drop the eager compact (`auto_compaction: true` already handles
+  // it inline on every write) and `await local.info()` to force the IDB
+  // `open()` to settle before we wire changes/sync on top.
+  async function openPersonalHandle() {
     if (handles.has(PERSONAL_KEY)) return handles.get(PERSONAL_KEY)
     const local = new PouchDB(PERSONAL_KEY, { auto_compaction: true })
-    local.compact().catch(err => console.warn('compact:', err))
+    await local.info()
     const handle = {
       changes: null,
       flockId: null,
@@ -97,11 +105,11 @@ export function attachPouch(app, { creds = null } = {}) {
     return handle
   }
 
-  function openSharedTripHandle(flockId, dbName) {
+  async function openSharedTripHandle(flockId, dbName) {
     const localName = `ternpike-${dbName}`
     if (handles.has(localName)) return handles.get(localName)
     const local = new PouchDB(localName, { auto_compaction: true })
-    local.compact().catch(err => console.warn('compact:', err))
+    await local.info()
     const handle = {
       changes: null,
       dbName,
@@ -187,7 +195,7 @@ export function attachPouch(app, { creds = null } = {}) {
 
     for (const [localName, { flockId, dbName }] of wanted.entries()) {
       if (!handles.has(localName)) {
-        const handle = openSharedTripHandle(flockId, dbName)
+        const handle = await openSharedTripHandle(flockId, dbName)
         startHandleSync(handle, dbName)
       }
     }
@@ -214,11 +222,11 @@ export function attachPouch(app, { creds = null } = {}) {
     }
   }
 
-  function startSync({ email, password, dbName }) {
+  async function startSync({ email, password, dbName }) {
     credsCache = { dbName, email, password }
     firstSyncSettled = false
     emitSync('syncing')
-    const personal = openPersonalHandle()
+    const personal = await openPersonalHandle()
     startHandleSync(personal, dbName)
     // Eagerly hydrate shared trips from whatever's already in local PouchDB.
     // The paused-event handler will also call this when initial sync
@@ -324,7 +332,7 @@ export function attachPouch(app, { creds = null } = {}) {
           // the personal-DB sync round-trip. Idempotent — openSharedTripHandle
           // no-ops on a name already in `handles`.
           if (msg.flockId && msg.dbName) {
-            const handle = openSharedTripHandle(msg.flockId, msg.dbName)
+            const handle = await openSharedTripHandle(msg.flockId, msg.dbName)
             if (handle && !handle.sync) {
               startHandleSync(handle, msg.dbName)
             }
@@ -423,7 +431,8 @@ export function attachPouch(app, { creds = null } = {}) {
     }
   })
 
-  app.ports.startSync.subscribe(startSync)
+  app.ports.startSync.subscribe(c =>
+    startSync(c).catch(err => console.error('[pouch] startSync:', err)))
   app.ports.stopSync.subscribe(stopSync)
   app.ports.clearStorage.subscribe(() => {
     teardownAll({ destroy: true }).catch(err =>
@@ -434,5 +443,6 @@ export function attachPouch(app, { creds = null } = {}) {
       console.error('[pouch] clearAllStorage teardown:', err))
   })
 
-  if (creds) startSync(creds)
+  if (creds) startSync(creds).catch(err =>
+    console.error('[pouch] initial startSync:', err))
 }
