@@ -415,9 +415,22 @@ encoders, decoders, and HTML-returning functions don't need examples.
 
 ## UI vetting
 
-Before reporting a UI task done — or when planning a visual change and want the user to see the current state — take a real browser screenshot via the `playwright-ui` skill at `.claude/skills/playwright-ui/SKILL.md`. The skill handles the awkward parts: seeding PouchDB, stubbing `auth_creds` so auth-gated routes render, intercepting the blocked `cdn.jsdelivr.net` PouchDB CDN with the local copy from `node_modules`, and the click-through-`/trips` navigation that's more reliable than deep-linking with `tripId=trip::...::...`.
+**The user develops from an iPad with no access to the Vite dev server. Screenshots are the dev loop. Take them early and often — not just at the end.**
 
-Send the screenshot with `SendUserFile`. Don't describe pixels in prose when you can show them. Delete the generated `scripts/` folder before ending the turn (see the untracked-files note in Git discipline above).
+Run the `playwright-ui` skill whenever any of these are true:
+
+- You touched a `view` function, a `viewFoo` helper, or any `Html`-returning function
+- You changed Tailwind classes, theme tokens in `src/theme.css`, or `src/global.css`
+- You added, removed, or rearranged a UI component
+- You're about to start a UI task and the user hasn't seen the current state yet
+- You finished a UI task and are about to report it done
+- The user asks "how does X look?" or "what does Y look like?"
+
+One screenshot before starting + one after finishing is the minimum for any UI change. For iterative work, screenshot after each meaningful step so the user can redirect before you go further.
+
+The skill handles the awkward parts: seeding PouchDB, stubbing `auth_creds` so auth-gated routes render, intercepting the blocked `cdn.jsdelivr.net` PouchDB CDN with the local copy from `node_modules`, and the click-through-`/trips` navigation that's more reliable than deep-linking with `tripId=trip::...::...`.
+
+Send every screenshot with `SendUserFile`. Don't describe pixels in prose when you can show them — "the button is now forest green" is not a substitute for showing it. Delete the generated `scripts/` folder before ending the turn (see the untracked-files note in Git discipline above).
 
 ## End-to-end + security test patterns
 
