@@ -1,6 +1,7 @@
 module Pages.Scan exposing (viewTab)
 
 import Data.Category as Category
+import Data.DateField as DateField
 import Data.Money as Money
 import Data.Navigation exposing (Tab(..))
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
@@ -240,7 +241,7 @@ viewBody model =
                 List.filter (\i -> i.exifDebug /= "") items
         in
         Html.div []
-            [ Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3 mb-4" ]
+            [ Html.div [ Html.Attributes.class "flex flex-col gap-3 mb-4" ]
                 (List.map viewScanCard items)
             , if hasSubmitted then
                 Html.div [ Html.Attributes.class "mb-4 flex justify-center" ]
@@ -275,66 +276,149 @@ viewExifDebugBlock idx item =
 
 viewScanCard : ScanItem -> Html Msg
 viewScanCard item =
-    Html.div [ Html.Attributes.class "bg-cream rounded-xl overflow-hidden shadow-card" ]
-        [ if item.imageUrl /= "" then
-            Html.img [ Html.Attributes.src item.imageUrl, Html.Attributes.class "w-full h-28 object-cover" ] []
-
-          else
-            Html.div [ Html.Attributes.class "w-full h-28 bg-cream-deep flex items-center justify-center text-tan" ]
-                [ UI.Icons.camera "w-8 h-8" ]
-        , Html.div [ Html.Attributes.class "p-2" ]
-            [ viewScanCardStatus item ]
+    Html.div
+        [ Html.Attributes.class "flex bg-cream rounded-xl overflow-hidden shadow-card" ]
+        [ viewScanThumbnail item
+        , Html.div [ Html.Attributes.class "flex-1 min-w-0 p-3" ]
+            [ viewScanCardBody item ]
         ]
 
 
-viewScanCardStatus : ScanItem -> Html Msg
-viewScanCardStatus item =
+viewScanThumbnail : ScanItem -> Html Msg
+viewScanThumbnail item =
+    if item.imageUrl /= "" then
+        Html.img
+            [ Html.Attributes.src item.imageUrl
+            , Html.Attributes.class "w-24 h-24 flex-shrink-0 object-cover"
+            ]
+            []
+
+    else
+        Html.div
+            [ Html.Attributes.class "w-24 h-24 flex-shrink-0 bg-cream-deep flex items-center justify-center text-tan" ]
+            [ UI.Icons.camera "w-8 h-8" ]
+
+
+viewScanCardBody : ScanItem -> Html Msg
+viewScanCardBody item =
     case item.status of
         ScanQueued ->
-            Html.div []
-                [ Html.div [ Html.Attributes.class "text-moss text-xs mb-1.5" ] [ Html.text "Queued…" ]
+            Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
+                [ Html.div [ Html.Attributes.class "text-moss text-xs" ] [ Html.text "Queued…" ]
                 , viewProgressBar "w-1/4"
                 ]
 
         ScanProcessing ->
-            Html.div []
-                [ Html.div [ Html.Attributes.class "text-rust text-xs mb-1.5" ] [ Html.text "Reading…" ]
+            Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
+                [ Html.div [ Html.Attributes.class "text-rust text-xs" ] [ Html.text "Reading…" ]
+                , viewSkeletonBars
                 , viewProgressBar "w-2/3"
                 ]
 
         ScanReady ->
-            Html.div []
-                [ case item.ocrData of
-                    Just ocr ->
-                        viewOcrSummary ocr
+            case item.ocrData of
+                Just ocr ->
+                    Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
+                        [ viewOcrSummary ocr
+                        , viewReviewButton item.id
+                        ]
 
-                    Nothing ->
-                        Html.div [ Html.Attributes.class "text-muted text-xs mb-2" ] [ Html.text "Fill manually" ]
-                , Html.button
-                    [ Html.Events.onClick (ReviewScanItem (ScanItemId.toString item.id))
-                    , Html.Attributes.class "w-full py-1.5 rounded-lg bg-rust text-parchment text-xs font-bold cursor-pointer border-none"
-                    ]
-                    [ Html.text "Review →" ]
-                ]
+                Nothing ->
+                    Html.div [ Html.Attributes.class "flex flex-col gap-2" ]
+                        [ Html.div [ Html.Attributes.class "text-rust text-xs italic" ]
+                            [ Html.text "OCR failed — fill manually" ]
+                        , viewReviewButton item.id
+                        ]
 
         ScanSubmitted ->
-            Html.div [ Html.Attributes.class "text-moss text-xs text-center py-1" ]
-                [ Html.text "✓ Submitted" ]
+            Html.div [ Html.Attributes.class "flex items-center h-full text-moss text-xs" ]
+                [ Html.text "✓ Submitted"
+                , case Maybe.andThen .date item.ocrData of
+                    Just date ->
+                        Html.span
+                            [ Html.Attributes.class "ml-2 text-muted" ]
+                            [ Html.text ("· " ++ DateField.formatMonthDay date) ]
+
+                    Nothing ->
+                        Html.text ""
+                ]
+
+
+viewReviewButton : ScanItemId.ScanItemId -> Html Msg
+viewReviewButton id =
+    Html.button
+        [ Html.Events.onClick (ReviewScanItem (ScanItemId.toString id))
+        , Html.Attributes.class "self-start py-1.5 px-3 rounded-lg bg-rust text-parchment text-xs font-bold cursor-pointer border-none"
+        ]
+        [ Html.text "Review →" ]
+
+
+viewSkeletonBars : Html Msg
+viewSkeletonBars =
+    Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
+        [ Html.div [ Html.Attributes.class "h-3 w-1/2 bg-cream-deep rounded animate-pulse-soft" ] []
+        , Html.div [ Html.Attributes.class "h-3 w-3/4 bg-cream-deep rounded animate-pulse-soft" ] []
+        , Html.div [ Html.Attributes.class "h-3 w-1/3 bg-cream-deep rounded animate-pulse-soft" ] []
+        ]
 
 
 viewOcrSummary : OcrData -> Html Msg
 viewOcrSummary ocr =
-    Html.div [ Html.Attributes.class "mb-2" ]
-        [ Html.div [ Html.Attributes.class "text-rust font-mono text-sm font-bold" ]
-            [ Html.text (ocr.amount |> Maybe.map Money.format |> Maybe.withDefault "—") ]
-        , Html.div [ Html.Attributes.class "text-muted text-xs truncate" ]
-            [ Html.text
-                (ocr.merchant
-                    |> Maybe.withDefault
-                        (ocr.category |> Maybe.map Category.label |> Maybe.withDefault "receipt")
-                )
+    let
+        merchantLabel : Html Msg
+        merchantLabel =
+            case ocr.merchant of
+                Just m ->
+                    Html.div [ Html.Attributes.class "text-sm text-forest truncate" ]
+                        [ Html.text m ]
+
+                Nothing ->
+                    Html.div [ Html.Attributes.class "text-sm text-muted italic truncate" ]
+                        [ Html.text "Receipt" ]
+
+        dateRow : Html Msg
+        dateRow =
+            case ocr.date of
+                Just date ->
+                    Html.div [ Html.Attributes.class "text-xs text-forest" ]
+                        [ Html.text ("📅 " ++ DateField.formatMonthDay date) ]
+
+                Nothing ->
+                    Html.div [ Html.Attributes.class "text-xs text-muted italic" ]
+                        [ Html.text "📅 Today · no date on receipt" ]
+
+        addressRow : Html Msg
+        addressRow =
+            case ocr.address of
+                Just addr ->
+                    Html.div [ Html.Attributes.class "text-xs text-muted truncate" ]
+                        [ Html.text ("📍 " ++ addr) ]
+
+                Nothing ->
+                    Html.text ""
+    in
+    Html.div [ Html.Attributes.class "flex flex-col gap-1" ]
+        [ Html.div [ Html.Attributes.class "flex items-baseline gap-2" ]
+            [ Html.div [ Html.Attributes.class "text-rust font-mono text-base font-bold" ]
+                [ Html.text (ocr.amount |> Maybe.map Money.format |> Maybe.withDefault "—") ]
+            , viewCategoryPill ocr.category
             ]
+        , merchantLabel
+        , dateRow
+        , addressRow
         ]
+
+
+viewCategoryPill : Maybe Category.Category -> Html Msg
+viewCategoryPill maybeCat =
+    case maybeCat of
+        Just cat ->
+            Html.span
+                [ Html.Attributes.class "px-2 py-0.5 rounded-full bg-tan/40 text-[10px] uppercase tracking-wider text-forest font-mono" ]
+                [ Html.text (Category.label cat) ]
+
+        Nothing ->
+            Html.text ""
 
 
 viewProgressBar : String -> Html Msg
