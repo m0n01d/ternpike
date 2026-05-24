@@ -92,3 +92,53 @@
     50%      { transform: translateY(4px); opacity: 0.4; }
   }
 }
+
+/* ── Campsite night theme ──────────────────────────────────────────────────
+   Applied via html.dark (set by JS from localStorage or system preference).
+   parchment is intentionally NOT remapped — it doubles as light text on
+   buttons (text-parchment) so it must stay cream. Surface uses of
+   bg-parchment get explicit dark:bg-cream overrides in Elm instead.       */
+html.dark {
+  /* Surfaces */
+  --color-cream:        #1b2513;
+  --color-cream-deep:   #242f18;
+  --color-tan:          #2c3a1e;
+
+  /* Text */
+  --color-ink:          #ddd6b8;
+  --color-forest:       #b8c890;
+  --color-forest-mid:   #98a870;
+  --color-forest-light: #7c9060;
+  --color-forest-deep:  #0e1509;
+  --color-moss:         #7a9060;
+  --color-muted:        #6e7c5c;
+
+  /* Accent — campfire */
+  --color-rust:         #cc6840;
+  --color-rust-light:   #e07850;
+  --color-rust-deep:    #aa5030;
+  --color-rust-tint:    #1e1208;
+  --color-danger:       #cc3838;
+
+  /* Polish surfaces */
+  --color-cream-deep:   #242f18;
+  --color-rust-deep:    #aa5030;
+
+  /* Editorial rules */
+  --rule-tan:  1px dashed rgb(44 58 32 / 0.7);
+  --rule-moss: 1px solid  rgb(122 144 96 / 0.28);
+
+  /* Shadows — black-based so they're visible on dark surfaces */
+  --shadow-card:       0 4px 24px rgb(0 0 0 / 0.35);
+  --shadow-panel:      0 8px 40px rgb(0 0 0 / 0.45);
+  --shadow-lift:       0 12px 48px rgb(0 0 0 / 0.55);
+  --shadow-card-hover: 0 6px 28px rgb(0 0 0 / 0.45);
+
+  /* Grain — inverted to pale so the texture stays visible on dark surfaces */
+  --bg-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/><feColorMatrix values='0 0 0 0 0.75  0 0 0 0 0.85  0 0 0 0 0.60  0 0 0 0.04 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+
+  /* Topo atlas — lighter contour lines for dark card backgrounds */
+  --bg-topo-atlas: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2400 2000'><defs><filter id='t' x='0%25' y='0%25' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.008 0.011' numOctaves='3' seed='11' result='n'/><feComponentTransfer in='n' result='s'><feFuncA type='discrete' tableValues='0 0 0 0 1 1 1 1 0 0 0 0 1 1 1 1 0 0 0 0 1 1 1 1 0 0 0 0 1 1 1 1'/></feComponentTransfer><feConvolveMatrix in='s' order='3' kernelMatrix='-1 -1 -1 -1 8 -1 -1 -1 -1' divisor='1' preserveAlpha='false' edgeMode='duplicate' result='e'/><feColorMatrix in='e' type='matrix' values='0 0 0 0 0.65  0 0 0 0 0.75  0 0 0 0 0.50  0 0 0 0.15 0'/></filter></defs><rect width='2400' height='2000' fill='black' filter='url(%23t)'/></svg>");
+
+  --bg-topo: var(--bg-topo-atlas);
+}

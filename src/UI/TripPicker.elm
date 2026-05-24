@@ -36,9 +36,9 @@ viewMove { expense, flocks, trips } =
             List.filter (\t -> t.id /= expense.tripId) trips
     in
     Html.div
-        [ Html.Attributes.class "fixed inset-0 bg-forest/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
+        [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
         [ Html.div
-            [ Html.Attributes.class "w-full max-w-sm border bg-parchment border-tan rounded-2xl shadow-panel bg-[image:var(--bg-grain)] overflow-hidden" ]
+            [ Html.Attributes.class "w-full max-w-sm border bg-parchment dark:bg-cream border-tan rounded-2xl shadow-panel bg-[image:var(--bg-grain)] overflow-hidden" ]
             [ Html.div [ Html.Attributes.class "p-6 pb-3" ]
                 [ Html.p [ Html.Attributes.class "mb-1 text-lg font-bold text-ink font-display" ]
                     [ Html.text "Move to trip" ]

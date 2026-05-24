@@ -550,7 +550,7 @@ viewInviteeChips draft =
                          else
                             "add another…"
                         )
-                    , Html.Attributes.class "flex-1 min-w-[140px] bg-parchment border border-tan rounded-lg px-2 py-1.5 text-[13px] focus:outline-none focus:border-moss"
+                    , Html.Attributes.class "flex-1 min-w-[140px] bg-parchment dark:bg-cream border border-tan rounded-lg px-2 py-1.5 text-[13px] focus:outline-none focus:border-moss"
                     ]
                     []
                ]
@@ -600,7 +600,7 @@ viewTargetTile opts =
         , Html.Attributes.classList
             [ ( "flex-1 min-w-[120px] rounded-lg border px-3 py-2 text-left cursor-pointer", True )
             , ( "bg-rust-tint border-rust-deep text-rust-deep", opts.active )
-            , ( "bg-parchment border-tan text-ink hover:border-moss", not opts.active )
+            , ( "bg-parchment dark:bg-cream border-tan text-ink hover:border-moss", not opts.active )
             ]
         ]
         [ Html.div [ Html.Attributes.class "text-[13px] font-semibold leading-tight" ]

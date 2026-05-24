@@ -37,6 +37,7 @@ import Chart.Item as CI
 import Data.Amendment exposing (Amendment)
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category)
+import Data.ColorScheme exposing (ColorScheme)
 import Data.DateField exposing (DateField)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
@@ -160,6 +161,7 @@ type alias AuthState =
     { activeScanItemId : Maybe ScanItemId
     , amendments : Dict String Amendment
     , basePath : String
+    , colorScheme : ColorScheme
     , config : AppConfig
     , confirmDeleteTrip : Maybe Trip
     , creds : Creds
@@ -328,6 +330,7 @@ type Msg
     | ReviewScanItem String
     | SaveTripForm
     | ScrolledToTop
+    | SetColorScheme ColorScheme
     | SetStatsGranularity Granularity
     | ShowToast String
     | SignOutClicked

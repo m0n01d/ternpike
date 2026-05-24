@@ -346,7 +346,7 @@ viewDayTotal total =
 
 viewDayKicker : Maybe Entry.Band -> Int -> DateField -> Html Msg
 viewDayKicker maybeBand dayN date =
-    Html.div [ Html.Attributes.class "sticky top-14 z-[9] bg-parchment border-t border-tan/40 -mx-5 px-5 py-3 flex items-center gap-3" ]
+    Html.div [ Html.Attributes.class "sticky top-14 z-[9] bg-parchment dark:bg-cream border-t border-tan/40 -mx-5 px-5 py-3 flex items-center gap-3" ]
         [ Html.span
             [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-rust" ]
             [ Html.text ("DAY " ++ String.fromInt dayN) ]
