@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { Resend } from 'resend'
 
+import { registerAdminRoutes } from './admin.js'
 import { getTier } from './auth.js'
 import { registerGeocodeRoutes } from './geocode.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
@@ -251,6 +252,7 @@ app.post('/marketing/waitlist', async (c) => {
 
 registerSharedTripRoutes(app)
 registerGeocodeRoutes(app)
+registerAdminRoutes(app)
 
 export default {
   fetch: app.fetch,

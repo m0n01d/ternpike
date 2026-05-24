@@ -15,3 +15,6 @@ e2e/screenshots/**/*-diff.png
 server/.wrangler/
 marketing/.results/
 marketing/.wrangler/
+scripts/admin/.env
+scripts/admin/node_modules/
+server/.dev.vars

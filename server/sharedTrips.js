@@ -60,14 +60,14 @@ const bytesToHex = (bytes) => {
   return s
 }
 
-const constantTimeEqual = (a, b) => {
+export const constantTimeEqual = (a, b) => {
   let acc = 0
   const len = Math.min(a.length, b.length)
   for (let i = 0; i < len; i++) acc |= a.charCodeAt(i) ^ b.charCodeAt(i)
   return acc === 0 && a.length === b.length
 }
 
-const derivePassword = async (email, secret) => {
+export const derivePassword = async (email, secret) => {
   const key = await importHmacKey(secret)
   const sig = await crypto.subtle.sign(
     'HMAC',
@@ -82,14 +82,14 @@ const randomSharedTripId = () => {
   return bytesToHex(bytes)
 }
 
-const sharedTripDbName = (sharedTripId) => `sharedtrip-${sharedTripId}`
+export const sharedTripDbName = (sharedTripId) => `sharedtrip-${sharedTripId}`
 
-const personalDbName = (email) =>
+export const personalDbName = (email) =>
   'ternpike-' + email.toLowerCase().replace(/[^a-z0-9_$()+/-]/g, '-')
 
 const nowIso = () => new Date().toISOString()
 
-const couchAdmin = (env, path, init = {}) => {
+export const couchAdmin = (env, path, init = {}) => {
   const adminAuth =
     'Basic ' + btoa(`${env.COUCH_ADMIN_USER}:${env.COUCH_ADMIN_PASS}`)
   return fetch(`${env.COUCH_URL}${path}`, {
@@ -128,14 +128,14 @@ async function authenticateCaller(c) {
   }
 }
 
-async function getTier(env, email) {
+export async function getTier(env, email) {
   if (!env.TIERS_KV) return 'tern'
   const v = await env.TIERS_KV.get(email.toLowerCase())
   if (v === 'osprey' || v === 'trailblazer') return v
   return 'tern'
 }
 
-async function setTier(env, email, tier) {
+export async function setTier(env, email, tier) {
   if (!env.TIERS_KV) throw new Error('TIERS_KV not bound')
   await env.TIERS_KV.put(email.toLowerCase(), tier)
 }
@@ -167,7 +167,7 @@ async function couchPutJson(env, path, body) {
   return r.json()
 }
 
-async function readSharedTripMeta(env, dbName) {
+export async function readSharedTripMeta(env, dbName) {
   return couchGetJson(env, `/${dbName}/sharedtrip%3Ameta`)
 }
 

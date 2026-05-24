@@ -56,3 +56,4 @@ crons = ["0 * * * *"]
 #   RESEND_API_KEY
 #   RESEND_WAITLIST_API_KEY  (separate Resend token scoped to the waitlist audience)
 #   TIER_WEBHOOK_SECRET   (shared with the future Stripe webhook + test hook)
+#   ADMIN_SECRET          (gates /admin/* — required by the ternpike-admin TUI)

@@ -212,6 +212,11 @@ the next push — and the source of truth is Stripe → Worker KV anyway. The
 client refresh path is the `/me` endpoint, called on startup and after
 returning from Stripe Checkout.
 
+> Admin / dev: the `ternpike-admin` TUI (`npm run admin`) talks to a
+> protected `/admin/*` surface on the auth Worker for browsing users,
+> CouchDB databases and shared trips, mutating tiers, and editing docs
+> inline in `$EDITOR`. See `scripts/admin/README.md`.
+
 ### The user profile doc
 
 There's exactly one profile doc per user (per-user remote DB scopes it, so no
