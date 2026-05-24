@@ -21,7 +21,7 @@ id = "d95ba1e24a514a6e8a9742cf176a541d"
 #   wrangler kv:namespace create GEOCODE_RL_KV
 [[kv_namespaces]]
 binding = "GEOCODE_RL_KV"
-id = "REPLACE_WITH_REAL_ID"
+id = "0828b3748638455e964b7120ab0a46a5"
 
 # Geocode result cache (key: `addr:<sha256(normalized)>`, value: JSON
 # `{lat, lon}`, TTL: 30d for hits, 1d for no-match). Shared across all
@@ -30,7 +30,7 @@ id = "REPLACE_WITH_REAL_ID"
 #   wrangler kv:namespace create GEOCODE_CACHE_KV
 [[kv_namespaces]]
 binding = "GEOCODE_CACHE_KV"
-id = "REPLACE_WITH_REAL_ID"
+id = "4a9baf82359545ef981e7dcc6a646f94"
 
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
