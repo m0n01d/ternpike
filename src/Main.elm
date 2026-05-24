@@ -1260,7 +1260,289 @@ update msg model =
         UrlChanged _ ->
             ( nextModel, Cmd.batch [ cmd, scrollToTop ] )
 
-        _ ->
+        AmountChanged _ ->
+            ( nextModel, cmd )
+
+        ApiKeyChanged _ ->
+            ( nextModel, cmd )
+
+        BackToQueue ->
+            ( nextModel, cmd )
+
+        CanInstall _ ->
+            ( nextModel, cmd )
+
+        CancelDeleteTrip ->
+            ( nextModel, cmd )
+
+        CategorySelected _ ->
+            ( nextModel, cmd )
+
+        ClearDoneItems ->
+            ( nextModel, cmd )
+
+        CloseFlockModal ->
+            ( nextModel, cmd )
+
+        CloseLedgerMenu ->
+            ( nextModel, cmd )
+
+        CloseMovePicker ->
+            ( nextModel, cmd )
+
+        CloseTripForm ->
+            ( nextModel, cmd )
+
+        CodeInputChanged _ ->
+            ( nextModel, cmd )
+
+        ConfirmDeleteTrip _ ->
+            ( nextModel, cmd )
+
+        CreateFlockNameChanged _ ->
+            ( nextModel, cmd )
+
+        CreateFlockResult _ ->
+            ( nextModel, cmd )
+
+        DateChanged _ ->
+            ( nextModel, cmd )
+
+        DeleteTrip _ ->
+            ( nextModel, cmd )
+
+        DismissError ->
+            ( nextModel, cmd )
+
+        DismissMapPicker ->
+            ( nextModel, cmd )
+
+        DuplicateEntry _ ->
+            ( nextModel, cmd )
+
+        EmailInputChanged _ ->
+            ( nextModel, cmd )
+
+        FilesSelected _ ->
+            ( nextModel, cmd )
+
+        GeolocationDenied ->
+            ( nextModel, cmd )
+
+        GotDeleteTripTime _ _ ->
+            ( nextModel, cmd )
+
+        GotDuplicateTime _ _ ->
+            ( nextModel, cmd )
+
+        GotExifCoords _ _ _ _ ->
+            ( nextModel, cmd )
+
+        GotFileUrl _ _ ->
+            ( nextModel, cmd )
+
+        GotGpsCoords _ _ ->
+            ( nextModel, cmd )
+
+        GotMoveTime _ _ _ ->
+            ( nextModel, cmd )
+
+        GotOcrResult _ _ ->
+            ( nextModel, cmd )
+
+        GotPouchMsg _ ->
+            ( nextModel, cmd )
+
+        GotSaveTripTime _ ->
+            ( nextModel, cmd )
+
+        GotSubmitTime _ _ ->
+            ( nextModel, cmd )
+
+        GotVoidTime _ _ ->
+            ( nextModel, cmd )
+
+        HoverCumulativePoints _ ->
+            ( nextModel, cmd )
+
+        HoverDailyBars _ ->
+            ( nextModel, cmd )
+
+        InviteEmailChanged _ ->
+            ( nextModel, cmd )
+
+        InviteToFlockResult _ ->
+            ( nextModel, cmd )
+
+        JoinFlockAccepted _ ->
+            ( nextModel, cmd )
+
+        JoinFlockDeclined ->
+            ( nextModel, cmd )
+
+        JoinFlockResult _ ->
+            ( nextModel, cmd )
+
+        LeaveFlockConfirmed _ ->
+            ( nextModel, cmd )
+
+        LeaveFlockResult _ ->
+            ( nextModel, cmd )
+
+        LinkClicked _ ->
+            ( nextModel, cmd )
+
+        LongNoteChanged _ ->
+            ( nextModel, cmd )
+
+        MapPickerConfirmed _ _ ->
+            ( nextModel, cmd )
+
+        MerchantChanged _ ->
+            ( nextModel, cmd )
+
+        MoveEntry _ _ ->
+            ( nextModel, cmd )
+
+        NetworkStatusChanged _ ->
+            ( nextModel, cmd )
+
+        NoteChanged _ ->
+            ( nextModel, cmd )
+
+        OpenCreateFlockModal ->
+            ( nextModel, cmd )
+
+        OpenEditTripForm _ ->
+            ( nextModel, cmd )
+
+        OpenInviteModal _ ->
+            ( nextModel, cmd )
+
+        OpenLeaveConfirmModal _ ->
+            ( nextModel, cmd )
+
+        OpenLedgerMenu _ ->
+            ( nextModel, cmd )
+
+        OpenMapPicker ->
+            ( nextModel, cmd )
+
+        OpenMovePicker _ ->
+            ( nextModel, cmd )
+
+        OpenNewTripForm ->
+            ( nextModel, cmd )
+
+        OpenTransferModal _ ->
+            ( nextModel, cmd )
+
+        PaymentMethodChanged _ ->
+            ( nextModel, cmd )
+
+        RefreshClicked ->
+            ( nextModel, cmd )
+
+        RequestCodeResult _ ->
+            ( nextModel, cmd )
+
+        ResetSettingsClicked ->
+            ( nextModel, cmd )
+
+        ReviewScanItem _ ->
+            ( nextModel, cmd )
+
+        SaveTripForm ->
+            ( nextModel, cmd )
+
+        ScrolledToTop ->
+            ( nextModel, cmd )
+
+        SetStatsGranularity _ ->
+            ( nextModel, cmd )
+
+        ShowToast _ ->
+            ( nextModel, cmd )
+
+        SignOutClicked ->
+            ( nextModel, cmd )
+
+        SkipLocation ->
+            ( nextModel, cmd )
+
+        SubmitCode ->
+            ( nextModel, cmd )
+
+        SubmitCreateFlock ->
+            ( nextModel, cmd )
+
+        SubmitEmail ->
+            ( nextModel, cmd )
+
+        SubmitEntry ->
+            ( nextModel, cmd )
+
+        SubmitInvite ->
+            ( nextModel, cmd )
+
+        SubmitTransfer ->
+            ( nextModel, cmd )
+
+        TakeOverBilling _ ->
+            ( nextModel, cmd )
+
+        ToastExpired ->
+            ( nextModel, cmd )
+
+        ToggleDayIntensity ->
+            ( nextModel, cmd )
+
+        ToggleFlockMembers _ ->
+            ( nextModel, cmd )
+
+        ToggleGuestSettings ->
+            ( nextModel, cmd )
+
+        ToggleLedgerMap ->
+            ( nextModel, cmd )
+
+        TransferTargetChanged _ ->
+            ( nextModel, cmd )
+
+        TransferToFlockResult _ ->
+            ( nextModel, cmd )
+
+        TriggerInstallPrompt ->
+            ( nextModel, cmd )
+
+        TripCreateFlockResult _ ->
+            ( nextModel, cmd )
+
+        TripFieldChanged _ _ ->
+            ( nextModel, cmd )
+
+        TripGroupNameChanged _ ->
+            ( nextModel, cmd )
+
+        TripInviteResult _ _ ->
+            ( nextModel, cmd )
+
+        TripInviteeAdded ->
+            ( nextModel, cmd )
+
+        TripInviteeDraftChanged _ ->
+            ( nextModel, cmd )
+
+        TripInviteeRemoved _ ->
+            ( nextModel, cmd )
+
+        TripTargetSelected _ ->
+            ( nextModel, cmd )
+
+        VerifyCodeResult _ ->
+            ( nextModel, cmd )
+
+        VoidEntry _ ->
             ( nextModel, cmd )
 
 
@@ -1379,7 +1661,258 @@ updateGuest msg gs =
         NetworkStatusChanged isOnline ->
             ( GuestModel { gs | networkOffline = not isOnline }, Cmd.none )
 
-        _ ->
+        -- Messages that only apply to the authenticated state.
+        -- They are no-ops here: the GuestModel has no corresponding fields.
+        AmountChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        BackToQueue ->
+            ( GuestModel gs, Cmd.none )
+
+        CanInstall _ ->
+            ( GuestModel gs, Cmd.none )
+
+        CancelDeleteTrip ->
+            ( GuestModel gs, Cmd.none )
+
+        CategorySelected _ ->
+            ( GuestModel gs, Cmd.none )
+
+        ClearDoneItems ->
+            ( GuestModel gs, Cmd.none )
+
+        CloseFlockModal ->
+            ( GuestModel gs, Cmd.none )
+
+        CloseLedgerMenu ->
+            ( GuestModel gs, Cmd.none )
+
+        CloseMovePicker ->
+            ( GuestModel gs, Cmd.none )
+
+        CloseTripForm ->
+            ( GuestModel gs, Cmd.none )
+
+        ConfirmDeleteTrip _ ->
+            ( GuestModel gs, Cmd.none )
+
+        CreateFlockNameChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        CreateFlockResult _ ->
+            ( GuestModel gs, Cmd.none )
+
+        DateChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        DeleteTrip _ ->
+            ( GuestModel gs, Cmd.none )
+
+        DismissError ->
+            ( GuestModel gs, Cmd.none )
+
+        DismissMapPicker ->
+            ( GuestModel gs, Cmd.none )
+
+        DuplicateEntry _ ->
+            ( GuestModel gs, Cmd.none )
+
+        FilesSelected _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GeolocationDenied ->
+            ( GuestModel gs, Cmd.none )
+
+        GotDeleteTripTime _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotDuplicateTime _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotExifCoords _ _ _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotFileUrl _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotGpsCoords _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotMoveTime _ _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotOcrResult _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotSaveTripTime _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotSubmitTime _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotVoidTime _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        HoverCumulativePoints _ ->
+            ( GuestModel gs, Cmd.none )
+
+        HoverDailyBars _ ->
+            ( GuestModel gs, Cmd.none )
+
+        InviteEmailChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        InviteToFlockResult _ ->
+            ( GuestModel gs, Cmd.none )
+
+        JoinFlockAccepted _ ->
+            ( GuestModel gs, Cmd.none )
+
+        JoinFlockDeclined ->
+            ( GuestModel gs, Cmd.none )
+
+        JoinFlockResult _ ->
+            ( GuestModel gs, Cmd.none )
+
+        LeaveFlockConfirmed _ ->
+            ( GuestModel gs, Cmd.none )
+
+        LeaveFlockResult _ ->
+            ( GuestModel gs, Cmd.none )
+
+        LongNoteChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        MapPickerConfirmed _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        MerchantChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        MoveEntry _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        NoteChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        OpenCreateFlockModal ->
+            ( GuestModel gs, Cmd.none )
+
+        OpenEditTripForm _ ->
+            ( GuestModel gs, Cmd.none )
+
+        OpenInviteModal _ ->
+            ( GuestModel gs, Cmd.none )
+
+        OpenLeaveConfirmModal _ ->
+            ( GuestModel gs, Cmd.none )
+
+        OpenLedgerMenu _ ->
+            ( GuestModel gs, Cmd.none )
+
+        OpenMapPicker ->
+            ( GuestModel gs, Cmd.none )
+
+        OpenMovePicker _ ->
+            ( GuestModel gs, Cmd.none )
+
+        OpenNewTripForm ->
+            ( GuestModel gs, Cmd.none )
+
+        OpenTransferModal _ ->
+            ( GuestModel gs, Cmd.none )
+
+        PaymentMethodChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        RefreshClicked ->
+            ( GuestModel gs, Cmd.none )
+
+        ReviewScanItem _ ->
+            ( GuestModel gs, Cmd.none )
+
+        SaveTripForm ->
+            ( GuestModel gs, Cmd.none )
+
+        ScrolledToTop ->
+            ( GuestModel gs, Cmd.none )
+
+        SetStatsGranularity _ ->
+            ( GuestModel gs, Cmd.none )
+
+        ShowToast _ ->
+            ( GuestModel gs, Cmd.none )
+
+        SignOutClicked ->
+            ( GuestModel gs, Cmd.none )
+
+        SkipLocation ->
+            ( GuestModel gs, Cmd.none )
+
+        SubmitCreateFlock ->
+            ( GuestModel gs, Cmd.none )
+
+        SubmitEntry ->
+            ( GuestModel gs, Cmd.none )
+
+        SubmitInvite ->
+            ( GuestModel gs, Cmd.none )
+
+        SubmitTransfer ->
+            ( GuestModel gs, Cmd.none )
+
+        TakeOverBilling _ ->
+            ( GuestModel gs, Cmd.none )
+
+        ToastExpired ->
+            ( GuestModel gs, Cmd.none )
+
+        ToggleDayIntensity ->
+            ( GuestModel gs, Cmd.none )
+
+        ToggleFlockMembers _ ->
+            ( GuestModel gs, Cmd.none )
+
+        ToggleLedgerMap ->
+            ( GuestModel gs, Cmd.none )
+
+        TransferTargetChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        TransferToFlockResult _ ->
+            ( GuestModel gs, Cmd.none )
+
+        TriggerInstallPrompt ->
+            ( GuestModel gs, Cmd.none )
+
+        TripCreateFlockResult _ ->
+            ( GuestModel gs, Cmd.none )
+
+        TripFieldChanged _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        TripGroupNameChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        TripInviteResult _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        TripInviteeAdded ->
+            ( GuestModel gs, Cmd.none )
+
+        TripInviteeDraftChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        TripInviteeRemoved _ ->
+            ( GuestModel gs, Cmd.none )
+
+        TripTargetSelected _ ->
+            ( GuestModel gs, Cmd.none )
+
+        UrlChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        VoidEntry _ ->
             ( GuestModel gs, Cmd.none )
 
 
@@ -2813,7 +3346,31 @@ updateAuth msg as_ =
         JoinFlockResult (Err err) ->
             ( AuthModel { as_ | error = Just (joinErrorMessage err) }, Cmd.none )
 
-        _ ->
+        -- Messages that only apply to the guest (unauthenticated) state.
+        -- They reach updateAuth when the top-level update dispatches before
+        -- model state has been evaluated — return unchanged.
+        CodeInputChanged _ ->
+            ( AuthModel as_, Cmd.none )
+
+        EmailInputChanged _ ->
+            ( AuthModel as_, Cmd.none )
+
+        RequestCodeResult _ ->
+            ( AuthModel as_, Cmd.none )
+
+        ScrolledToTop ->
+            ( AuthModel as_, Cmd.none )
+
+        SubmitCode ->
+            ( AuthModel as_, Cmd.none )
+
+        SubmitEmail ->
+            ( AuthModel as_, Cmd.none )
+
+        ToggleGuestSettings ->
+            ( AuthModel as_, Cmd.none )
+
+        VerifyCodeResult _ ->
             ( AuthModel as_, Cmd.none )
 
 
