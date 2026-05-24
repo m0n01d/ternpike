@@ -165,26 +165,26 @@ graceCopy role days =
     in
     case role of
         Owner ->
-            "Your subscription lapsed. Renew within " ++ n ++ " days or this flock becomes read-only."
+            "Your subscription lapsed. Renew within " ++ n ++ " days or this shared trip becomes read-only."
 
         PaidMember ->
             "Owner's subscription lapsed. Read-only in " ++ n ++ " days. You can take over billing now."
 
         FledglingMember ->
-            "Owner's subscription lapsed. This flock becomes read-only in " ++ n ++ " days."
+            "Owner's subscription lapsed. This shared trip becomes read-only in " ++ n ++ " days."
 
 
 frozenCopy : Role -> SharedTrip -> String
 frozenCopy role flock =
     case role of
         Owner ->
-            "Flock is read-only. Renew to restore writes."
+            "Shared trip is read-only. Renew to restore writes."
 
         PaidMember ->
-            "Flock is read-only. You can take over billing."
+            "Shared trip is read-only. You can take over billing."
 
         FledglingMember ->
-            "Flock is read-only. Ask "
+            "Shared trip is read-only. Ask "
                 ++ UserId.toString flock.billingOwner
                 ++ " to renew, or upgrade and take over billing yourself."
 
@@ -294,7 +294,7 @@ toneLabel tone =
             "Billing lapsed"
 
         Danger ->
-            "Flock frozen"
+            "Shared trip frozen"
 
 
 bannerWrapperClass : Tone -> String
