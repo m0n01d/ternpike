@@ -75,11 +75,11 @@ test.describe('Billing lapse → read-only → recovery', () => {
   test.use({
     aliceSpec: {
       email: HONEYMOON.ownerEmail,
-      tier: 'Fly',
+      tier: 'Osprey',
     },
     bobSpec: {
       email: HONEYMOON.memberEmail,
-      tier: 'Fly', // Bob is Fly so the transfer-ownership recovery step works
+      tier: 'Osprey', // Bob is Osprey so the transfer-ownership recovery step works
     },
   })
 

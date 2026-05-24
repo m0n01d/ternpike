@@ -70,7 +70,7 @@ const ensurePersonalDbs = async (
  */
 const setServerTier = async (
   email: string,
-  tier: 'fledgling' | 'fly' | 'trailblazer',
+  tier: 'tern' | 'osprey' | 'trailblazer',
 ): Promise<void> => {
   const state = readHarnessState()
   const res = await fetch(
@@ -207,8 +207,8 @@ const seedFlockLocally = async (
 test.beforeAll(async () => {
   await ensurePersonalDbs([ALICE_EMAIL, BOB_EMAIL])
   // Default tiers for these E2E specs. Individual tests override below.
-  await setServerTier(ALICE_EMAIL, 'fly')
-  await setServerTier(BOB_EMAIL, 'fledgling')
+  await setServerTier(ALICE_EMAIL, 'osprey')
+  await setServerTier(BOB_EMAIL, 'tern')
 })
 
 test.beforeEach(async ({ resendMock }) => {
@@ -400,20 +400,20 @@ test.describe('Fledgling cannot create a flock', () => {
           },
         ],
       },
-      tier: 'Fledgling',
+      tier: 'Tern',
     },
   })
 
   test.beforeEach(async () => {
-    // The default tier wired in the suite-level beforeAll is Fly. Flip
-    // Alice to Fledgling for this describe block so any client→server
+    // The default tier wired in the suite-level beforeAll is Osprey. Flip
+    // Alice to Tern for this describe block so any client→server
     // attempt would 403, matching the UI affordance under test.
-    await setServerTier(ALICE_EMAIL, 'fledgling')
+    await setServerTier(ALICE_EMAIL, 'tern')
   })
 
   test.afterEach(async () => {
     // Restore so downstream tests (re-run with --grep, etc.) keep working.
-    await setServerTier(ALICE_EMAIL, 'fly')
+    await setServerTier(ALICE_EMAIL, 'osprey')
   })
 
   test('Create button is disabled and upgrade copy is visible', async ({

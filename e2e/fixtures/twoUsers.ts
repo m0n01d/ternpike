@@ -9,7 +9,7 @@ import { readHarnessState } from '../utils/state'
 
 import type { CouchClient } from '../utils/couch'
 
-export type Tier = 'Fledgling' | 'Fly' | 'Trailblazer'
+export type Tier = 'Osprey' | 'Tern' | 'Trailblazer'
 
 export type UserSpec = {
   email: string
@@ -106,7 +106,7 @@ export const test = base.extend<Options & Fixtures>({
           },
         ],
       },
-      tier: 'Fly',
+      tier: 'Osprey',
     },
     { option: true },
   ],
@@ -123,7 +123,7 @@ export const test = base.extend<Options & Fixtures>({
           },
         ],
       },
-      tier: 'Fledgling',
+      tier: 'Tern',
     },
     { option: true },
   ],

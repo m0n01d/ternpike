@@ -59,12 +59,12 @@ group even after a hard crash.
 - `aliceContext` and `bobContext` — `BrowserContext`s with PouchDB seeded
   and `auth_creds` stubbed.
 - `aliceSpec` and `bobSpec` — Playwright options. Override per-test with
-  `test.use({ bobSpec: { email: '…', tier: 'Fly', seed: { trips: […] } } })`.
+  `test.use({ bobSpec: { email: '…', tier: 'Osprey', seed: { trips: […] } } })`.
 - `resendMock` — client over the mock's `/__captured` and `/__ping`
   endpoints.
 - `couchAdmin` — admin client against the disposable CouchDB.
 
-Default tiers: Alice = `Fly`, Bob = `Fledgling`. Override with
+Default tiers: Alice = `Osprey`, Bob = `Tern`. Override with
 `test.use(...)` per spec. (`tier` is recorded on the spec for downstream
 test logic; the field is not yet plumbed into the Elm `AuthState` — see
 CLAUDE.md "Subscription tiers" for the planned wiring.)
@@ -80,7 +80,7 @@ CLAUDE.md "Subscription tiers" for the planned wiring.)
    test.use({
      bobSpec: {
        email: 'bob@test.ternpike.com',
-       tier: 'Fly',
+       tier: 'Osprey',
        seed: { trips: [{ name: 'Test', startDate: '2026-01-01', endDate: '2026-01-07' }] },
      },
    })

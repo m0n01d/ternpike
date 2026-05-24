@@ -9,7 +9,7 @@ export type AuthCreds = {
   password: string
   // Optional. When set, the Elm app reads it off the auth_creds blob and
   // initializes `AuthState.tier`. Matches the `Data.Tier.fromString` wire
-  // values: 'fledgling' | 'fly' | 'trailblazer'.
+  // values: 'tern' | 'osprey' | 'trailblazer'.
   tier?: string
 }
 
