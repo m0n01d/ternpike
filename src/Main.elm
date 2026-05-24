@@ -73,7 +73,7 @@ import Browser.Navigation as Nav
 import Data.Amendment as Amendment
 import Data.AmendmentId as AmendmentId
 import Data.Auth exposing (AppConfig, Creds)
-import Data.Category as Category exposing (Category(..))
+import Data.Category exposing (Category(..))
 import Data.ColorScheme as ColorScheme
 import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
@@ -85,10 +85,9 @@ import Data.Iso8601 as Iso8601
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
-import Data.PaymentMethod as PaymentMethod
 import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
-import Data.Scan as Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.Scan as Scan exposing (ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip as SharedTrip
 import Data.SharedTripId
@@ -111,7 +110,6 @@ import Http
 import Http.GeocodeApi
 import Http.SharedTripApi
 import Json.Decode as D
-import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 import Pages.Add
 import Pages.Guest exposing (viewGuest)
@@ -474,23 +472,23 @@ expenseBundleDecoder =
 syncStateDecoder : D.Decoder SyncState
 syncStateDecoder =
     D.string
-        |> D.andThen
+        |> D.map
             (\s ->
                 case s of
                     "auth_error" ->
-                        D.succeed AuthExpired
+                        AuthExpired
 
                     "error" ->
-                        D.succeed SyncError
+                        SyncError
 
                     "synced" ->
-                        D.succeed Synced
+                        Synced
 
                     "syncing" ->
-                        D.succeed Syncing
+                        Syncing
 
                     _ ->
-                        D.succeed NotEnabled
+                        NotEnabled
             )
 
 
@@ -500,22 +498,6 @@ syncStateDecoder =
 -- "Effective" means post-amendment, non-voided. See Data.Entry for the
 -- definition. These two helpers are the only places in the app that go
 -- from cached PouchDB documents → user-facing data.
-
-
-{-| Every effective expense for one trip, sorted by date.
-
-Pulls only that trip's expenses out of the outer `Dict` (single
-`Dict.get`), then hands the rest to `Entry.resolve`. Amendments and voids
-are passed in full — `resolve` builds its own indexes per call.
-
--}
-resolveForTrip : TripId.TripId -> AuthState -> List Entry.EffectiveEntry
-resolveForTrip tripId as_ =
-    Entry.resolve
-        (as_.expenses |> Dict.get (TripId.toString tripId) |> Maybe.withDefault Dict.empty |> Dict.values)
-        (Dict.values as_.amendments)
-        (Dict.values as_.voids)
-        tripId
 
 
 {-| Find one expense by ID, with its amendments folded in.
@@ -901,9 +883,6 @@ upsertTripIntoState trip state =
         NoTripsYet ->
             TripsLoaded (Trips.singleton trip)
 
-        TripsFailed _ ->
-            state
-
 
 removeTripFromState : TripId.TripId -> TripsState -> TripsState
 removeTripFromState id state =
@@ -920,9 +899,6 @@ removeTripFromState id state =
                     NoTripsYet
 
         NoTripsYet ->
-            state
-
-        TripsFailed _ ->
             state
 
 
@@ -969,8 +945,8 @@ expenseToPending e =
     }
 
 
-toastFor : String -> Cmd Msg
-toastFor _ =
+toastFor : Cmd Msg
+toastFor =
     Task.perform (\_ -> ToastExpired) (Process.sleep 4000)
 
 
@@ -1507,9 +1483,6 @@ update msg model =
         SetStatsGranularity _ ->
             ( nextModel, cmd )
 
-        ShowToast _ ->
-            ( nextModel, cmd )
-
         SignOutClicked ->
             ( nextModel, cmd )
 
@@ -1573,7 +1546,7 @@ update msg model =
         TripGroupNameChanged _ ->
             ( nextModel, cmd )
 
-        TripInviteResult _ _ ->
+        TripInviteResult ->
             ( nextModel, cmd )
 
         TripInviteeAdded ->
@@ -1898,9 +1871,6 @@ updateGuest msg gs =
         SetStatsGranularity _ ->
             ( GuestModel gs, Cmd.none )
 
-        ShowToast _ ->
-            ( GuestModel gs, Cmd.none )
-
         SignOutClicked ->
             ( GuestModel gs, Cmd.none )
 
@@ -1955,7 +1925,7 @@ updateGuest msg gs =
         TripGroupNameChanged _ ->
             ( GuestModel gs, Cmd.none )
 
-        TripInviteResult _ _ ->
+        TripInviteResult ->
             ( GuestModel gs, Cmd.none )
 
         TripInviteeAdded ->
@@ -2498,7 +2468,7 @@ updateAuth msg as_ =
                 }
             , Cmd.batch
                 [ sendPouch (SaveExpense (targetForTripId duplicate.tripId as_) (Expense.encoder duplicate))
-                , toastFor "Duplicated"
+                , toastFor
                 ]
             )
 
@@ -2596,7 +2566,7 @@ updateAuth msg as_ =
                     )
                 , sendPouch (SaveExpense (targetForTripId moved.tripId as_) (Expense.encoder moved))
                 , Nav.pushUrl as_.key destPath
-                , toastFor "Moved"
+                , toastFor
                 ]
             )
 
@@ -2688,9 +2658,6 @@ updateAuth msg as_ =
 
         SetStatsGranularity g ->
             ( AuthModel { as_ | statsGranularity = Just g }, Cmd.none )
-
-        ShowToast message ->
-            ( AuthModel { as_ | toast = Just message }, toastFor message )
 
         ToastExpired ->
             ( AuthModel { as_ | toast = Nothing }, Cmd.none )
@@ -3030,13 +2997,13 @@ updateAuth msg as_ =
                                     []
 
                         inviteCmds =
-                            List.indexedMap
-                                (\i email ->
+                            List.map
+                                (\email ->
                                     Http.SharedTripApi.inviteToSharedTrip
                                         as_.creds
                                         response.sharedTripId
                                         { email = email }
-                                        (TripInviteResult i)
+                                        (\_ -> TripInviteResult)
                                 )
                                 invitees
 
@@ -3057,7 +3024,7 @@ updateAuth msg as_ =
                         )
                     )
 
-        TripInviteResult _ _ ->
+        TripInviteResult ->
             -- Fire-and-forget. Invites can't block trip creation — partial
             -- success is OK (the user can re-invite from Settings on any
             -- specific failures). Failures get a console line for now;
@@ -3360,7 +3327,7 @@ updateAuth msg as_ =
                         | toast = Just "Shared trip created. It'll show up here once sync settles."
                     }
                 )
-            , toastFor "Shared trip created."
+            , toastFor
             )
 
         OpenInviteModal flockId ->
@@ -3402,7 +3369,7 @@ updateAuth msg as_ =
                         | toast = Just "Invite sent."
                     }
                 )
-            , toastFor "Invite sent."
+            , toastFor
             )
 
         OpenLeaveConfirmModal flockId ->
@@ -3420,7 +3387,7 @@ updateAuth msg as_ =
 
         LeaveSharedTripResult (Ok ()) ->
             ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Left shared trip." })
-            , toastFor "Left shared trip."
+            , toastFor
             )
 
         OpenTransferModal flockId ->
@@ -3457,7 +3424,7 @@ updateAuth msg as_ =
 
         TransferToSharedTripResult (Ok ()) ->
             ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Ownership transferred." })
-            , toastFor "Ownership transferred."
+            , toastFor
             )
 
         JoinSharedTripAccepted token ->
@@ -3478,7 +3445,7 @@ updateAuth msg as_ =
                 }
             , Cmd.batch
                 [ Nav.pushUrl as_.key (as_.basePath ++ "settings")
-                , toastFor ("Joined " ++ response.name ++ ".")
+                , toastFor
                 ]
             )
 

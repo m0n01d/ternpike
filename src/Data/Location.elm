@@ -55,7 +55,6 @@ type LocationSource
 -}
 type LocationState
     = LocationCheckingExif
-    | LocationFetching
     | LocationGot GeoPoint LocationSource
     | LocationIdle
     | LocationNoExifGps

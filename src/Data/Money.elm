@@ -2,13 +2,11 @@ module Data.Money exposing
     ( Money
     , add
     , decoder
-    , difference
     , encoder
     , format
     , fromCents
     , fromDollarString
     , isZero
-    , scale
     , sum
     , toCents
     , toDollarString
@@ -239,39 +237,6 @@ format (Money cents) =
 add : Money -> Money -> Money
 add (Money a) (Money b) =
     Money (a + b)
-
-
-{-| Subtract the second `Money` from the first. Result can be negative
-(e.g. when computing "budget remaining" for an over-budget trip).
-
-    toCents (difference (fromCents 1000) (fromCents 300))
-    --> 700
-
-    toCents (difference (fromCents 300) (fromCents 1000))
-    --> -700
-
--}
-difference : Money -> Money -> Money
-difference (Money a) (Money b) =
-    Money (a - b)
-
-
-{-| Multiply by a scalar. Used by the one Stats site that projects
-"monthly spend ≈ avgPerDay \* 30". Rounds to nearest cent.
-
-    toCents (scale (fromCents 100) 2.5)
-    --> 250
-
-    toCents (scale (fromCents 333) 3.0)
-    --> 999
-
-    toCents (scale zero 100.0)
-    --> 0
-
--}
-scale : Money -> Float -> Money
-scale (Money cents) factor =
-    Money (round (toFloat cents * factor))
 
 
 {-| Sum a list of `Money`. The drop-in replacement for

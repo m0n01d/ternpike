@@ -31,7 +31,7 @@ import UI.Skeleton
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
 viewTab as_ =
     case addPageMode as_.route as_.form of
-        AddPageLoading _ ->
+        AddPageLoading ->
             { actions = []
             , body = viewLoadingBody
             , hero = viewLoadingHero
@@ -47,7 +47,7 @@ viewTab as_ =
             , hero = viewHero pending
             }
 
-        AddPageEditing _ ->
+        AddPageEditing ->
             let
                 pending =
                     formPending as_.form
@@ -65,13 +65,13 @@ addPageMode route form =
             case form of
                 EditForm formId _ ->
                     if formId == id then
-                        AddPageEditing id
+                        AddPageEditing
 
                     else
-                        AddPageLoading id
+                        AddPageLoading
 
                 FreshForm _ ->
-                    AddPageLoading id
+                    AddPageLoading
 
         _ ->
             AddPageNew
@@ -476,10 +476,6 @@ viewLocationWidget model pending =
 viewLocationStatus : LocationState -> Html Msg
 viewLocationStatus ls =
     case ls of
-        LocationFetching ->
-            Html.div [ Html.Attributes.class "text-moss text-sm py-2" ]
-                [ Html.text "📍 Getting location…" ]
-
         LocationCheckingExif ->
             Html.div [ Html.Attributes.class "text-moss text-sm py-2" ]
                 [ Html.text "📍 Reading photo…" ]

@@ -1,4 +1,4 @@
-module UI.Rule exposing (dashedRule, kicker, mossRule)
+module UI.Rule exposing (dashedRule, kicker)
 
 import Html exposing (Html)
 import Html.Attributes
@@ -16,10 +16,3 @@ kicker label =
     Html.div
         [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-moss mb-2" ]
         [ Html.text label ]
-
-
-mossRule : Html msg
-mossRule =
-    Html.hr
-        [ Html.Attributes.class "border-0 border-t border-moss/25 my-4" ]
-        []

@@ -1,4 +1,4 @@
-module Data.ScanItemId exposing (ScanItemId, decode, encode, fromString, toString)
+module Data.ScanItemId exposing (ScanItemId, fromString, toString)
 
 {-| Opaque wrapper around a local-only scan item id.
 
@@ -14,22 +14,9 @@ from letting you mix `ScanItemId` with any other `String`.
 
 -}
 
-import Json.Decode
-import Json.Encode
-
 
 type ScanItemId
     = ScanItemId String
-
-
-decode : Json.Decode.Decoder ScanItemId
-decode =
-    Json.Decode.map ScanItemId Json.Decode.string
-
-
-encode : ScanItemId -> Json.Encode.Value
-encode (ScanItemId s) =
-    Json.Encode.string s
 
 
 fromString : String -> ScanItemId

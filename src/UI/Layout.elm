@@ -1,13 +1,11 @@
 module UI.Layout exposing
     ( formField
     , page
-    , sectionHead
     , textInputStyle
     , viewBottomNav
     , viewDeleteConfirmModal
     , viewErrorBanner
     , viewHeader
-    , viewNavTab
     , viewOfflineBanner
     , viewToast
     )
@@ -82,9 +80,6 @@ viewTripKicker state =
     case state of
         NoTripsYet ->
             kicker "No trips yet"
-
-        TripsFailed _ ->
-            kicker "Couldn't load trips"
 
         TripsLoaded trips ->
             kicker (Trips.selectedTrip trips).name
@@ -279,11 +274,6 @@ page { actions, body, hero, route } =
             ]
         , body
         ]
-
-
-sectionHead : Html.Attribute Msg
-sectionHead =
-    Html.Attributes.class "text-xs font-semibold tracking-widest uppercase text-moss"
 
 
 textInputStyle : Html.Attribute Msg

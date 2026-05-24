@@ -13,7 +13,6 @@ module UI.Icons exposing
     , pencil
     , pin
     , plus
-    , search
     , settings
     , trash
     )
@@ -205,19 +204,6 @@ plus classes =
     Svg.svg (common classes)
         [ Svg.path [ Svg.Attributes.d "M12 5 V19" ] []
         , Svg.path [ Svg.Attributes.d "M5 12 H19" ] []
-        ]
-
-
-search : String -> Svg.Svg msg
-search classes =
-    Svg.svg (common classes)
-        [ Svg.circle
-            [ Svg.Attributes.cx "11"
-            , Svg.Attributes.cy "11"
-            , Svg.Attributes.r "6"
-            ]
-            []
-        , Svg.path [ Svg.Attributes.d "M16 16 L20 20" ] []
         ]
 
 

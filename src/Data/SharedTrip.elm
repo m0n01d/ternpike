@@ -1,15 +1,11 @@
 module Data.SharedTrip exposing
     ( BillingStatus(..)
     , SharedTrip
-    , addMember
     , decoder
-    , encode
     , isMember
     , isOwner
     , isReadOnly
     , members
-    , removeMember
-    , transferOwnership
     )
 
 {-| A shared trip — a shared expense space with one billing owner and zero or
@@ -42,7 +38,6 @@ import Data.SharedTripId
 import Data.UserId exposing (UserId)
 import Json.Decode
 import Json.Decode.Pipeline as Pipeline
-import Json.Encode
 
 
 type alias SharedTrip =
@@ -116,84 +111,7 @@ isReadOnly sharedTrip =
 
 
 -- MUTATE
-
-
-{-| Add a user as a non-owner member. Idempotent — if the user is
-already the owner or already in `otherMembers`, the shared trip is returned
-unchanged.
--}
-addMember : UserId -> SharedTrip -> SharedTrip
-addMember user sharedTrip =
-    if isMember user sharedTrip then
-        sharedTrip
-
-    else
-        { sharedTrip | otherMembers = user :: sharedTrip.otherMembers }
-
-
-{-| Remove a user from `otherMembers`. Refuses to remove the billing
-owner — that's a different operation (`transferOwnership` followed by
-`removeMember`). Returns the shared trip unchanged if the user wasn't in
-`otherMembers` either.
--}
-removeMember : UserId -> SharedTrip -> SharedTrip
-removeMember user sharedTrip =
-    if user == sharedTrip.billingOwner then
-        sharedTrip
-
-    else
-        { sharedTrip | otherMembers = List.filter ((/=) user) sharedTrip.otherMembers }
-
-
-{-| Promote one of the `otherMembers` to billing owner, demoting the
-current owner into `otherMembers`. No-op if the target isn't already in
-`otherMembers` — we never silently add a user as part of this
-operation.
-
-The resulting `members` set is identical to the original, just with a
-different head.
-
--}
-transferOwnership : UserId -> SharedTrip -> SharedTrip
-transferOwnership newOwner sharedTrip =
-    if List.member newOwner sharedTrip.otherMembers then
-        { sharedTrip
-            | billingOwner = newOwner
-            , otherMembers =
-                sharedTrip.billingOwner
-                    :: List.filter ((/=) newOwner) sharedTrip.otherMembers
-        }
-
-    else
-        sharedTrip
-
-
-
 -- JSON
-
-
-{-| Encode a `SharedTrip` to the on-disk `sharedtrip:meta` wire format. Flattens
-the structural `billingOwner :: otherMembers` split back to a single
-`members` array.
--}
-encode : SharedTrip -> Json.Encode.Value
-encode sharedTrip =
-    Json.Encode.object
-        [ ( "_id", Json.Encode.string "sharedtrip:meta" )
-        , ( "billingLapsedAt"
-          , sharedTrip.billingLapsedAt
-                |> Maybe.map Json.Encode.string
-                |> Maybe.withDefault Json.Encode.null
-          )
-        , ( "billingOwner", Data.UserId.encode sharedTrip.billingOwner )
-        , ( "billingStatus", Json.Encode.string (billingStatusToString sharedTrip.billingStatus) )
-        , ( "createdAt", Json.Encode.string sharedTrip.createdAt )
-        , ( "createdBy", Data.UserId.encode sharedTrip.createdBy )
-        , ( "flockId", Data.SharedTripId.encode sharedTrip.id )
-        , ( "members", Json.Encode.list Data.UserId.encode (members sharedTrip) )
-        , ( "name", Json.Encode.string sharedTrip.name )
-        , ( "type", Json.Encode.string "sharedtrip:meta" )
-        ]
 
 
 {-| Decode a `sharedtrip:meta` document. Hard-rejects via `Json.Decode.fail`
@@ -263,16 +181,3 @@ billingStatusDecoder =
                     _ ->
                         Json.Decode.fail ("Unknown billingStatus: " ++ s)
             )
-
-
-billingStatusToString : BillingStatus -> String
-billingStatusToString status =
-    case status of
-        Active ->
-            "active"
-
-        Frozen ->
-            "frozen"
-
-        Grace ->
-            "grace"

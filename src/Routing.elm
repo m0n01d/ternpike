@@ -3,7 +3,6 @@ module Routing exposing
     , effectiveRoute
     , pathForCurrentTab
     , routeFromUrl
-    , routeParser
     , routeTitle
     , routeToTab
     , routeTripId

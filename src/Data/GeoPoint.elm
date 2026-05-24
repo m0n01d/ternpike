@@ -1,4 +1,4 @@
-module Data.GeoPoint exposing (GeoPoint, decoder, decoderPair, encoder, format, fromDegrees, latDegrees, lonDegrees)
+module Data.GeoPoint exposing (GeoPoint, decoderPair, format, fromDegrees, latDegrees, lonDegrees)
 
 {-| A single geographic point — latitude and longitude as `Angle` values
 from `ianmackenzie/elm-units` — wrapped in an opaque constructor so that
@@ -14,13 +14,12 @@ the legacy `{ lat, lon }` wire format.
 `format` is byte-for-byte compatible with the previous `Helpers.formatCoord`
 so the Ledger row layout doesn't shift when call sites migrate.
 
-@docs GeoPoint, decoder, decoderPair, encoder, format, fromDegrees, latDegrees, lonDegrees
+@docs GeoPoint, decoderPair, format, fromDegrees, latDegrees, lonDegrees
 
 -}
 
 import Angle exposing (Angle)
 import Json.Decode
-import Json.Encode
 
 
 {-| A geographic point. Opaque — build with `fromDegrees` or one of the
@@ -83,16 +82,6 @@ format point =
         ++ String.left 9 (String.fromFloat (lonDegrees point))
 
 
-{-| Decode the legacy wire form `{ "lat": Float, "lon": Float }` (degrees)
-into a `GeoPoint`. Both fields are required.
--}
-decoder : Json.Decode.Decoder GeoPoint
-decoder =
-    Json.Decode.map2 fromDegrees
-        (Json.Decode.field "lat" Json.Decode.float)
-        (Json.Decode.field "lon" Json.Decode.float)
-
-
 {-| Pull sibling `"lat"` and `"lon"` fields out of a parent object and lift
 them into a `Maybe GeoPoint`. Succeeds with `Just` only when both fields are
 present and decode as floats; missing-or-null on either side yields `Nothing`.
@@ -111,14 +100,3 @@ decoderPair =
         )
         (Json.Decode.maybe (Json.Decode.field "lat" Json.Decode.float))
         (Json.Decode.maybe (Json.Decode.field "lon" Json.Decode.float))
-
-
-{-| Emit a `GeoPoint` as the legacy wire form `{ "lat": Float, "lon": Float }`
-in degrees.
--}
-encoder : GeoPoint -> Json.Encode.Value
-encoder point =
-    Json.Encode.object
-        [ ( "lat", Json.Encode.float (latDegrees point) )
-        , ( "lon", Json.Encode.float (lonDegrees point) )
-        ]

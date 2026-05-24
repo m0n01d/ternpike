@@ -122,14 +122,14 @@ decoder =
         |> Pipeline.required "amount" Money.decoder
         |> Pipeline.required "category"
             (Json.Decode.string
-                |> Json.Decode.andThen
+                |> Json.Decode.map
                     (\s ->
                         case Category.fromStringMaybe s of
                             Just c ->
-                                Json.Decode.succeed c
+                                c
 
                             Nothing ->
-                                Json.Decode.succeed Category.Misc
+                                Category.Misc
                     )
             )
         |> Pipeline.required "createdAt" createdAtDecoder
