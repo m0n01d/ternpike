@@ -16,6 +16,7 @@ import NoUnused.Modules
 import NoUnused.Parameters
 import NoUnused.Patterns
 import NoUnused.Variables
+import NoWildcardOnUpdateFunctions
 import Review.Rule as Rule exposing (Rule)
 import Simplify
 
@@ -36,5 +37,6 @@ config =
         , NoUnused.Parameters.rule
         , NoUnused.Patterns.rule
         , NoUnused.Variables.rule
+        , NoWildcardOnUpdateFunctions.rule
         , Simplify.rule Simplify.defaults
         ]
