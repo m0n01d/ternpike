@@ -504,6 +504,9 @@ viewLocationStatus ls =
                         BrowserGeo ->
                             "📍 GPS"
 
+                        Geocoded ->
+                            "📍 from address"
+
                         ManualPin ->
                             "📍 pinned"
             in

@@ -62,6 +62,7 @@ import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import File exposing (File)
 import Http
+import Http.GeocodeApi
 import Http.SharedTripApi
 import Json.Decode
 import Set exposing (Set)
@@ -213,7 +214,8 @@ Form inputs (Add page): `AddressChanged`, `AmountChanged`,
 `NoteChanged`, `PaymentMethodChanged`.
 
 Scan flow: `FilesSelected`, `GotFileUrl`, `GotExifCoords`,
-`GotOcrResult`, `ReviewScanItem`, `BackToQueue`, `ClearDoneItems`.
+`GotGeocodeResult`, `GotOcrResult`, `ReviewScanItem`, `BackToQueue`,
+`ClearDoneItems`.
 
 Location: `GotGpsCoords`, `GeolocationDenied`, `OpenMapPicker`,
 `MapPickerConfirmed`, `DismissMapPicker`, `SkipLocation`.
@@ -292,6 +294,7 @@ type Msg
     | GotDuplicateTime Expense Time.Posix
     | GotExifCoords String (Maybe Float) (Maybe Float) String
     | GotFileUrl String String
+    | GotGeocodeResult String (Result Http.Error Http.GeocodeApi.GeocodeResponse)
     | GotGpsCoords Float Float
     | GotMoveTime Expense TripId Time.Posix
     | GotOcrResult String (Result Http.Error String)

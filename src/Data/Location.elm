@@ -2,12 +2,15 @@ module Data.Location exposing (LocationSource(..), LocationState(..))
 
 {-| State machine for where an expense's lat/lon comes from.
 
-Three sources feed the location field, in this order of preference:
+Four sources feed the location field, in this order of preference:
 
 1.  EXIF GPS embedded in the receipt photo — captured at the moment the
     receipt was taken, so it's the most accurate.
-2.  Browser geolocation — fired when the user lands on the Add tab.
-3.  Manual map pin — the fallback when the first two miss or the user
+2.  Server geocode of the OCR-extracted merchant address — paid tier
+    only (#152). Wins over browser geo / manual when EXIF is absent;
+    EXIF always trumps it.
+3.  Browser geolocation — fired when the user lands on the Add tab.
+4.  Manual map pin — the fallback when the others miss or the user
     wants to correct them.
 
 `LocationState` models the lifecycle of trying those sources in turn.
@@ -21,12 +24,19 @@ import Data.GeoPoint exposing (GeoPoint)
 
 
 {-| Where the captured lat/lon came from. Surfaced in the UI as a small
-provenance label ("from photo", "GPS", "pinned") so the user knows
-whether to trust it.
+provenance label ("from photo", "GPS", "from address", "pinned") so the
+user knows whether to trust it.
+
+`Geocoded` is set when the paid-tier `POST /geocode` Worker endpoint
+resolved an OCR'd merchant address to coordinates. The client-side
+handler only promotes a `ScanItem` to `Geocoded` when no EXIF source is
+already present — EXIF wins over geocode.
+
 -}
 type LocationSource
     = BrowserGeo
     | ExifGps
+    | Geocoded
     | ManualPin
 
 

@@ -108,6 +108,7 @@ import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Http
+import Http.GeocodeApi
 import Http.SharedTripApi
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
@@ -976,6 +977,60 @@ authPending f as_ =
     ( AuthModel { as_ | form = mapForm f as_.form }, Cmd.none )
 
 
+{-| For each touched scan item that has a non-empty extracted address,
+fire a `POST /geocode` Cmd — but only on a paid-tier trip and only
+when EXIF hasn't already supplied a location (EXIF always wins). Tern
+trips skip the Cmd entirely; the server would 403 it anyway.
+-}
+geocodeCmdsForItems : List String -> Dict.Dict String ScanItem -> AuthState -> List (Cmd Msg)
+geocodeCmdsForItems ids queue as_ =
+    case activeTripForGeocode as_ of
+        Just trip ->
+            if Trip.canUseProxiedOCR trip as_ then
+                List.filterMap (geocodeCmdForItem queue as_.creds) ids
+
+            else
+                []
+
+        Nothing ->
+            []
+
+
+geocodeCmdForItem : Dict.Dict String ScanItem -> Data.Auth.Creds -> String -> Maybe (Cmd Msg)
+geocodeCmdForItem queue creds id =
+    case Dict.get id queue of
+        Just item ->
+            case ( item.locationState, Maybe.andThen .address item.ocrData ) of
+                ( Data.Location.LocationGot _ Data.Location.ExifGps, _ ) ->
+                    -- EXIF already supplied a location; geocode would
+                    -- be discarded by GotGeocodeResult anyway, so save
+                    -- the round trip.
+                    Nothing
+
+                ( _, Just rawAddress ) ->
+                    if String.trim rawAddress /= "" then
+                        Just (Http.GeocodeApi.geocode creds { address = rawAddress } (GotGeocodeResult id))
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+        Nothing ->
+            Nothing
+
+
+activeTripForGeocode : AuthState -> Maybe Trip
+activeTripForGeocode as_ =
+    case ( Routing.routeTripId as_.route, as_.trips ) of
+        ( Just tripId, TripsLoaded loadedTrips ) ->
+            Trips.findTrip tripId loadedTrips
+
+        _ ->
+            Nothing
+
+
 
 -- OCR
 
@@ -1318,6 +1373,9 @@ update msg model =
             ( nextModel, cmd )
 
         GotFileUrl _ _ ->
+            ( nextModel, cmd )
+
+        GotGeocodeResult _ _ ->
             ( nextModel, cmd )
 
         GotGpsCoords _ _ ->
@@ -1720,6 +1778,9 @@ updateGuest msg gs =
         GotFileUrl _ _ ->
             ( GuestModel gs, Cmd.none )
 
+        GotGeocodeResult _ _ ->
+            ( GuestModel gs, Cmd.none )
+
         GotGpsCoords _ _ ->
             ( GuestModel gs, Cmd.none )
 
@@ -2109,7 +2170,7 @@ updateAuth msg as_ =
                         Err _ ->
                             []
 
-                updatedQueue =
+                ( updatedQueue, touchedIds ) =
                     case ( Dict.get itemId as_.scanQueue, ocrList ) of
                         ( Just source, first :: second :: rest ) ->
                             let
@@ -2141,16 +2202,22 @@ updateAuth msg as_ =
                                         )
                                         splits
                             in
-                            List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
+                            ( List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
+                            , List.map Tuple.first indexed
+                            )
 
                         _ ->
                             let
                                 singleData =
                                     List.head ocrList
                             in
-                            Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = singleData })) as_.scanQueue
+                            ( Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = singleData })) as_.scanQueue
+                            , [ itemId ]
+                            )
             in
-            ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
+            ( AuthModel { as_ | scanQueue = updatedQueue }
+            , Cmd.batch (geocodeCmdsForItems touchedIds updatedQueue as_)
+            )
 
         AddressChanged s ->
             authPending (\p -> { p | address = s }) as_
@@ -2603,6 +2670,40 @@ updateAuth msg as_ =
             ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map (\i -> { i | locationState = LocationNoExifGps, exifDebug = debug })) as_.scanQueue }
             , Cmd.none
             )
+
+        GotGeocodeResult itemId result ->
+            case result of
+                Ok geo ->
+                    case ( geo.lat, geo.lon ) of
+                        ( Just lat, Just lon ) ->
+                            let
+                                promote item =
+                                    -- EXIF wins over geocode — only promote
+                                    -- when the item's locationState wasn't
+                                    -- already set from EXIF GPS. Idle /
+                                    -- NoExifGps / browser / pinned / skipped /
+                                    -- mid-fetch all yield to the server's
+                                    -- address resolution.
+                                    case item.locationState of
+                                        LocationGot _ ExifGps ->
+                                            item
+
+                                        _ ->
+                                            { item | locationState = LocationGot (GeoPoint.fromDegrees lat lon) Geocoded }
+                            in
+                            ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map promote) as_.scanQueue }
+                            , Cmd.none
+                            )
+
+                        _ ->
+                            -- No-match (Nominatim returned null lat/lon) —
+                            -- leave the item's locationState untouched so
+                            -- the user can pin manually.
+                            ( AuthModel as_, Cmd.none )
+
+                Err _ ->
+                    -- Rate-limited / network error / 4xx — same fallback.
+                    ( AuthModel as_, Cmd.none )
 
         ReviewScanItem itemId ->
             case Dict.get itemId as_.scanQueue of
