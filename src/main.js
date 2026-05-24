@@ -210,6 +210,34 @@ import './global.css'
   customElements.define('map-picker', MapPicker)
 
   // ── <waypoint-map> custom element ──────────────────────────────────────
+
+  // Leaflet's marker DOM lives outside Tailwind's tree-shake reach, so
+  // these icons inline-style their HTML (same pattern as MapPicker above).
+
+  function stopDotIcon() {
+    return L.divIcon({
+      className: 'tp-stop-dot',
+      html: '<span style="display:block;width:10px;height:10px;border-radius:9999px;background:#9a4426;border:2px solid #f5efe2;box-shadow:0 0 0 1px #9a4426;"></span>',
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    })
+  }
+
+  function dayPillIcon(label) {
+    const safe = String(label || '').replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+    )
+    return L.divIcon({
+      className: 'tp-day-pill',
+      html:
+        '<span style="display:inline-block;background:#9a4426;color:#f5efe2;font:600 11px/1.4 system-ui,-apple-system,sans-serif;padding:3px 8px;border-radius:9999px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.25);">' +
+        safe +
+        '</span>',
+      iconSize: null,
+      iconAnchor: [0, 0],
+    })
+  }
+
   class WaypointMap extends HTMLElement {
     connectedCallback() {
       this._map = L.map(this).setView([64.2008, -153.4937], 6)
@@ -218,6 +246,7 @@ import './global.css'
         maxZoom: 19,
       }).addTo(this._map)
       this._markers = []
+      this._polyline = null
       this._renderPoints(this.getAttribute('points'))
       setTimeout(() => this._map && this._map.invalidateSize(), 100)
     }
@@ -225,22 +254,32 @@ import './global.css'
     disconnectedCallback() {
       if (this._map) { this._map.remove(); this._map = null }
       this._markers = []
+      this._polyline = null
     }
 
     _renderPoints(raw) {
       this._markers.forEach(m => m.remove())
       this._markers = []
+      if (this._polyline) { this._polyline.remove(); this._polyline = null }
       let pts; try { pts = JSON.parse(raw || '[]') } catch (_) { return }
       if (!pts.length) return
-      const lls = []
+      const lls = pts.map(p => [p.lat, p.lon])
+      if (lls.length >= 2) {
+        this._polyline = L.polyline(lls, {
+          color: '#9a4426',
+          weight: 3,
+          opacity: 0.85,
+        }).addTo(this._map)
+      }
       pts.forEach(p => {
-        const m = L.marker([p.lat, p.lon]).addTo(this._map)
+        const m = p.isDayBoundary
+          ? L.marker([p.lat, p.lon], { icon: dayPillIcon(p.dayLabel) }).addTo(this._map)
+          : L.marker([p.lat, p.lon], { icon: stopDotIcon() }).addTo(this._map)
         if (p.label) m.bindPopup(p.label)
         this._markers.push(m)
-        lls.push([p.lat, p.lon])
       })
       if (lls.length === 1) this._map.setView(lls[0], 13)
-      else this._map.fitBounds(lls, { padding: [20, 20] })
+      else this._map.fitBounds(lls, { padding: [40, 40] })
     }
 
     attributeChangedCallback(name, _old, val) {
