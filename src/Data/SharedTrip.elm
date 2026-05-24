@@ -1,6 +1,6 @@
-module Data.Flock exposing
+module Data.SharedTrip exposing
     ( BillingStatus(..)
-    , Flock
+    , SharedTrip
     , addMember
     , decoder
     , encode
@@ -12,12 +12,12 @@ module Data.Flock exposing
     , transferOwnership
     )
 
-{-| A flock — a shared expense space with one billing owner and zero or
+{-| A shared trip — a shared expense space with one billing owner and zero or
 more other members.
 
 The members list is modelled as `billingOwner :: otherMembers` rather
 than a single flat list so that "the owner is always a member" is a
-structural invariant: there is no value of `Flock` for which the owner
+structural invariant: there is no value of `SharedTrip` for which the owner
 isn't in the members set. `members` derives the flat list on demand,
 which is provably non-empty by construction.
 
@@ -38,20 +38,20 @@ and `transferOwnership` is a no-op when the target isn't already in
 
 -}
 
-import Data.FlockId
+import Data.SharedTripId
 import Data.UserId exposing (UserId)
 import Json.Decode
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
 
 
-type alias Flock =
+type alias SharedTrip =
     { billingLapsedAt : Maybe String
     , billingOwner : UserId
     , billingStatus : BillingStatus
     , createdAt : String
     , createdBy : UserId
-    , id : Data.FlockId.FlockId
+    , id : Data.SharedTripId.SharedTripId
     , name : String
     , otherMembers : List UserId
     }
@@ -67,30 +67,30 @@ type BillingStatus
 -- DERIVED
 
 
-{-| Every member of the flock, with the billing owner at the head.
+{-| Every member of the shared trip, with the billing owner at the head.
 Provably non-empty by construction.
 -}
-members : Flock -> List UserId
-members flock =
-    flock.billingOwner :: flock.otherMembers
+members : SharedTrip -> List UserId
+members sharedTrip =
+    sharedTrip.billingOwner :: sharedTrip.otherMembers
 
 
-{-| True if the given user is the billing owner of the flock.
+{-| True if the given user is the billing owner of the shared trip.
 -}
-isOwner : UserId -> Flock -> Bool
-isOwner user flock =
-    flock.billingOwner == user
+isOwner : UserId -> SharedTrip -> Bool
+isOwner user sharedTrip =
+    sharedTrip.billingOwner == user
 
 
-{-| True if the given user appears anywhere in the flock's membership
+{-| True if the given user appears anywhere in the shared trip's membership
 (owner or otherwise).
 -}
-isMember : UserId -> Flock -> Bool
-isMember user flock =
-    flock.billingOwner == user || List.member user flock.otherMembers
+isMember : UserId -> SharedTrip -> Bool
+isMember user sharedTrip =
+    sharedTrip.billingOwner == user || List.member user sharedTrip.otherMembers
 
 
-{-| True when the flock's billing lapse means writes should be
+{-| True when the shared trip's billing lapse means writes should be
 pre-disabled in the UI. `Grace` and `Frozen` are both read-only on the
 client; `Active` is writable. Single source of truth for the predicate
 — every disable site (Add submit, Ledger row menu, Scan trigger)
@@ -101,9 +101,9 @@ layer (#57); this is purely the UX side so users don't submit and then
 see a 403.
 
 -}
-isReadOnly : Flock -> Bool
-isReadOnly flock =
-    case flock.billingStatus of
+isReadOnly : SharedTrip -> Bool
+isReadOnly sharedTrip =
+    case sharedTrip.billingStatus of
         Active ->
             False
 
@@ -119,30 +119,30 @@ isReadOnly flock =
 
 
 {-| Add a user as a non-owner member. Idempotent — if the user is
-already the owner or already in `otherMembers`, the flock is returned
+already the owner or already in `otherMembers`, the shared trip is returned
 unchanged.
 -}
-addMember : UserId -> Flock -> Flock
-addMember user flock =
-    if isMember user flock then
-        flock
+addMember : UserId -> SharedTrip -> SharedTrip
+addMember user sharedTrip =
+    if isMember user sharedTrip then
+        sharedTrip
 
     else
-        { flock | otherMembers = user :: flock.otherMembers }
+        { sharedTrip | otherMembers = user :: sharedTrip.otherMembers }
 
 
 {-| Remove a user from `otherMembers`. Refuses to remove the billing
 owner — that's a different operation (`transferOwnership` followed by
-`removeMember`). Returns the flock unchanged if the user wasn't in
+`removeMember`). Returns the shared trip unchanged if the user wasn't in
 `otherMembers` either.
 -}
-removeMember : UserId -> Flock -> Flock
-removeMember user flock =
-    if user == flock.billingOwner then
-        flock
+removeMember : UserId -> SharedTrip -> SharedTrip
+removeMember user sharedTrip =
+    if user == sharedTrip.billingOwner then
+        sharedTrip
 
     else
-        { flock | otherMembers = List.filter ((/=) user) flock.otherMembers }
+        { sharedTrip | otherMembers = List.filter ((/=) user) sharedTrip.otherMembers }
 
 
 {-| Promote one of the `otherMembers` to billing owner, demoting the
@@ -154,44 +154,44 @@ The resulting `members` set is identical to the original, just with a
 different head.
 
 -}
-transferOwnership : UserId -> Flock -> Flock
-transferOwnership newOwner flock =
-    if List.member newOwner flock.otherMembers then
-        { flock
+transferOwnership : UserId -> SharedTrip -> SharedTrip
+transferOwnership newOwner sharedTrip =
+    if List.member newOwner sharedTrip.otherMembers then
+        { sharedTrip
             | billingOwner = newOwner
             , otherMembers =
-                flock.billingOwner
-                    :: List.filter ((/=) newOwner) flock.otherMembers
+                sharedTrip.billingOwner
+                    :: List.filter ((/=) newOwner) sharedTrip.otherMembers
         }
 
     else
-        flock
+        sharedTrip
 
 
 
 -- JSON
 
 
-{-| Encode a `Flock` to the on-disk `flock:meta` wire format. Flattens
+{-| Encode a `SharedTrip` to the on-disk `flock:meta` wire format. Flattens
 the structural `billingOwner :: otherMembers` split back to a single
 `members` array.
 -}
-encode : Flock -> Json.Encode.Value
-encode flock =
+encode : SharedTrip -> Json.Encode.Value
+encode sharedTrip =
     Json.Encode.object
         [ ( "_id", Json.Encode.string "flock:meta" )
         , ( "billingLapsedAt"
-          , flock.billingLapsedAt
+          , sharedTrip.billingLapsedAt
                 |> Maybe.map Json.Encode.string
                 |> Maybe.withDefault Json.Encode.null
           )
-        , ( "billingOwner", Data.UserId.encode flock.billingOwner )
-        , ( "billingStatus", Json.Encode.string (billingStatusToString flock.billingStatus) )
-        , ( "createdAt", Json.Encode.string flock.createdAt )
-        , ( "createdBy", Data.UserId.encode flock.createdBy )
-        , ( "flockId", Data.FlockId.encode flock.id )
-        , ( "members", Json.Encode.list Data.UserId.encode (members flock) )
-        , ( "name", Json.Encode.string flock.name )
+        , ( "billingOwner", Data.UserId.encode sharedTrip.billingOwner )
+        , ( "billingStatus", Json.Encode.string (billingStatusToString sharedTrip.billingStatus) )
+        , ( "createdAt", Json.Encode.string sharedTrip.createdAt )
+        , ( "createdBy", Data.UserId.encode sharedTrip.createdBy )
+        , ( "flockId", Data.SharedTripId.encode sharedTrip.id )
+        , ( "members", Json.Encode.list Data.UserId.encode (members sharedTrip) )
+        , ( "name", Json.Encode.string sharedTrip.name )
         , ( "type", Json.Encode.string "flock:meta" )
         ]
 
@@ -200,18 +200,18 @@ encode flock =
 when `billingOwner` is not in the flat `members` array — that doc is
 malformed and we'd rather see the error than silently paper over it.
 -}
-decoder : Json.Decode.Decoder Flock
+decoder : Json.Decode.Decoder SharedTrip
 decoder =
     -- `_id` on the PouchDB doc is the literal `"flock:meta"` (one meta
-    -- doc per per-flock DB), not the FlockId — so we read the per-flock
+    -- doc per per-flock DB), not the SharedTripId — so we read the per-flock
     -- identifier off the `flockId` field the server writes alongside it.
-    Json.Decode.succeed RawFlock
+    Json.Decode.succeed RawSharedTrip
         |> Pipeline.optional "billingLapsedAt" (Json.Decode.nullable Json.Decode.string) Nothing
         |> Pipeline.required "billingOwner" Data.UserId.decoder
         |> Pipeline.required "billingStatus" billingStatusDecoder
         |> Pipeline.required "createdAt" Json.Decode.string
         |> Pipeline.required "createdBy" Data.UserId.decoder
-        |> Pipeline.required "flockId" Data.FlockId.decoder
+        |> Pipeline.required "flockId" Data.SharedTripId.decoder
         |> Pipeline.required "members" (Json.Decode.list Data.UserId.decoder)
         |> Pipeline.required "name" Json.Decode.string
         |> Json.Decode.andThen
@@ -229,17 +229,17 @@ decoder =
                         }
 
                 else
-                    Json.Decode.fail "Flock: billingOwner is not in members"
+                    Json.Decode.fail "SharedTrip: billingOwner is not in members"
             )
 
 
-type alias RawFlock =
+type alias RawSharedTrip =
     { billingLapsedAt : Maybe String
     , billingOwner : UserId
     , billingStatus : BillingStatus
     , createdAt : String
     , createdBy : UserId
-    , id : Data.FlockId.FlockId
+    , id : Data.SharedTripId.SharedTripId
     , memberList : List UserId
     , name : String
     }

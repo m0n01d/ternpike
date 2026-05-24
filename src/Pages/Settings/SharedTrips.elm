@@ -1,8 +1,8 @@
-module Pages.Settings.Flocks exposing (view, viewModal)
+module Pages.Settings.SharedTrips exposing (view, viewModal)
 
 {-| The "Flocks" subsection of the Settings page (#62).
 
-Renders one card per flock the user belongs to plus a "Create flock"
+Renders one card per shared trip the user belongs to plus a "Create flock"
 button at the top with a Tern-friendly upgrade hint. Owner cards
 get Invite / Transfer-ownership / Leave buttons; member cards only
 get Leave. A "View members" toggle expands the inline avatar stack
@@ -14,9 +14,9 @@ inside the card so they overlay everything.
 
 -}
 
-import Data.Flock as Flock exposing (Flock)
-import Data.FlockUi as FlockUi
-import Data.Flocks as Flocks
+import Data.SharedTrip as SharedTrip exposing (SharedTrip)
+import Data.SharedTripUi as SharedTripUi
+import Data.SharedTrips as SharedTrips
 import Data.Tier as Tier
 import Data.UserId as UserId exposing (UserId)
 import Html exposing (Html)
@@ -27,8 +27,8 @@ import UI.Avatar
 import UI.BillingBanner
 import UI.Button
 import UI.Card
-import UI.FlockBadge
 import UI.Rule
+import UI.SharedTripBadge
 
 
 view : AuthState -> Html Msg
@@ -38,7 +38,7 @@ view as_ =
             UserId.fromString as_.creds.email
 
         joined =
-            Flocks.joinedBy currentUser as_.flocks
+            SharedTrips.joinedBy currentUser as_.sharedTrips
     in
     Html.div []
         [ UI.Rule.kicker "FLOCKS"
@@ -47,7 +47,7 @@ view as_ =
             viewEmptyState
 
           else
-            Html.div [] (List.map (viewFlockCard as_ currentUser) joined)
+            Html.div [] (List.map (viewSharedTripCard as_ currentUser) joined)
         ]
 
 
@@ -65,7 +65,7 @@ viewCreateRow tier =
                     )
                 ]
             , if Tier.isPaid tier then
-                UI.Button.primary { label = "Create", onClick = OpenCreateFlockModal }
+                UI.Button.primary { label = "Create", onClick = OpenCreateSharedTripModal }
 
               else
                 Html.button
@@ -93,19 +93,19 @@ viewEmptyState =
         ]
 
 
-viewFlockCard : AuthState -> UserId -> Flock -> Html Msg
-viewFlockCard as_ currentUser flock =
+viewSharedTripCard : AuthState -> UserId -> SharedTrip -> Html Msg
+viewSharedTripCard as_ currentUser sharedTrip =
     let
         owner =
-            Flock.isOwner currentUser flock
+            SharedTrip.isOwner currentUser sharedTrip
 
         membersExpanded =
-            FlockUi.isExpanded flock.id as_.flockUi
+            SharedTripUi.isExpanded sharedTrip.id as_.sharedTripUi
     in
     UI.Card.subCard
         [ Html.div [ Html.Attributes.class "flex items-start justify-between gap-3 mb-3" ]
             [ Html.div [ Html.Attributes.class "flex flex-col gap-1.5 min-w-0" ]
-                [ UI.FlockBadge.view flock
+                [ UI.SharedTripBadge.view sharedTrip
                 , Html.p [ Html.Attributes.class "text-xs text-muted font-mono uppercase tracking-widest" ]
                     [ Html.text
                         (if owner then
@@ -116,27 +116,27 @@ viewFlockCard as_ currentUser flock =
                         )
                     ]
                 ]
-            , viewMembersStack flock
+            , viewMembersStack sharedTrip
             ]
         , UI.BillingBanner.viewInline
             { currentUser = currentUser
-            , flock = flock
+            , flock = sharedTrip
             , tier = as_.tier
             , today = as_.today
             }
         , Html.div [ Html.Attributes.class "flex flex-wrap gap-2 mt-3" ]
             (if owner then
-                [ UI.Button.secondary { label = "Invite", onClick = OpenInviteModal flock.id }
-                , UI.Button.ghost { label = "Transfer ownership", onClick = OpenTransferModal flock.id }
+                [ UI.Button.secondary { label = "Invite", onClick = OpenInviteModal sharedTrip.id }
+                , UI.Button.ghost { label = "Transfer ownership", onClick = OpenTransferModal sharedTrip.id }
                 ]
 
              else
-                [ UI.Button.ghost { label = "Leave", onClick = OpenLeaveConfirmModal flock.id }
+                [ UI.Button.ghost { label = "Leave", onClick = OpenLeaveConfirmModal sharedTrip.id }
                 ]
             )
         , Html.button
             [ Html.Attributes.type_ "button"
-            , Html.Events.onClick (ToggleFlockMembers flock.id)
+            , Html.Events.onClick (ToggleSharedTripMembers sharedTrip.id)
             , Html.Attributes.class "mt-3 text-xs font-mono uppercase tracking-widest text-moss hover:text-forest bg-transparent border-0 cursor-pointer p-0"
             ]
             [ Html.text
@@ -148,30 +148,30 @@ viewFlockCard as_ currentUser flock =
                 )
             ]
         , if membersExpanded then
-            viewMembersList flock
+            viewMembersList sharedTrip
 
           else
             Html.text ""
         ]
 
 
-viewMembersStack : Flock -> Html msg
-viewMembersStack flock =
+viewMembersStack : SharedTrip -> Html msg
+viewMembersStack sharedTrip =
     Html.div [ Html.Attributes.class "shrink-0" ]
-        [ UI.Avatar.viewStack (Flock.members flock) ]
+        [ UI.Avatar.viewStack (SharedTrip.members sharedTrip) ]
 
 
-viewMembersList : Flock -> Html msg
-viewMembersList flock =
+viewMembersList : SharedTrip -> Html msg
+viewMembersList sharedTrip =
     Html.div [ Html.Attributes.class "mt-3 flex flex-col gap-2" ]
-        (Flock.members flock
+        (SharedTrip.members sharedTrip
             |> List.map
                 (\u ->
                     Html.div [ Html.Attributes.class "flex items-center gap-2" ]
                         [ UI.Avatar.viewInitial u
                         , Html.span [ Html.Attributes.class "text-sm text-ink" ]
                             [ Html.text (UserId.toString u) ]
-                        , if Flock.isOwner u flock then
+                        , if SharedTrip.isOwner u sharedTrip then
                             Html.span [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-rust-deep" ]
                                 [ Html.text "Owner" ]
 
@@ -188,11 +188,11 @@ viewMembersList flock =
 
 viewModal : AuthState -> Html Msg
 viewModal as_ =
-    case as_.flockUi.modal of
-        FlockUi.NoModal ->
+    case as_.sharedTripUi.modal of
+        SharedTripUi.NoModal ->
             Html.text ""
 
-        FlockUi.CreateModal { error, name } ->
+        SharedTripUi.CreateModal { error, name } ->
             modalShell "New Flock"
                 [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
                     [ Html.text "Give your flock a name. You can invite people once it's created." ]
@@ -200,7 +200,7 @@ viewModal as_ =
                     (Html.input
                         [ Html.Attributes.type_ "text"
                         , Html.Attributes.value name
-                        , Html.Events.onInput CreateFlockNameChanged
+                        , Html.Events.onInput CreateSharedTripNameChanged
                         , Html.Attributes.placeholder "Honeymoon"
                         , textInputStyle
                         ]
@@ -208,13 +208,13 @@ viewModal as_ =
                     )
                 , viewError error
                 , modalActions
-                    { confirm = ( "Create", SubmitCreateFlock )
-                    , cancel = ( "Cancel", CloseFlockModal )
-                    , inFlight = as_.flockUi.inFlight
+                    { confirm = ( "Create", SubmitCreateSharedTrip )
+                    , cancel = ( "Cancel", CloseSharedTripModal )
+                    , inFlight = as_.sharedTripUi.inFlight
                     }
                 ]
 
-        FlockUi.InviteModal _ { email, error } ->
+        SharedTripUi.InviteModal _ { email, error } ->
             modalShell "Invite to flock"
                 [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
                     [ Html.text "We'll email them a one-click link to accept." ]
@@ -231,15 +231,15 @@ viewModal as_ =
                 , viewError error
                 , modalActions
                     { confirm = ( "Send invite", SubmitInvite )
-                    , cancel = ( "Cancel", CloseFlockModal )
-                    , inFlight = as_.flockUi.inFlight
+                    , cancel = ( "Cancel", CloseSharedTripModal )
+                    , inFlight = as_.sharedTripUi.inFlight
                     }
                 ]
 
-        FlockUi.LeaveConfirmModal flockId { error } ->
+        SharedTripUi.LeaveConfirmModal sharedTripId { error } ->
             let
-                flockName =
-                    Flocks.get flockId as_.flocks
+                sharedTripName =
+                    SharedTrips.get sharedTripId as_.sharedTrips
                         |> Maybe.map .name
                         |> Maybe.withDefault "this flock"
             in
@@ -247,25 +247,25 @@ viewModal as_ =
                 [ Html.p [ Html.Attributes.class "text-sm text-ink mb-3" ]
                     [ Html.text
                         ("Leave the "
-                            ++ flockName
+                            ++ sharedTripName
                             ++ " flock? You'll lose access to its trips on this device, but the flock keeps the data."
                         )
                     ]
                 , viewError error
                 , modalActions
-                    { confirm = ( "Leave", LeaveFlockConfirmed flockId )
-                    , cancel = ( "Cancel", CloseFlockModal )
-                    , inFlight = as_.flockUi.inFlight
+                    { confirm = ( "Leave", LeaveSharedTripConfirmed sharedTripId )
+                    , cancel = ( "Cancel", CloseSharedTripModal )
+                    , inFlight = as_.sharedTripUi.inFlight
                     }
                 ]
 
-        FlockUi.TransferModal flockId { error, target } ->
+        SharedTripUi.TransferModal sharedTripId { error, target } ->
             let
                 memberOptions =
-                    Flocks.get flockId as_.flocks
+                    SharedTrips.get sharedTripId as_.sharedTrips
                         |> Maybe.map
-                            (\flock ->
-                                flock.otherMembers
+                            (\sharedTrip ->
+                                sharedTrip.otherMembers
                                     |> List.map UserId.toString
                             )
                         |> Maybe.withDefault []
@@ -295,8 +295,8 @@ viewModal as_ =
                 , viewError error
                 , modalActions
                     { confirm = ( "Transfer", SubmitTransfer )
-                    , cancel = ( "Cancel", CloseFlockModal )
-                    , inFlight = as_.flockUi.inFlight
+                    , cancel = ( "Cancel", CloseSharedTripModal )
+                    , inFlight = as_.sharedTripUi.inFlight
                     }
                 ]
 

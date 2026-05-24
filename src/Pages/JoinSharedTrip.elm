@@ -1,4 +1,4 @@
-module Pages.JoinFlock exposing (viewAuth)
+module Pages.JoinSharedTrip exposing (viewAuth)
 
 {-| The `/flocks/join?token=<jwt>` redemption page.
 
@@ -10,7 +10,7 @@ Two surfaces:
   - **Auth** — the user is signed in. We decode the JWT payload
     (display only — the server checks the signature), show a
     confirmation card ("Alice invited you to join Honeymoon"), and on
-    Accept hit `Http.FlockApi.joinFlock`.
+    Accept hit `Http.SharedTripApi.joinSharedTrip`.
 
 The JWT is split on `.` and the middle segment is base64url-decoded;
 we never verify it on the client. We only pull `inviterEmail`,
@@ -47,10 +47,10 @@ viewHero invite =
         [ Html.text
             (case invite.inviterEmail of
                 Just name ->
-                    name ++ " invited you to join a flock."
+                    name ++ " invited you to join a shared trip."
 
                 Nothing ->
-                    "You've been invited to join a flock."
+                    "You've been invited to join a shared trip."
             )
         ]
 
@@ -73,13 +73,13 @@ viewAuthBody as_ token invite =
                             inviter ++ " invited you to join \"" ++ flockName ++ "\"."
 
                         ( Just inviter, Nothing ) ->
-                            inviter ++ " invited you to join a flock."
+                            inviter ++ " invited you to join a shared trip."
 
                         ( Nothing, Just flockName ) ->
                             "You've been invited to join \"" ++ flockName ++ "\"."
 
                         ( Nothing, Nothing ) ->
-                            "You've been invited to join a flock."
+                            "You've been invited to join a shared trip."
                     )
                 ]
             , if wrongRecipient then
@@ -100,11 +100,11 @@ viewAuthBody as_ token invite =
                   else
                     UI.Button.primary
                         { label = "Accept"
-                        , onClick = JoinFlockAccepted token
+                        , onClick = JoinSharedTripAccepted token
                         }
                 , UI.Button.ghost
                     { label = "Decline"
-                    , onClick = JoinFlockDeclined
+                    , onClick = JoinSharedTripDeclined
                     }
                 ]
             ]

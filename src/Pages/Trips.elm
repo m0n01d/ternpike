@@ -2,10 +2,10 @@ module Pages.Trips exposing (viewTab)
 
 import Data.DateField as DateField
 import Data.Entry as Entry
-import Data.Flock exposing (Flock)
-import Data.Flocks
 import Data.Money as Money
 import Data.Navigation exposing (Tab(..))
+import Data.SharedTrip exposing (SharedTrip)
+import Data.SharedTrips
 import Data.Tier as Tier
 import Data.Trip as Trip exposing (Trip, TripField(..), TripForm)
 import Data.TripId as TripId
@@ -21,10 +21,10 @@ import Types exposing (AuthState, Msg(..))
 import UI.Avatar
 import UI.BudgetBar
 import UI.Button
-import UI.FlockBadge
 import UI.Icons
 import UI.Layout
 import UI.Mascot
+import UI.SharedTripBadge
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -110,13 +110,13 @@ viewHero as_ =
 or for flock trips whose meta hasn't synced yet (rare; the trip-card
 falls back to the personal layout in that case).
 -}
-flockForTrip : AuthState -> Trip -> Maybe Flock
+flockForTrip : AuthState -> Trip -> Maybe SharedTrip
 flockForTrip as_ trip =
     trip.flockId
-        |> Maybe.andThen (\fid -> Data.Flocks.get fid as_.flocks)
+        |> Maybe.andThen (\fid -> Data.SharedTrips.get fid as_.sharedTrips)
 
 
-viewTripHero : Maybe Flock -> Trip -> List Entry.EffectiveEntry -> Html Msg
+viewTripHero : Maybe SharedTrip -> Trip -> List Entry.EffectiveEntry -> Html Msg
 viewTripHero maybeFlock activeTrip entries =
     let
         totalSpent =
@@ -153,7 +153,7 @@ viewTripHero maybeFlock activeTrip entries =
                 [ Html.text "ACTIVE TRIP" ]
             , case maybeFlock of
                 Just flock ->
-                    UI.FlockBadge.view flock
+                    UI.SharedTripBadge.view flock
 
                 Nothing ->
                     Html.text ""
@@ -181,7 +181,7 @@ viewTripHero maybeFlock activeTrip entries =
                 Html.text ""
             , case maybeFlock of
                 Just flock ->
-                    UI.Avatar.viewStack (Data.Flock.members flock)
+                    UI.Avatar.viewStack (Data.SharedTrip.members flock)
 
                 Nothing ->
                     Html.text ""
@@ -244,7 +244,7 @@ viewOtherTripRow as_ trip =
             [ case maybeFlock of
                 Just flock ->
                     Html.div [ Html.Attributes.class "mb-1" ]
-                        [ UI.FlockBadge.view flock ]
+                        [ UI.SharedTripBadge.view flock ]
 
                 Nothing ->
                     Html.text ""
@@ -259,7 +259,7 @@ viewOtherTripRow as_ trip =
                     Html.text ""
                 , case maybeFlock of
                     Just flock ->
-                        UI.Avatar.viewStack (Data.Flock.members flock)
+                        UI.Avatar.viewStack (Data.SharedTrip.members flock)
 
                     Nothing ->
                         Html.text ""
@@ -274,7 +274,7 @@ viewTripForm : AuthState -> TripForm -> Html Msg
 viewTripForm as_ form =
     let
         ownedFlocks =
-            Data.Flocks.ownedBy as_.currentUser as_.flocks
+            Data.SharedTrips.ownedBy as_.currentUser as_.sharedTrips
 
         isNew =
             form.editing == Nothing
@@ -400,7 +400,7 @@ at least one owned flock; the spec is to collapse the single-option
 case to the implicit Personal default so the user never sees a
 segmented control with one tile.
 -}
-viewTargetPicker : AuthState -> TripForm -> List Flock -> Html Msg
+viewTargetPicker : AuthState -> TripForm -> List SharedTrip -> Html Msg
 viewTargetPicker as_ form ownedFlocks =
     let
         selected =
@@ -614,11 +614,11 @@ viewTargetTile opts =
 than a comma-joined initial list when the flock is large, and short
 enough at small flocks to keep the segmented control single-line.
 -}
-flockTileSub : Flock -> String
+flockTileSub : SharedTrip -> String
 flockTileSub flock =
     let
         count =
-            List.length (Data.Flock.members flock)
+            List.length (Data.SharedTrip.members flock)
     in
     if count <= 1 then
         "JUST OWNER"

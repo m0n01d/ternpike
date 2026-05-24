@@ -1,12 +1,12 @@
 module Pages.Scan exposing (viewTab)
 
 import Data.Category as Category
-import Data.Flock exposing (Flock)
-import Data.Flocks
 import Data.Money as Money
 import Data.Navigation exposing (Tab(..))
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
+import Data.SharedTrip exposing (SharedTrip)
+import Data.SharedTrips
 import Data.Tier
 import Data.Trip as Trip exposing (Trip)
 import Data.Trips
@@ -19,8 +19,8 @@ import Json.Decode
 import Routing
 import Types exposing (AuthState, Msg(..))
 import UI.Button
-import UI.FlockBadge
 import UI.Icons
+import UI.SharedTripBadge
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -98,14 +98,14 @@ paidOcrLabel trip as_ =
 {-| The active trip's flock context, if any. `Nothing` for personal
 trips and for trips whose flock meta hasn't synced yet.
 -}
-activeFlockContext : AuthState -> Maybe ( Trip, Flock )
+activeFlockContext : AuthState -> Maybe ( Trip, SharedTrip )
 activeFlockContext model =
     case ( Routing.routeTripId model.route, model.trips ) of
         ( Just tripId, Data.Trips.TripsLoaded loadedTrips ) ->
             case Data.Trips.findTrip tripId loadedTrips of
                 Just trip ->
                     trip.flockId
-                        |> Maybe.andThen (\fid -> Data.Flocks.get fid model.flocks)
+                        |> Maybe.andThen (\fid -> Data.SharedTrips.get fid model.sharedTrips)
                         |> Maybe.map (\flock -> ( trip, flock ))
 
                 Nothing ->
@@ -119,13 +119,13 @@ activeFlockContext model =
 Same pattern as `Pages.Add`; on personal trips the screen renders
 without flock chrome.
 -}
-viewFlockContextStrip : Maybe ( Trip, Flock ) -> Html Msg
+viewFlockContextStrip : Maybe ( Trip, SharedTrip ) -> Html Msg
 viewFlockContextStrip ctx =
     case ctx of
         Just ( trip, flock ) ->
             Html.div
                 [ Html.Attributes.class "mb-4 flex items-center gap-3 bg-cream-deep border border-tan rounded-card px-4 py-3" ]
-                [ UI.FlockBadge.view flock
+                [ UI.SharedTripBadge.view flock
                 , Html.div [ Html.Attributes.class "flex flex-col leading-tight min-w-0" ]
                     [ Html.span
                         [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
@@ -184,7 +184,7 @@ viewReadOnlyHero =
 
 
 {-| Mirror of the predicate used on Add / Ledger — single source of
-truth lives in `Data.Flock.isReadOnly`.
+truth lives in `Data.SharedTrip.isReadOnly`.
 -}
 isActiveTripReadOnly : AuthState -> Bool
 isActiveTripReadOnly model =
@@ -192,8 +192,8 @@ isActiveTripReadOnly model =
         ( Just tripId, Data.Trips.TripsLoaded trips ) ->
             Data.Trips.findTrip tripId trips
                 |> Maybe.andThen .flockId
-                |> Maybe.andThen (\fid -> Data.Flocks.get fid model.flocks)
-                |> Maybe.map Data.Flock.isReadOnly
+                |> Maybe.andThen (\fid -> Data.SharedTrips.get fid model.sharedTrips)
+                |> Maybe.map Data.SharedTrip.isReadOnly
                 |> Maybe.withDefault False
 
         _ ->

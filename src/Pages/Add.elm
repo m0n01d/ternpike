@@ -1,14 +1,14 @@
 module Pages.Add exposing (viewTab)
 
 import Data.Category as Category exposing (Category)
-import Data.Flock exposing (Flock)
-import Data.Flocks
 import Data.GeoPoint as GeoPoint
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod(..))
 import Data.PendingEntry exposing (AddPageMode(..), PendingEntry, PendingForm(..))
 import Data.ScanItemId as ScanItemId
+import Data.SharedTrip exposing (SharedTrip)
+import Data.SharedTrips
 import Data.Trip exposing (Trip)
 import Data.Trips
 import Data.UserId as UserId
@@ -21,10 +21,10 @@ import Routing
 import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Card
-import UI.FlockBadge
 import UI.Layout
 import UI.Mascot
 import UI.Rule
+import UI.SharedTripBadge
 import UI.Skeleton
 
 
@@ -240,14 +240,14 @@ viewBody model pending isEditing =
 trips and for trips whose flock meta hasn't synced yet — in either
 case the Add page renders without the flock chrome.
 -}
-activeFlockContext : AuthState -> Maybe ( Trip, Flock )
+activeFlockContext : AuthState -> Maybe ( Trip, SharedTrip )
 activeFlockContext model =
     case ( Routing.routeTripId model.route, model.trips ) of
         ( Just tripId, Data.Trips.TripsLoaded loadedTrips ) ->
             case Data.Trips.findTrip tripId loadedTrips of
                 Just trip ->
                     trip.flockId
-                        |> Maybe.andThen (\fid -> Data.Flocks.get fid model.flocks)
+                        |> Maybe.andThen (\fid -> Data.SharedTrips.get fid model.sharedTrips)
                         |> Maybe.map (\flock -> ( trip, flock ))
 
                 Nothing ->
@@ -265,7 +265,7 @@ isActiveTripReadOnly : AuthState -> Bool
 isActiveTripReadOnly model =
     case activeFlockContext model of
         Just ( _, flock ) ->
-            Data.Flock.isReadOnly flock
+            Data.SharedTrip.isReadOnly flock
 
         Nothing ->
             False
@@ -275,13 +275,13 @@ isActiveTripReadOnly model =
 Only rendered for flock-scoped trips; on personal trips the form keeps
 its current top-of-screen behaviour.
 -}
-viewFlockContextStrip : Maybe ( Trip, Flock ) -> Html Msg
+viewFlockContextStrip : Maybe ( Trip, SharedTrip ) -> Html Msg
 viewFlockContextStrip ctx =
     case ctx of
         Just ( trip, flock ) ->
             Html.div
                 [ Html.Attributes.class "mb-4 flex items-center gap-3 bg-cream-deep border border-tan rounded-card px-4 py-3" ]
-                [ UI.FlockBadge.view flock
+                [ UI.SharedTripBadge.view flock
                 , Html.div [ Html.Attributes.class "flex flex-col leading-tight min-w-0" ]
                     [ Html.span
                         [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
@@ -301,7 +301,7 @@ hero on flock-scoped trips. Lists the flock's members by first name
 (email local-part), collapsing to "+ N more" when there are more than
 three.
 -}
-viewVisibleToCaption : Maybe ( Trip, Flock ) -> Html Msg
+viewVisibleToCaption : Maybe ( Trip, SharedTrip ) -> Html Msg
 viewVisibleToCaption ctx =
     case ctx of
         Just ( _, flock ) ->
@@ -313,11 +313,11 @@ viewVisibleToCaption ctx =
             Html.text ""
 
 
-visibleToLabel : Flock -> String
+visibleToLabel : SharedTrip -> String
 visibleToLabel flock =
     let
         names =
-            List.map firstNameFor (Data.Flock.members flock)
+            List.map firstNameFor (Data.SharedTrip.members flock)
     in
     case names of
         [] ->

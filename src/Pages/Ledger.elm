@@ -4,10 +4,10 @@ import Data.Category as Category
 import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
 import Data.ExpenseId as ExpenseId
-import Data.Flock
-import Data.Flocks
 import Data.Ledger exposing (LedgerMode(..))
 import Data.Money as Money exposing (Money)
+import Data.SharedTrip
+import Data.SharedTrips
 import Data.TripId as TripId
 import Data.Trips
 import Data.UserId as UserId exposing (UserId)
@@ -211,9 +211,9 @@ membersForActiveTrip model =
                 Just trip ->
                     case trip.flockId of
                         Just fid ->
-                            case Data.Flocks.get fid model.flocks of
+                            case Data.SharedTrips.get fid model.sharedTrips of
                                 Just flock ->
-                                    membersDict (Data.Flock.members flock)
+                                    membersDict (Data.SharedTrip.members flock)
 
                                 Nothing ->
                                     Dict.empty
@@ -266,8 +266,8 @@ isActiveTripReadOnly model =
         ( Just tripId, Data.Trips.TripsLoaded trips ) ->
             Data.Trips.findTrip tripId trips
                 |> Maybe.andThen .flockId
-                |> Maybe.andThen (\fid -> Data.Flocks.get fid model.flocks)
-                |> Maybe.map Data.Flock.isReadOnly
+                |> Maybe.andThen (\fid -> Data.SharedTrips.get fid model.sharedTrips)
+                |> Maybe.map Data.SharedTrip.isReadOnly
                 |> Maybe.withDefault False
 
         _ ->
