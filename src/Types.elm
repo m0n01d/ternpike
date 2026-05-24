@@ -208,9 +208,9 @@ type alias AuthState =
 Variants are grouped by area below; the type itself is alphabetised per
 the style guide.
 
-Form inputs (Add page): `AmountChanged`, `CategorySelected`,
-`DateChanged`, `LongNoteChanged`, `MerchantChanged`, `NoteChanged`,
-`PaymentMethodChanged`.
+Form inputs (Add page): `AddressChanged`, `AmountChanged`,
+`CategorySelected`, `DateChanged`, `LongNoteChanged`, `MerchantChanged`,
+`NoteChanged`, `PaymentMethodChanged`.
 
 Scan flow: `FilesSelected`, `GotFileUrl`, `GotExifCoords`,
 `GotOcrResult`, `ReviewScanItem`, `BackToQueue`, `ClearDoneItems`.
@@ -264,7 +264,8 @@ chip selector.
 
 -}
 type Msg
-    = AmountChanged String
+    = AddressChanged String
+    | AmountChanged String
     | ApiKeyChanged String
     | BackToQueue
     | CanInstall Bool

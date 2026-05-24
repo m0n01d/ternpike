@@ -175,6 +175,16 @@ viewBody model pending isEditing =
                     ]
                     []
                 )
+            , UI.Layout.formField "ADDRESS"
+                (Html.input
+                    [ Html.Attributes.type_ "text"
+                    , Html.Attributes.value pending.address
+                    , Html.Events.onInput AddressChanged
+                    , Html.Attributes.placeholder "optional — street, city, state"
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
+                )
             , UI.Layout.formField "LOCATION" (viewLocationWidget model pending)
             ]
         , UI.Rule.kicker "NOTES"

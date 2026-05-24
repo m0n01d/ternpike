@@ -88,7 +88,7 @@ import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod
 import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
-import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.Scan as Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip as SharedTrip
 import Data.SharedTripId
@@ -982,7 +982,7 @@ authPending f as_ =
 
 ocrSystemPrompt : String
 ocrSystemPrompt =
-    "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
+    "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"address\": \"<street address as printed on receipt, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
 
 
 makeOcrCall : String -> String -> String -> String -> Cmd Msg
@@ -1038,41 +1038,6 @@ makeOcrCall itemId apiKey base64Data mimeType =
 claudeTextDecoder : D.Decoder String
 claudeTextDecoder =
     D.field "content" (D.index 0 (D.field "text" D.string))
-
-
-ocrDataDecoder : D.Decoder OcrData
-ocrDataDecoder =
-    D.succeed OcrData
-        |> Pipeline.optional "address" (D.map Just D.string) Nothing
-        |> Pipeline.optional "amount" (D.map Just Money.decoder) Nothing
-        |> Pipeline.optional "category" (D.map Just (D.map Category.fromString D.string)) Nothing
-        |> Pipeline.optional "date" (D.map Just DateField.decoder) Nothing
-        |> Pipeline.optional "longNote" (D.map Just D.string) Nothing
-        |> Pipeline.optional "merchant" (D.map Just D.string) Nothing
-        |> Pipeline.optional "note" (D.map Just D.string) Nothing
-        |> Pipeline.optional "paymentMethod"
-            (D.nullable
-                (D.string
-                    |> D.andThen
-                        (\s ->
-                            case PaymentMethod.fromString s of
-                                Just pm ->
-                                    D.succeed pm
-
-                                Nothing ->
-                                    D.fail ("Unknown paymentMethod: " ++ s)
-                        )
-                )
-            )
-            Nothing
-
-
-ocrDataListDecoder : D.Decoder (List OcrData)
-ocrDataListDecoder =
-    D.oneOf
-        [ D.list ocrDataDecoder
-        , D.map List.singleton ocrDataDecoder
-        ]
 
 
 stripCodeFence : String -> String
@@ -1270,6 +1235,9 @@ update msg model =
     case msg of
         UrlChanged _ ->
             ( nextModel, Cmd.batch [ cmd, scrollToTop ] )
+
+        AddressChanged _ ->
+            ( nextModel, cmd )
 
         AmountChanged _ ->
             ( nextModel, cmd )
@@ -1677,6 +1645,9 @@ updateGuest msg gs =
 
         -- Messages that only apply to the authenticated state.
         -- They are no-ops here: the GuestModel has no corresponding fields.
+        AddressChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
         AmountChanged _ ->
             ( GuestModel gs, Cmd.none )
 
@@ -2125,7 +2096,7 @@ updateAuth msg as_ =
                         Ok responseBody ->
                             case D.decodeString claudeTextDecoder responseBody of
                                 Ok innerJson ->
-                                    case D.decodeString ocrDataListDecoder (stripCodeFence innerJson) of
+                                    case D.decodeString Scan.ocrDataListDecoder (stripCodeFence innerJson) of
                                         Ok list ->
                                             list
 
@@ -2180,6 +2151,9 @@ updateAuth msg as_ =
                             Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = singleData })) as_.scanQueue
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
+
+        AddressChanged s ->
+            authPending (\p -> { p | address = s }) as_
 
         AmountChanged s ->
             authPending (\p -> { p | amount = s }) as_
