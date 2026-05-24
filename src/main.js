@@ -17,6 +17,22 @@ import './global.css'
 
 ;(async function () {
 
+  // ── Color scheme ──────────────────────────────────────────────────────
+  function applyColorScheme(pref) {
+    const sys = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const dark = pref === 'dark' || (pref !== 'light' && sys)
+    document.documentElement.classList.toggle('dark', dark)
+  }
+
+  applyColorScheme(localStorage.getItem('color_scheme') || 'auto')
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    const stored = localStorage.getItem('color_scheme')
+    if (!stored || stored === 'auto') {
+      document.documentElement.classList.toggle('dark', e.matches)
+    }
+  })
+
   // ── Nano-id (no dependency) ────────────────────────────────────────────
   const nanoid = (len = 8) =>
     crypto.getRandomValues(new Uint8Array(len))
@@ -103,6 +119,7 @@ import './global.css'
     anthropicKey: anthropicKey  || '',
     backendUrl:   'https://api.ternpike.com',
     basePath:     import.meta.env.BASE_URL,
+    colorScheme:  localStorage.getItem('color_scheme') || 'auto',
     tier:         tier || '',
     today:        new Date().toISOString().slice(0, 10),
     version:      __BUILD_SHA__,
@@ -256,6 +273,10 @@ import './global.css'
 
   app.ports.saveStorage.subscribe(async ({ key, value }) => {
     await idbSet(key, value)
+    if (key === 'color_scheme') {
+      localStorage.setItem('color_scheme', value)
+      applyColorScheme(value)
+    }
   })
 
   // ── Network status ─────────────────────────────────────────────────────

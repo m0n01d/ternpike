@@ -1,6 +1,7 @@
 module Pages.Settings exposing (viewPanel, viewTab)
 
 import Data.Auth exposing (AppConfig)
+import Data.ColorScheme exposing (ColorScheme(..))
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -17,7 +18,8 @@ viewTab as_ =
     { actions = []
     , body =
         Html.div []
-            [ viewBody as_.config (Just as_.showDayIntensity) as_.showInstallPrompt as_.version
+            [ viewAppearanceSection as_.colorScheme
+            , viewBody as_.config (Just as_.showDayIntensity) as_.showInstallPrompt as_.version
             , Pages.Settings.SharedTrips.view as_
             ]
     , hero = viewHero as_.config
@@ -99,6 +101,35 @@ viewBody cfg maybeDayIntensity showInstallPrompt version =
 
           else
             Html.text ""
+        ]
+
+
+viewAppearanceSection : ColorScheme -> Html Msg
+viewAppearanceSection current =
+    let
+        schemeBtn scheme label =
+            Html.button
+                [ Html.Attributes.type_ "button"
+                , Html.Events.onClick (SetColorScheme scheme)
+                , Html.Attributes.classList
+                    [ ( "flex-1 py-2 rounded-lg text-xs font-mono uppercase tracking-widest cursor-pointer border transition-colors", True )
+                    , ( "bg-forest text-parchment border-forest", current == scheme )
+                    , ( "bg-cream-deep text-muted border-tan hover:border-moss hover:text-forest", current /= scheme )
+                    ]
+                ]
+                [ Html.text label ]
+    in
+    Html.div []
+        [ UI.Rule.kicker "APPEARANCE"
+        , UI.Card.subCard
+            [ Html.div [ Html.Attributes.class "flex gap-2" ]
+                [ schemeBtn Light "Light"
+                , schemeBtn Auto "Auto"
+                , schemeBtn Dark "Dark"
+                ]
+            , Html.p [ Html.Attributes.class "text-xs text-muted mt-2" ]
+                [ Html.text "Auto follows your system setting." ]
+            ]
         ]
 
 

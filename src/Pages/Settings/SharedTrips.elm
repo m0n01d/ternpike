@@ -304,7 +304,7 @@ viewModal as_ =
 modalShell : String -> List (Html Msg) -> Html Msg
 modalShell title children =
     Html.div
-        [ Html.Attributes.class "fixed inset-0 z-40 flex items-center justify-center px-5 bg-ink/40" ]
+        [ Html.Attributes.class "fixed inset-0 z-40 flex items-center justify-center px-5 bg-black/50" ]
         [ Html.div
             [ Html.Attributes.class "w-full max-w-md bg-cream rounded-card shadow-panel p-5" ]
             (Html.p

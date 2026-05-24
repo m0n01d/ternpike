@@ -74,6 +74,7 @@ import Data.Amendment as Amendment
 import Data.AmendmentId as AmendmentId
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category as Category exposing (Category(..))
+import Data.ColorScheme as ColorScheme
 import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
 import Data.Expense as Expense
@@ -206,6 +207,7 @@ toAuthState creds initialRoute gs =
     { activeScanItemId = Nothing
     , amendments = Dict.empty
     , basePath = gs.basePath
+    , colorScheme = ColorScheme.Auto
     , config = gs.session.config
     , confirmDeleteTrip = Nothing
     , creds = creds
@@ -1186,6 +1188,12 @@ init flagsJson url key =
         -- right tier on stub-auth boots without having to mount a fake
         -- session endpoint. Production main.js does not set the flag, so
         -- the default applies until /me is wired.
+        initialColorScheme =
+            D.decodeValue (D.field "colorScheme" D.string) flagsJson
+                |> Result.toMaybe
+                |> Maybe.andThen ColorScheme.fromString
+                |> Maybe.withDefault ColorScheme.Auto
+
         initialTier =
             D.decodeValue (D.field "tier" D.string) flagsJson
                 |> Result.toMaybe
@@ -1228,7 +1236,7 @@ init flagsJson url key =
                     Routing.routeFromUrl basePath url
 
                 as_ =
-                    { tierBoot | tier = initialTier }
+                    { tierBoot | colorScheme = initialColorScheme, tier = initialTier }
 
                 tierBoot =
                     toAuthState creds initialRoute gs
@@ -1456,6 +1464,9 @@ update msg model =
             ( nextModel, cmd )
 
         ScrolledToTop ->
+            ( nextModel, cmd )
+
+        SetColorScheme _ ->
             ( nextModel, cmd )
 
         SetStatsGranularity _ ->
@@ -1835,6 +1846,9 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         ScrolledToTop ->
+            ( GuestModel gs, Cmd.none )
+
+        SetColorScheme _ ->
             ( GuestModel gs, Cmd.none )
 
         SetStatsGranularity _ ->
@@ -2547,6 +2561,11 @@ updateAuth msg as_ =
             in
             ( AuthModel { as_ | config = { cfg | anthropicKey = s } }
             , saveStorage { key = "anthropic_key", value = s }
+            )
+
+        SetColorScheme scheme ->
+            ( AuthModel { as_ | colorScheme = scheme }
+            , saveStorage { key = "color_scheme", value = ColorScheme.toString scheme }
             )
 
         DismissError ->
@@ -3481,7 +3500,7 @@ view model =
     { title = "Ternpike"
     , body =
         [ Html.div
-            [ Html.Attributes.class "bg-parchment text-ink min-h-screen font-body max-w-[480px] mx-auto relative" ]
+            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-screen font-body max-w-[480px] mx-auto relative" ]
             [ case model of
                 GuestModel gs ->
                     viewGuest gs

@@ -234,9 +234,9 @@ viewErrorBanner maybeErr =
 viewDeleteConfirmModal : Trip -> Html Msg
 viewDeleteConfirmModal trip =
     Html.div
-        [ Html.Attributes.class "fixed inset-0 bg-forest/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
+        [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
         [ Html.div
-            [ Html.Attributes.class "w-full max-w-sm p-6 border bg-parchment border-tan rounded-2xl shadow-panel bg-[image:var(--bg-grain)]" ]
+            [ Html.Attributes.class "w-full max-w-sm p-6 border bg-parchment dark:bg-cream border-tan rounded-2xl shadow-panel bg-[image:var(--bg-grain)]" ]
             [ Html.p [ Html.Attributes.class "mb-2 text-lg font-bold text-ink font-display" ]
                 [ Html.text ("Delete “" ++ trip.name ++ "”?") ]
             , Html.p [ Html.Attributes.class "mb-6 text-sm leading-relaxed text-muted" ]
