@@ -62,6 +62,7 @@ import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import File exposing (File)
 import Http
+import Http.GeocodeApi
 import Http.SharedTripApi
 import Json.Decode
 import Set exposing (Set)
@@ -173,6 +174,7 @@ type alias AuthState =
     , form : PendingForm
     , geoBlocked : Bool
     , key : Nav.Key
+    , ledgerMapExpanded : Bool
     , loadingExpenses : Set String
     , loadingTrips : Set String
     , movePicker : Maybe Expense
@@ -208,12 +210,13 @@ type alias AuthState =
 Variants are grouped by area below; the type itself is alphabetised per
 the style guide.
 
-Form inputs (Add page): `AmountChanged`, `CategorySelected`,
-`DateChanged`, `LongNoteChanged`, `MerchantChanged`, `NoteChanged`,
-`PaymentMethodChanged`.
+Form inputs (Add page): `AddressChanged`, `AmountChanged`,
+`CategorySelected`, `DateChanged`, `LongNoteChanged`, `MerchantChanged`,
+`NoteChanged`, `PaymentMethodChanged`.
 
 Scan flow: `FilesSelected`, `GotFileUrl`, `GotExifCoords`,
-`GotOcrResult`, `ReviewScanItem`, `BackToQueue`, `ClearDoneItems`.
+`GotGeocodeResult`, `GotOcrResult`, `ReviewScanItem`, `BackToQueue`,
+`ClearDoneItems`.
 
 Location: `GotGpsCoords`, `GeolocationDenied`, `OpenMapPicker`,
 `MapPickerConfirmed`, `DismissMapPicker`, `SkipLocation`.
@@ -264,7 +267,8 @@ chip selector.
 
 -}
 type Msg
-    = AmountChanged String
+    = AddressChanged String
+    | AmountChanged String
     | ApiKeyChanged String
     | BackToQueue
     | CanInstall Bool
@@ -291,6 +295,7 @@ type Msg
     | GotDuplicateTime Expense Time.Posix
     | GotExifCoords String (Maybe Float) (Maybe Float) String
     | GotFileUrl String String
+    | GotGeocodeResult String (Result Http.Error Http.GeocodeApi.GeocodeResponse)
     | GotGpsCoords Float Float
     | GotMoveTime Expense TripId Time.Posix
     | GotOcrResult String (Result Http.Error String)
@@ -347,6 +352,7 @@ type Msg
     | ToggleSharedTripMembers SharedTripId
     | ToggleGuestSettings
     | ToggleLedgerMap
+    | ToggleLedgerMapExpanded
     | TransferTargetChanged String
     | TransferToSharedTripResult (Result Http.Error ())
     | TriggerInstallPrompt

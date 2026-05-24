@@ -1,4 +1,4 @@
-module Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+module Data.Scan exposing (OcrData, ScanItem, ScanStatus(..), ocrDataDecoder, ocrDataListDecoder)
 
 {-| Receipt-scan queue: one `ScanItem` per receipt the user has dropped
 into the Scan tab, plus the OCR result the Anthropic API hands back.
@@ -16,12 +16,14 @@ domain.
 
 -}
 
-import Data.Category exposing (Category)
-import Data.DateField exposing (DateField)
+import Data.Category as Category exposing (Category)
+import Data.DateField as DateField exposing (DateField)
 import Data.Location exposing (LocationState)
-import Data.Money exposing (Money)
-import Data.PaymentMethod exposing (PaymentMethod)
+import Data.Money as Money exposing (Money)
+import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Data.ScanItemId exposing (ScanItemId)
+import Json.Decode
+import Json.Decode.Pipeline as Pipeline
 
 
 {-| Lifecycle stage of one queued receipt.
@@ -50,7 +52,8 @@ correct anything missing or wrong.
 
 -}
 type alias OcrData =
-    { amount : Maybe Money
+    { address : Maybe String
+    , amount : Maybe Money
     , category : Maybe Category
     , date : Maybe DateField
     , longNote : Maybe String
@@ -83,3 +86,49 @@ type alias ScanItem =
     , ocrData : Maybe OcrData
     , status : ScanStatus
     }
+
+
+{-| Decode one OCR JSON object into an `OcrData`. Every field is
+optional — Anthropic's "best effort" parser may omit any of them, and a
+missing field falls through to `Nothing` rather than failing the whole
+parse. `address` was added in #150 so receipts batch-scanned at home
+can be geocoded to where they were actually issued (paid tier) or
+manually pinned (free tier).
+-}
+ocrDataDecoder : Json.Decode.Decoder OcrData
+ocrDataDecoder =
+    Json.Decode.succeed OcrData
+        |> Pipeline.optional "address" (Json.Decode.map Just Json.Decode.string) Nothing
+        |> Pipeline.optional "amount" (Json.Decode.map Just Money.decoder) Nothing
+        |> Pipeline.optional "category" (Json.Decode.map Just (Json.Decode.map Category.fromString Json.Decode.string)) Nothing
+        |> Pipeline.optional "date" (Json.Decode.map Just DateField.decoder) Nothing
+        |> Pipeline.optional "longNote" (Json.Decode.map Just Json.Decode.string) Nothing
+        |> Pipeline.optional "merchant" (Json.Decode.map Just Json.Decode.string) Nothing
+        |> Pipeline.optional "note" (Json.Decode.map Just Json.Decode.string) Nothing
+        |> Pipeline.optional "paymentMethod"
+            (Json.Decode.nullable
+                (Json.Decode.string
+                    |> Json.Decode.andThen
+                        (\s ->
+                            case PaymentMethod.fromString s of
+                                Just pm ->
+                                    Json.Decode.succeed pm
+
+                                Nothing ->
+                                    Json.Decode.fail ("Unknown paymentMethod: " ++ s)
+                        )
+                )
+            )
+            Nothing
+
+
+{-| Decode either a single OCR object or a JSON array of them into a
+list. The Anthropic prompt asks for an array, but legacy single-object
+responses still parse for backward compatibility.
+-}
+ocrDataListDecoder : Json.Decode.Decoder (List OcrData)
+ocrDataListDecoder =
+    Json.Decode.oneOf
+        [ Json.Decode.list ocrDataDecoder
+        , Json.Decode.map List.singleton ocrDataDecoder
+        ]

@@ -48,7 +48,8 @@ parsed value avoids a needless string round-trip.
 
 -}
 type alias PendingEntry =
-    { amount : String
+    { address : String
+    , amount : String
     , category : Category
     , date : String
     , locationState : LocationState
@@ -100,7 +101,8 @@ which mean "no location stamped").
 
 -}
 type alias ParsedEntry =
-    { amount : Money
+    { address : String
+    , amount : Money
     , category : Category
     , date : DateField
     , geoPoint : Maybe GeoPoint
@@ -163,7 +165,8 @@ parseEntry pe =
     case ( amountResult, dateResult ) of
         ( Ok amount, Ok date ) ->
             Ok
-                { amount = amount
+                { address = pe.address
+                , amount = amount
                 , category = pe.category
                 , date = date
                 , geoPoint = geoPoint

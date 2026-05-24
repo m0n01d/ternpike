@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { Resend } from 'resend'
 
+import { registerGeocodeRoutes } from './geocode.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
 
 const CODE_TTL_SECONDS = 600
@@ -143,6 +144,7 @@ app.use('/auth/*', corsConfig)
 app.use('/sharedtrips/*', corsConfig)
 app.use('/sharedtrips', corsConfig)
 app.use('/marketing/*', corsConfig)
+app.use('/geocode', corsConfig)
 
 app.post('/auth/request-code', async (c) => {
   const env = c.env
@@ -245,6 +247,7 @@ app.post('/marketing/waitlist', async (c) => {
 })
 
 registerSharedTripRoutes(app)
+registerGeocodeRoutes(app)
 
 export default {
   fetch: app.fetch,

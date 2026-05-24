@@ -5,6 +5,7 @@ module Data.DateField exposing
     , diffDays
     , encoder
     , formatDisplay
+    , formatMonthDay
     , fromIso
     , fromIsoOr
     , toIso
@@ -140,6 +141,24 @@ encoder df =
 formatDisplay : DateField -> String
 formatDisplay (DateField d) =
     Date.format "MMM d, yyyy" d
+
+
+{-| Render the short "month + day" label used on the multi-day map day
+pills and the Scan-queue date provenance row.
+
+    Maybe.map formatMonthDay (fromIso "2024-05-21")
+    --> Just "May 21"
+
+    Maybe.map formatMonthDay (fromIso "2024-01-01")
+    --> Just "Jan 1"
+
+    Maybe.map formatMonthDay (fromIso "2024-02-29")
+    --> Just "Feb 29"
+
+-}
+formatMonthDay : DateField -> String
+formatMonthDay (DateField d) =
+    Date.format "MMM d" d
 
 
 {-| Parse a calendar date from an ISO `YYYY-MM-DD` String. Returns `Nothing`

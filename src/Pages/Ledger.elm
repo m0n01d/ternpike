@@ -78,22 +78,46 @@ ledgerMode as_ =
 
 viewActions : AuthState -> List (Html Msg)
 viewActions model =
-    [ UI.Button.iconButton
-        { icon = UI.Icons.map "w-4 h-4"
-        , onClick = ToggleLedgerMap
-        , title =
-            if model.showLedgerMap then
-                "Hide map"
+    let
+        mapToggle =
+            UI.Button.iconButton
+                { icon = UI.Icons.map "w-4 h-4"
+                , onClick = ToggleLedgerMap
+                , title =
+                    if model.showLedgerMap then
+                        "Hide map"
+
+                    else
+                        "Show map"
+                }
+
+        expandToggle =
+            if model.ledgerMapExpanded then
+                UI.Button.iconButton
+                    { icon = UI.Icons.collapse "w-4 h-4"
+                    , onClick = ToggleLedgerMapExpanded
+                    , title = "Shrink map"
+                    }
 
             else
-                "Show map"
-        }
-    , UI.Button.iconButton
-        { icon = UI.Icons.chevronRight "w-4 h-4"
-        , onClick = RefreshClicked
-        , title = "Refresh"
-        }
-    ]
+                UI.Button.iconButton
+                    { icon = UI.Icons.expand "w-4 h-4"
+                    , onClick = ToggleLedgerMapExpanded
+                    , title = "Expand map"
+                    }
+
+        refresh =
+            UI.Button.iconButton
+                { icon = UI.Icons.chevronRight "w-4 h-4"
+                , onClick = RefreshClicked
+                , title = "Refresh"
+                }
+    in
+    if model.showLedgerMap then
+        [ mapToggle, expandToggle, refresh ]
+
+    else
+        [ mapToggle, refresh ]
 
 
 viewHero : Money -> LedgerMode -> Html Msg
@@ -162,18 +186,22 @@ viewBody model mode =
             viewEmptyState
 
         LedgerReady entries ->
-            Html.div []
-                [ viewLedgerMap model entries
-                , viewEntries
-                    { basePath = model.basePath
-                    , canMove = hasOtherTrips model
-                    , members = membersForActiveTrip model
-                    , openMenu = model.openLedgerMenu
-                    , readOnly = isActiveTripReadOnly model
-                    , showIntensity = model.showDayIntensity
-                    }
-                    entries
-                ]
+            if model.showLedgerMap && model.ledgerMapExpanded then
+                viewLedgerMap model entries
+
+            else
+                Html.div []
+                    [ viewLedgerMap model entries
+                    , viewEntries
+                        { basePath = model.basePath
+                        , canMove = hasOtherTrips model
+                        , members = membersForActiveTrip model
+                        , openMenu = model.openLedgerMenu
+                        , readOnly = isActiveTripReadOnly model
+                        , showIntensity = model.showDayIntensity
+                        }
+                        entries
+                    ]
 
 
 hasOtherTrips : AuthState -> Bool
@@ -389,9 +417,17 @@ bandColor band =
 viewLedgerMap : AuthState -> List Entry.EffectiveEntry -> Html Msg
 viewLedgerMap model entries =
     if model.showLedgerMap then
+        let
+            sizing =
+                if model.ledgerMapExpanded then
+                    "h-[70vh] mb-0"
+
+                else
+                    "h-[260px] mb-5"
+        in
         Html.node "waypoint-map"
             [ Html.Attributes.attribute "points" (encodeWaypoints entries)
-            , Html.Attributes.class "block w-full rounded-xl overflow-hidden mb-5 h-[260px]"
+            , Html.Attributes.class ("block w-full rounded-xl overflow-hidden " ++ sizing)
             ]
             []
 

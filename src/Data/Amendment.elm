@@ -47,7 +47,8 @@ import Time
 
 
 type alias Amendment =
-    { amount : Maybe Money
+    { address : Maybe String
+    , amount : Maybe Money
     , category : Maybe Category
     , createdAt : Time.Posix
     , createdBy : UserId
@@ -70,6 +71,13 @@ encoder a =
          , ( "createdBy", UserId.encode a.createdBy )
          , ( "type", Json.Encode.string "amend" )
          ]
+            ++ (case a.address of
+                    Just v ->
+                        [ ( "address", Json.Encode.string v ) ]
+
+                    Nothing ->
+                        []
+               )
             ++ (case a.amount of
                     Just v ->
                         [ ( "amount", Money.encoder v ) ]
@@ -125,6 +133,7 @@ encoder a =
 decoder : Json.Decode.Decoder Amendment
 decoder =
     Json.Decode.succeed Amendment
+        |> Pipeline.optional "address" (Json.Decode.nullable Json.Decode.string) Nothing
         |> Pipeline.optional "amount"
             (Json.Decode.nullable Money.decoder)
             Nothing

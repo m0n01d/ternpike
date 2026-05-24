@@ -81,7 +81,8 @@ suite =
                 case Json.Decode.decodeString Amendment.decoder wire of
                     Ok a ->
                         Expect.all
-                            [ \am -> Expect.equal Nothing am.amount
+                            [ \am -> Expect.equal Nothing am.address
+                            , \am -> Expect.equal Nothing am.amount
                             , \am -> Expect.equal Nothing am.date
                             , \am -> Expect.equal Nothing am.note
                             , \am -> Expect.equal Nothing am.merchant
@@ -93,6 +94,25 @@ suite =
 
                     Err err ->
                         Expect.fail (Json.Decode.errorToString err)
+        , test "amendment with address decodes and encodes the value" <|
+            \_ ->
+                let
+                    wire =
+                        """
+                        { "_id": "amend::expense::2024-05-21T14:30:45Z::abcd1234::ef567890"
+                        , "address": "789 Seward Hwy, Seward AK"
+                        , "createdAt": "2024-05-21T15:45:00Z"
+                        , "createdBy": "alice@example.com"
+                        , "targetId": "expense::2024-05-21T14:30:45Z::abcd1234"
+                        , "type": "amend"
+                        }
+                        """
+                in
+                Json.Decode.decodeString Amendment.decoder wire
+                    |> Result.map Amendment.encoder
+                    |> Result.map (Json.Decode.decodeValue Amendment.decoder)
+                    |> Result.map (Result.map .address)
+                    |> Expect.equal (Ok (Ok (Just "789 Seward Hwy, Seward AK")))
         , test "roundtrips through encoder/decoder" <|
             \_ ->
                 let

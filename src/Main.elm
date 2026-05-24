@@ -88,7 +88,7 @@ import Data.Navigation exposing (Route(..), Tab(..))
 import Data.PaymentMethod as PaymentMethod
 import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
-import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.Scan as Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip as SharedTrip
 import Data.SharedTripId
@@ -108,6 +108,7 @@ import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Http
+import Http.GeocodeApi
 import Http.SharedTripApi
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
@@ -219,6 +220,7 @@ toAuthState creds initialRoute gs =
     , form = FreshForm (defaultPendingEntry gs.today)
     , geoBlocked = False
     , key = gs.key
+    , ledgerMapExpanded = False
     , loadingExpenses = Set.empty
     , loadingTrips = Set.empty
     , movePicker = Nothing
@@ -918,7 +920,8 @@ input (R7 will tighten that field).
 -}
 defaultPendingEntry : DateField -> PendingEntry
 defaultPendingEntry today =
-    { amount = ""
+    { address = ""
+    , amount = ""
     , category = Fuel
     , date = DateField.toIso today
     , locationState = LocationIdle
@@ -931,7 +934,8 @@ defaultPendingEntry today =
 
 expenseToPending : Expense.Expense -> PendingEntry
 expenseToPending e =
-    { amount = Money.toDollarString e.amount
+    { address = e.address
+    , amount = Money.toDollarString e.amount
     , category = e.category
     , date = DateField.toIso e.date
     , locationState =
@@ -974,13 +978,67 @@ authPending f as_ =
     ( AuthModel { as_ | form = mapForm f as_.form }, Cmd.none )
 
 
+{-| For each touched scan item that has a non-empty extracted address,
+fire a `POST /geocode` Cmd — but only on a paid-tier trip and only
+when EXIF hasn't already supplied a location (EXIF always wins). Tern
+trips skip the Cmd entirely; the server would 403 it anyway.
+-}
+geocodeCmdsForItems : List String -> Dict.Dict String ScanItem -> AuthState -> List (Cmd Msg)
+geocodeCmdsForItems ids queue as_ =
+    case activeTripForGeocode as_ of
+        Just trip ->
+            if Trip.canUseProxiedOCR trip as_ then
+                List.filterMap (geocodeCmdForItem queue as_.creds) ids
+
+            else
+                []
+
+        Nothing ->
+            []
+
+
+geocodeCmdForItem : Dict.Dict String ScanItem -> Data.Auth.Creds -> String -> Maybe (Cmd Msg)
+geocodeCmdForItem queue creds id =
+    case Dict.get id queue of
+        Just item ->
+            case ( item.locationState, Maybe.andThen .address item.ocrData ) of
+                ( Data.Location.LocationGot _ Data.Location.ExifGps, _ ) ->
+                    -- EXIF already supplied a location; geocode would
+                    -- be discarded by GotGeocodeResult anyway, so save
+                    -- the round trip.
+                    Nothing
+
+                ( _, Just rawAddress ) ->
+                    if String.trim rawAddress /= "" then
+                        Just (Http.GeocodeApi.geocode creds { address = rawAddress } (GotGeocodeResult id))
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+        Nothing ->
+            Nothing
+
+
+activeTripForGeocode : AuthState -> Maybe Trip
+activeTripForGeocode as_ =
+    case ( Routing.routeTripId as_.route, as_.trips ) of
+        ( Just tripId, TripsLoaded loadedTrips ) ->
+            Trips.findTrip tripId loadedTrips
+
+        _ ->
+            Nothing
+
+
 
 -- OCR
 
 
 ocrSystemPrompt : String
 ocrSystemPrompt =
-    "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
+    "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"address\": \"<street address as printed on receipt, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
 
 
 makeOcrCall : String -> String -> String -> String -> Cmd Msg
@@ -1036,40 +1094,6 @@ makeOcrCall itemId apiKey base64Data mimeType =
 claudeTextDecoder : D.Decoder String
 claudeTextDecoder =
     D.field "content" (D.index 0 (D.field "text" D.string))
-
-
-ocrDataDecoder : D.Decoder OcrData
-ocrDataDecoder =
-    D.succeed OcrData
-        |> Pipeline.optional "amount" (D.map Just Money.decoder) Nothing
-        |> Pipeline.optional "category" (D.map Just (D.map Category.fromString D.string)) Nothing
-        |> Pipeline.optional "date" (D.map Just DateField.decoder) Nothing
-        |> Pipeline.optional "longNote" (D.map Just D.string) Nothing
-        |> Pipeline.optional "merchant" (D.map Just D.string) Nothing
-        |> Pipeline.optional "note" (D.map Just D.string) Nothing
-        |> Pipeline.optional "paymentMethod"
-            (D.nullable
-                (D.string
-                    |> D.andThen
-                        (\s ->
-                            case PaymentMethod.fromString s of
-                                Just pm ->
-                                    D.succeed pm
-
-                                Nothing ->
-                                    D.fail ("Unknown paymentMethod: " ++ s)
-                        )
-                )
-            )
-            Nothing
-
-
-ocrDataListDecoder : D.Decoder (List OcrData)
-ocrDataListDecoder =
-    D.oneOf
-        [ D.list ocrDataDecoder
-        , D.map List.singleton ocrDataDecoder
-        ]
 
 
 stripCodeFence : String -> String
@@ -1268,6 +1292,9 @@ update msg model =
         UrlChanged _ ->
             ( nextModel, Cmd.batch [ cmd, scrollToTop ] )
 
+        AddressChanged _ ->
+            ( nextModel, cmd )
+
         AmountChanged _ ->
             ( nextModel, cmd )
 
@@ -1347,6 +1374,9 @@ update msg model =
             ( nextModel, cmd )
 
         GotFileUrl _ _ ->
+            ( nextModel, cmd )
+
+        GotGeocodeResult _ _ ->
             ( nextModel, cmd )
 
         GotGpsCoords _ _ ->
@@ -1517,6 +1547,9 @@ update msg model =
         ToggleLedgerMap ->
             ( nextModel, cmd )
 
+        ToggleLedgerMapExpanded ->
+            ( nextModel, cmd )
+
         TransferTargetChanged _ ->
             ( nextModel, cmd )
 
@@ -1674,6 +1707,9 @@ updateGuest msg gs =
 
         -- Messages that only apply to the authenticated state.
         -- They are no-ops here: the GuestModel has no corresponding fields.
+        AddressChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
         AmountChanged _ ->
             ( GuestModel gs, Cmd.none )
 
@@ -1744,6 +1780,9 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         GotFileUrl _ _ ->
+            ( GuestModel gs, Cmd.none )
+
+        GotGeocodeResult _ _ ->
             ( GuestModel gs, Cmd.none )
 
         GotGpsCoords _ _ ->
@@ -1888,6 +1927,9 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         ToggleLedgerMap ->
+            ( GuestModel gs, Cmd.none )
+
+        ToggleLedgerMapExpanded ->
             ( GuestModel gs, Cmd.none )
 
         TransferTargetChanged _ ->
@@ -2122,7 +2164,7 @@ updateAuth msg as_ =
                         Ok responseBody ->
                             case D.decodeString claudeTextDecoder responseBody of
                                 Ok innerJson ->
-                                    case D.decodeString ocrDataListDecoder (stripCodeFence innerJson) of
+                                    case D.decodeString Scan.ocrDataListDecoder (stripCodeFence innerJson) of
                                         Ok list ->
                                             list
 
@@ -2135,7 +2177,7 @@ updateAuth msg as_ =
                         Err _ ->
                             []
 
-                updatedQueue =
+                ( updatedQueue, touchedIds ) =
                     case ( Dict.get itemId as_.scanQueue, ocrList ) of
                         ( Just source, first :: second :: rest ) ->
                             let
@@ -2167,16 +2209,25 @@ updateAuth msg as_ =
                                         )
                                         splits
                             in
-                            List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
+                            ( List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
+                            , List.map Tuple.first indexed
+                            )
 
                         _ ->
                             let
                                 singleData =
                                     List.head ocrList
                             in
-                            Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = singleData })) as_.scanQueue
+                            ( Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = singleData })) as_.scanQueue
+                            , [ itemId ]
+                            )
             in
-            ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
+            ( AuthModel { as_ | scanQueue = updatedQueue }
+            , Cmd.batch (geocodeCmdsForItems touchedIds updatedQueue as_)
+            )
+
+        AddressChanged s ->
+            authPending (\p -> { p | address = s }) as_
 
         AmountChanged s ->
             authPending (\p -> { p | amount = s }) as_
@@ -2244,6 +2295,12 @@ updateAuth msg as_ =
                                 amend =
                                     { id = amendId
                                     , targetId = original.id
+                                    , address =
+                                        if parsed.address /= original.address then
+                                            Just parsed.address
+
+                                        else
+                                            Nothing
                                     , amount =
                                         if parsed.amount /= original.amount then
                                             Just parsed.amount
@@ -2323,6 +2380,7 @@ updateAuth msg as_ =
                                 expense =
                                     { id = ExpenseId.fromString expenseId
                                     , tripId = tripId
+                                    , address = parsed.address
                                     , amount = parsed.amount
                                     , category = parsed.category
                                     , createdAt = posix
@@ -2599,7 +2657,29 @@ updateAuth msg as_ =
             ( AuthModel { as_ | showDayIntensity = not as_.showDayIntensity }, Cmd.none )
 
         ToggleLedgerMap ->
-            ( AuthModel { as_ | showLedgerMap = not as_.showLedgerMap }, Cmd.none )
+            let
+                nextShow =
+                    not as_.showLedgerMap
+            in
+            -- Always collapse back to small when the map is hidden, so
+            -- the next time the user opens it they start at the
+            -- compact 260-px size — discoverability beats remembering
+            -- the previous expanded state.
+            ( AuthModel
+                { as_
+                    | showLedgerMap = nextShow
+                    , ledgerMapExpanded =
+                        if nextShow then
+                            as_.ledgerMapExpanded
+
+                        else
+                            False
+                }
+            , Cmd.none
+            )
+
+        ToggleLedgerMapExpanded ->
+            ( AuthModel { as_ | ledgerMapExpanded = not as_.ledgerMapExpanded }, Cmd.none )
 
         SetStatsGranularity g ->
             ( AuthModel { as_ | statsGranularity = Just g }, Cmd.none )
@@ -2620,6 +2700,40 @@ updateAuth msg as_ =
             , Cmd.none
             )
 
+        GotGeocodeResult itemId result ->
+            case result of
+                Ok geo ->
+                    case ( geo.lat, geo.lon ) of
+                        ( Just lat, Just lon ) ->
+                            let
+                                promote item =
+                                    -- EXIF wins over geocode — only promote
+                                    -- when the item's locationState wasn't
+                                    -- already set from EXIF GPS. Idle /
+                                    -- NoExifGps / browser / pinned / skipped /
+                                    -- mid-fetch all yield to the server's
+                                    -- address resolution.
+                                    case item.locationState of
+                                        LocationGot _ ExifGps ->
+                                            item
+
+                                        _ ->
+                                            { item | locationState = LocationGot (GeoPoint.fromDegrees lat lon) Geocoded }
+                            in
+                            ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map promote) as_.scanQueue }
+                            , Cmd.none
+                            )
+
+                        _ ->
+                            -- No-match (Nominatim returned null lat/lon) —
+                            -- leave the item's locationState untouched so
+                            -- the user can pin manually.
+                            ( AuthModel as_, Cmd.none )
+
+                Err _ ->
+                    -- Rate-limited / network error / 4xx — same fallback.
+                    ( AuthModel as_, Cmd.none )
+
         ReviewScanItem itemId ->
             case Dict.get itemId as_.scanQueue of
                 Nothing ->
@@ -2629,11 +2743,12 @@ updateAuth msg as_ =
                     let
                         ocr =
                             Maybe.withDefault
-                                { amount = Nothing, category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+                                { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
                                 item.ocrData
 
                         newPending =
-                            { amount =
+                            { address = Maybe.withDefault "" ocr.address
+                            , amount =
                                 ocr.amount
                                     |> Maybe.map Money.toDollarString
                                     |> Maybe.withDefault ""
