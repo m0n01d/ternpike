@@ -172,14 +172,14 @@ viewReadOnlyHero : Html Msg
 viewReadOnlyHero =
     Html.div
         [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep opacity-70"
-        , Html.Attributes.title "This flock is read-only."
+        , Html.Attributes.title "This shared trip is read-only."
         ]
         [ Html.div [ Html.Attributes.class "flex justify-center mb-3 text-muted" ]
             [ UI.Icons.camera "w-12 h-12" ]
         , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
             [ Html.text "Scanning is paused" ]
         , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
-            [ Html.text "This flock is read-only while billing is sorted out." ]
+            [ Html.text "This shared trip is read-only while billing is sorted out." ]
         ]
 
 
