@@ -325,8 +325,7 @@ viewScanCardBody item =
 
                 Nothing ->
                     Html.div [ Html.Attributes.class "flex flex-col gap-2" ]
-                        [ Html.div [ Html.Attributes.class "text-rust text-xs italic" ]
-                            [ Html.text "OCR failed — fill manually" ]
+                        [ viewOcrFailure item.ocrError
                         , viewReviewButton item.id
                         ]
 
@@ -342,6 +341,28 @@ viewScanCardBody item =
                     Nothing ->
                         Html.text ""
                 ]
+
+
+{-| Render the "OCR didn't produce usable data" block on a Scan card.
+Shows the captured failure reason when we have one (HTTP error,
+unparseable model output, no receipts detected, etc.) so the user can
+tell why they're being asked to fill the form manually instead of
+guessing. Falls back to the generic message if no reason was captured.
+-}
+viewOcrFailure : Maybe String -> Html Msg
+viewOcrFailure maybeReason =
+    case maybeReason of
+        Just reason ->
+            Html.div [ Html.Attributes.class "flex flex-col gap-1" ]
+                [ Html.div [ Html.Attributes.class "text-rust text-xs font-bold" ]
+                    [ Html.text "OCR failed — fill manually" ]
+                , Html.div [ Html.Attributes.class "text-muted text-xs italic whitespace-pre-wrap break-words" ]
+                    [ Html.text reason ]
+                ]
+
+        Nothing ->
+            Html.div [ Html.Attributes.class "text-rust text-xs italic" ]
+                [ Html.text "OCR failed — fill manually" ]
 
 
 viewReviewButton : ScanItemId.ScanItemId -> Html Msg

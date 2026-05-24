@@ -436,6 +436,15 @@ category pill, merchant, the extracted date with provenance ("📅 May
 worth of batch-scanned receipts are visibly distributed across the
 right days before you tap Review on each one.
 
+When OCR fails (HTTP error from Anthropic, refusal, unparseable JSON,
+or no receipts detected), the failure reason is captured on
+`ScanItem.ocrError : Maybe String` and rendered on the Scan card below
+the "OCR failed — fill manually" header. `Main.makeOcrCall` uses
+`Http.expectStringResponse` (not `expectString`) so non-2xx bodies are
+preserved — that's where Anthropic's `error.message` lives, and
+surfacing it lets the user tell a rate-limit from a corrupt-image from
+a paymentMethod the decoder didn't recognize.
+
 ### Location precedence
 
 `Data.Location.LocationSource` has four constructors, in preference

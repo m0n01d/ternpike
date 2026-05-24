@@ -75,6 +75,11 @@ type alias OcrData =
     extraction port.
   - `ocrData` — `Nothing` until OCR returns; `Just` even if the model
     extracted nothing (so we know it ran).
+  - `ocrError` — human-readable reason the most recent OCR attempt
+    failed (HTTP error, refusal, unparseable JSON, etc.). `Nothing`
+    while OCR is in flight or after a successful read; surfaced on the
+    Scan card so the user can tell why an item is in fill-manually
+    mode instead of guessing.
   - `status` — the lifecycle stage above.
 
 -}
@@ -84,6 +89,7 @@ type alias ScanItem =
     , imageUrl : String
     , locationState : LocationState
     , ocrData : Maybe OcrData
+    , ocrError : Maybe String
     , status : ScanStatus
     }
 

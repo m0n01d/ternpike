@@ -962,6 +962,7 @@ freshScanItem id =
     , imageUrl = ""
     , locationState = LocationCheckingExif
     , ocrData = Nothing
+    , ocrError = Nothing
     , status = ScanQueued
     }
 
@@ -1078,10 +1079,63 @@ makeOcrCall itemId apiKey base64Data mimeType =
             ]
         , url = "https://api.anthropic.com/v1/messages"
         , body = Http.jsonBody body
-        , expect = Http.expectString (GotOcrResult itemId)
+        , expect = Http.expectStringResponse (GotOcrResult itemId) ocrResponseToResult
         , timeout = Nothing
         , tracker = Nothing
         }
+
+
+{-| Convert an Anthropic HTTP response into a human-readable error
+string or the raw success body. We use `expectStringResponse` (rather
+than `expectString`) so that non-2xx responses keep their body — the
+body is where Anthropic's actual error message lives, and surfacing it
+on the Scan card is the whole point of #N.
+-}
+ocrResponseToResult : Http.Response String -> Result String String
+ocrResponseToResult response =
+    case response of
+        Http.BadUrl_ url ->
+            Err ("Bad URL: " ++ url)
+
+        Http.Timeout_ ->
+            Err "OCR request timed out — try again"
+
+        Http.NetworkError_ ->
+            Err "Network error — check your connection and try again"
+
+        Http.BadStatus_ meta body ->
+            Err (formatAnthropicError meta.statusCode body)
+
+        Http.GoodStatus_ _ body ->
+            Ok body
+
+
+{-| Pull the `error.message` field out of an Anthropic error JSON body
+(`{"type":"error","error":{"type":"...","message":"..."}}`) and frame
+it for display. Falls back to a status-only message if the body isn't
+the expected shape.
+-}
+formatAnthropicError : Int -> String -> String
+formatAnthropicError status body =
+    case D.decodeString (D.field "error" (D.field "message" D.string)) body of
+        Ok msg ->
+            "Anthropic error (HTTP " ++ String.fromInt status ++ "): " ++ msg
+
+        Err _ ->
+            "OCR request failed (HTTP " ++ String.fromInt status ++ ")"
+
+
+{-| Truncate a string to `n` characters, appending an ellipsis if it
+was shortened. Used when embedding raw Anthropic output in an error
+message so a giant refusal doesn't blow out the Scan card.
+-}
+truncate : Int -> String -> String
+truncate n s =
+    if String.length s > n then
+        String.left n s ++ "…"
+
+    else
+        s
 
 
 claudeTextDecoder : D.Decoder String
@@ -2134,68 +2188,101 @@ updateAuth msg as_ =
 
         GotOcrResult itemId result ->
             let
-                ocrList =
+                parsed : Result String (List Scan.OcrData)
+                parsed =
                     case result of
+                        Err httpErr ->
+                            Err httpErr
+
                         Ok responseBody ->
                             case D.decodeString claudeTextDecoder responseBody of
+                                Err decodeErr ->
+                                    Err
+                                        ("Couldn't read Anthropic response: "
+                                            ++ D.errorToString decodeErr
+                                        )
+
                                 Ok innerJson ->
-                                    case D.decodeString Scan.ocrDataListDecoder (stripCodeFence innerJson) of
+                                    let
+                                        stripped =
+                                            stripCodeFence innerJson
+                                    in
+                                    case D.decodeString Scan.ocrDataListDecoder stripped of
                                         Ok list ->
-                                            list
+                                            Ok list
 
-                                        Err _ ->
-                                            []
+                                        Err decodeErr ->
+                                            Err
+                                                ("Couldn't parse receipt JSON: "
+                                                    ++ D.errorToString decodeErr
+                                                    ++ "\n\nModel returned: "
+                                                    ++ truncate 240 stripped
+                                                )
 
-                                Err _ ->
-                                    []
-
-                        Err _ ->
-                            []
+                markReady : Maybe Scan.OcrData -> Maybe String -> Dict.Dict String Scan.ScanItem
+                markReady ocrData ocrError =
+                    Dict.update itemId
+                        (Maybe.map
+                            (\i ->
+                                { i
+                                    | ocrData = ocrData
+                                    , ocrError = ocrError
+                                    , status = ScanReady
+                                }
+                            )
+                        )
+                        as_.scanQueue
 
                 ( updatedQueue, touchedIds ) =
-                    case ( Dict.get itemId as_.scanQueue, ocrList ) of
-                        ( Just source, first :: second :: rest ) ->
-                            let
-                                splits =
-                                    first :: second :: rest
+                    case parsed of
+                        Err errMsg ->
+                            ( markReady Nothing (Just errMsg), [ itemId ] )
 
-                                queueWithoutSource =
-                                    Dict.remove itemId as_.scanQueue
-
-                                startIdx =
-                                    Dict.size queueWithoutSource
-
-                                indexed =
-                                    List.indexedMap
-                                        (\i data ->
-                                            let
-                                                rawId =
-                                                    "scan-" ++ String.fromInt (startIdx + i)
-                                            in
-                                            ( rawId
-                                            , { exifDebug = source.exifDebug
-                                              , id = ScanItemId.fromString rawId
-                                              , imageUrl = source.imageUrl
-                                              , locationState = source.locationState
-                                              , ocrData = Just data
-                                              , status = ScanReady
-                                              }
-                                            )
-                                        )
-                                        splits
-                            in
-                            ( List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
-                            , List.map Tuple.first indexed
-                            )
-
-                        _ ->
-                            let
-                                singleData =
-                                    List.head ocrList
-                            in
-                            ( Dict.update itemId (Maybe.map (\i -> { i | status = ScanReady, ocrData = singleData })) as_.scanQueue
+                        Ok [] ->
+                            ( markReady Nothing (Just "No receipts detected in the image — try a clearer photo or a tighter crop")
                             , [ itemId ]
                             )
+
+                        Ok [ single ] ->
+                            ( markReady (Just single) Nothing, [ itemId ] )
+
+                        Ok ((_ :: _ :: _) as multi) ->
+                            case Dict.get itemId as_.scanQueue of
+                                Nothing ->
+                                    -- item disappeared mid-flight (cleared/submitted) — no-op
+                                    ( as_.scanQueue, [] )
+
+                                Just source ->
+                                    let
+                                        queueWithoutSource =
+                                            Dict.remove itemId as_.scanQueue
+
+                                        startIdx =
+                                            Dict.size queueWithoutSource
+
+                                        indexed =
+                                            List.indexedMap
+                                                (\i data ->
+                                                    let
+                                                        rawId =
+                                                            "scan-" ++ String.fromInt (startIdx + i)
+                                                    in
+                                                    ( rawId
+                                                    , { exifDebug = source.exifDebug
+                                                      , id = ScanItemId.fromString rawId
+                                                      , imageUrl = source.imageUrl
+                                                      , locationState = source.locationState
+                                                      , ocrData = Just data
+                                                      , ocrError = Nothing
+                                                      , status = ScanReady
+                                                      }
+                                                    )
+                                                )
+                                                multi
+                                    in
+                                    ( List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
+                                    , List.map Tuple.first indexed
+                                    )
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }
             , Cmd.batch (geocodeCmdsForItems touchedIds updatedQueue as_)
