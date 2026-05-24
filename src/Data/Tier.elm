@@ -9,16 +9,23 @@ module Data.Tier exposing
 
 Three tiers, matching the pricing in `CLAUDE.md`:
 
-  - `Fledgling` — free. BYO key only.
-  - `Fly` — $2.99/mo or $24/yr. Hosted OCR + batch scanning.
+  - `Tern` — free. BYO key only. Named after the seabird that "Ternpike"
+    takes its name from.
+  - `Osprey` — $2.99/mo or $24/yr. Hosted OCR + batch scanning. Named for
+    a more capable bird, signalling the paid tier.
   - `Trailblazer` — $79 one-time, capped at first 500 users. Feature-equivalent
-    to `Fly`; the distinction is billing mechanics (no recurring charge, all
+    to `Osprey`; the distinction is billing mechanics (no recurring charge, all
     1.x updates included, loyalty discount on v2).
 
 `isPaid` collapses the three into the binary capability question: does this
 tier unlock paid features? Use `isPaid` for "can I do X?" predicates; branch
 on the full type when rendering tier-specific UI (badges, billing screen) so
 the compiler forces all three to be handled.
+
+Wire format: `"tern"`, `"osprey"`, `"trailblazer"` (lowercase). Constructors
+are Elm-internal identity; wire strings are the persisted/server-canonical form.
+The two are intentionally decoupled so constructor renames don't break stored
+data.
 
 This module is the minimal stub required to land `Trip.effectiveTier` (#61).
 The full subscription-tier track (#16–#22) will flesh out JSON codecs and the
@@ -33,18 +40,18 @@ upgrade). See `CLAUDE.md` "Storage tiers" for the full rule.
 
 
 type Tier
-    = Fledgling
-    | Fly
+    = Osprey
+    | Tern
     | Trailblazer
 
 
 {-| True when the tier unlocks paid features (hosted OCR, batch scanning,
-etc.). `Fledgling` returns False; `Fly` and `Trailblazer` return True.
+etc.). `Tern` returns False; `Osprey` and `Trailblazer` return True.
 
-    isPaid Fledgling
+    isPaid Tern
     --> False
 
-    isPaid Fly
+    isPaid Osprey
     --> True
 
     isPaid Trailblazer
@@ -54,23 +61,23 @@ etc.). `Fledgling` returns False; `Fly` and `Trailblazer` return True.
 isPaid : Tier -> Bool
 isPaid tier =
     case tier of
-        Fledgling ->
+        Tern ->
             False
 
-        Fly ->
+        Osprey ->
             True
 
         Trailblazer ->
             True
 
 
-{-| Wire form: the lowercase constructor name.
+{-| Wire form: the lowercase canonical name.
 
-    toString Fledgling
-    --> "fledgling"
+    toString Tern
+    --> "tern"
 
-    toString Fly
-    --> "fly"
+    toString Osprey
+    --> "osprey"
 
     toString Trailblazer
     --> "trailblazer"
@@ -79,24 +86,24 @@ isPaid tier =
 toString : Tier -> String
 toString tier =
     case tier of
-        Fledgling ->
-            "fledgling"
+        Tern ->
+            "tern"
 
-        Fly ->
-            "fly"
+        Osprey ->
+            "osprey"
 
         Trailblazer ->
             "trailblazer"
 
 
 {-| Parse the lowercase wire form. Returns `Nothing` for any other input;
-callers decide whether to default (typically to `Fledgling`) or fail.
+callers decide whether to default (typically to `Tern`) or fail.
 
-    fromString "fledgling"
-    --> Just Fledgling
+    fromString "tern"
+    --> Just Tern
 
-    fromString "fly"
-    --> Just Fly
+    fromString "osprey"
+    --> Just Osprey
 
     fromString "trailblazer"
     --> Just Trailblazer
@@ -108,11 +115,11 @@ callers decide whether to default (typically to `Fledgling`) or fail.
 fromString : String -> Maybe Tier
 fromString s =
     case s of
-        "fledgling" ->
-            Just Fledgling
+        "tern" ->
+            Just Tern
 
-        "fly" ->
-            Just Fly
+        "osprey" ->
+            Just Osprey
 
         "trailblazer" ->
             Just Trailblazer

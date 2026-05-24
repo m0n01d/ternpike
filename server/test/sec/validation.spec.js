@@ -23,8 +23,8 @@ let bobCreds
 before(async () => {
   couch = await startCouch()
   env = buildEnv(couch)
-  await seedUser(env, couch, ALICE, 'fly')
-  await seedUser(env, couch, BOB, 'fly')
+  await seedUser(env, couch, ALICE, 'osprey')
+  await seedUser(env, couch, BOB, 'osprey')
   aliceCreds = {
     email: ALICE,
     password: await derivePassword(ALICE, env.SERVER_SECRET),

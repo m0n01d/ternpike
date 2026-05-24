@@ -8,8 +8,8 @@ The server enforces `Grace` (read-only with countdown) and `Frozen`
 (#57); this module is the UX side. Two variants:
 
   - `view` — full-bleed banner inserted once at the top of every
-    flock-scoped tab (Ledger/Stats/Add/Scan). Owner / Fly+ member /
-    Fledgling member each see different copy and CTAs per the matrix
+    flock-scoped tab (Ledger/Stats/Add/Scan). Owner / Osprey+ member /
+    Tern member each see different copy and CTAs per the matrix
     in #64's body.
   - `viewInline` — smaller chrome variant for the Settings flock card
     so the same status is visible without opening the flock's trip.
@@ -46,7 +46,7 @@ graceWindowDays =
 
 {-| Full-bleed banner for flock-scoped trip pages. Takes the
 current-user `UserId` so role (owner / member) can be derived, the
-viewer's own `Tier` so the Fly+ vs Fledgling member split can render
+viewer's own `Tier` so the Osprey+ vs Tern member split can render
 the right CTA, and `today` (calendar date) so the countdown can be
 computed.
 

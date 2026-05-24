@@ -232,7 +232,7 @@ toAuthState creds initialRoute gs =
     , statsHover = StatsHover.empty
     , submitting = False
     , syncState = NotEnabled
-    , tier = Tier.Fledgling
+    , tier = Tier.Tern
     , toast = Nothing
     , today = gs.today
     , tripForm = Nothing
@@ -1180,7 +1180,7 @@ init flagsJson url key =
             D.decodeValue (D.field "authCreds" (D.nullable credsDecoder)) flagsJson
                 |> Result.withDefault Nothing
 
-        -- Tier override from flags. Defaults to Fledgling. The auth server's
+        -- Tier override from flags. Defaults to Tern. The auth server's
         -- `/me` endpoint is the long-term source of truth (see CLAUDE.md
         -- "Storage tiers"); this flag exists so the E2E harness can set the
         -- right tier on stub-auth boots without having to mount a fake
@@ -1190,7 +1190,7 @@ init flagsJson url key =
             D.decodeValue (D.field "tier" D.string) flagsJson
                 |> Result.toMaybe
                 |> Maybe.andThen Tier.fromString
-                |> Maybe.withDefault Tier.Fledgling
+                |> Maybe.withDefault Tier.Tern
 
         initialToday =
             D.decodeValue (D.field "today" DateField.decoder) flagsJson

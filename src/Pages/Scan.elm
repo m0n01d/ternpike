@@ -42,7 +42,7 @@ viewBodyWithContext as_ =
 
 {-| Tier-derived footnote under the scan body — surfaces whether the
 trip's scans go through the Ternpike-hosted proxy (paid) or the
-user's BYO Anthropic key (Fledgling). Inside a flock owned by a paid
+user's BYO Anthropic key (Tern). Inside a flock owned by a paid
 member, free members see the paid footnote because
 `Trip.effectiveTier` resolves to the owner's tier (#61).
 -}
@@ -72,10 +72,10 @@ viewTierLabel trip as_ =
             -- forces the compiler to flag missing tiers when #19 adds
             -- more, and keeps the per-tier label easy to evolve.
             case Trip.effectiveTier trip as_ of
-                Data.Tier.Fledgling ->
+                Data.Tier.Tern ->
                     "BYO key"
 
-                Data.Tier.Fly ->
+                Data.Tier.Osprey ->
                     paidOcrLabel trip as_
 
                 Data.Tier.Trailblazer ->

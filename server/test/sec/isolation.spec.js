@@ -80,8 +80,8 @@ async function getDocOk(userFetch, dbName, docId) {
 before(async () => {
   harness = await setupHarness()
   env = harness.buildEnv()
-  await seedUser(env, harness.couch, ALICE, 'fly')
-  await seedUser(env, harness.couch, BOB, 'fly')
+  await seedUser(env, harness.couch, ALICE, 'osprey')
+  await seedUser(env, harness.couch, BOB, 'osprey')
 
   alicePass = await derivePassword(ALICE, env.SERVER_SECRET)
   bobPass = await derivePassword(BOB, env.SERVER_SECRET)

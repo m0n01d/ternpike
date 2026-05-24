@@ -37,10 +37,10 @@ after(async () => {
 beforeEach(async () => {
   env = buildEnv(couch)
   resend.reset()
-  await seedUser(env, couch, ALICE, 'fly')
-  await seedUser(env, couch, BOB, 'fly')
-  await seedUser(env, couch, CAROL, 'fly')
-  await seedUser(env, couch, EVE, 'fledgling')
+  await seedUser(env, couch, ALICE, 'osprey')
+  await seedUser(env, couch, BOB, 'osprey')
+  await seedUser(env, couch, CAROL, 'osprey')
+  await seedUser(env, couch, EVE, 'tern')
 })
 
 const authed = async (email) => ({
@@ -95,7 +95,7 @@ describe('POST /flocks', () => {
   test('server ignores tier asserted in the request body', async () => {
     const res = await request(env, 'POST', '/flocks', {
       headers: await authed(EVE),
-      body: { name: 'sneaky', tier: 'fly' },
+      body: { name: 'sneaky', tier: 'osprey' },
     })
     assert.equal(res.status, 403)
     assert.equal(res.body.error, 'paid_tier_required')

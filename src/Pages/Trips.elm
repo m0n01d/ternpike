@@ -445,7 +445,7 @@ viewTargetPicker as_ form ownedFlocks =
         )
 
 
-{-| Submit blocked while a save is in flight OR when a Fledgling user
+{-| Submit blocked while a save is in flight OR when a Tern user
 has the "+ New shared trip" tile selected (the inline upgrade prompt
 is shown instead).
 -}
@@ -469,8 +469,8 @@ isToNewFlock target =
 
 
 {-| The inline panel that appears under the picker when the user has
-selected "+ New shared trip". For Fly+ it exposes the chip-input for
-invitee emails and an optional Group Name override. For Fledgling it
+selected "+ New shared trip". For Osprey+ it exposes the chip-input for
+invitee emails and an optional Group Name override. For Tern it
 swaps in an upgrade prompt and the submit button is blocked elsewhere.
 -}
 viewNewFlockInline : AuthState -> TripForm -> Html Msg
