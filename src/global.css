@@ -4,6 +4,10 @@
 @import "./theme.css";
 @source "./**/*.elm";
 
+/* In Tailwind v4, darkMode:'class' in tailwind.config.js is ignored.
+   This custom variant wires dark: utilities to the html.dark class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   /* ── Base resets ─────────────────────────────────────────────── */
   *, *::before, *::after {
