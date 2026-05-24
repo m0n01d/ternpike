@@ -24,7 +24,7 @@ import UI.Button
 import UI.FlockBadge
 import UI.Icons
 import UI.Layout
-import UI.Skeleton
+import UI.Mascot
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -71,8 +71,7 @@ viewHero : AuthState -> Html Msg
 viewHero as_ =
     case as_.trips of
         TripsLoading _ _ ->
-            Html.div [ Html.Attributes.class "py-2" ]
-                [ UI.Skeleton.row ]
+            UI.Mascot.loading
 
         TripsFailed err ->
             Html.div [ Html.Attributes.class "py-2 text-rust text-sm" ]
