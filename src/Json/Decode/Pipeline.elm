@@ -1,7 +1,4 @@
-module Json.Decode.Pipeline exposing
-    ( required, requiredAt, optional, optionalAt, hardcoded, custom
-    , resolve
-    )
+module Json.Decode.Pipeline exposing (required, optional, custom)
 
 {-|
 
@@ -13,12 +10,10 @@ Use the `(|>)` operator to build JSON decoders.
 
 ## Decoding fields
 
-@docs required, requiredAt, optional, optionalAt, hardcoded, custom
+@docs required, optional, custom
 
 
 ## Ending pipelines
-
-@docs resolve
 
 -}
 
@@ -57,13 +52,6 @@ import Json.Decode as Decode exposing (Decoder)
 required : String -> Decoder a -> Decoder (a -> b) -> Decoder b
 required key valDecoder decoder =
     custom (Decode.field key valDecoder) decoder
-
-
-{-| Decode a required nested field.
--}
-requiredAt : List String -> Decoder a -> Decoder (a -> b) -> Decoder b
-requiredAt path valDecoder decoder =
-    custom (Decode.at path valDecoder) decoder
 
 
 {-| Decode a field that may be missing or have a null value. If the field is
@@ -114,13 +102,6 @@ optional key valDecoder fallback decoder =
     custom (optionalDecoder [ key ] valDecoder fallback) decoder
 
 
-{-| Decode an optional nested field.
--}
-optionalAt : List String -> Decoder a -> a -> Decoder (a -> b) -> Decoder b
-optionalAt path valDecoder fallback decoder =
-    custom (optionalDecoder path valDecoder fallback) decoder
-
-
 optionalDecoder : List String -> Decoder a -> a -> Decoder a
 optionalDecoder path valDecoder fallback =
     let
@@ -146,41 +127,6 @@ optionalDecoder path valDecoder fallback =
     in
     Decode.value
         |> Decode.andThen handleResult
-
-
-{-| Rather than decoding anything, use a fixed value for the next step in the
-pipeline. `harcoded` does not look at the JSON at all.
-
-    import Json.Decode as Decode exposing (Decoder, int, string)
-    import Json.Decode.Pipeline exposing (required)
-
-    type alias User =
-        { id : Int
-        , email : String
-        , followers : Int
-        }
-
-    userDecoder : Decoder User
-    userDecoder =
-        Decode.succeed User
-            |> required "id" int
-            |> required "email" string
-            |> hardcoded 0
-
-    result : Result String User
-    result =
-        Decode.decodeString
-            userDecoder
-            """
-          {"id": 123, "email": "sam@example.com"}
-        """
-
-    -- Ok { id = 123, email = "sam@example.com", followers = 0 }
-
--}
-hardcoded : a -> Decoder (a -> b) -> Decoder b
-hardcoded =
-    Decode.succeed >> custom
 
 
 {-| Run the given decoder and feed its result into the pipeline at this point.
@@ -221,51 +167,3 @@ Consider this example.
 custom : Decoder a -> Decoder (a -> b) -> Decoder b
 custom =
     Decode.map2 (|>)
-
-
-{-| Convert a `Decoder (Result x a)` into a `Decoder a`. Useful when you want
-to perform some custom processing just before completing the decoding operation.
-
-    import Json.Decode as Decode exposing (Decoder, float, int, string)
-    import Json.Decode.Pipeline exposing (required, resolve)
-
-    type alias User =
-        { id : Int
-        , email : String
-        }
-
-    userDecoder : Decoder User
-    userDecoder =
-        let
-            -- toDecoder gets run *after* all the
-            -- (|> required ...) steps are done.
-            toDecoder : Int -> String -> Int -> Decoder User
-            toDecoder id email version =
-                if version > 2 then
-                    Decode.succeed (User id email)
-
-                else
-                    fail "This JSON is from a deprecated source. Please upgrade!"
-        in
-        Decode.succeed toDecoder
-            |> required "id" int
-            |> required "email" string
-            |> required "version" int
-            -- version is part of toDecoder,
-            |> resolve
-
-    -- but it is not a part of User
-    result : Result String User
-    result =
-        Decode.decodeString
-            userDecoder
-            """
-          {"id": 123, "email": "sam@example.com", "version": 1}
-        """
-
-    -- Err "This JSON is from a deprecated source. Please upgrade!"
-
--}
-resolve : Decoder (Decoder a) -> Decoder a
-resolve =
-    Decode.andThen identity

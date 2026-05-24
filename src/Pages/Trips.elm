@@ -73,10 +73,6 @@ viewHero as_ =
         TripsLoading _ _ ->
             UI.Mascot.loading
 
-        TripsFailed err ->
-            Html.div [ Html.Attributes.class "py-2 text-rust text-sm" ]
-                [ Html.text ("Couldn't load trips: " ++ err) ]
-
         NoTripsYet ->
             Html.div [ Html.Attributes.class "py-2" ]
                 [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]

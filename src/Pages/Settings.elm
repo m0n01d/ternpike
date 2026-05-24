@@ -22,14 +22,14 @@ viewTab as_ =
             , viewBody as_.config (Just as_.showDayIntensity) as_.showInstallPrompt as_.version
             , Pages.Settings.SharedTrips.view as_
             ]
-    , hero = viewHero as_.config
+    , hero = viewHero
     }
 
 
 viewPanel : AppConfig -> Bool -> String -> Html Msg
 viewPanel cfg isSignedIn version =
     Html.div [ Html.Attributes.class "px-5 py-6" ]
-        [ viewHero cfg
+        [ viewHero
         , Html.div [ Html.Attributes.class "mt-4" ]
             [ viewBody cfg
                 (if isSignedIn then
@@ -44,8 +44,8 @@ viewPanel cfg isSignedIn version =
         ]
 
 
-viewHero : AppConfig -> Html Msg
-viewHero _ =
+viewHero : Html Msg
+viewHero =
     Html.div [ Html.Attributes.class "text-sm text-muted" ]
         [ Html.text "Local-first preferences. Nothing here leaves the device." ]
 

@@ -4,7 +4,6 @@ module Data.Trips exposing
     , allTrips
     , findTrip
     , fromDict
-    , mostRecent
     , otherTrips
     , removeTrip
     , selectTrip
@@ -63,7 +62,6 @@ type Trips
 -}
 type TripsState
     = NoTripsYet
-    | TripsFailed String
     | TripsLoaded Trips
     | TripsLoading (Dict String Trip) (Maybe TripId)
 
@@ -86,11 +84,6 @@ fromDict dict =
 
         [] ->
             Nothing
-
-
-mostRecent : Dict String Trip -> Maybe Trips
-mostRecent =
-    fromDict
 
 
 singleton : Trip -> Trips

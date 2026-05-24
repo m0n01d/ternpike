@@ -76,15 +76,15 @@ type PendingForm
 {-| What the Add page should render right now.
 
   - `AddPageNew` — fresh expense form, the default.
-  - `AddPageEditing id` — editing this expense; the form is already
+  - `AddPageEditing` — editing an expense; the form is already
     hydrated with its current values.
-  - `AddPageLoading id` — we know we want to edit this expense, but
+  - `AddPageLoading` — we know we want to edit an expense, but
     its document hasn't arrived from PouchDB yet; show a skeleton.
 
 -}
 type AddPageMode
-    = AddPageEditing ExpenseId
-    | AddPageLoading ExpenseId
+    = AddPageEditing
+    | AddPageLoading
     | AddPageNew
 
 

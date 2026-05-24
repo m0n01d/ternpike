@@ -337,7 +337,6 @@ type Msg
     | ScrolledToTop
     | SetColorScheme ColorScheme
     | SetStatsGranularity Granularity
-    | ShowToast String
     | SignOutClicked
     | SkipLocation
     | SubmitCode
@@ -359,7 +358,7 @@ type Msg
     | TripCreateSharedTripResult (Result Http.Error Http.SharedTripApi.CreateSharedTripResponse)
     | TripFieldChanged TripField String
     | TripGroupNameChanged String
-    | TripInviteResult Int (Result Http.Error ())
+    | TripInviteResult
     | TripInviteeAdded
     | TripInviteeDraftChanged String
     | TripInviteeRemoved Int

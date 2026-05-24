@@ -554,8 +554,7 @@ viewRowMenu canMove readOnly entry =
 
             else
                 []
-    in
-    let
+
         duplicate =
             menuItem
                 { danger = False
