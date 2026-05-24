@@ -41,7 +41,7 @@ view as_ =
             SharedTrips.joinedBy currentUser as_.sharedTrips
     in
     Html.div []
-        [ UI.Rule.kicker "FLOCKS"
+        [ UI.Rule.kicker "SHARED TRIPS"
         , viewCreateRow as_.tier
         , if List.isEmpty joined then
             viewEmptyState
@@ -61,11 +61,11 @@ viewCreateRow tier =
                         "Log expenses together with a partner or household."
 
                      else
-                        "Flocks let you log expenses together with a partner. Upgrade to Fly to create one."
+                        "Share a trip with a partner or household so you can log expenses together. Upgrade to Osprey to start one."
                     )
                 ]
             , if Tier.isPaid tier then
-                UI.Button.primary { label = "Create", onClick = OpenCreateSharedTripModal }
+                UI.Button.primary { label = "Share a trip", onClick = OpenCreateSharedTripModal }
 
               else
                 Html.button
@@ -73,7 +73,7 @@ viewCreateRow tier =
                     , Html.Attributes.disabled True
                     , Html.Attributes.class "shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg bg-cream-deep text-muted border border-tan cursor-not-allowed"
                     ]
-                    [ Html.text "Create" ]
+                    [ Html.text "Share a trip" ]
             ]
         ]
 
@@ -82,13 +82,13 @@ viewEmptyState : Html Msg
 viewEmptyState =
     UI.Card.subCard
         [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-            [ Html.text "You're not in any flocks yet. Start a "
+            [ Html.text "You haven't shared a trip yet. Start a "
             , Html.a
                 [ Html.Attributes.href "/trips"
                 , Html.Attributes.class "text-rust-deep underline"
                 ]
                 [ Html.text "shared trip" ]
-            , Html.text " on the Trips page to create one, or accept an invite link to join."
+            , Html.text " from the Trips page, or accept an invite link to join one."
             ]
         ]
 
@@ -193,9 +193,9 @@ viewModal as_ =
             Html.text ""
 
         SharedTripUi.CreateModal { error, name } ->
-            modalShell "New Flock"
+            modalShell "New shared trip"
                 [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
-                    [ Html.text "Give your flock a name. You can invite people once it's created." ]
+                    [ Html.text "Give your shared trip a name. You can invite people once it's created." ]
                 , formField "NAME"
                     (Html.input
                         [ Html.Attributes.type_ "text"
@@ -208,14 +208,14 @@ viewModal as_ =
                     )
                 , viewError error
                 , modalActions
-                    { confirm = ( "Create", SubmitCreateSharedTrip )
+                    { confirm = ( "Share a trip", SubmitCreateSharedTrip )
                     , cancel = ( "Cancel", CloseSharedTripModal )
                     , inFlight = as_.sharedTripUi.inFlight
                     }
                 ]
 
         SharedTripUi.InviteModal _ { email, error } ->
-            modalShell "Invite to flock"
+            modalShell "Invite to this trip"
                 [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
                     [ Html.text "We'll email them a one-click link to accept." ]
                 , formField "EMAIL"
@@ -241,14 +241,14 @@ viewModal as_ =
                 sharedTripName =
                     SharedTrips.get sharedTripId as_.sharedTrips
                         |> Maybe.map .name
-                        |> Maybe.withDefault "this flock"
+                        |> Maybe.withDefault "this shared trip"
             in
-            modalShell "Leave flock?"
+            modalShell "Leave shared trip?"
                 [ Html.p [ Html.Attributes.class "text-sm text-ink mb-3" ]
                     [ Html.text
                         ("Leave the "
                             ++ sharedTripName
-                            ++ " flock? You'll lose access to its trips on this device, but the flock keeps the data."
+                            ++ " shared trip? You'll lose access to its trips on this device, but the shared trip keeps the data."
                         )
                     ]
                 , viewError error
@@ -272,7 +272,7 @@ viewModal as_ =
             in
             modalShell "Transfer ownership"
                 [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
-                    [ Html.text "New owner must be on Fly or higher. The server will reject Fledgling targets." ]
+                    [ Html.text "New owner must be on Osprey or higher. The server will reject Tern targets." ]
                 , formField "MEMBER"
                     (Html.select
                         [ Html.Events.onInput TransferTargetChanged
