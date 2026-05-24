@@ -253,12 +253,35 @@ toGuestState reason as_ =
     , emailInput = ""
     , key = as_.key
     , networkOffline = as_.networkOffline
-    , pendingJoinToken = Nothing
+    , pendingJoinToken = joinTokenFromRoute as_.route
     , session = { config = as_.config, reason = reason }
     , showSettings = reason == SessionExpired
     , today = as_.today
     , version = as_.version
     }
+
+
+{-| Extract the join JWT from a route so the sign-in flow can carry it
+across re-auth. Returns `Just token` only for `RouteJoinSharedTrip`;
+every other route resets to `Nothing` so a stale token from a prior
+session doesn't trigger an unintended redirect after the user signs in
+on an unrelated screen.
+
+    joinTokenFromRoute (RouteJoinSharedTrip "abc")
+    --> Just "abc"
+
+    joinTokenFromRoute RouteTrips
+    --> Nothing
+
+-}
+joinTokenFromRoute : Route -> Maybe String
+joinTokenFromRoute route =
+    case route of
+        RouteJoinSharedTrip token ->
+            Just token
+
+        _ ->
+            Nothing
 
 
 credsDecoder : D.Decoder Creds
@@ -866,9 +889,22 @@ handleTripsFetched tripsDict as_ =
                 |> (\( s, c ) -> ( AuthModel s, c ))
 
         Nothing ->
-            ( AuthModel { as_ | trips = NoTripsYet, route = RouteTrips }
-            , Nav.replaceUrl as_.key (as_.basePath ++ "trips")
-            )
+            case as_.route of
+                -- A first-time invitee has zero personal trips but is mid
+                -- invite-accept on `/sharedtrips/join?token=…`. Don't clobber
+                -- their route — let them complete the Accept/Decline flow
+                -- (which provisions a shared trip and resolves the empty
+                -- state). Every other route falls back to the Trips empty
+                -- state as before.
+                RouteJoinSharedTrip _ ->
+                    ( AuthModel { as_ | trips = NoTripsYet }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( AuthModel { as_ | trips = NoTripsYet, route = RouteTrips }
+                    , Nav.replaceUrl as_.key (as_.basePath ++ "trips")
+                    )
 
 
 upsertTripIntoState : Trip -> TripsState -> TripsState
@@ -1217,6 +1253,9 @@ init flagsJson url key =
         basePath =
             dec "basePath"
 
+        initialRoute =
+            Routing.routeFromUrl basePath url
+
         gs =
             { authError = Nothing
             , basePath = basePath
@@ -1224,7 +1263,7 @@ init flagsJson url key =
             , emailInput = ""
             , key = key
             , networkOffline = False
-            , pendingJoinToken = Nothing
+            , pendingJoinToken = joinTokenFromRoute initialRoute
             , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
             , today = initialToday
@@ -1237,9 +1276,6 @@ init flagsJson url key =
 
         Just creds ->
             let
-                initialRoute =
-                    Routing.routeFromUrl basePath url
-
                 as_ =
                     { booted | colorScheme = initialColorScheme }
 
@@ -1628,14 +1664,24 @@ updateGuest msg gs =
             case ( gs.session.reason, result ) of
                 ( VerifyingCode _ _, Ok creds ) ->
                     let
+                        ( landingRoute, landingUrl ) =
+                            case gs.pendingJoinToken of
+                                Just token ->
+                                    ( RouteJoinSharedTrip token
+                                    , gs.basePath ++ "sharedtrips/join?token=" ++ token
+                                    )
+
+                                Nothing ->
+                                    ( RouteTrips, gs.basePath ++ "trips" )
+
                         as_ =
-                            toAuthState creds RouteTrips gs
+                            toAuthState creds landingRoute gs
                     in
                     ( AuthModel as_
                     , Cmd.batch
                         [ saveStorage { key = "auth_creds", value = E.encode 0 (encodeCreds creds) }
                         , startSync (encodeCreds creds)
-                        , Nav.replaceUrl gs.key (gs.basePath ++ "trips")
+                        , Nav.replaceUrl gs.key landingUrl
                         ]
                     )
 
