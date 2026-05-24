@@ -174,6 +174,7 @@ type alias AuthState =
     , form : PendingForm
     , geoBlocked : Bool
     , key : Nav.Key
+    , ledgerMapExpanded : Bool
     , loadingExpenses : Set String
     , loadingTrips : Set String
     , movePicker : Maybe Expense
@@ -351,6 +352,7 @@ type Msg
     | ToggleSharedTripMembers SharedTripId
     | ToggleGuestSettings
     | ToggleLedgerMap
+    | ToggleLedgerMapExpanded
     | TransferTargetChanged String
     | TransferToSharedTripResult (Result Http.Error ())
     | TriggerInstallPrompt

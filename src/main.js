@@ -1,6 +1,9 @@
 import { Elm } from './Main.elm'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
@@ -238,6 +241,20 @@ import './global.css'
     })
   }
 
+  // Per-stop dot markers are grouped into this cluster on the map. The
+  // icon overrides Leaflet.MarkerCluster's blue/green defaults so the
+  // badges sit in the rust palette like the polyline and day pills.
+  function stopClusterIcon(cluster) {
+    return L.divIcon({
+      className: 'tp-stop-cluster',
+      html:
+        '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9999px;background:#9a4426;color:#f5efe2;font:600 12px/1 system-ui,-apple-system,sans-serif;border:2px solid #f5efe2;box-shadow:0 1px 2px rgba(0,0,0,0.25);">' +
+        cluster.getChildCount() +
+        '</span>',
+      iconSize: [28, 28],
+    })
+  }
+
   class WaypointMap extends HTMLElement {
     connectedCallback() {
       this._map = L.map(this).setView([64.2008, -153.4937], 6)
@@ -247,20 +264,34 @@ import './global.css'
       }).addTo(this._map)
       this._markers = []
       this._polyline = null
+      this._clusters = null
       this._renderPoints(this.getAttribute('points'))
       setTimeout(() => this._map && this._map.invalidateSize(), 100)
+      // Re-invalidate whenever the container resizes — the Ledger
+      // small ⇄ expanded toggle flips a Tailwind height class, and
+      // Leaflet's viewport otherwise stays stale until the next pan.
+      this._resizeObserver = new ResizeObserver(() => {
+        if (this._map) this._map.invalidateSize()
+      })
+      this._resizeObserver.observe(this)
     }
 
     disconnectedCallback() {
+      if (this._resizeObserver) {
+        this._resizeObserver.disconnect()
+        this._resizeObserver = null
+      }
       if (this._map) { this._map.remove(); this._map = null }
       this._markers = []
       this._polyline = null
+      this._clusters = null
     }
 
     _renderPoints(raw) {
       this._markers.forEach(m => m.remove())
       this._markers = []
       if (this._polyline) { this._polyline.remove(); this._polyline = null }
+      if (this._clusters) { this._clusters.remove(); this._clusters = null }
       let pts; try { pts = JSON.parse(raw || '[]') } catch (_) { return }
       if (!pts.length) return
       const lls = pts.map(p => [p.lat, p.lon])
@@ -271,13 +302,30 @@ import './global.css'
           opacity: 0.85,
         }).addTo(this._map)
       }
-      pts.forEach(p => {
-        const m = p.isDayBoundary
-          ? L.marker([p.lat, p.lon], { icon: dayPillIcon(p.dayLabel) }).addTo(this._map)
-          : L.marker([p.lat, p.lon], { icon: stopDotIcon() }).addTo(this._map)
-        if (p.label) m.bindPopup(p.label)
-        this._markers.push(m)
+      // Dot markers go into the cluster group; day-boundary pills stay
+      // on the base map layer with a high zIndexOffset so they always
+      // paint over any nearby cluster badge.
+      this._clusters = L.markerClusterGroup({
+        showCoverageOnHover: false,
+        maxClusterRadius: 40,
+        spiderfyOnMaxZoom: true,
+        iconCreateFunction: stopClusterIcon,
       })
+      pts.forEach(p => {
+        if (p.isDayBoundary) {
+          const m = L.marker([p.lat, p.lon], {
+            icon: dayPillIcon(p.dayLabel),
+            zIndexOffset: 1000,
+          }).addTo(this._map)
+          if (p.label) m.bindPopup(p.label)
+          this._markers.push(m)
+        } else {
+          const dot = L.marker([p.lat, p.lon], { icon: stopDotIcon() })
+          if (p.label) dot.bindPopup(p.label)
+          this._clusters.addLayer(dot)
+        }
+      })
+      this._map.addLayer(this._clusters)
       if (lls.length === 1) this._map.setView(lls[0], 13)
       else this._map.fitBounds(lls, { padding: [40, 40] })
     }

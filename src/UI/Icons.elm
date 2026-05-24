@@ -3,7 +3,9 @@ module UI.Icons exposing
     , chart
     , chevronRight
     , close
+    , collapse
     , copy
+    , expand
     , journal
     , kebab
     , map
@@ -71,11 +73,37 @@ close classes =
         ]
 
 
+{-| Four corner brackets pointing inward — toggles the Ledger map back
+to its compact 260-px size from the expanded view.
+-}
+collapse : String -> Svg.Svg msg
+collapse classes =
+    Svg.svg (common classes)
+        [ Svg.path [ Svg.Attributes.d "M9 4 V9 H4" ] []
+        , Svg.path [ Svg.Attributes.d "M15 4 V9 H20" ] []
+        , Svg.path [ Svg.Attributes.d "M9 20 V15 H4" ] []
+        , Svg.path [ Svg.Attributes.d "M15 20 V15 H20" ] []
+        ]
+
+
 copy : String -> Svg.Svg msg
 copy classes =
     Svg.svg (common classes)
         [ Svg.path [ Svg.Attributes.d "M9 9 H19 A1 1 0 0 1 20 10 V20 A1 1 0 0 1 19 21 H9 A1 1 0 0 1 8 20 V10 A1 1 0 0 1 9 9 Z" ] []
         , Svg.path [ Svg.Attributes.d "M5 15 H4 A1 1 0 0 1 3 14 V4 A1 1 0 0 1 4 3 H14 A1 1 0 0 1 15 4 V5" ] []
+        ]
+
+
+{-| Four corner brackets pointing outward — toggles the Ledger map to
+its expanded ~70vh size that replaces the ledger list.
+-}
+expand : String -> Svg.Svg msg
+expand classes =
+    Svg.svg (common classes)
+        [ Svg.path [ Svg.Attributes.d "M4 9 V4 H9" ] []
+        , Svg.path [ Svg.Attributes.d "M20 9 V4 H15" ] []
+        , Svg.path [ Svg.Attributes.d "M4 15 V20 H9" ] []
+        , Svg.path [ Svg.Attributes.d "M20 15 V20 H15" ] []
         ]
 
 

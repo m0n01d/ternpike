@@ -220,6 +220,7 @@ toAuthState creds initialRoute gs =
     , form = FreshForm (defaultPendingEntry gs.today)
     , geoBlocked = False
     , key = gs.key
+    , ledgerMapExpanded = False
     , loadingExpenses = Set.empty
     , loadingTrips = Set.empty
     , movePicker = Nothing
@@ -1546,6 +1547,9 @@ update msg model =
         ToggleLedgerMap ->
             ( nextModel, cmd )
 
+        ToggleLedgerMapExpanded ->
+            ( nextModel, cmd )
+
         TransferTargetChanged _ ->
             ( nextModel, cmd )
 
@@ -1923,6 +1927,9 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         ToggleLedgerMap ->
+            ( GuestModel gs, Cmd.none )
+
+        ToggleLedgerMapExpanded ->
             ( GuestModel gs, Cmd.none )
 
         TransferTargetChanged _ ->
@@ -2650,7 +2657,29 @@ updateAuth msg as_ =
             ( AuthModel { as_ | showDayIntensity = not as_.showDayIntensity }, Cmd.none )
 
         ToggleLedgerMap ->
-            ( AuthModel { as_ | showLedgerMap = not as_.showLedgerMap }, Cmd.none )
+            let
+                nextShow =
+                    not as_.showLedgerMap
+            in
+            -- Always collapse back to small when the map is hidden, so
+            -- the next time the user opens it they start at the
+            -- compact 260-px size — discoverability beats remembering
+            -- the previous expanded state.
+            ( AuthModel
+                { as_
+                    | showLedgerMap = nextShow
+                    , ledgerMapExpanded =
+                        if nextShow then
+                            as_.ledgerMapExpanded
+
+                        else
+                            False
+                }
+            , Cmd.none
+            )
+
+        ToggleLedgerMapExpanded ->
+            ( AuthModel { as_ | ledgerMapExpanded = not as_.ledgerMapExpanded }, Cmd.none )
 
         SetStatsGranularity g ->
             ( AuthModel { as_ | statsGranularity = Just g }, Cmd.none )
