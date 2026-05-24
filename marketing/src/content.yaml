@@ -126,10 +126,10 @@ ledgerPreview:
 pricing:
   sectionLabel: "Pricing"
   headline: "Simple.\nNo surprises."
-  finePrint: "Fledgling is genuinely free, forever. No trials that flip to paid."
+  finePrint: "Tern is genuinely free, forever. No trials that flip to paid."
   tiers:
     - id: "fledgling"
-      name: "Fledgling"
+      name: "Tern"
       tagline: "For casual loggers."
       price: "$0"
       priceNote: "always free"
@@ -146,14 +146,14 @@ pricing:
         style: "ghost"
         arrow: false
     - id: "fly"
-      name: "Fly"
+      name: "Osprey"
       tagline: "For the dedicated road tripper."
       price: "$2.99 / month"
       priceNote: "$24 / year. Save $12."
       featured: true
       badge: "Recommended"
       features:
-        - "Everything in Fledgling"
+        - "Everything in Tern"
         - "Unlimited receipt scanning"
         - "Full receipt details (merchant, date, notes, GPS)"
         - "Cross-device sync"
@@ -172,7 +172,7 @@ pricing:
       priceNote: "one time"
       featured: false
       features:
-        - "Everything in Fly"
+        - "Everything in Osprey"
         - "No recurring charge, ever"
         - "All 1.x updates included"
         - "Loyalty discount on v2"
