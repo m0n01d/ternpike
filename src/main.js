@@ -241,17 +241,42 @@ import './global.css'
     })
   }
 
-  // Per-stop dot markers are grouped into this cluster on the map. The
-  // icon overrides Leaflet.MarkerCluster's blue/green defaults so the
-  // badges sit in the rust palette like the polyline and day pills.
-  function stopClusterIcon(cluster) {
+  // Cluster icon for the per-stop / per-day marker group. The icon
+  // reads the date range of its children — same-day clusters render as
+  // "Jun 10 · 5" (solves the day-pill / count-badge overlap), multi-day
+  // clusters render as "Jun 1–Jun 7 · 23" (the "bin days to weeks"
+  // behavior at low zoom). Pure-dot clusters with no day metadata fall
+  // back to a plain numeric badge.
+  function rangeClusterIcon(cluster) {
+    const children = cluster.getAllChildMarkers()
+    const dateToLabel = new Map()
+    children.forEach(m => {
+      const d = m.tpData
+      if (d && d.date) dateToLabel.set(d.date, d.dayLabel || '')
+    })
+    const sortedDates = [...dateToLabel.keys()].sort()
+    const labels = sortedDates.map(d => dateToLabel.get(d))
+    const count = children.length
+    const safe = s => String(s || '').replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+    )
+    let labelText = ''
+    if (labels.length === 1) {
+      labelText = safe(labels[0])
+    } else if (labels.length > 1) {
+      labelText = safe(labels[0]) + '–' + safe(labels[labels.length - 1])
+    }
+    const inner = labelText
+      ? labelText + '<span style="opacity:.6;margin:0 4px">·</span>' + count
+      : String(count)
     return L.divIcon({
-      className: 'tp-stop-cluster',
+      className: 'tp-cluster-pill',
       html:
-        '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9999px;background:#9a4426;color:#f5efe2;font:600 12px/1 system-ui,-apple-system,sans-serif;border:2px solid #f5efe2;box-shadow:0 1px 2px rgba(0,0,0,0.25);">' +
-        cluster.getChildCount() +
+        '<span style="display:inline-flex;align-items:center;background:#9a4426;color:#f5efe2;font:600 11px/1.2 system-ui,-apple-system,sans-serif;padding:4px 10px;border-radius:9999px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.25);">' +
+        inner +
         '</span>',
-      iconSize: [28, 28],
+      iconSize: null,
+      iconAnchor: [0, 0],
     })
   }
 
@@ -302,28 +327,26 @@ import './global.css'
           opacity: 0.85,
         }).addTo(this._map)
       }
-      // Dot markers go into the cluster group; day-boundary pills stay
-      // on the base map layer with a high zIndexOffset so they always
-      // paint over any nearby cluster badge.
+      // Every marker — day-boundary pills AND stop dots — goes into
+      // the cluster group. The cluster icon (rangeClusterIcon) reads
+      // each child's tpData.date / dayLabel to build a date-range
+      // label, which (a) fixes the date-marker / count-badge overlap
+      // when same-day stops cluster, and (b) bins days into ranges at
+      // low zoom levels. maxClusterRadius scales with zoom: aggressive
+      // (80 px) when zoomed way out, tight (40 px) at street level.
       this._clusters = L.markerClusterGroup({
         showCoverageOnHover: false,
-        maxClusterRadius: 40,
+        maxClusterRadius: zoom =>
+          zoom < 8 ? 80 : zoom < 12 ? 60 : 40,
         spiderfyOnMaxZoom: true,
-        iconCreateFunction: stopClusterIcon,
+        iconCreateFunction: rangeClusterIcon,
       })
       pts.forEach(p => {
-        if (p.isDayBoundary) {
-          const m = L.marker([p.lat, p.lon], {
-            icon: dayPillIcon(p.dayLabel),
-            zIndexOffset: 1000,
-          }).addTo(this._map)
-          if (p.label) m.bindPopup(p.label)
-          this._markers.push(m)
-        } else {
-          const dot = L.marker([p.lat, p.lon], { icon: stopDotIcon() })
-          if (p.label) dot.bindPopup(p.label)
-          this._clusters.addLayer(dot)
-        }
+        const icon = p.isDayBoundary ? dayPillIcon(p.dayLabel) : stopDotIcon()
+        const marker = L.marker([p.lat, p.lon], { icon })
+        marker.tpData = p
+        if (p.label) marker.bindPopup(p.label)
+        this._clusters.addLayer(marker)
       })
       this._map.addLayer(this._clusters)
       if (lls.length === 1) this._map.setView(lls[0], 13)
