@@ -99,34 +99,30 @@
    buttons (text-parchment) so it must stay cream. Surface uses of
    bg-parchment get explicit dark:bg-cream overrides in Elm instead.       */
 html.dark {
-  /* Surfaces */
-  --color-cream:        #1b2513;
-  --color-cream-deep:   #242f18;
-  --color-tan:          #2c3a1e;
+  /* Surfaces — near-black */
+  --color-cream:        #1a1a17;
+  --color-cream-deep:   #222220;
+  --color-tan:          #2e2e2a;
 
-  /* Text */
-  --color-ink:          #ddd6b8;
-  --color-forest:       #b8c890;
-  --color-forest-mid:   #98a870;
-  --color-forest-light: #7c9060;
-  --color-forest-deep:  #0e1509;
-  --color-moss:         #7a9060;
-  --color-muted:        #6e7c5c;
+  /* Text — near-white */
+  --color-ink:          #f0ece0;
+  --color-forest:       #c8c4b0;
+  --color-forest-mid:   #a8a498;
+  --color-forest-light: #888478;
+  --color-forest-deep:  #080807;
+  --color-moss:         #909080;
+  --color-muted:        #6e6e60;
 
-  /* Accent — campfire */
-  --color-rust:         #cc6840;
+  /* Accent — campfire ember */
+  --color-rust:         #d46a40;
   --color-rust-light:   #e07850;
-  --color-rust-deep:    #aa5030;
-  --color-rust-tint:    #1e1208;
+  --color-rust-deep:    #b05030;
+  --color-rust-tint:    #1c0f08;
   --color-danger:       #cc3838;
 
-  /* Polish surfaces */
-  --color-cream-deep:   #242f18;
-  --color-rust-deep:    #aa5030;
-
   /* Editorial rules */
-  --rule-tan:  1px dashed rgb(44 58 32 / 0.7);
-  --rule-moss: 1px solid  rgb(122 144 96 / 0.28);
+  --rule-tan:  1px dashed rgb(46 46 42 / 0.9);
+  --rule-moss: 1px solid  rgb(144 144 128 / 0.20);
 
   /* Shadows — black-based so they're visible on dark surfaces */
   --shadow-card:       0 4px 24px rgb(0 0 0 / 0.35);

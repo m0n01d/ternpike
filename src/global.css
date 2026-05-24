@@ -85,7 +85,7 @@
 
   /* Dark mode: body bg must be darker than cards (parchment token stays cream) */
   html.dark body {
-    background-color: #111a0b;
+    background-color: #0c0c0b;
   }
 
   /* Keyboard focus ring on real buttons */
