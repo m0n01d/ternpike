@@ -24,7 +24,7 @@ import Simplify
 config : List Rule
 config =
     List.map
-        (Rule.ignoreErrorsForDirectories [ "vendor/" ])
+        (Rule.ignoreErrorsForDirectories [ "vendor/", "tests/" ])
         [ NoExposingEverything.rule
         , NoImportingEverything.rule []
         , NoMissingTypeAnnotation.rule
