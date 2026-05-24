@@ -34,6 +34,10 @@ id = "4a9baf82359545ef981e7dcc6a646f94"
 
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
+# Resend audience ID for the marketing waitlist. Required path
+# parameter for POST /audiences/{id}/contacts — the scoped
+# RESEND_WAITLIST_API_KEY does not imply an audience on its own.
+RESEND_AUDIENCE_ID = "206e97c4-13b7-4a6a-a85b-01414c35449b"
 
 
 [[routes]]
