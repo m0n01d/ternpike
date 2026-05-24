@@ -424,6 +424,112 @@ import './global.css'
     )
   })
 
+  // Approximate decoded-byte length of a `data:image/...;base64,XXX` URL.
+  // Each 4 base64 chars decode to 3 bytes, minus 1 byte per `=` padding char.
+  function base64ByteLength(dataUrl) {
+    if (typeof dataUrl !== 'string') return 0
+    const comma = dataUrl.indexOf(',')
+    const payload = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl
+    const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0
+    return Math.max(0, Math.floor((payload.length * 3) / 4) - padding)
+  }
+
+  // Load a data URL into an HTMLImageElement, resolving once `onload` fires.
+  function loadImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = () => reject(new Error('image failed to decode'))
+      img.src = dataUrl
+    })
+  }
+
+  // ── OCR image prep: downscale + recompress before sending to Anthropic ──
+  //
+  // Anthropic's vision API caps base64 image payloads at 5 MiB. Phone JPEGs
+  // routinely run 6–8 MB, so we'd 400 on most real-world receipt photos.
+  // Elm has no Canvas, so the resize has to happen here: draw the image to
+  // a canvas at max 1568px on the long edge (Claude's recommended size) and
+  // re-encode JPEG, dropping quality and then dimensions until the base64
+  // length fits the caller's budget.
+  app.ports.prepareOcrImage.subscribe(async ({ id, dataUrl, maxBytes }) => {
+    const send = (payload) => {
+      if (app.ports.ocrImagePrepared) {
+        app.ports.ocrImagePrepared.send(payload)
+      }
+    }
+
+    const originalBytes = base64ByteLength(dataUrl)
+
+    try {
+      // Fast path: already small enough, ship as-is.
+      if (originalBytes <= maxBytes) {
+        send({ id, dataUrl, originalBytes, finalBytes: originalBytes, error: '' })
+        return
+      }
+
+      const img = await loadImage(dataUrl)
+      const maxDim = 1568
+
+      let width = img.naturalWidth || img.width
+      let height = img.naturalHeight || img.height
+      const initialScale = Math.min(1, maxDim / Math.max(width, height))
+      width = Math.max(1, Math.round(width * initialScale))
+      height = Math.max(1, Math.round(height * initialScale))
+
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+
+      const render = (w, h, quality) => {
+        canvas.width = w
+        canvas.height = h
+        ctx.drawImage(img, 0, 0, w, h)
+        return canvas.toDataURL('image/jpeg', quality)
+      }
+
+      // Quality ladder at the initial dimensions.
+      const qualitySteps = [0.85, 0.75, 0.65, 0.55, 0.45]
+      let result = null
+      let finalBytes = Infinity
+
+      for (const q of qualitySteps) {
+        result = render(width, height, q)
+        finalBytes = base64ByteLength(result)
+        if (finalBytes <= maxBytes) break
+      }
+
+      // Still too big — shrink dimensions 20% at a time at quality 0.55.
+      while (finalBytes > maxBytes && Math.max(width, height) > 600) {
+        width = Math.max(1, Math.round(width * 0.8))
+        height = Math.max(1, Math.round(height * 0.8))
+        result = render(width, height, 0.55)
+        finalBytes = base64ByteLength(result)
+      }
+
+      if (finalBytes > maxBytes) {
+        send({
+          id,
+          dataUrl: '',
+          originalBytes,
+          finalBytes,
+          error: `couldn't shrink image below ${maxBytes} bytes (got ${finalBytes})`,
+        })
+        return
+      }
+
+      send({ id, dataUrl: result, originalBytes, finalBytes, error: '' })
+    } catch (err) {
+      console.error('[ocr-resize] failed:', err)
+      send({
+        id,
+        dataUrl: '',
+        originalBytes,
+        finalBytes: 0,
+        error: String(err && err.message ? err.message : err),
+      })
+    }
+  })
+
   app.ports.extractExifGps.subscribe(async ({ id, dataUrl }) => {
     try {
       const res    = await fetch(dataUrl)

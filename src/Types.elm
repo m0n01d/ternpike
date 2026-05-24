@@ -319,6 +319,7 @@ type Msg
     | MoveEntry Expense TripId
     | NetworkStatusChanged Bool
     | NoteChanged String
+    | OcrImagePrepared { dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int }
     | OpenEditTripForm Trip
     | OpenCreateSharedTripModal
     | OpenInviteModal SharedTripId

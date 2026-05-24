@@ -164,6 +164,12 @@ port requestGeolocation : () -> Cmd msg
 port extractExifGps : { id : String, dataUrl : String } -> Cmd msg
 
 
+port prepareOcrImage : { dataUrl : String, id : String, maxBytes : Int } -> Cmd msg
+
+
+port ocrImagePrepared : ({ dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int } -> msg) -> Sub msg
+
+
 port gotGpsCoords : ({ lat : Float, lon : Float, denied : Bool } -> msg) -> Sub msg
 
 
@@ -1085,6 +1091,17 @@ makeOcrCall itemId apiKey base64Data mimeType =
         }
 
 
+{-| Target max-byte budget for the base64-encoded image we send to
+Anthropic. The API enforces 5 MiB (5\_242\_880 bytes) on the
+`messages.0.content.0.image.source.base64` string. We aim well below
+that so JPEG quality jitter and downscaling rounding can't push us
+over: 4 MiB ≈ a 3 MiB binary image, plenty for a receipt.
+-}
+ocrMaxBase64Bytes : Int
+ocrMaxBase64Bytes =
+    4 * 1024 * 1024
+
+
 {-| Convert an Anthropic HTTP response into a human-readable error
 string or the raw success body. We use `expectStringResponse` (rather
 than `expectString`) so that non-2xx responses keep their body — the
@@ -1483,6 +1500,9 @@ update msg model =
         NoteChanged _ ->
             ( nextModel, cmd )
 
+        OcrImagePrepared _ ->
+            ( nextModel, cmd )
+
         OpenCreateSharedTripModal ->
             ( nextModel, cmd )
 
@@ -1877,6 +1897,9 @@ updateGuest msg gs =
         NoteChanged _ ->
             ( GuestModel gs, Cmd.none )
 
+        OcrImagePrepared _ ->
+            ( GuestModel gs, Cmd.none )
+
         OpenCreateSharedTripModal ->
             ( GuestModel gs, Cmd.none )
 
@@ -2178,13 +2201,54 @@ updateAuth msg as_ =
             ( AuthModel { as_ | scanQueue = updatedQueue }
             , Cmd.batch
                 [ if as_.config.anthropicKey /= "" then
-                    makeOcrCall itemId as_.config.anthropicKey (extractBase64 dataUrl) (getMimeType dataUrl)
+                    -- Always route through the JS-side downscaler before
+                    -- the OCR call. Anthropic's image limit is 5 MiB on
+                    -- the base64 payload; modern phone JPEGs routinely
+                    -- run 6–8 MB so we'd otherwise 400 on every photo.
+                    -- We use the EXIF data URL for GPS extraction in
+                    -- parallel because exifr needs the original bytes.
+                    prepareOcrImage { dataUrl = dataUrl, id = itemId, maxBytes = ocrMaxBase64Bytes }
 
                   else
                     Cmd.none
                 , extractExifGps { id = itemId, dataUrl = dataUrl }
                 ]
             )
+
+        OcrImagePrepared payload ->
+            case Dict.get payload.id as_.scanQueue of
+                Nothing ->
+                    -- item was cleared/submitted while resize was in flight — no-op
+                    ( AuthModel as_, Cmd.none )
+
+                Just _ ->
+                    if payload.error /= "" then
+                        let
+                            updatedQueue =
+                                Dict.update payload.id
+                                    (Maybe.map
+                                        (\i ->
+                                            { i
+                                                | ocrData = Nothing
+                                                , ocrError = Just ("Couldn't prepare image for OCR: " ++ payload.error)
+                                                , status = ScanReady
+                                            }
+                                        )
+                                    )
+                                    as_.scanQueue
+                        in
+                        ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
+
+                    else
+                        let
+                            updatedQueue =
+                                Dict.update payload.id
+                                    (Maybe.map (\i -> { i | imageUrl = payload.dataUrl }))
+                                    as_.scanQueue
+                        in
+                        ( AuthModel { as_ | scanQueue = updatedQueue }
+                        , makeOcrCall payload.id as_.config.anthropicKey (extractBase64 payload.dataUrl) (getMimeType payload.dataUrl)
+                        )
 
         GotOcrResult itemId result ->
             let
@@ -3818,6 +3882,7 @@ main =
                         )
                     , networkStatus NetworkStatusChanged
                     , canInstall CanInstall
+                    , ocrImagePrepared OcrImagePrepared
                     ]
         , update = update
         , view = view
