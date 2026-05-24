@@ -1,8 +1,9 @@
-// Negative + happy-path coverage for `POST /geocode` (#152).
+// Negative + happy-path coverage for `POST /geocode` (#152 + #169).
 //
 // No CouchDB dependency — the geocode endpoint only touches the KV
-// bindings and Nominatim, both of which we stub in-process. Each test
-// gets a fresh env so the per-user rate-limit KV starts empty.
+// bindings and the Google Geocoding API, both of which we stub in-
+// process. Each test gets a fresh env so the per-user rate-limit KV
+// starts empty.
 
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -15,19 +16,19 @@ const ALICE = 'alice@test.ternpike.com'
 const EVE = 'eve@test.ternpike.com'
 const SERVER_SECRET = 'test-server-secret-do-not-use-in-production'
 
-const NOMINATIM_BASE = 'https://nominatim.test.local'
+const GOOGLE_BASE = 'https://google.test.local'
 
 let env
 let upstreamCalls
 let upstreamHandler
 let realFetch
 
-function installNominatimMock() {
+function installGoogleMock() {
   upstreamCalls = []
   realFetch = globalThis.fetch
   globalThis.fetch = async (input, init) => {
     const url = typeof input === 'string' ? input : input.url
-    if (url.startsWith(NOMINATIM_BASE)) {
+    if (url.startsWith(GOOGLE_BASE)) {
       upstreamCalls.push({ url, init })
       return upstreamHandler(url, init)
     }
@@ -35,7 +36,7 @@ function installNominatimMock() {
   }
 }
 
-function uninstallNominatimMock() {
+function uninstallGoogleMock() {
   globalThis.fetch = realFetch
 }
 
@@ -47,30 +48,30 @@ function jsonResponse(body, init = {}) {
   })
 }
 
+function googleHit(lat, lng) {
+  return jsonResponse({
+    status: 'OK',
+    results: [{ geometry: { location: { lat, lng } } }],
+  })
+}
+
 beforeEach(async () => {
   env = {
     SERVER_SECRET,
-    NOMINATIM_BASE_URL: NOMINATIM_BASE,
-    APP_VERSION: 'test',
+    GOOGLE_GEOCODING_BASE_URL: GOOGLE_BASE,
+    GOOGLE_GEOCODING_API_KEY: 'test-google-key',
     TIERS_KV: memoryKv(),
     GEOCODE_RL_KV: memoryKv(),
     GEOCODE_CACHE_KV: memoryKv(),
   }
   await env.TIERS_KV.put(ALICE.toLowerCase(), 'osprey')
   await env.TIERS_KV.put(EVE.toLowerCase(), 'tern')
-  upstreamHandler = (_url) =>
-    jsonResponse([
-      {
-        lat: '38.8977',
-        lon: '-77.0366',
-        display_name: '1600 Pennsylvania Ave NW, Washington DC',
-      },
-    ])
-  installNominatimMock()
+  upstreamHandler = (_url) => googleHit(38.8977, -77.0366)
+  installGoogleMock()
 })
 
 afterEach(() => {
-  uninstallNominatimMock()
+  uninstallGoogleMock()
 })
 
 const authed = async (email) => ({
@@ -129,7 +130,7 @@ describe('POST /geocode', () => {
     assert.equal(res.body.error, 'bad_request')
   })
 
-  test('paid caller gets a successful geocode (200) and the lat/lon parses to numbers', async () => {
+  test('paid caller gets a successful geocode (200) with numeric lat/lon and source: google', async () => {
     const res = await request(env, 'POST', '/geocode', {
       headers: await authed(ALICE),
       body: { address: '1600 Pennsylvania Ave NW' },
@@ -138,22 +139,22 @@ describe('POST /geocode', () => {
     assert.equal(res.body.ok, true)
     assert.equal(typeof res.body.lat, 'number')
     assert.equal(typeof res.body.lon, 'number')
-    assert.equal(res.body.source, 'nominatim')
+    assert.equal(res.body.lat, 38.8977)
+    assert.equal(res.body.lon, -77.0366)
+    assert.equal(res.body.source, 'google')
   })
 
-  test('upstream User-Agent header includes Ternpike + contact email', async () => {
+  test('upstream URL includes the API key', async () => {
     await request(env, 'POST', '/geocode', {
       headers: await authed(ALICE),
       body: { address: '1600 Pennsylvania Ave NW' },
     })
     assert.equal(upstreamCalls.length, 1)
-    const ua = upstreamCalls[0].init.headers['User-Agent']
-    assert.match(ua, /Ternpike\/test/)
-    assert.match(ua, /contact@ternpike\.com/)
+    assert.match(upstreamCalls[0].url, /key=test-google-key/)
   })
 
-  test('Nominatim no-match returns 200 with null lat/lon', async () => {
-    upstreamHandler = () => jsonResponse([])
+  test('Google ZERO_RESULTS returns 200 with null lat/lon', async () => {
+    upstreamHandler = () => jsonResponse({ status: 'ZERO_RESULTS', results: [] })
     const res = await request(env, 'POST', '/geocode', {
       headers: await authed(ALICE),
       body: { address: 'nonexistent place 9999' },
@@ -164,9 +165,9 @@ describe('POST /geocode', () => {
     assert.equal(res.body.lon, null)
   })
 
-  test('Nominatim 5xx returns 502 upstream', async () => {
+  test('Google OVER_QUERY_LIMIT returns 502 upstream', async () => {
     upstreamHandler = () =>
-      new Response('upstream broke', { status: 503 })
+      jsonResponse({ status: 'OVER_QUERY_LIMIT', results: [] })
     const res = await request(env, 'POST', '/geocode', {
       headers: await authed(ALICE),
       body: { address: '1600 Pennsylvania Ave NW' },
@@ -175,28 +176,50 @@ describe('POST /geocode', () => {
     assert.equal(res.body.error, 'upstream')
   })
 
-  test('second request within rate-limit window returns 429', async () => {
-    const first = await request(env, 'POST', '/geocode', {
+  test('Google REQUEST_DENIED returns 502 upstream', async () => {
+    upstreamHandler = () =>
+      jsonResponse({ status: 'REQUEST_DENIED', results: [] })
+    const res = await request(env, 'POST', '/geocode', {
       headers: await authed(ALICE),
       body: { address: '1600 Pennsylvania Ave NW' },
     })
-    assert.equal(first.status, 200)
-    const second = await request(env, 'POST', '/geocode', {
-      headers: await authed(ALICE),
-      body: { address: 'another address' },
-    })
-    assert.equal(second.status, 429)
-    assert.equal(second.body.error, 'rate_limited')
+    assert.equal(res.status, 502)
+    assert.equal(res.body.error, 'upstream')
   })
 
-  test('cache hit: same address resolved twice only calls Nominatim once', async () => {
-    // First call populates the cache.
+  test('Google 5xx returns 502 upstream', async () => {
+    upstreamHandler = () => new Response('upstream broke', { status: 503 })
+    const res = await request(env, 'POST', '/geocode', {
+      headers: await authed(ALICE),
+      body: { address: '1600 Pennsylvania Ave NW' },
+    })
+    assert.equal(res.status, 502)
+    assert.equal(res.body.error, 'upstream')
+  })
+
+  test('per-user token bucket admits a batch of 100 within the same window', async () => {
+    // A real batch-scanned road-trip week is 30-50 receipts. 100 in
+    // succession is the cap; the next one is 429'd.
+    for (let i = 0; i < 100; i++) {
+      const res = await request(env, 'POST', '/geocode', {
+        headers: await authed(ALICE),
+        body: { address: `${i} stop st` },
+      })
+      assert.equal(res.status, 200, `call #${i + 1} should pass`)
+    }
+    const overflow = await request(env, 'POST', '/geocode', {
+      headers: await authed(ALICE),
+      body: { address: 'one too many' },
+    })
+    assert.equal(overflow.status, 429)
+    assert.equal(overflow.body.error, 'rate_limited')
+  })
+
+  test('cache hit: same address resolved twice only calls Google once', async () => {
     await request(env, 'POST', '/geocode', {
       headers: await authed(ALICE),
       body: { address: '1600 Pennsylvania Ave NW' },
     })
-    // Reset the rate limit so the second call isn't 429'd.
-    await env.GEOCODE_RL_KV.delete(`rl:${ALICE.toLowerCase()}`)
     const second = await request(env, 'POST', '/geocode', {
       headers: await authed(ALICE),
       body: { address: '1600 Pennsylvania Ave NW' },
@@ -211,7 +234,6 @@ describe('POST /geocode', () => {
       headers: await authed(ALICE),
       body: { address: '1600 Pennsylvania Ave NW' },
     })
-    await env.GEOCODE_RL_KV.delete(`rl:${ALICE.toLowerCase()}`)
     const second = await request(env, 'POST', '/geocode', {
       headers: await authed(ALICE),
       body: { address: '  1600   pennsylvania   ave   nw  ' },
@@ -219,5 +241,15 @@ describe('POST /geocode', () => {
     assert.equal(second.status, 200)
     assert.equal(second.body.cached, true)
     assert.equal(upstreamCalls.length, 1)
+  })
+
+  test('missing GOOGLE_GEOCODING_API_KEY returns 502 upstream', async () => {
+    env.GOOGLE_GEOCODING_API_KEY = undefined
+    const res = await request(env, 'POST', '/geocode', {
+      headers: await authed(ALICE),
+      body: { address: '1600 Pennsylvania Ave NW' },
+    })
+    assert.equal(res.status, 502)
+    assert.equal(res.body.error, 'upstream')
   })
 })
