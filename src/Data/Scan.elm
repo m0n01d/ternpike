@@ -50,7 +50,8 @@ correct anything missing or wrong.
 
 -}
 type alias OcrData =
-    { amount : Maybe Money
+    { address : Maybe String
+    , amount : Maybe Money
     , category : Maybe Category
     , date : Maybe DateField
     , longNote : Maybe String

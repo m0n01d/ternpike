@@ -46,7 +46,8 @@ import Time
 
 
 type alias Expense =
-    { amount : Money
+    { address : String
+    , amount : Money
     , category : Category
     , createdAt : Time.Posix
     , createdBy : UserId
@@ -65,6 +66,7 @@ encoder : Expense -> Json.Encode.Value
 encoder e =
     Json.Encode.object
         ([ ( "_id", ExpenseId.encode e.id )
+         , ( "address", Json.Encode.string e.address )
          , ( "amount", Money.encoder e.amount )
          , ( "category", Json.Encode.string (Category.label e.category) )
          , ( "createdAt", Json.Encode.string (Iso8601.fromPosix e.createdAt) )
@@ -116,6 +118,7 @@ snapshotWith fields source =
 decoder : Json.Decode.Decoder Expense
 decoder =
     Json.Decode.succeed Expense
+        |> Pipeline.optional "address" Json.Decode.string ""
         |> Pipeline.required "amount" Money.decoder
         |> Pipeline.required "category"
             (Json.Decode.string

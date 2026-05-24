@@ -918,7 +918,8 @@ input (R7 will tighten that field).
 -}
 defaultPendingEntry : DateField -> PendingEntry
 defaultPendingEntry today =
-    { amount = ""
+    { address = ""
+    , amount = ""
     , category = Fuel
     , date = DateField.toIso today
     , locationState = LocationIdle
@@ -931,7 +932,8 @@ defaultPendingEntry today =
 
 expenseToPending : Expense.Expense -> PendingEntry
 expenseToPending e =
-    { amount = Money.toDollarString e.amount
+    { address = e.address
+    , amount = Money.toDollarString e.amount
     , category = e.category
     , date = DateField.toIso e.date
     , locationState =
@@ -1041,6 +1043,7 @@ claudeTextDecoder =
 ocrDataDecoder : D.Decoder OcrData
 ocrDataDecoder =
     D.succeed OcrData
+        |> Pipeline.optional "address" (D.map Just D.string) Nothing
         |> Pipeline.optional "amount" (D.map Just Money.decoder) Nothing
         |> Pipeline.optional "category" (D.map Just (D.map Category.fromString D.string)) Nothing
         |> Pipeline.optional "date" (D.map Just DateField.decoder) Nothing
@@ -2244,6 +2247,12 @@ updateAuth msg as_ =
                                 amend =
                                     { id = amendId
                                     , targetId = original.id
+                                    , address =
+                                        if parsed.address /= original.address then
+                                            Just parsed.address
+
+                                        else
+                                            Nothing
                                     , amount =
                                         if parsed.amount /= original.amount then
                                             Just parsed.amount
@@ -2323,6 +2332,7 @@ updateAuth msg as_ =
                                 expense =
                                     { id = ExpenseId.fromString expenseId
                                     , tripId = tripId
+                                    , address = parsed.address
                                     , amount = parsed.amount
                                     , category = parsed.category
                                     , createdAt = posix
@@ -2629,11 +2639,12 @@ updateAuth msg as_ =
                     let
                         ocr =
                             Maybe.withDefault
-                                { amount = Nothing, category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+                                { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
                                 item.ocrData
 
                         newPending =
-                            { amount =
+                            { address = Maybe.withDefault "" ocr.address
+                            , amount =
                                 ocr.amount
                                     |> Maybe.map Money.toDollarString
                                     |> Maybe.withDefault ""

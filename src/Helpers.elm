@@ -10,7 +10,8 @@ import Json.Encode
 
 effectiveEntryToExpense : EffectiveEntry -> Expense
 effectiveEntryToExpense e =
-    { amount = e.amount
+    { address = e.address
+    , amount = e.amount
     , category = e.category
     , createdAt = e.createdAt
     , createdBy = e.createdBy

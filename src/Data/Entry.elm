@@ -61,7 +61,8 @@ amendments applied. `isAmended` is `True` if at least one amendment was
 folded in, so the UI can render an "edited" indicator.
 -}
 type alias EffectiveEntry =
-    { amount : Money
+    { address : String
+    , amount : Money
     , category : Category
     , createdAt : Time.Posix
     , createdBy : UserId
@@ -123,7 +124,8 @@ resolve expenses amendments voids activeTripId =
 
 toEffectiveEntry : Bool -> Expense -> EffectiveEntry
 toEffectiveEntry isAmended e =
-    { amount = e.amount
+    { address = e.address
+    , amount = e.amount
     , category = e.category
     , createdAt = e.createdAt
     , createdBy = e.createdBy
@@ -141,7 +143,8 @@ toEffectiveEntry isAmended e =
 
 applyAmendment : EffectiveEntry -> Amendment -> EffectiveEntry
 applyAmendment e a =
-    { amount = Maybe.withDefault e.amount a.amount
+    { address = Maybe.withDefault e.address a.address
+    , amount = Maybe.withDefault e.amount a.amount
     , category = Maybe.withDefault e.category a.category
     , createdAt = e.createdAt
     , createdBy = e.createdBy

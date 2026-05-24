@@ -80,6 +80,70 @@ suite =
                 Json.Decode.decodeString Expense.decoder wire
                     |> Result.map .geoPoint
                     |> Expect.equal (Ok Nothing)
+        , test "legacy doc missing address decodes to empty string" <|
+            \_ ->
+                let
+                    wire =
+                        """
+                        { "_id": "expense::2024-05-21T14:30:45Z::abcd1234"
+                        , "amount": 9.99
+                        , "category": "fuel"
+                        , "createdAt": "2024-05-21T14:30:45Z"
+                        , "date": "2024-05-21"
+                        , "merchant": "Gas Station"
+                        , "note": ""
+                        , "tripId": "trip::2024-05-21T14:30:45Z::zzzzzzzz"
+                        , "type": "expense"
+                        }
+                        """
+                in
+                Json.Decode.decodeString Expense.decoder wire
+                    |> Result.map .address
+                    |> Expect.equal (Ok "")
+        , test "doc with address decodes the value" <|
+            \_ ->
+                let
+                    wire =
+                        """
+                        { "_id": "expense::2024-05-21T14:30:45Z::abcd1234"
+                        , "address": "123 Main St, Anchorage AK"
+                        , "amount": 9.99
+                        , "category": "fuel"
+                        , "createdAt": "2024-05-21T14:30:45Z"
+                        , "date": "2024-05-21"
+                        , "merchant": "Gas Station"
+                        , "note": ""
+                        , "tripId": "trip::2024-05-21T14:30:45Z::zzzzzzzz"
+                        , "type": "expense"
+                        }
+                        """
+                in
+                Json.Decode.decodeString Expense.decoder wire
+                    |> Result.map .address
+                    |> Expect.equal (Ok "123 Main St, Anchorage AK")
+        , test "address roundtrips through encoder/decoder" <|
+            \_ ->
+                let
+                    wire =
+                        """
+                        { "_id": "expense::2024-05-21T14:30:45Z::abcd1234"
+                        , "address": "456 Glenn Hwy, Palmer AK"
+                        , "amount": 42.50
+                        , "category": "lodging"
+                        , "createdAt": "2024-05-21T14:30:45Z"
+                        , "date": "2024-05-21"
+                        , "merchant": "Cabin"
+                        , "note": "one night"
+                        , "tripId": "trip::2024-05-21T14:30:45Z::zzzzzzzz"
+                        , "type": "expense"
+                        }
+                        """
+                in
+                Json.Decode.decodeString Expense.decoder wire
+                    |> Result.map Expense.encoder
+                    |> Result.map (Json.Decode.decodeValue Expense.decoder)
+                    |> Result.map (Result.map .address)
+                    |> Expect.equal (Ok (Ok "456 Glenn Hwy, Palmer AK"))
         , test "roundtrips through encoder/decoder" <|
             \_ ->
                 let
