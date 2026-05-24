@@ -14,6 +14,24 @@ id = "a3818441349d4138b8898fac4480bf1a"
 binding = "TIERS_KV"
 id = "d95ba1e24a514a6e8a9742cf176a541d"
 
+# Geocode endpoint per-user rate limit (key: `rl:<email>`, value: any,
+# TTL: 60s — KV minimum). Effectively 1 geocode call per minute per
+# user, which keeps OSM Nominatim's global 1-req/sec policy headroom
+# comfortable at our user volume. Provision with:
+#   wrangler kv:namespace create GEOCODE_RL_KV
+[[kv_namespaces]]
+binding = "GEOCODE_RL_KV"
+id = "REPLACE_WITH_REAL_ID"
+
+# Geocode result cache (key: `addr:<sha256(normalized)>`, value: JSON
+# `{lat, lon}`, TTL: 30d for hits, 1d for no-match). Shared across all
+# users — addresses resolve to the same point regardless of who asked.
+# Provision with:
+#   wrangler kv:namespace create GEOCODE_CACHE_KV
+[[kv_namespaces]]
+binding = "GEOCODE_CACHE_KV"
+id = "REPLACE_WITH_REAL_ID"
+
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
 
