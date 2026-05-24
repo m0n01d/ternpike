@@ -491,12 +491,12 @@ viewFledglingUpgradePrompt : Html Msg
 viewFledglingUpgradePrompt =
     Html.div [ Html.Attributes.class "mt-3 bg-rust-tint border border-rust/30 rounded-lg px-3 py-2.5" ]
         [ Html.p [ Html.Attributes.class "text-[13px] text-rust-deep" ]
-            [ Html.text "Sharing requires Fly. "
+            [ Html.text "Sharing requires Osprey. "
             , Html.a
                 [ Html.Attributes.href "/settings#billing"
                 , Html.Attributes.class "underline font-semibold"
                 ]
-                [ Html.text "Upgrade to Fly →" ]
+                [ Html.text "Upgrade to Osprey →" ]
             ]
         ]
 
