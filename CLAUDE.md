@@ -415,7 +415,7 @@ encoders, decoders, and HTML-returning functions don't need examples.
 
 ## UI vetting
 
-**The user develops from an iPad with no access to the Vite dev server. Screenshots are the dev loop. Take them early and often — not just at the end.**
+**The user works from iPad, iPhone, and Mac interchangeably. Claude Code web sessions have no port forwarding, so the Vite dev server is never directly accessible. Screenshots are the dev loop regardless of device. Take them early and often — not just at the end.**
 
 Run the `playwright-ui` skill whenever any of these are true:
 
