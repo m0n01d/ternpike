@@ -559,6 +559,16 @@ The *real* seed path (`seedPouchDB` in `e2e/utils/seed.ts`) uses a different sen
 - **One escape hatch:** `@layer components` with `@apply` is allowed when the same multi-utility chain repeats across N>1 rows of structurally identical markup (the Ledger row is the canonical example). Name the class after what it is (`.ledger-row`, not `.row`). One use = inline the utilities.
 - `src/theme.css` is the single source of truth. Both `src/global.css` (app) and `marketing/src/styles.css` (marketing) `@import` it. Don't redeclare tokens anywhere else.
 
+## Working with `.elm` files: prefer `elmq`
+
+`elmq` is on PATH — a tree-sitter-aware CLI for reading and editing `.elm` files. Use it for Elm reads and writes whenever it fits, instead of `cat`/`Read`/`grep`/`rg`/`Edit`. It returns the enclosing declaration for free on searches, edits structurally without dumping whole files into context, and handles project-wide operations (rename module, move decls, add/remove variants) atomically across the dependency graph.
+
+- **Discovery:** `elmq grep <regex> [path]` — use instead of `grep`/`rg` on `.elm`. Add `--definitions --source` for one-shot definition lookup. `elmq refs` for structural references through the import graph.
+- **Reads:** `elmq list` for file sizes, `elmq get` for specific declarations. Skip `Read` on files over ~300 lines.
+- **Edits:** `elmq patch` / `set decl` / `set let` / `set case` for single-file edits on larger files. `Edit` is fine for files under ~300 lines.
+- **Project-wide:** always use `elmq` for rename/move/variant operations — don't hand-roll across files.
+- `Write` is OK for creating a new `.elm` file; switch to `elmq` or `Edit` for further edits.
+
 ## Elm style guide
 - **Alphabetize** all record fields and all type constructor lists. Apply to every new type and every edit of an existing type.
 - Always fully qualify imports. If you touch a module or function whose imports are not fully qualified, refactor them. You can expose the type, but not `(..)`.
