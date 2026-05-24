@@ -87,10 +87,10 @@ in `billingStatus` for the lapsed / frozen edge cases (#64).
 -}
 
 import Data.DateField as DateField exposing (DateField)
-import Data.Flock exposing (Flock)
-import Data.FlockId
-import Data.Flocks exposing (Flocks)
 import Data.Money as Money exposing (Money)
+import Data.SharedTrip exposing (SharedTrip)
+import Data.SharedTripId
+import Data.SharedTrips exposing (SharedTrips)
 import Data.Tier exposing (Tier)
 import Data.TripId as TripId exposing (TripId)
 import Data.UserId exposing (UserId)
@@ -105,7 +105,7 @@ type alias Trip =
     , coverPhotoUrl : String
     , description : String
     , endDate : DateField
-    , flockId : Maybe Data.FlockId.FlockId
+    , flockId : Maybe Data.SharedTripId.SharedTripId
     , id : TripId
     , name : String
     , startDate : DateField
@@ -145,7 +145,7 @@ side so legacy / not-yet-targeted call sites keep working.
 
 -}
 type TripTarget
-    = InFlock Data.FlockId.FlockId
+    = InFlock Data.SharedTripId.SharedTripId
     | Personal
 
 
@@ -162,7 +162,7 @@ flock-local PouchDB, then rewrites the form's target to
 -}
 type CreateTarget
     = ToPersonal
-    | ToExistingFlock Data.FlockId.FlockId
+    | ToExistingFlock Data.SharedTripId.SharedTripId
     | ToNewFlock NewFlockDraft
 
 
@@ -248,7 +248,7 @@ decoder =
         |> Pipeline.required "coverPhotoUrl" D.string
         |> Pipeline.required "description" D.string
         |> Pipeline.required "endDate" DateField.decoder
-        |> Pipeline.optional "flockId" (D.nullable Data.FlockId.decoder) Nothing
+        |> Pipeline.optional "flockId" (D.nullable Data.SharedTripId.decoder) Nothing
         |> Pipeline.required "_id" TripId.decode
         |> Pipeline.required "name" D.string
         |> Pipeline.required "startDate" DateField.decoder
@@ -284,7 +284,7 @@ encodeTarget target =
         InFlock fid ->
             E.object
                 [ ( "kind", E.string "InFlock" )
-                , ( "flockId", Data.FlockId.encode fid )
+                , ( "flockId", Data.SharedTripId.encode fid )
                 ]
 
         Personal ->
@@ -307,7 +307,7 @@ tier governs this trip's paid features?"
 
 -}
 type alias TierContext a =
-    { a | currentUser : UserId, flocks : Flocks, tier : Tier }
+    { a | currentUser : UserId, sharedTrips : SharedTrips, tier : Tier }
 
 
 {-| The tier that gates paid features on this trip.
@@ -324,7 +324,7 @@ effectiveTier : Trip -> TierContext a -> Tier
 effectiveTier trip ctx =
     case trip.flockId of
         Just fid ->
-            case Data.Flocks.get fid ctx.flocks of
+            case Data.SharedTrips.get fid ctx.sharedTrips of
                 Just flock ->
                     ownerTier flock ctx
 
@@ -342,7 +342,7 @@ billing-lapsed flocks are surfaced separately via `billingStatus`
 (handled by #64). Falls back to `Osprey` (optimistic paid) when the
 owner is someone else.
 -}
-ownerTier : Flock -> TierContext a -> Tier
+ownerTier : SharedTrip -> TierContext a -> Tier
 ownerTier flock ctx =
     if flock.billingOwner == ctx.currentUser then
         ctx.tier

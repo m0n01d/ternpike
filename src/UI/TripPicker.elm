@@ -11,17 +11,17 @@ picker only renders. Each candidate trip is a `<button>` that dispatches
 
 import Data.DateField as DateField
 import Data.Expense exposing (Expense)
-import Data.Flock
-import Data.Flocks exposing (Flocks)
 import Data.Money as Money
+import Data.SharedTrip
+import Data.SharedTrips exposing (SharedTrips)
 import Data.Trip exposing (Trip)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Types exposing (Msg(..))
 import UI.Avatar
-import UI.FlockBadge
 import UI.Icons
+import UI.SharedTripBadge
 
 
 {-| Render the move-expense trip picker. The expense's current trip is
@@ -29,7 +29,7 @@ filtered out — only candidate destinations are shown. Caller is
 responsible for not rendering this when the destinations list is empty
 (the row menu hides the "Move to trip…" entry in that case).
 -}
-viewMove : { expense : Expense, flocks : Flocks, trips : List Trip } -> Html Msg
+viewMove : { expense : Expense, flocks : SharedTrips, trips : List Trip } -> Html Msg
 viewMove { expense, flocks, trips } =
     let
         candidates =
@@ -59,11 +59,11 @@ viewMove { expense, flocks, trips } =
         ]
 
 
-viewCandidate : Expense -> Flocks -> Trip -> Html Msg
+viewCandidate : Expense -> SharedTrips -> Trip -> Html Msg
 viewCandidate expense flocks trip =
     let
         maybeFlock =
-            trip.flockId |> Maybe.andThen (\fid -> Data.Flocks.get fid flocks)
+            trip.flockId |> Maybe.andThen (\fid -> Data.SharedTrips.get fid flocks)
     in
     Html.button
         [ Html.Attributes.type_ "button"
@@ -74,7 +74,7 @@ viewCandidate expense flocks trip =
             [ case maybeFlock of
                 Just flock ->
                     Html.div [ Html.Attributes.class "mb-1" ]
-                        [ UI.FlockBadge.view flock ]
+                        [ UI.SharedTripBadge.view flock ]
 
                 Nothing ->
                     Html.text ""
@@ -85,7 +85,7 @@ viewCandidate expense flocks trip =
                     [ Html.text (dateRange trip) ]
                 , case maybeFlock of
                     Just flock ->
-                        UI.Avatar.viewStack (Data.Flock.members flock)
+                        UI.Avatar.viewStack (Data.SharedTrip.members flock)
 
                     Nothing ->
                         Html.text ""

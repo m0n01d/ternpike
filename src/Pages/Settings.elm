@@ -4,7 +4,7 @@ import Data.Auth exposing (AppConfig)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Pages.Settings.Flocks
+import Pages.Settings.SharedTrips
 import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Card
@@ -18,7 +18,7 @@ viewTab as_ =
     , body =
         Html.div []
             [ viewBody as_.config (Just as_.showDayIntensity) as_.showInstallPrompt as_.version
-            , Pages.Settings.Flocks.view as_
+            , Pages.Settings.SharedTrips.view as_
             ]
     , hero = viewHero as_.config
     }

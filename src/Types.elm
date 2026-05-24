@@ -40,15 +40,15 @@ import Data.Category exposing (Category)
 import Data.DateField exposing (DateField)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
-import Data.FlockId exposing (FlockId)
-import Data.FlockUi exposing (FlockUiState)
-import Data.Flocks
 import Data.Guest exposing (GuestSession)
 import Data.Navigation exposing (Route)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PendingEntry exposing (ParsedEntry, PendingForm)
 import Data.Scan exposing (ScanItem)
 import Data.ScanItemId exposing (ScanItemId)
+import Data.SharedTripId exposing (SharedTripId)
+import Data.SharedTripUi exposing (SharedTripUiState)
+import Data.SharedTrips
 import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
 import Data.Sync exposing (SyncState)
@@ -61,7 +61,7 @@ import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import File exposing (File)
 import Http
-import Http.FlockApi
+import Http.SharedTripApi
 import Json.Decode
 import Set exposing (Set)
 import Time
@@ -166,8 +166,8 @@ type alias AuthState =
     , currentUser : Data.UserId.UserId
     , error : Maybe String
     , expenses : Dict String (Dict String Expense)
-    , flockUi : FlockUiState
-    , flocks : Data.Flocks.Flocks
+    , sharedTripUi : SharedTripUiState
+    , sharedTrips : Data.SharedTrips.SharedTrips
     , form : PendingForm
     , geoBlocked : Bool
     , key : Nav.Key
@@ -269,9 +269,9 @@ type Msg
     | CancelDeleteTrip
     | CategorySelected Category
     | ClearDoneItems
-    | CloseFlockModal
-    | CreateFlockNameChanged String
-    | CreateFlockResult (Result Http.Error Http.FlockApi.CreateFlockResponse)
+    | CloseSharedTripModal
+    | CreateSharedTripNameChanged String
+    | CreateSharedTripResult (Result Http.Error Http.SharedTripApi.CreateSharedTripResponse)
     | CloseLedgerMenu
     | CloseMovePicker
     | CloseTripForm
@@ -299,12 +299,12 @@ type Msg
     | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
     | HoverDailyBars (List (CI.One DailyDay CI.Bar))
     | InviteEmailChanged String
-    | InviteToFlockResult (Result Http.Error ())
-    | JoinFlockAccepted String
-    | JoinFlockDeclined
-    | JoinFlockResult (Result Http.Error Http.FlockApi.JoinFlockResponse)
-    | LeaveFlockConfirmed FlockId
-    | LeaveFlockResult (Result Http.Error ())
+    | InviteToSharedTripResult (Result Http.Error ())
+    | JoinSharedTripAccepted String
+    | JoinSharedTripDeclined
+    | JoinSharedTripResult (Result Http.Error Http.SharedTripApi.JoinSharedTripResponse)
+    | LeaveSharedTripConfirmed SharedTripId
+    | LeaveSharedTripResult (Result Http.Error ())
     | LinkClicked Browser.UrlRequest
     | LongNoteChanged String
     | MapPickerConfirmed Float Float
@@ -313,14 +313,14 @@ type Msg
     | NetworkStatusChanged Bool
     | NoteChanged String
     | OpenEditTripForm Trip
-    | OpenCreateFlockModal
-    | OpenInviteModal FlockId
-    | OpenLeaveConfirmModal FlockId
+    | OpenCreateSharedTripModal
+    | OpenInviteModal SharedTripId
+    | OpenLeaveConfirmModal SharedTripId
     | OpenLedgerMenu ExpenseId
     | OpenMapPicker
     | OpenMovePicker Expense
     | OpenNewTripForm
-    | OpenTransferModal FlockId
+    | OpenTransferModal SharedTripId
     | PaymentMethodChanged (Maybe PaymentMethod)
     | RefreshClicked
     | RequestCodeResult (Result Http.Error ())
@@ -335,19 +335,19 @@ type Msg
     | SubmitCode
     | SubmitEmail
     | SubmitEntry
-    | SubmitCreateFlock
+    | SubmitCreateSharedTrip
     | SubmitInvite
     | SubmitTransfer
-    | TakeOverBilling FlockId
+    | TakeOverBilling SharedTripId
     | ToastExpired
     | ToggleDayIntensity
-    | ToggleFlockMembers FlockId
+    | ToggleSharedTripMembers SharedTripId
     | ToggleGuestSettings
     | ToggleLedgerMap
     | TransferTargetChanged String
-    | TransferToFlockResult (Result Http.Error ())
+    | TransferToSharedTripResult (Result Http.Error ())
     | TriggerInstallPrompt
-    | TripCreateFlockResult (Result Http.Error Http.FlockApi.CreateFlockResponse)
+    | TripCreateSharedTripResult (Result Http.Error Http.SharedTripApi.CreateSharedTripResponse)
     | TripFieldChanged TripField String
     | TripGroupNameChanged String
     | TripInviteResult Int (Result Http.Error ())

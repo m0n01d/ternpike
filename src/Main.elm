@@ -78,10 +78,6 @@ import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
 import Data.Expense as Expense
 import Data.ExpenseId as ExpenseId
-import Data.Flock as Flock
-import Data.FlockId
-import Data.FlockUi as FlockUi
-import Data.Flocks as Flocks
 import Data.GeoPoint as GeoPoint
 import Data.Guest exposing (GuestReason(..), GuestSession)
 import Data.Iso8601 as Iso8601
@@ -93,6 +89,10 @@ import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..)
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
+import Data.SharedTrip as SharedTrip
+import Data.SharedTripId
+import Data.SharedTripUi as SharedTripUi
+import Data.SharedTrips as SharedTrips
 import Data.StatsHover as StatsHover
 import Data.Sync exposing (SyncState(..))
 import Data.Tier as Tier
@@ -107,17 +107,17 @@ import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Http
-import Http.FlockApi
+import Http.SharedTripApi
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
 import Pages.Add
 import Pages.Guest exposing (viewGuest)
-import Pages.JoinFlock
+import Pages.JoinSharedTrip
 import Pages.Ledger
 import Pages.Scan
 import Pages.Settings
-import Pages.Settings.Flocks
+import Pages.Settings.SharedTrips
 import Pages.Stats
 import Pages.Trips
 import Process
@@ -212,8 +212,8 @@ toAuthState creds initialRoute gs =
     , currentUser = UserId.fromString creds.email
     , error = Nothing
     , expenses = Dict.empty
-    , flockUi = FlockUi.empty
-    , flocks = Flocks.empty
+    , sharedTripUi = SharedTripUi.empty
+    , sharedTrips = SharedTrips.empty
     , form = FreshForm (defaultPendingEntry gs.today)
     , geoBlocked = False
     , key = gs.key
@@ -303,7 +303,7 @@ encodePouchOut msg =
         OpenFlock { dbName, flockId } ->
             E.object
                 [ ( "tag", E.string "OpenFlock" )
-                , ( "flockId", Data.FlockId.encode flockId )
+                , ( "flockId", Data.SharedTripId.encode flockId )
                 , ( "dbName", E.string dbName )
                 ]
 
@@ -385,10 +385,10 @@ pouchInDecoder =
                             expenseBundleDecoder
 
                     "FlockMeta" ->
-                        D.map FlockMetaChanged (D.field "doc" Flock.decoder)
+                        D.map FlockMetaChanged (D.field "doc" SharedTrip.decoder)
 
                     "FlocksReconciled" ->
-                        D.map FlocksReconciled (D.field "flockIds" (D.list Data.FlockId.decoder))
+                        D.map FlocksReconciled (D.field "flockIds" (D.list Data.SharedTripId.decoder))
 
                     "SyncState" ->
                         D.map SyncStateMsg (D.field "state" syncStateDecoder)
@@ -1281,7 +1281,7 @@ update msg model =
         ClearDoneItems ->
             ( nextModel, cmd )
 
-        CloseFlockModal ->
+        CloseSharedTripModal ->
             ( nextModel, cmd )
 
         CloseLedgerMenu ->
@@ -1299,10 +1299,10 @@ update msg model =
         ConfirmDeleteTrip _ ->
             ( nextModel, cmd )
 
-        CreateFlockNameChanged _ ->
+        CreateSharedTripNameChanged _ ->
             ( nextModel, cmd )
 
-        CreateFlockResult _ ->
+        CreateSharedTripResult _ ->
             ( nextModel, cmd )
 
         DateChanged _ ->
@@ -1371,22 +1371,22 @@ update msg model =
         InviteEmailChanged _ ->
             ( nextModel, cmd )
 
-        InviteToFlockResult _ ->
+        InviteToSharedTripResult _ ->
             ( nextModel, cmd )
 
-        JoinFlockAccepted _ ->
+        JoinSharedTripAccepted _ ->
             ( nextModel, cmd )
 
-        JoinFlockDeclined ->
+        JoinSharedTripDeclined ->
             ( nextModel, cmd )
 
-        JoinFlockResult _ ->
+        JoinSharedTripResult _ ->
             ( nextModel, cmd )
 
-        LeaveFlockConfirmed _ ->
+        LeaveSharedTripConfirmed _ ->
             ( nextModel, cmd )
 
-        LeaveFlockResult _ ->
+        LeaveSharedTripResult _ ->
             ( nextModel, cmd )
 
         LinkClicked _ ->
@@ -1410,7 +1410,7 @@ update msg model =
         NoteChanged _ ->
             ( nextModel, cmd )
 
-        OpenCreateFlockModal ->
+        OpenCreateSharedTripModal ->
             ( nextModel, cmd )
 
         OpenEditTripForm _ ->
@@ -1473,7 +1473,7 @@ update msg model =
         SubmitCode ->
             ( nextModel, cmd )
 
-        SubmitCreateFlock ->
+        SubmitCreateSharedTrip ->
             ( nextModel, cmd )
 
         SubmitEmail ->
@@ -1497,7 +1497,7 @@ update msg model =
         ToggleDayIntensity ->
             ( nextModel, cmd )
 
-        ToggleFlockMembers _ ->
+        ToggleSharedTripMembers _ ->
             ( nextModel, cmd )
 
         ToggleGuestSettings ->
@@ -1509,13 +1509,13 @@ update msg model =
         TransferTargetChanged _ ->
             ( nextModel, cmd )
 
-        TransferToFlockResult _ ->
+        TransferToSharedTripResult _ ->
             ( nextModel, cmd )
 
         TriggerInstallPrompt ->
             ( nextModel, cmd )
 
-        TripCreateFlockResult _ ->
+        TripCreateSharedTripResult _ ->
             ( nextModel, cmd )
 
         TripFieldChanged _ _ ->
@@ -1681,7 +1681,7 @@ updateGuest msg gs =
         ClearDoneItems ->
             ( GuestModel gs, Cmd.none )
 
-        CloseFlockModal ->
+        CloseSharedTripModal ->
             ( GuestModel gs, Cmd.none )
 
         CloseLedgerMenu ->
@@ -1696,10 +1696,10 @@ updateGuest msg gs =
         ConfirmDeleteTrip _ ->
             ( GuestModel gs, Cmd.none )
 
-        CreateFlockNameChanged _ ->
+        CreateSharedTripNameChanged _ ->
             ( GuestModel gs, Cmd.none )
 
-        CreateFlockResult _ ->
+        CreateSharedTripResult _ ->
             ( GuestModel gs, Cmd.none )
 
         DateChanged _ ->
@@ -1762,22 +1762,22 @@ updateGuest msg gs =
         InviteEmailChanged _ ->
             ( GuestModel gs, Cmd.none )
 
-        InviteToFlockResult _ ->
+        InviteToSharedTripResult _ ->
             ( GuestModel gs, Cmd.none )
 
-        JoinFlockAccepted _ ->
+        JoinSharedTripAccepted _ ->
             ( GuestModel gs, Cmd.none )
 
-        JoinFlockDeclined ->
+        JoinSharedTripDeclined ->
             ( GuestModel gs, Cmd.none )
 
-        JoinFlockResult _ ->
+        JoinSharedTripResult _ ->
             ( GuestModel gs, Cmd.none )
 
-        LeaveFlockConfirmed _ ->
+        LeaveSharedTripConfirmed _ ->
             ( GuestModel gs, Cmd.none )
 
-        LeaveFlockResult _ ->
+        LeaveSharedTripResult _ ->
             ( GuestModel gs, Cmd.none )
 
         LongNoteChanged _ ->
@@ -1795,7 +1795,7 @@ updateGuest msg gs =
         NoteChanged _ ->
             ( GuestModel gs, Cmd.none )
 
-        OpenCreateFlockModal ->
+        OpenCreateSharedTripModal ->
             ( GuestModel gs, Cmd.none )
 
         OpenEditTripForm _ ->
@@ -1849,7 +1849,7 @@ updateGuest msg gs =
         SkipLocation ->
             ( GuestModel gs, Cmd.none )
 
-        SubmitCreateFlock ->
+        SubmitCreateSharedTrip ->
             ( GuestModel gs, Cmd.none )
 
         SubmitEntry ->
@@ -1870,7 +1870,7 @@ updateGuest msg gs =
         ToggleDayIntensity ->
             ( GuestModel gs, Cmd.none )
 
-        ToggleFlockMembers _ ->
+        ToggleSharedTripMembers _ ->
             ( GuestModel gs, Cmd.none )
 
         ToggleLedgerMap ->
@@ -1879,13 +1879,13 @@ updateGuest msg gs =
         TransferTargetChanged _ ->
             ( GuestModel gs, Cmd.none )
 
-        TransferToFlockResult _ ->
+        TransferToSharedTripResult _ ->
             ( GuestModel gs, Cmd.none )
 
         TriggerInstallPrompt ->
             ( GuestModel gs, Cmd.none )
 
-        TripCreateFlockResult _ ->
+        TripCreateSharedTripResult _ ->
             ( GuestModel gs, Cmd.none )
 
         TripFieldChanged _ _ ->
@@ -1978,11 +1978,11 @@ updateAuth msg as_ =
                 Ok (FlockMetaChanged flock) ->
                     ( AuthModel
                         { as_
-                            | flocks =
+                            | sharedTrips =
                                 Dict.insert
-                                    (Data.FlockId.toString flock.id)
+                                    (Data.SharedTripId.toString flock.id)
                                     flock
-                                    as_.flocks
+                                    as_.sharedTrips
                         }
                     , Cmd.none
                     )
@@ -1991,12 +1991,12 @@ updateAuth msg as_ =
                     let
                         keep =
                             flockIds
-                                |> List.map Data.FlockId.toString
+                                |> List.map Data.SharedTripId.toString
                                 |> Set.fromList
                     in
                     ( AuthModel
                         { as_
-                            | flocks = Dict.filter (\k _ -> Set.member k keep) as_.flocks
+                            | sharedTrips = Dict.filter (\k _ -> Set.member k keep) as_.sharedTrips
                         }
                     , Cmd.none
                     )
@@ -2862,7 +2862,7 @@ updateAuth msg as_ =
             , Cmd.none
             )
 
-        TripCreateFlockResult result ->
+        TripCreateSharedTripResult result ->
             case ( as_.tripForm, result ) of
                 ( Nothing, _ ) ->
                     ( AuthModel as_, Cmd.none )
@@ -2893,23 +2893,23 @@ updateAuth msg as_ =
                         inviteCmds =
                             List.indexedMap
                                 (\i email ->
-                                    Http.FlockApi.inviteToFlock
+                                    Http.SharedTripApi.inviteToSharedTrip
                                         as_.creds
-                                        response.flockId
+                                        response.sharedTripId
                                         { email = email }
                                         (TripInviteResult i)
                                 )
                                 invitees
 
                         updatedForm =
-                            { form | target = Trip.ToExistingFlock response.flockId }
+                            { form | target = Trip.ToExistingFlock response.sharedTripId }
                     in
                     ( AuthModel { as_ | tripForm = Just updatedForm }
                     , Cmd.batch
                         ([ sendPouch
                             (OpenFlock
-                                { flockId = response.flockId
-                                , dbName = "flock-" ++ Data.FlockId.toString response.flockId
+                                { flockId = response.sharedTripId
+                                , dbName = "flock-" ++ Data.SharedTripId.toString response.sharedTripId
                                 }
                             )
                          , Task.perform GotSaveTripTime Time.now
@@ -2968,7 +2968,7 @@ updateAuth msg as_ =
                                                         String.trim form.name
                                             in
                                             ( AuthModel { as_ | tripForm = Just { form | submitting = True, errors = [] } }
-                                            , Http.FlockApi.createFlock as_.creds { name = groupName } TripCreateFlockResult
+                                            , Http.SharedTripApi.createSharedTrip as_.creds { name = groupName } TripCreateSharedTripResult
                                             )
 
                                         _ ->
@@ -3144,52 +3144,52 @@ updateAuth msg as_ =
 
         TakeOverBilling flockId ->
             ( AuthModel as_
-            , Http.FlockApi.transferOwnership
+            , Http.SharedTripApi.transferOwnership
                 as_.creds
                 flockId
                 { newOwnerEmail = as_.creds.email }
-                TransferToFlockResult
+                TransferToSharedTripResult
             )
 
         -- FLOCK MODAL MESSAGES
-        CloseFlockModal ->
-            ( AuthModel (setFlockModal FlockUi.NoModal as_), Cmd.none )
+        CloseSharedTripModal ->
+            ( AuthModel (setSharedTripModal SharedTripUi.NoModal as_), Cmd.none )
 
-        ToggleFlockMembers flockId ->
+        ToggleSharedTripMembers flockId ->
             let
                 ui =
-                    as_.flockUi
+                    as_.sharedTripUi
             in
-            ( AuthModel { as_ | flockUi = FlockUi.toggleExpanded flockId ui }
+            ( AuthModel { as_ | sharedTripUi = SharedTripUi.toggleExpanded flockId ui }
             , Cmd.none
             )
 
-        OpenCreateFlockModal ->
-            ( AuthModel (setFlockModal (FlockUi.CreateModal { error = Nothing, name = "" }) as_)
+        OpenCreateSharedTripModal ->
+            ( AuthModel (setSharedTripModal (SharedTripUi.CreateModal { error = Nothing, name = "" }) as_)
             , Cmd.none
             )
 
-        CreateFlockNameChanged name ->
+        CreateSharedTripNameChanged name ->
             let
                 ui =
-                    as_.flockUi
+                    as_.sharedTripUi
             in
             case ui.modal of
-                FlockUi.CreateModal m ->
-                    ( AuthModel { as_ | flockUi = { ui | modal = FlockUi.CreateModal { m | name = name } } }
+                SharedTripUi.CreateModal m ->
+                    ( AuthModel { as_ | sharedTripUi = { ui | modal = SharedTripUi.CreateModal { m | name = name } } }
                     , Cmd.none
                     )
 
                 _ ->
                     ( AuthModel as_, Cmd.none )
 
-        SubmitCreateFlock ->
+        SubmitCreateSharedTrip ->
             let
                 ui =
-                    as_.flockUi
+                    as_.sharedTripUi
             in
             case ui.modal of
-                FlockUi.CreateModal { name } ->
+                SharedTripUi.CreateModal { name } ->
                     let
                         trimmed =
                             String.trim name
@@ -3197,26 +3197,26 @@ updateAuth msg as_ =
                     if trimmed == "" then
                         let
                             newModal =
-                                FlockUi.CreateModal { error = Just "Name is required.", name = name }
+                                SharedTripUi.CreateModal { error = Just "Name is required.", name = name }
                         in
-                        ( AuthModel { as_ | flockUi = { ui | modal = newModal } }
+                        ( AuthModel { as_ | sharedTripUi = { ui | modal = newModal } }
                         , Cmd.none
                         )
 
                     else
                         ( AuthModel (setFlockInFlight True as_)
-                        , Http.FlockApi.createFlock as_.creds { name = trimmed } CreateFlockResult
+                        , Http.SharedTripApi.createSharedTrip as_.creds { name = trimmed } CreateSharedTripResult
                         )
 
                 _ ->
                     ( AuthModel as_, Cmd.none )
 
-        CreateFlockResult (Err err) ->
+        CreateSharedTripResult (Err err) ->
             ( AuthModel (storeFlockError err as_), Cmd.none )
 
-        CreateFlockResult (Ok _) ->
+        CreateSharedTripResult (Ok _) ->
             ( AuthModel
-                (setFlockModal FlockUi.NoModal
+                (setSharedTripModal SharedTripUi.NoModal
                     { as_
                         | toast = Just "Flock created. It'll show up here once sync settles."
                     }
@@ -3225,18 +3225,18 @@ updateAuth msg as_ =
             )
 
         OpenInviteModal flockId ->
-            ( AuthModel (setFlockModal (FlockUi.InviteModal flockId { email = "", error = Nothing }) as_)
+            ( AuthModel (setSharedTripModal (SharedTripUi.InviteModal flockId { email = "", error = Nothing }) as_)
             , Cmd.none
             )
 
         InviteEmailChanged email ->
             let
                 ui =
-                    as_.flockUi
+                    as_.sharedTripUi
             in
             case ui.modal of
-                FlockUi.InviteModal id m ->
-                    ( AuthModel { as_ | flockUi = { ui | modal = FlockUi.InviteModal id { m | email = email } } }
+                SharedTripUi.InviteModal id m ->
+                    ( AuthModel { as_ | sharedTripUi = { ui | modal = SharedTripUi.InviteModal id { m | email = email } } }
                     , Cmd.none
                     )
 
@@ -3244,21 +3244,21 @@ updateAuth msg as_ =
                     ( AuthModel as_, Cmd.none )
 
         SubmitInvite ->
-            case as_.flockUi.modal of
-                FlockUi.InviteModal flockId { email } ->
+            case as_.sharedTripUi.modal of
+                SharedTripUi.InviteModal flockId { email } ->
                     ( AuthModel (setFlockInFlight True as_)
-                    , Http.FlockApi.inviteToFlock as_.creds flockId { email = email } InviteToFlockResult
+                    , Http.SharedTripApi.inviteToSharedTrip as_.creds flockId { email = email } InviteToSharedTripResult
                     )
 
                 _ ->
                     ( AuthModel as_, Cmd.none )
 
-        InviteToFlockResult (Err err) ->
+        InviteToSharedTripResult (Err err) ->
             ( AuthModel (storeFlockError err as_), Cmd.none )
 
-        InviteToFlockResult (Ok ()) ->
+        InviteToSharedTripResult (Ok ()) ->
             ( AuthModel
-                (setFlockModal FlockUi.NoModal
+                (setSharedTripModal SharedTripUi.NoModal
                     { as_
                         | toast = Just "Invite sent."
                     }
@@ -3267,36 +3267,36 @@ updateAuth msg as_ =
             )
 
         OpenLeaveConfirmModal flockId ->
-            ( AuthModel (setFlockModal (FlockUi.LeaveConfirmModal flockId { error = Nothing }) as_)
+            ( AuthModel (setSharedTripModal (SharedTripUi.LeaveConfirmModal flockId { error = Nothing }) as_)
             , Cmd.none
             )
 
-        LeaveFlockConfirmed flockId ->
+        LeaveSharedTripConfirmed flockId ->
             ( AuthModel (setFlockInFlight True as_)
-            , Http.FlockApi.leaveFlock as_.creds flockId LeaveFlockResult
+            , Http.SharedTripApi.leaveSharedTrip as_.creds flockId LeaveSharedTripResult
             )
 
-        LeaveFlockResult (Err err) ->
+        LeaveSharedTripResult (Err err) ->
             ( AuthModel (storeFlockError err as_), Cmd.none )
 
-        LeaveFlockResult (Ok ()) ->
-            ( AuthModel (setFlockModal FlockUi.NoModal { as_ | toast = Just "Left flock." })
+        LeaveSharedTripResult (Ok ()) ->
+            ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Left flock." })
             , toastFor "Left flock."
             )
 
         OpenTransferModal flockId ->
-            ( AuthModel (setFlockModal (FlockUi.TransferModal flockId { error = Nothing, target = "" }) as_)
+            ( AuthModel (setSharedTripModal (SharedTripUi.TransferModal flockId { error = Nothing, target = "" }) as_)
             , Cmd.none
             )
 
         TransferTargetChanged target ->
             let
                 ui =
-                    as_.flockUi
+                    as_.sharedTripUi
             in
             case ui.modal of
-                FlockUi.TransferModal id m ->
-                    ( AuthModel { as_ | flockUi = { ui | modal = FlockUi.TransferModal id { m | target = target } } }
+                SharedTripUi.TransferModal id m ->
+                    ( AuthModel { as_ | sharedTripUi = { ui | modal = SharedTripUi.TransferModal id { m | target = target } } }
                     , Cmd.none
                     )
 
@@ -3304,34 +3304,34 @@ updateAuth msg as_ =
                     ( AuthModel as_, Cmd.none )
 
         SubmitTransfer ->
-            case as_.flockUi.modal of
-                FlockUi.TransferModal flockId { target } ->
+            case as_.sharedTripUi.modal of
+                SharedTripUi.TransferModal flockId { target } ->
                     ( AuthModel (setFlockInFlight True as_)
-                    , Http.FlockApi.transferOwnership as_.creds flockId { newOwnerEmail = target } TransferToFlockResult
+                    , Http.SharedTripApi.transferOwnership as_.creds flockId { newOwnerEmail = target } TransferToSharedTripResult
                     )
 
                 _ ->
                     ( AuthModel as_, Cmd.none )
 
-        TransferToFlockResult (Err err) ->
+        TransferToSharedTripResult (Err err) ->
             ( AuthModel (storeFlockError err as_), Cmd.none )
 
-        TransferToFlockResult (Ok ()) ->
-            ( AuthModel (setFlockModal FlockUi.NoModal { as_ | toast = Just "Ownership transferred." })
+        TransferToSharedTripResult (Ok ()) ->
+            ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Ownership transferred." })
             , toastFor "Ownership transferred."
             )
 
-        JoinFlockAccepted token ->
+        JoinSharedTripAccepted token ->
             ( AuthModel as_
-            , Http.FlockApi.joinFlock as_.creds { token = token } JoinFlockResult
+            , Http.SharedTripApi.joinSharedTrip as_.creds { token = token } JoinSharedTripResult
             )
 
-        JoinFlockDeclined ->
+        JoinSharedTripDeclined ->
             ( AuthModel { as_ | route = RouteTrips }
             , Nav.pushUrl as_.key (as_.basePath ++ "trips")
             )
 
-        JoinFlockResult (Ok response) ->
+        JoinSharedTripResult (Ok response) ->
             ( AuthModel
                 { as_
                     | route = RouteSettings
@@ -3343,7 +3343,7 @@ updateAuth msg as_ =
                 ]
             )
 
-        JoinFlockResult (Err err) ->
+        JoinSharedTripResult (Err err) ->
             ( AuthModel { as_ | error = Just (joinErrorMessage err) }, Cmd.none )
 
         -- Messages that only apply to the guest (unauthenticated) state.
@@ -3378,22 +3378,22 @@ updateAuth msg as_ =
 -- FLOCK HELPERS
 
 
-setFlockModal : FlockUi.FlockModal -> AuthState -> AuthState
-setFlockModal modal as_ =
+setSharedTripModal : SharedTripUi.SharedTripModal -> AuthState -> AuthState
+setSharedTripModal modal as_ =
     let
         ui =
-            as_.flockUi
+            as_.sharedTripUi
     in
-    { as_ | flockUi = { ui | inFlight = False, modal = modal } }
+    { as_ | sharedTripUi = { ui | inFlight = False, modal = modal } }
 
 
 setFlockInFlight : Bool -> AuthState -> AuthState
 setFlockInFlight v as_ =
     let
         ui =
-            as_.flockUi
+            as_.sharedTripUi
     in
-    { as_ | flockUi = { ui | inFlight = v } }
+    { as_ | sharedTripUi = { ui | inFlight = v } }
 
 
 storeFlockError : Http.Error -> AuthState -> AuthState
@@ -3403,26 +3403,26 @@ storeFlockError err as_ =
             flockErrorMessage err
 
         ui =
-            as_.flockUi
+            as_.sharedTripUi
 
         newModal =
             case ui.modal of
-                FlockUi.CreateModal m ->
-                    FlockUi.CreateModal { m | error = Just message }
+                SharedTripUi.CreateModal m ->
+                    SharedTripUi.CreateModal { m | error = Just message }
 
-                FlockUi.InviteModal id m ->
-                    FlockUi.InviteModal id { m | error = Just message }
+                SharedTripUi.InviteModal id m ->
+                    SharedTripUi.InviteModal id { m | error = Just message }
 
-                FlockUi.LeaveConfirmModal id _ ->
-                    FlockUi.LeaveConfirmModal id { error = Just message }
+                SharedTripUi.LeaveConfirmModal id _ ->
+                    SharedTripUi.LeaveConfirmModal id { error = Just message }
 
-                FlockUi.TransferModal id m ->
-                    FlockUi.TransferModal id { m | error = Just message }
+                SharedTripUi.TransferModal id m ->
+                    SharedTripUi.TransferModal id { m | error = Just message }
 
-                FlockUi.NoModal ->
-                    FlockUi.NoModal
+                SharedTripUi.NoModal ->
+                    SharedTripUi.NoModal
     in
-    { as_ | flockUi = { ui | inFlight = False, modal = newModal } }
+    { as_ | sharedTripUi = { ui | inFlight = False, modal = newModal } }
 
 
 flockErrorMessage : Http.Error -> String
@@ -3511,7 +3511,7 @@ viewAuth as_ =
                     Pages.Add.viewTab as_
 
                 RouteJoinFlock token ->
-                    Pages.JoinFlock.viewAuth as_ token
+                    Pages.JoinSharedTrip.viewAuth as_ token
 
                 RouteLedger _ ->
                     Pages.Ledger.viewTab as_
@@ -3552,13 +3552,13 @@ viewAuth as_ =
             ( Just expense, TripsLoaded loadedTrips ) ->
                 UI.TripPicker.viewMove
                     { expense = expense
-                    , flocks = as_.flocks
+                    , flocks = as_.sharedTrips
                     , trips = Trips.allTrips loadedTrips
                     }
 
             _ ->
                 Html.text ""
-        , Pages.Settings.Flocks.viewModal as_
+        , Pages.Settings.SharedTrips.viewModal as_
         , UI.Layout.viewToast as_.toast
         ]
 
@@ -3574,7 +3574,7 @@ viewBillingBannerForRoute as_ route =
         ( Just tripId, TripsLoaded loadedTrips ) ->
             case Trips.findTrip tripId loadedTrips of
                 Just trip ->
-                    case Maybe.andThen (\fid -> Flocks.get fid as_.flocks) trip.flockId of
+                    case Maybe.andThen (\fid -> SharedTrips.get fid as_.sharedTrips) trip.flockId of
                         Just flock ->
                             UI.BillingBanner.view
                                 { currentUser = UserId.fromString as_.creds.email

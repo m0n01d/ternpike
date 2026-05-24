@@ -27,7 +27,7 @@ don't need to gate, but doing so saves a DOM node.
 -}
 
 import Data.DateField as DateField exposing (DateField)
-import Data.Flock as Flock exposing (BillingStatus(..), Flock)
+import Data.SharedTrip as SharedTrip exposing (BillingStatus(..), SharedTrip)
 import Data.Tier as Tier exposing (Tier)
 import Data.UserId as UserId exposing (UserId)
 import Html exposing (Html)
@@ -53,7 +53,7 @@ computed.
 Returns `Html.text ""` when the flock is `Active` — the common case.
 
 -}
-view : { currentUser : UserId, flock : Flock, tier : Tier, today : DateField } -> Html Msg
+view : { currentUser : UserId, flock : SharedTrip, tier : Tier, today : DateField } -> Html Msg
 view opts =
     let
         role =
@@ -82,7 +82,7 @@ view opts =
 chrome — sits inside an already-padded card. Returns `Html.text ""`
 when the flock is `Active`.
 -}
-viewInline : { currentUser : UserId, flock : Flock, tier : Tier, today : DateField } -> Html Msg
+viewInline : { currentUser : UserId, flock : SharedTrip, tier : Tier, today : DateField } -> Html Msg
 viewInline opts =
     let
         role =
@@ -125,12 +125,12 @@ type Tone
 type Cta
     = NoCta
     | Renew
-    | TransferToMe Flock
+    | TransferToMe SharedTrip
 
 
-roleFor : UserId -> Flock -> Tier -> Role
+roleFor : UserId -> SharedTrip -> Tier -> Role
 roleFor user flock tier =
-    if Flock.isOwner user flock then
+    if SharedTrip.isOwner user flock then
         Owner
 
     else if Tier.isPaid tier then
@@ -140,7 +140,7 @@ roleFor user flock tier =
         FledglingMember
 
 
-ctaFor : Role -> Flock -> Cta
+ctaFor : Role -> SharedTrip -> Cta
 ctaFor role flock =
     case role of
         Owner ->
@@ -174,7 +174,7 @@ graceCopy role days =
             "Owner's subscription lapsed. This flock becomes read-only in " ++ n ++ " days."
 
 
-frozenCopy : Role -> Flock -> String
+frozenCopy : Role -> SharedTrip -> String
 frozenCopy role flock =
     case role of
         Owner ->
@@ -197,10 +197,10 @@ frozenCopy role flock =
 when `billingLapsedAt` is missing or unparseable (the server should
 always set it for Grace, but we don't crash if it doesn't).
 `billingLapsedAt` is the legacy `"YYYY-MM-DDTHH:MM:SSZ"` ISO timestamp
-on `Data.Flock.Flock`; we only care about the calendar-day portion for
+on `Data.SharedTrip.SharedTrip`; we only care about the calendar-day portion for
 the countdown, so we trim to the date and parse with `DateField.fromIso`.
 -}
-daysRemaining : DateField -> Flock -> Int
+daysRemaining : DateField -> SharedTrip -> Int
 daysRemaining today flock =
     case Maybe.andThen (\iso -> DateField.fromIso (String.left 10 iso)) flock.billingLapsedAt of
         Nothing ->

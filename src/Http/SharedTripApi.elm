@@ -1,14 +1,14 @@
-module Http.FlockApi exposing
-    ( CreateFlockResponse
-    , JoinFlockResponse
-    , createFlock
-    , inviteToFlock
-    , joinFlock
-    , leaveFlock
+module Http.SharedTripApi exposing
+    ( CreateSharedTripResponse
+    , JoinSharedTripResponse
+    , createSharedTrip
+    , inviteToSharedTrip
+    , joinSharedTrip
+    , leaveSharedTrip
     , transferOwnership
     )
 
-{-| HTTP client for the five flock-membership endpoints served by
+{-| HTTP client for the five shared-trip-membership endpoints served by
 `api.ternpike.com`.
 
 These wrap the endpoints introduced in #57:
@@ -16,7 +16,7 @@ These wrap the endpoints introduced in #57:
   - `POST /flocks` — create.
   - `POST /flocks/:id/invite` — invite a user by email.
   - `POST /flocks/join` — redeem an invite JWT.
-  - `POST /flocks/:id/leave` — leave a flock (non-owner only).
+  - `POST /flocks/:id/leave` — leave a shared trip (non-owner only).
   - `POST /flocks/:id/transfer` — transfer ownership to another member.
 
 Every request uses HTTP Basic with the per-user CouchDB credentials
@@ -26,19 +26,19 @@ HMAC-derived value it issued at login.
 
 All response shapes are kept minimal — the new `flock:meta` doc lands
 through the live CouchDB changes feed, so the HTTP response only needs
-to confirm the action and (for create / join) hand back the flock id.
+to confirm the action and (for create / join) hand back the shared trip id.
 
 -}
 
 import Data.Auth exposing (Creds)
-import Data.FlockId as FlockId exposing (FlockId)
+import Data.SharedTripId as SharedTripId exposing (SharedTripId)
 import Http
 import Json.Decode
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
 
 
-{-| The base URL all flock endpoints sit beneath. Kept in one place so
+{-| The base URL all shared trip endpoints sit beneath. Kept in one place so
 swapping environments only touches this module.
 -}
 baseUrl : String
@@ -116,11 +116,11 @@ encodeBasic input =
     go bytes
 
 
-{-| Response from `POST /flocks`: just the new flock's id. The full
+{-| Response from `POST /flocks`: just the new shared trip's id. The full
 `flock:meta` document lands separately through the live changes feed.
 -}
-type alias CreateFlockResponse =
-    { flockId : FlockId
+type alias CreateSharedTripResponse =
+    { sharedTripId : SharedTripId
     }
 
 
@@ -128,34 +128,34 @@ type alias CreateFlockResponse =
 toast (the name) and navigate (the id). The full membership update
 lands through the live changes feed.
 -}
-type alias JoinFlockResponse =
-    { flockId : FlockId
-    , name : String
+type alias JoinSharedTripResponse =
+    { name : String
+    , sharedTripId : SharedTripId
     }
 
 
-createFlockResponseDecoder : Json.Decode.Decoder CreateFlockResponse
-createFlockResponseDecoder =
-    Json.Decode.succeed CreateFlockResponse
-        |> Pipeline.required "flockId" FlockId.decoder
+createSharedTripResponseDecoder : Json.Decode.Decoder CreateSharedTripResponse
+createSharedTripResponseDecoder =
+    Json.Decode.succeed CreateSharedTripResponse
+        |> Pipeline.required "flockId" SharedTripId.decoder
 
 
-joinFlockResponseDecoder : Json.Decode.Decoder JoinFlockResponse
-joinFlockResponseDecoder =
-    Json.Decode.succeed JoinFlockResponse
-        |> Pipeline.required "flockId" FlockId.decoder
+joinSharedTripResponseDecoder : Json.Decode.Decoder JoinSharedTripResponse
+joinSharedTripResponseDecoder =
+    Json.Decode.succeed JoinSharedTripResponse
         |> Pipeline.required "name" Json.Decode.string
+        |> Pipeline.required "flockId" SharedTripId.decoder
 
 
-{-| `POST /flocks` — create a flock. The server is responsible for
+{-| `POST /flocks` — create a shared trip. The server is responsible for
 checking the tier (Osprey+) and rejecting Tern creators.
 -}
-createFlock :
+createSharedTrip :
     Creds
     -> { name : String }
-    -> (Result Http.Error CreateFlockResponse -> msg)
+    -> (Result Http.Error CreateSharedTripResponse -> msg)
     -> Cmd msg
-createFlock creds { name } toMsg =
+createSharedTrip creds { name } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
@@ -165,7 +165,7 @@ createFlock creds { name } toMsg =
                 (Json.Encode.object
                     [ ( "name", Json.Encode.string name ) ]
                 )
-        , expect = Http.expectJson toMsg createFlockResponseDecoder
+        , expect = Http.expectJson toMsg createSharedTripResponseDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -174,17 +174,17 @@ createFlock creds { name } toMsg =
 {-| `POST /flocks/:id/invite` — owner-only invite by email. Server
 sends the JWT-bearing invite email via Resend and returns `204`.
 -}
-inviteToFlock :
+inviteToSharedTrip :
     Creds
-    -> FlockId
+    -> SharedTripId
     -> { email : String }
     -> (Result Http.Error () -> msg)
     -> Cmd msg
-inviteToFlock creds flockId { email } toMsg =
+inviteToSharedTrip creds sharedTripId { email } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/flocks/" ++ FlockId.toString flockId ++ "/invite"
+        , url = baseUrl ++ "/flocks/" ++ SharedTripId.toString sharedTripId ++ "/invite"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -200,12 +200,12 @@ inviteToFlock creds flockId { email } toMsg =
 the token's recipient against the calling user's email and 403s on
 mismatch.
 -}
-joinFlock :
+joinSharedTrip :
     Creds
     -> { token : String }
-    -> (Result Http.Error JoinFlockResponse -> msg)
+    -> (Result Http.Error JoinSharedTripResponse -> msg)
     -> Cmd msg
-joinFlock creds { token } toMsg =
+joinSharedTrip creds { token } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
@@ -215,26 +215,26 @@ joinFlock creds { token } toMsg =
                 (Json.Encode.object
                     [ ( "token", Json.Encode.string token ) ]
                 )
-        , expect = Http.expectJson toMsg joinFlockResponseDecoder
+        , expect = Http.expectJson toMsg joinSharedTripResponseDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
 
 
-{-| `POST /flocks/:id/leave` — leave a flock. The server rejects the
+{-| `POST /flocks/:id/leave` — leave a shared trip. The server rejects the
 billing owner attempting to leave while other members remain (must
 `transferOwnership` first).
 -}
-leaveFlock :
+leaveSharedTrip :
     Creds
-    -> FlockId
+    -> SharedTripId
     -> (Result Http.Error () -> msg)
     -> Cmd msg
-leaveFlock creds flockId toMsg =
+leaveSharedTrip creds sharedTripId toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/flocks/" ++ FlockId.toString flockId ++ "/leave"
+        , url = baseUrl ++ "/flocks/" ++ SharedTripId.toString sharedTripId ++ "/leave"
         , body = Http.emptyBody
         , expect = Http.expectWhatever toMsg
         , timeout = Nothing
@@ -248,15 +248,15 @@ and is on Osprey+ before accepting.
 -}
 transferOwnership :
     Creds
-    -> FlockId
+    -> SharedTripId
     -> { newOwnerEmail : String }
     -> (Result Http.Error () -> msg)
     -> Cmd msg
-transferOwnership creds flockId { newOwnerEmail } toMsg =
+transferOwnership creds sharedTripId { newOwnerEmail } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/flocks/" ++ FlockId.toString flockId ++ "/transfer"
+        , url = baseUrl ++ "/flocks/" ++ SharedTripId.toString sharedTripId ++ "/transfer"
         , body =
             Http.jsonBody
                 (Json.Encode.object

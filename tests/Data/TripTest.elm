@@ -1,9 +1,9 @@
 module Data.TripTest exposing (suite)
 
 import Data.DateField as DateField exposing (DateField)
-import Data.Flock exposing (BillingStatus(..), Flock)
-import Data.FlockId as FlockId exposing (FlockId)
-import Data.Flocks as Flocks
+import Data.SharedTrip exposing (BillingStatus(..), SharedTrip)
+import Data.SharedTripId as SharedTripId exposing (SharedTripId)
+import Data.SharedTrips as SharedTrips
 import Data.Money as Money
 import Data.Tier as Tier
 import Data.Trip as Trip exposing (Trip)
@@ -20,23 +20,23 @@ suite =
         [ test "personal trip returns the user's own tier" <|
             \_ ->
                 Trip.effectiveTier (personalTrip "trip::1::aaaaaaaa")
-                    { currentUser = member, tier = Tier.Tern, flocks = Flocks.empty }
+                    { currentUser = member, tier = Tier.Tern, sharedTrips = SharedTrips.empty }
                     |> Expect.equal Tier.Tern
         , test "personal trip for a paid user returns Osprey" <|
             \_ ->
                 Trip.effectiveTier (personalTrip "trip::2::bbbbbbbb")
-                    { currentUser = member, tier = Tier.Osprey, flocks = Flocks.empty }
+                    { currentUser = member, tier = Tier.Osprey, sharedTrips = SharedTrips.empty }
                     |> Expect.equal Tier.Osprey
         , test "active flock trip elevates a Tern member to Osprey" <|
             \_ ->
                 let
                     fid =
-                        validFlockId
+                        validSharedTripId
 
                     state =
                         { currentUser = member
                         , tier = Tier.Tern
-                        , flocks = Flocks.fromList [ flockWith fid Active ]
+                        , sharedTrips = SharedTrips.fromList [ sharedTripWith fid Active ]
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::3::cccccccc" fid) state
@@ -45,12 +45,12 @@ suite =
             \_ ->
                 let
                     fid =
-                        validFlockId
+                        validSharedTripId
 
                     state =
                         { currentUser = owner
                         , tier = Tier.Osprey
-                        , flocks = Flocks.fromList [ flockWith fid Active ]
+                        , sharedTrips = SharedTrips.fromList [ sharedTripWith fid Active ]
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::4::dddddddd" fid) state
@@ -59,12 +59,12 @@ suite =
             \_ ->
                 let
                     fid =
-                        validFlockId
+                        validSharedTripId
 
                     state =
                         { currentUser = owner
                         , tier = Tier.Tern
-                        , flocks = Flocks.fromList [ flockWith fid Grace ]
+                        , sharedTrips = SharedTrips.fromList [ sharedTripWith fid Grace ]
                         }
                 in
                 -- Under #63's semantics the helper doesn't read billingStatus —
@@ -76,12 +76,12 @@ suite =
             \_ ->
                 let
                     fid =
-                        validFlockId
+                        validSharedTripId
 
                     state =
                         { currentUser = owner
                         , tier = Tier.Osprey
-                        , flocks = Flocks.fromList [ flockWith fid Frozen ]
+                        , sharedTrips = SharedTrips.fromList [ sharedTripWith fid Frozen ]
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::6::ffffffff" fid) state
@@ -90,12 +90,12 @@ suite =
             \_ ->
                 let
                     fid =
-                        validFlockId
+                        validSharedTripId
 
                     state =
                         { currentUser = member
                         , tier = Tier.Tern
-                        , flocks = Flocks.empty
+                        , sharedTrips = SharedTrips.empty
                         }
                 in
                 Trip.effectiveTier (flockTrip "trip::7::99999999" fid) state
@@ -104,12 +104,12 @@ suite =
             \_ ->
                 let
                     fid =
-                        validFlockId
+                        validSharedTripId
 
                     state =
                         { currentUser = member
                         , tier = Tier.Tern
-                        , flocks = Flocks.fromList [ flockWith fid Active ]
+                        , sharedTrips = SharedTrips.fromList [ sharedTripWith fid Active ]
                         }
                 in
                 Trip.canUseProxiedOCR (flockTrip "trip::8::88888888" fid) state
@@ -117,18 +117,18 @@ suite =
         , test "canUseProxiedOCR is False on a personal trip for a Tern" <|
             \_ ->
                 Trip.canUseProxiedOCR (personalTrip "trip::9::77777777")
-                    { currentUser = member, tier = Tier.Tern, flocks = Flocks.empty }
+                    { currentUser = member, tier = Tier.Tern, sharedTrips = SharedTrips.empty }
                     |> Expect.equal False
         , test "canBatchScan is True on an active flock trip for a Tern member" <|
             \_ ->
                 let
                     fid =
-                        validFlockId
+                        validSharedTripId
 
                     state =
                         { currentUser = member
                         , tier = Tier.Tern
-                        , flocks = Flocks.fromList [ flockWith fid Active ]
+                        , sharedTrips = SharedTrips.fromList [ sharedTripWith fid Active ]
                         }
                 in
                 Trip.canBatchScan (flockTrip "trip::10::66666666" fid) state
@@ -153,7 +153,7 @@ personalTrip id =
     }
 
 
-flockTrip : String -> FlockId -> Trip
+flockTrip : String -> SharedTripId -> Trip
 flockTrip id fid =
     { budget = Money.zero
     , coverPhotoUrl = ""
@@ -175,29 +175,29 @@ epoch =
     DateField.today Time.utc (Time.millisToPosix 0)
 
 
-{-| A known-good 12-char hex FlockId used across the test fixtures. We
+{-| A known-good 12-char hex SharedTripId used across the test fixtures. We
 materialise it lazily through a function so the totality fallback can
 recurse without tripping Elm's top-level cyclic-value check.
-`FlockId.fromString "0123456789ab"` always returns `Just`, so the
+`SharedTripId.fromString "0123456789ab"` always returns `Just`, so the
 fallback is never evaluated.
 -}
-validFlockId : FlockId
-validFlockId =
-    mkFlockId ()
+validSharedTripId : SharedTripId
+validSharedTripId =
+    mkSharedTripId ()
 
 
-mkFlockId : () -> FlockId
-mkFlockId () =
-    case FlockId.fromString "0123456789ab" of
+mkSharedTripId : () -> SharedTripId
+mkSharedTripId () =
+    case SharedTripId.fromString "0123456789ab" of
         Just fid ->
             fid
 
         Nothing ->
-            mkFlockId ()
+            mkSharedTripId ()
 
 
-flockWith : FlockId -> BillingStatus -> Flock
-flockWith fid status =
+sharedTripWith : SharedTripId -> BillingStatus -> SharedTrip
+sharedTripWith fid status =
     { billingLapsedAt = Nothing
     , billingOwner = owner
     , billingStatus = status
