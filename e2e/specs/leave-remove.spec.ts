@@ -196,7 +196,7 @@ const openSettingsFlocks = async (page: Page): Promise<void> => {
   await expect(page.getByText('Local-first preferences')).toBeVisible({
     timeout: 15_000,
   })
-  await expect(page.getByText('FLOCKS', { exact: true })).toBeVisible({
+  await expect(page.getByText('SHARED TRIPS', { exact: true })).toBeVisible({
     timeout: 10_000,
   })
 }
@@ -311,7 +311,7 @@ test.describe('Shared trip leave + remove', () => {
 
     await bob.getByRole('button', { name: 'Leave' }).first().click()
     const leaveModal = bob.locator('div').filter({
-      has: bob.getByText('Leave flock?', { exact: true }),
+      has: bob.getByText('Leave shared trip?', { exact: true }),
     }).last()
     await expect(leaveModal).toBeVisible()
     await leaveModal.getByRole('button', { name: 'Leave', exact: true }).click()
@@ -368,7 +368,7 @@ test.describe('Shared trip leave + remove', () => {
     })
     await bob.getByRole('button', { name: 'Leave' }).first().click()
     const leaveModal = bob.locator('div').filter({
-      has: bob.getByText('Leave flock?', { exact: true }),
+      has: bob.getByText('Leave shared trip?', { exact: true }),
     }).last()
     await expect(leaveModal).toBeVisible()
     await leaveModal.getByRole('button', { name: 'Leave', exact: true }).click()

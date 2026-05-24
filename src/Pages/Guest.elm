@@ -50,7 +50,7 @@ viewJoinHint gs =
         Just _ ->
             Html.div [ Html.Attributes.class "max-w-sm w-full mb-4" ]
                 [ Html.p [ Html.Attributes.class "text-sm text-moss text-center" ]
-                    [ Html.text "Sign in to accept your flock invite." ]
+                    [ Html.text "Sign in to accept your shared-trip invite." ]
                 ]
 
         Nothing ->
