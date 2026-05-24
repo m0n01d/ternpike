@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { Resend } from 'resend'
 
+import { getTier } from './auth.js'
 import { registerGeocodeRoutes } from './geocode.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
 
@@ -204,7 +205,8 @@ app.post('/auth/verify-code', async (c) => {
   try {
     await ensureUser(env, email, password)
     await ensureDb(env, dbName, email)
-    return c.json({ ok: true, email, password, dbName })
+    const tier = await getTier(env, email)
+    return c.json({ ok: true, dbName, email, password, tier })
   } catch (err) {
     console.error('provision:', err)
     return c.json({ ok: false }, 500)

@@ -97,21 +97,9 @@ import './global.css'
   ])
 
   let authCreds = null
-  let tier = null
   if (authCredsRaw) {
     try {
-      const parsed = JSON.parse(authCredsRaw)
-      // `tier` rides on the same IndexedDB blob in test harnesses (and,
-      // once /me is wired, after a real session refresh). Pull it off so
-      // the Elm flags carry only credentials in `authCreds`. Falls through
-      // to Tern on the Elm side if absent.
-      if (parsed && typeof parsed === 'object') {
-        if (typeof parsed.tier === 'string') tier = parsed.tier
-        const { tier: _t, ...creds } = parsed
-        authCreds = creds
-      } else {
-        authCreds = parsed
-      }
+      authCreds = JSON.parse(authCredsRaw)
     } catch (_) {
       authCreds = null
     }
@@ -123,7 +111,6 @@ import './global.css'
     backendUrl:   'https://api.ternpike.com',
     basePath:     import.meta.env.BASE_URL,
     colorScheme:  localStorage.getItem('color_scheme') || 'auto',
-    tier:         tier || '',
     today:        new Date().toISOString().slice(0, 10),
     version:      __BUILD_SHA__,
   }

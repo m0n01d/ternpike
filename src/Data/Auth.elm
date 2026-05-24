@@ -17,6 +17,8 @@ Neither type ships across PouchDB sync — both are device-local.
 
 -}
 
+import Data.Tier exposing (Tier)
+
 
 {-| Per-user credentials returned by the auth server.
 
@@ -25,12 +27,17 @@ Neither type ships across PouchDB sync — both are device-local.
   - `password` — the database password (a server-issued long token,
     not the user's typed password — the user authenticates with an
     email code, never a password).
+  - `tier` — server-authoritative subscription tier at login time.
+    Refreshed on every `/auth/verify-code` round-trip; persisted to
+    IndexedDB alongside the rest of `Creds` so a returning visit
+    boots with the right tier without waiting on `/me`.
 
 -}
 type alias Creds =
     { dbName : String
     , email : String
     , password : String
+    , tier : Tier
     }
 
 

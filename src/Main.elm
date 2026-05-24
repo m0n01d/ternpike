@@ -96,7 +96,7 @@ import Data.SharedTripUi as SharedTripUi
 import Data.SharedTrips as SharedTrips
 import Data.StatsHover as StatsHover
 import Data.Sync exposing (SyncState(..))
-import Data.Tier as Tier
+import Data.Tier as Tier exposing (Tier)
 import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
@@ -236,7 +236,7 @@ toAuthState creds initialRoute gs =
     , statsHover = StatsHover.empty
     , submitting = False
     , syncState = NotEnabled
-    , tier = Tier.Tern
+    , tier = creds.tier
     , toast = Nothing
     , today = gs.today
     , tripForm = Nothing
@@ -265,10 +265,26 @@ toGuestState reason as_ =
 
 credsDecoder : D.Decoder Creds
 credsDecoder =
-    D.map3 Creds
+    D.map4 Creds
         (D.field "dbName" D.string)
         (D.field "email" D.string)
         (D.field "password" D.string)
+        tierField
+
+
+{-| Decode tier from either the auth server's verify-code response or
+the IndexedDB-stored `auth_creds` blob. Defaults to `Tern` when the
+field is absent (legacy blobs persisted before tier was wired in) or
+when the value is unrecognized — fails closed so an unknown tier never
+silently grants paid features.
+-}
+tierField : D.Decoder Tier
+tierField =
+    D.oneOf
+        [ D.field "tier" D.string
+            |> D.map (Tier.fromString >> Maybe.withDefault Tier.Tern)
+        , D.succeed Tier.Tern
+        ]
 
 
 encodeCreds : Creds -> D.Value
@@ -277,6 +293,7 @@ encodeCreds c =
         [ ( "dbName", E.string c.dbName )
         , ( "email", E.string c.email )
         , ( "password", E.string c.password )
+        , ( "tier", E.string (Tier.toString c.tier) )
         ]
 
 
@@ -1206,23 +1223,11 @@ init flagsJson url key =
             D.decodeValue (D.field "authCreds" (D.nullable credsDecoder)) flagsJson
                 |> Result.withDefault Nothing
 
-        -- Tier override from flags. Defaults to Tern. The auth server's
-        -- `/me` endpoint is the long-term source of truth (see CLAUDE.md
-        -- "Storage tiers"); this flag exists so the E2E harness can set the
-        -- right tier on stub-auth boots without having to mount a fake
-        -- session endpoint. Production main.js does not set the flag, so
-        -- the default applies until /me is wired.
         initialColorScheme =
             D.decodeValue (D.field "colorScheme" D.string) flagsJson
                 |> Result.toMaybe
                 |> Maybe.andThen ColorScheme.fromString
                 |> Maybe.withDefault ColorScheme.Auto
-
-        initialTier =
-            D.decodeValue (D.field "tier" D.string) flagsJson
-                |> Result.toMaybe
-                |> Maybe.andThen Tier.fromString
-                |> Maybe.withDefault Tier.Tern
 
         initialToday =
             D.decodeValue (D.field "today" DateField.decoder) flagsJson
@@ -1260,9 +1265,9 @@ init flagsJson url key =
                     Routing.routeFromUrl basePath url
 
                 as_ =
-                    { tierBoot | colorScheme = initialColorScheme, tier = initialTier }
+                    { booted | colorScheme = initialColorScheme }
 
-                tierBoot =
+                booted =
                     toAuthState creds initialRoute gs
             in
             -- Don't fire route-driven fetches here. Sync hasn't settled
