@@ -889,9 +889,22 @@ handleTripsFetched tripsDict as_ =
                 |> (\( s, c ) -> ( AuthModel s, c ))
 
         Nothing ->
-            ( AuthModel { as_ | trips = NoTripsYet, route = RouteTrips }
-            , Nav.replaceUrl as_.key (as_.basePath ++ "trips")
-            )
+            case as_.route of
+                -- A first-time invitee has zero personal trips but is mid
+                -- invite-accept on `/sharedtrips/join?token=…`. Don't clobber
+                -- their route — let them complete the Accept/Decline flow
+                -- (which provisions a shared trip and resolves the empty
+                -- state). Every other route falls back to the Trips empty
+                -- state as before.
+                RouteJoinSharedTrip _ ->
+                    ( AuthModel { as_ | trips = NoTripsYet }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( AuthModel { as_ | trips = NoTripsYet, route = RouteTrips }
+                    , Nav.replaceUrl as_.key (as_.basePath ++ "trips")
+                    )
 
 
 upsertTripIntoState : Trip -> TripsState -> TripsState
