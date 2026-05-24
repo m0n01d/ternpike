@@ -12,15 +12,16 @@
  *    server's `authenticateCaller` accepts them.
  *  - The Resend Worker SDK reads its baseUrl from `process.env` at module
  *    load, which `workerd` does not populate. This branch replaces the SDK
- *    usage in `server/flocks.js` with a raw `fetch` against
+ *    usage in `server/sharedTrips.js` with a raw `fetch` against
  *    `env.RESEND_BASE_URL`, which the harness wires up via `--var`.
  *  - PouchDB live sync still points at production `couch.ternpike.com` so
- *    the post-create flock card will not appear via the natural sync path
- *    in this test environment. We instead simulate what sync would do by
- *    writing `user:flocks` into the personal PouchDB and `flock:meta`
- *    into the per-flock PouchDB directly after the server confirms the
- *    create. The local PouchDB `changes` listener (`src/pouch.js`) fires
- *    the same `FlockMeta` / `FlocksReconciled` ports as a real sync.
+ *    the post-create shared trip card will not appear via the natural sync
+ *    path in this test environment. We instead simulate what sync would do
+ *    by writing `user:sharedtrips` into the personal PouchDB and
+ *    `sharedtrip:meta` into the per-shared-trip PouchDB directly after the
+ *    server confirms the create. The local PouchDB `changes` listener
+ *    (`src/pouch.js`) fires the same `SharedTripMeta` /
+ *    `SharedTripsReconciled` ports as a real sync.
  */
 
 import { test, expect, deriveStubPassword } from '../fixtures/twoUsers'
@@ -36,7 +37,7 @@ const personalDbName = (email: string): string =>
 
 /**
  * Pre-create both users' personal CouchDB databases so the auth server's
- * `appendUserFlocks` write doesn't 404. The real production flow gets
+ * `appendUserSharedTrips` write doesn't 404. The real production flow gets
  * these for free at signup; the stub-auth path skips signup entirely.
  */
 const ensurePersonalDbs = async (
@@ -64,9 +65,9 @@ const ensurePersonalDbs = async (
 /**
  * Sets a user's server-side tier via the test webhook on the auth Worker.
  * The webhook secret is hard-coded in `e2e/global-setup.ts` and the route
- * lives at `POST /flocks/test/tier-changed`. Server-side `TIERS_KV` is the
- * source of truth for `/flocks`'s tier gate; the client tier flag in
- * `auth_creds` only controls UI affordances.
+ * lives at `POST /sharedtrips/test/tier-changed`. Server-side `TIERS_KV`
+ * is the source of truth for `/sharedtrips`'s tier gate; the client tier
+ * flag in `auth_creds` only controls UI affordances.
  */
 const setServerTier = async (
   email: string,
@@ -74,7 +75,7 @@ const setServerTier = async (
 ): Promise<void> => {
   const state = readHarnessState()
   const res = await fetch(
-    `http://127.0.0.1:${state.serverPort}/flocks/test/tier-changed`,
+    `http://127.0.0.1:${state.serverPort}/sharedtrips/test/tier-changed`,
     {
       method: 'POST',
       headers: {
@@ -98,7 +99,7 @@ type CreateFlockResponseBody = {
 }
 
 /**
- * Watches the page for a successful response from the create-flock
+ * Watches the page for a successful response from the create-shared-trip
  * endpoint (proxied to the local auth server via `routeApiTernpikeToLocal`).
  * The browser's `response` event reports the proxied URL host
  * (`api.ternpike.com`), so we filter on path. We poll the response body
@@ -110,14 +111,14 @@ const captureCreateFlockResponse = async (
 ): Promise<{ flockId: string; dbName: string }> => {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(
-      () => reject(new Error('did not see POST /flocks response in time')),
+      () => reject(new Error('did not see POST /sharedtrips response in time')),
       15_000,
     )
     page.on('response', async (res) => {
       const req = res.request()
       if (req.method() !== 'POST') return
       const url = req.url()
-      if (!url.endsWith('/flocks')) return
+      if (!url.endsWith('/sharedtrips')) return
       try {
         const raw = await res.text()
         const body = JSON.parse(raw || '{}') as CreateFlockResponseBody
@@ -134,11 +135,11 @@ const captureCreateFlockResponse = async (
 }
 
 /**
- * Pushes the `FlocksReconciled` + `FlockMeta` port events into Elm that a
- * real CouchDB sync would deliver after `POST /flocks` lands. Replaces
- * the more invasive "spin up a second PouchDB instance and write doc"
- * approach — PouchDB's cross-instance change feed turned out not to
- * propagate reliably inside the Playwright browser context, and the
+ * Pushes the `SharedTripsReconciled` + `SharedTripMeta` port events into
+ * Elm that a real CouchDB sync would deliver after `POST /sharedtrips`
+ * lands. Replaces the more invasive "spin up a second PouchDB instance and
+ * write doc" approach — PouchDB's cross-instance change feed turned out not
+ * to propagate reliably inside the Playwright browser context, and the
  * port-level event is what we actually want to assert against anyway.
  *
  * Reads the live Elm app off `window.__ternpikeTestApp` (set by
@@ -168,18 +169,18 @@ const seedFlockLocally = async (
       }
       const app = w.__ternpikeTestApp
 
-      // First: reconcile the flock list so Elm knows this flock exists.
-      app.ports.pouchIn.send({ tag: 'FlocksReconciled', flockIds: [flockId] })
+      // First: reconcile the shared trip list so Elm knows this entry exists.
+      app.ports.pouchIn.send({ tag: 'SharedTripsReconciled', flockIds: [flockId] })
 
-      // Then: ship the flock metadata as a FlockMeta event. The shape
-      // mirrors what `src/pouch.js` constructs after stripping `_rev`
-      // from the on-disk doc — see `Data.Flock.decoder` for the field
+      // Then: ship the shared trip metadata as a SharedTripMeta event. The
+      // shape mirrors what `src/pouch.js` constructs after stripping `_rev`
+      // from the on-disk doc — see `Data.SharedTrip.decoder` for the field
       // contract.
       app.ports.pouchIn.send({
-        tag: 'FlockMeta',
+        tag: 'SharedTripMeta',
         doc: {
-          _id: 'flock:meta',
-          type: 'flock:meta',
+          _id: 'sharedtrip:meta',
+          type: 'sharedtrip:meta',
           flockId,
           name,
           members: [owner],
@@ -307,7 +308,7 @@ test('Alice (Fly) creates a flock and invites Bob', async ({
   expect(captured).not.toBeNull()
   expect(captured?.to.toLowerCase()).toBe(BOB_EMAIL)
   const bodyText = (captured?.text ?? '') + (captured?.html ?? '')
-  expect(bodyText).toContain('/flocks/join?token=')
+  expect(bodyText).toContain('/sharedtrips/join?token=')
 })
 
 test('inviting the same email twice surfaces an inline error', async ({
@@ -345,15 +346,15 @@ test('inviting the same email twice surfaces an inline error', async ({
 
   // Simulate the invitee accepting (so the server sees them as a member).
   // The cleanest way to make the duplicate-invite check fire is to push
-  // the invitee into the flock-meta members list directly via the admin
-  // CouchDB client, matching what `POST /flocks/join` would do.
+  // the invitee into the sharedtrip:meta members list directly via the
+  // admin CouchDB client, matching what `POST /sharedtrips/join` would do.
   const state = readHarnessState()
   const auth =
     'Basic ' +
     Buffer.from(`${state.couchAdminUser}:${state.couchAdminPassword}`).toString(
       'base64',
     )
-  const metaUrl = `${state.couchUrl}/flock-${created.flockId}/flock%3Ameta`
+  const metaUrl = `${state.couchUrl}/sharedtrip-${created.flockId}/sharedtrip%3Ameta`
   const cur = await fetch(metaUrl, { headers: { Authorization: auth } })
   const meta = (await cur.json()) as {
     _rev: string
@@ -369,7 +370,7 @@ test('inviting the same email twice surfaces an inline error', async ({
     body: JSON.stringify(updated),
   })
   if (!put.ok) {
-    throw new Error(`could not add member to flock-meta: ${put.status} ${await put.text()}`)
+    throw new Error(`could not add member to sharedtrip:meta: ${put.status} ${await put.text()}`)
   }
 
   // Second invite for the same email → server 409 → modal stays open with

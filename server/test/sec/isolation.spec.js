@@ -259,12 +259,12 @@ describe('isolation: member sees only their flocks', () => {
         `flock-B doc ${row.id} leaked into bob's flock-A view`,
       )
       // No personal-db doc ids either. Personal docs use the same id shapes
-      // (expense::, trip::, user:flocks), so the strongest assertion is
+      // (expense::, trip::, user:sharedtrips), so the strongest assertion is
       // "every id matches something we actually put here" — checked above —
       // and a bound on the doc count.
     }
-    // user:flocks lives in personal dbs only, not flocks. If it shows up
-    // here, something is very wrong.
+    // user:sharedtrips lives in personal dbs only, not shared trips. If it
+    // shows up here, something is very wrong.
     const personalOnlyIds = body.rows.filter((row) =>
       row.id.startsWith('user:'),
     )

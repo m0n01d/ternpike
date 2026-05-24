@@ -125,16 +125,16 @@ const assertRejected = (res, msg) =>
 // "all 401s pass because nothing is wired" regression can't slip through.
 describe('positive controls — members can read their own flocks', () => {
   test('alice reads flock-A/flock:meta (200)', async () => {
-    const res = await asUser(ALICE, 'GET', `/${flockA.dbName}/flock%3Ameta`)
+    const res = await asUser(ALICE, 'GET', `/${flockA.dbName}/sharedtrip%3Ameta`)
     assert.equal(res.status, 200)
-    assert.equal(res.body._id, 'flock:meta')
+    assert.equal(res.body._id, 'sharedtrip:meta')
     assert.equal(res.body.name, 'flock-A')
   })
 
   test('bob reads flock-B/flock:meta (200)', async () => {
-    const res = await asUser(BOB, 'GET', `/${flockB.dbName}/flock%3Ameta`)
+    const res = await asUser(BOB, 'GET', `/${flockB.dbName}/sharedtrip%3Ameta`)
     assert.equal(res.status, 200)
-    assert.equal(res.body._id, 'flock:meta')
+    assert.equal(res.body._id, 'sharedtrip:meta')
     assert.equal(res.body.name, 'flock-B')
   })
 
@@ -158,7 +158,7 @@ describe('outsider read is blocked', () => {
   })
 
   test('eve GET /flock-A/flock:meta → 403', async () => {
-    const res = await asUser(EVE, 'GET', `/${flockA.dbName}/flock%3Ameta`)
+    const res = await asUser(EVE, 'GET', `/${flockA.dbName}/sharedtrip%3Ameta`)
     assertRejected(res, 'eve GET /flock-A/flock:meta')
   })
 
@@ -201,7 +201,7 @@ describe('outsider write is blocked', () => {
     const res = await asUser(
       EVE,
       'DELETE',
-      `/${flockA.dbName}/flock%3Ameta?rev=1-anything`,
+      `/${flockA.dbName}/sharedtrip%3Ameta?rev=1-anything`,
     )
     assertRejected(res, 'eve DELETE /flock-A/flock:meta')
   })
@@ -231,7 +231,7 @@ describe('outsider replication handshake is blocked', () => {
 
   test('eve POST /flock-A/_bulk_get → 403', async () => {
     const res = await asUser(EVE, 'POST', `/${flockA.dbName}/_bulk_get`, {
-      body: { docs: [{ id: 'flock:meta' }] },
+      body: { docs: [{ id: 'sharedtrip:meta' }] },
     })
     assertRejected(res, 'eve POST /flock-A/_bulk_get')
   })
@@ -266,11 +266,11 @@ describe('outsider DB enumeration', () => {
 
   test('eve probing a sequence of nonexistent flock ids — all rejected, no body leak', async () => {
     const probes = [
-      'flock-000000000000',
-      'flock-aaaaaaaaaaaa',
-      'flock-deadbeefcafe',
-      'flock-ffffffffffff',
-      'flock-1234567890ab',
+      'sharedtrip-000000000000',
+      'sharedtrip-aaaaaaaaaaaa',
+      'sharedtrip-deadbeefcafe',
+      'sharedtrip-ffffffffffff',
+      'sharedtrip-1234567890ab',
     ]
     for (const id of probes) {
       const res = await asUser(EVE, 'GET', `/${id}`)
@@ -294,12 +294,12 @@ describe('outsider DB enumeration', () => {
     }
   })
 
-  test('eve GET /flock-A (real, forbidden) returns a body shaped like /flock-nonexistent', async () => {
+  test('eve GET /flock-A (real, forbidden) returns a body shaped like /sharedtrip-nonexistent', async () => {
     // Document the leak as a test: today these statuses differ (403 vs 404),
     // which IS the leak. We assert what the safer property looks like and
     // mark it skipped so it's discoverable without breaking the suite.
     const forbidden = await asUser(EVE, 'GET', `/${flockA.dbName}`)
-    const nonexistent = await asUser(EVE, 'GET', `/flock-000000000000`)
+    const nonexistent = await asUser(EVE, 'GET', `/sharedtrip-000000000000`)
     // Both responses should at least share a status; today they don't. The
     // assertion below is the canary — when a proxy lands, flip the `.skip`
     // to a real assertion.
@@ -313,15 +313,15 @@ describe('outsider DB enumeration', () => {
   test('eve GET /_all_dbs → not 200, or excludes flock-* dbs', async () => {
     // Non-admin users either get 401 outright or, depending on CouchDB
     // version config, an empty list. What must NOT happen is the response
-    // including any `flock-*` name.
+    // including any `sharedtrip-*` name.
     const res = await asUser(EVE, 'GET', `/_all_dbs`)
     if (res.status === 200) {
       assert.ok(Array.isArray(res.body))
-      const leaked = res.body.filter((db) => db.startsWith('flock-'))
+      const leaked = res.body.filter((db) => db.startsWith('sharedtrip-'))
       assert.deepEqual(
         leaked,
         [],
-        `/_all_dbs leaked flock dbs to a non-admin: ${leaked.join(', ')}`,
+        `/_all_dbs leaked sharedtrip dbs to a non-admin: ${leaked.join(', ')}`,
       )
     } else {
       assertRejected(res, 'eve GET /_all_dbs')
@@ -336,7 +336,7 @@ describe('cross-flock access is blocked', () => {
   })
 
   test('alice GET /flock-B/flock:meta → 403', async () => {
-    const res = await asUser(ALICE, 'GET', `/${flockB.dbName}/flock%3Ameta`)
+    const res = await asUser(ALICE, 'GET', `/${flockB.dbName}/sharedtrip%3Ameta`)
     assertRejected(res, 'alice GET /flock-B/flock:meta')
   })
 
@@ -428,20 +428,20 @@ describe('_security mutation is admin-only', () => {
 })
 
 describe('design doc and flock:meta tampering by an outsider', () => {
-  test('eve PUT /flock-A/_design/flock_validator → rejected', async () => {
+  test('eve PUT /flock-A/_design/sharedtrip_validator → rejected', async () => {
     const res = await asUser(
       EVE,
       'PUT',
-      `/${flockA.dbName}/${encodeURIComponent('_design/flock_validator')}`,
+      `/${flockA.dbName}/${encodeURIComponent('_design/sharedtrip_validator')}`,
       { body: { language: 'javascript', validate_doc_update: 'function(){}' } },
     )
-    assertRejected(res, 'eve PUT _design/flock_validator')
+    assertRejected(res, 'eve PUT _design/sharedtrip_validator')
   })
 
   test('eve PUT /flock-A/flock:meta → rejected', async () => {
-    const res = await asUser(EVE, 'PUT', `/${flockA.dbName}/flock%3Ameta`, {
+    const res = await asUser(EVE, 'PUT', `/${flockA.dbName}/sharedtrip%3Ameta`, {
       body: {
-        type: 'flock',
+        type: 'sharedtrip',
         name: 'pwned',
         members: [EVE],
         billingOwner: EVE,

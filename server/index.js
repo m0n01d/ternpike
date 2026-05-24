@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { Resend } from 'resend'
 
-import { registerFlockRoutes, runGraceFreezeSweep } from './flocks.js'
+import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
 
 const CODE_TTL_SECONDS = 600
 const CODE_LENGTH = 6
@@ -140,8 +140,8 @@ const corsConfig = cors({
 })
 
 app.use('/auth/*', corsConfig)
-app.use('/flocks/*', corsConfig)
-app.use('/flocks', corsConfig)
+app.use('/sharedtrips/*', corsConfig)
+app.use('/sharedtrips', corsConfig)
 app.use('/marketing/*', corsConfig)
 
 app.post('/auth/request-code', async (c) => {
@@ -244,7 +244,7 @@ app.post('/marketing/waitlist', async (c) => {
   return c.json({ ok: true })
 })
 
-registerFlockRoutes(app)
+registerSharedTripRoutes(app)
 
 export default {
   fetch: app.fetch,

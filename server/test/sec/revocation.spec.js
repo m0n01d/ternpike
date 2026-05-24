@@ -30,7 +30,7 @@
 //   3. Replication revocation  — pre-revoke handshake worked; post-revoke fails
 //   4. Rejoin path             — admin re-adds; reads + writes recover
 //   5. Re-invite after leave   — self-leave + new invite + redeem round-trips,
-//                                and `user:flocks` reflects the rejoin
+//                                and `user:sharedtrips` reflects the rejoin
 
 import { after, before, beforeEach, describe, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -105,7 +105,7 @@ const couchUserFetch = async (email, path, init = {}) => {
 }
 
 // Admin-side simulation of an owner kick or self-leave: drop a member from
-// both `_security.members.names` and `flock:meta.members`, exactly how the
+// both `_security.members.names` and `sharedtrip:meta.members`, exactly how the
 // server's leave/kick path writes them.
 const adminRemoveMember = async (dbName, email) => {
   const secRes = await couchAdminFetch(couch, `/${dbName}/_security`)
@@ -118,15 +118,15 @@ const adminRemoveMember = async (dbName, email) => {
   })
   if (!secPut.ok) throw new Error(`_security PUT ${secPut.status}`)
 
-  const metaRes = await couchAdminFetch(couch, `/${dbName}/flock%3Ameta`)
-  if (!metaRes.ok) throw new Error(`flock:meta GET ${metaRes.status}`)
+  const metaRes = await couchAdminFetch(couch, `/${dbName}/sharedtrip%3Ameta`)
+  if (!metaRes.ok) throw new Error(`sharedtrip:meta GET ${metaRes.status}`)
   const meta = await metaRes.json()
   meta.members = meta.members.filter((m) => m !== email)
-  const metaPut = await couchAdminFetch(couch, `/${dbName}/flock%3Ameta`, {
+  const metaPut = await couchAdminFetch(couch, `/${dbName}/sharedtrip%3Ameta`, {
     method: 'PUT',
     body: JSON.stringify(meta),
   })
-  if (!metaPut.ok) throw new Error(`flock:meta PUT ${metaPut.status}`)
+  if (!metaPut.ok) throw new Error(`sharedtrip:meta PUT ${metaPut.status}`)
 }
 
 const adminAddMember = async (dbName, email) => {
@@ -140,24 +140,24 @@ const adminAddMember = async (dbName, email) => {
   })
   if (!secPut.ok) throw new Error(`_security PUT ${secPut.status}`)
 
-  const metaRes = await couchAdminFetch(couch, `/${dbName}/flock%3Ameta`)
-  if (!metaRes.ok) throw new Error(`flock:meta GET ${metaRes.status}`)
+  const metaRes = await couchAdminFetch(couch, `/${dbName}/sharedtrip%3Ameta`)
+  if (!metaRes.ok) throw new Error(`sharedtrip:meta GET ${metaRes.status}`)
   const meta = await metaRes.json()
   if (!meta.members.includes(email)) meta.members.push(email)
-  const metaPut = await couchAdminFetch(couch, `/${dbName}/flock%3Ameta`, {
+  const metaPut = await couchAdminFetch(couch, `/${dbName}/sharedtrip%3Ameta`, {
     method: 'PUT',
     body: JSON.stringify(meta),
   })
-  if (!metaPut.ok) throw new Error(`flock:meta PUT ${metaPut.status}`)
+  if (!metaPut.ok) throw new Error(`sharedtrip:meta PUT ${metaPut.status}`)
 }
 
 const readUserFlocks = async (email) => {
   const personalDb = personalDbFor(email)
   const r = await couchAdminFetch(
     couch,
-    `/${personalDb}/user%3Aflocks`,
+    `/${personalDb}/user%3Asharedtrips`,
   )
-  if (!r.ok) throw new Error(`user:flocks GET ${r.status}`)
+  if (!r.ok) throw new Error(`user:sharedtrips GET ${r.status}`)
   return r.json()
 }
 
@@ -202,7 +202,7 @@ describe('Read revocation', () => {
 
   test('flockId is the routable identifier', () => {
     assert.ok(flockId)
-    assert.equal(dbName, `flock-${flockId}`)
+    assert.equal(dbName, `sharedtrip-${flockId}`)
   })
 })
 
@@ -363,27 +363,27 @@ describe('Rejoin path (admin re-adds)', () => {
 })
 
 describe('Re-invite after self-leave', () => {
-  test('Bob leaves, Alice re-invites, Bob redeems; user:flocks reflects rejoin', async () => {
+  test('Bob leaves, Alice re-invites, Bob redeems; user:sharedtrips reflects rejoin', async () => {
     const f = await provisionFlock(couch, {
       name: 'reinvite',
       owner: ALICE,
       members: [ALICE, BOB],
     })
 
-    // Sanity: Bob's user:flocks lists this flock pre-leave.
+    // Sanity: Bob's user:sharedtrips lists this flock pre-leave.
     const beforeFlocks = await readUserFlocks(BOB)
     assert.ok(
       (beforeFlocks.flocks || []).some((x) => x.id === f.flockId),
-      'expected Bob.user:flocks to include the flock before leave',
+      'expected Bob.user:sharedtrips to include the flock before leave',
     )
 
     // Bob self-leaves via the endpoint (exercises the real removal path).
-    const leave = await request(env, 'POST', `/flocks/${f.flockId}/leave`, {
+    const leave = await request(env, 'POST', `/sharedtrips/${f.flockId}/leave`, {
       headers: await authed(BOB),
     })
     assert.equal(leave.status, 200)
 
-    // After leave: Bob's user:flocks no longer lists it, and CouchDB
+    // After leave: Bob's user:sharedtrips no longer lists it, and CouchDB
     // rejects his reads.
     const midFlocks = await readUserFlocks(BOB)
     assert.equal(
@@ -394,10 +394,10 @@ describe('Re-invite after self-leave', () => {
     assert.equal(mid.status, 403)
 
     // Alice re-invites Bob. We extract the join token from the captured
-    // email body (same pattern as the existing /flocks/join round-trip
+    // email body (same pattern as the existing /sharedtrips/join round-trip
     // test in endpoints.spec.js).
     resend.reset()
-    const invite = await request(env, 'POST', `/flocks/${f.flockId}/invite`, {
+    const invite = await request(env, 'POST', `/sharedtrips/${f.flockId}/invite`, {
       headers: await authed(ALICE),
       body: { inviteeEmail: BOB },
     })
@@ -407,19 +407,19 @@ describe('Re-invite after self-leave', () => {
     assert.ok(match, 'expected join link in re-invite email body')
     const token = decodeURIComponent(match[1])
 
-    const join = await request(env, 'POST', '/flocks/join', {
+    const join = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token },
     })
     assert.equal(join.status, 200)
 
-    // Bob is back in `_security` and `flock:meta.members`.
+    // Bob is back in `_security` and `sharedtrip:meta.members`.
     const sec = await readSecurity(couch, f.dbName)
     assert.ok(sec.members.names.includes(BOB))
     const meta = await readMeta(couch, f.dbName)
     assert.ok(meta.members.includes(BOB))
 
-    // Bob's user:flocks reflects the rejoin (one entry, not duplicated).
+    // Bob's user:sharedtrips reflects the rejoin (one entry, not duplicated).
     const afterFlocks = await readUserFlocks(BOB)
     const matching = (afterFlocks.flocks || []).filter(
       (x) => x.id === f.flockId,
@@ -441,7 +441,7 @@ describe('Re-invite after self-leave', () => {
       owner: ALICE,
       members: [ALICE],
     })
-    const res = await request(env, 'POST', `/flocks/${f.flockId}/invite`, {
+    const res = await request(env, 'POST', `/sharedtrips/${f.flockId}/invite`, {
       headers: await authed(EVE),
       body: { inviteeEmail: BOB },
     })

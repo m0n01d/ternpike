@@ -1,16 +1,18 @@
 import { readHarnessState } from '../utils/state'
 import {
   deriveCouchPassword,
-  flockDbName,
   personalDbName,
-  provisionFlockDb,
-  provisionPersonalDb,
   proxyApiToLocal,
-  purgeUserFlocks,
-  readUserFlocksDoc,
+  purgeUserSharedTrips,
+  readUserSharedTripsDoc,
+  sharedTripDbName,
   signInviteJwt,
   stubRealAuthCreds,
-} from '../utils/flock-test-helpers'
+} from '../utils/shared-trip-test-helpers'
+import {
+  provisionPersonalDb,
+  provisionSharedTripDb,
+} from '../utils/shared-trip-test-helpers'
 import { test, expect } from '../fixtures/twoUsers'
 
 /**
@@ -33,7 +35,7 @@ import { test, expect } from '../fixtures/twoUsers'
  * password. The auth server's HTTP Basic check derives the expected
  * password from `HMAC-SHA256("couch:" + email, SERVER_SECRET)`. We
  * override the stub with the real derived password via
- * `stubRealAuthCreds` so /flocks/join actually accepts the call.
+ * `stubRealAuthCreds` so /sharedtrips/join actually accepts the call.
  *
  * API host: the Elm bundle hardcodes `https://api.ternpike.com`. We
  * proxy that to `127.0.0.1:<serverPort>` via context.route.
@@ -62,7 +64,7 @@ const freshTokenForBob = (serverSecret: string): string =>
 test.describe('join flow (free invitee)', () => {
   test.beforeEach(async ({ couchAdmin }) => {
     // Bob, Alice, and Carol need personal dbs so the join handler can
-    // write `user:flocks` without 500-ing. The real signup flow does
+    // write `user:sharedtrips` without 500-ing. The real signup flow does
     // this on email verification. Idempotent: each call no-ops if the
     // db already exists, but it must run per-test because globalSetup
     // doesn't know which users a spec needs.
@@ -71,13 +73,13 @@ test.describe('join flow (free invitee)', () => {
     await provisionPersonalDb(couchAdmin, CAROL_EMAIL)
     // Clear residue from any prior test so the "already a member" path
     // doesn't bleed into the happy path on a re-run.
-    await purgeUserFlocks(couchAdmin, BOB_EMAIL)
-    await purgeUserFlocks(couchAdmin, ALICE_EMAIL)
-    await purgeUserFlocks(couchAdmin, CAROL_EMAIL)
-    // Honeymoon flock, Alice owner. Wipes & recreates so each test
+    await purgeUserSharedTrips(couchAdmin, BOB_EMAIL)
+    await purgeUserSharedTrips(couchAdmin, ALICE_EMAIL)
+    await purgeUserSharedTrips(couchAdmin, CAROL_EMAIL)
+    // Honeymoon shared trip, Alice owner. Wipes & recreates so each test
     // starts from a known shape.
-    await provisionFlockDb(couchAdmin, {
-      flockId: FLOCK_ID,
+    await provisionSharedTripDb(couchAdmin, {
+      sharedTripId: FLOCK_ID,
       name: FLOCK_NAME,
       ownerEmail: ALICE_EMAIL,
     })
@@ -94,9 +96,9 @@ test.describe('join flow (free invitee)', () => {
     const token = freshTokenForBob(state.serverSecret)
 
     const page = await bobContext.newPage()
-    await page.goto(`/flocks/join?token=${encodeURIComponent(token)}`)
+    await page.goto(`/sharedtrips/join?token=${encodeURIComponent(token)}`)
 
-    // The confirmation card renders the inviter and the flock name.
+    // The confirmation card renders the inviter and the shared trip name.
     const confirmation = page.getByText(
       `${ALICE_EMAIL} invited you to join "${FLOCK_NAME}".`,
     )
@@ -115,7 +117,7 @@ test.describe('join flow (free invitee)', () => {
     ).toHaveCount(0)
 
     const joinResponse = page.waitForResponse(
-      (r) => r.url().endsWith('/flocks/join') && r.request().method() === 'POST',
+      (r) => r.url().endsWith('/sharedtrips/join') && r.request().method() === 'POST',
     )
     await page.getByRole('button', { name: 'Accept' }).click()
     const res = await joinResponse
@@ -127,22 +129,22 @@ test.describe('join flow (free invitee)', () => {
       timeout: 10_000,
     })
 
-    // Server-side state: Bob's user:flocks now references Honeymoon.
-    const userFlocks = await readUserFlocksDoc(couchAdmin, BOB_EMAIL)
-    expect(userFlocks).not.toBeNull()
-    expect(userFlocks?.flocks).toEqual(
+    // Server-side state: Bob's user:sharedtrips now references Honeymoon.
+    const userSharedTrips = await readUserSharedTripsDoc(couchAdmin, BOB_EMAIL)
+    expect(userSharedTrips).not.toBeNull()
+    expect(userSharedTrips?.flocks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: FLOCK_ID,
           name: FLOCK_NAME,
-          dbName: flockDbName(FLOCK_ID),
+          dbName: sharedTripDbName(FLOCK_ID),
         }),
       ]),
     )
 
-    // The flock-side membership matches.
+    // The shared-trip-side membership matches.
     const meta = await couchAdmin
-      .request(`/${flockDbName(FLOCK_ID)}/flock%3Ameta`)
+      .request(`/${sharedTripDbName(FLOCK_ID)}/sharedtrip%3Ameta`)
       .then((r) => r.json())
     expect(meta.members).toEqual(
       expect.arrayContaining([ALICE_EMAIL, BOB_EMAIL]),
@@ -171,12 +173,12 @@ test.describe('join flow (free invitee)', () => {
 
       const tokenForBob = freshTokenForBob(state.serverSecret)
       const page = await carolContext.newPage()
-      await page.goto(`/flocks/join?token=${encodeURIComponent(tokenForBob)}`)
+      await page.goto(`/sharedtrips/join?token=${encodeURIComponent(tokenForBob)}`)
 
       await expect(
         page.getByText(`This invite is for ${BOB_EMAIL}`, { exact: false }),
       ).toBeVisible({ timeout: 30_000 })
-      // No Accept button — the JoinFlock page hides it on mismatch.
+      // No Accept button — the JoinSharedTrip page hides it on mismatch.
       await expect(page.getByRole('button', { name: 'Accept' })).toHaveCount(0)
     } finally {
       await carolContext.close()
@@ -203,13 +205,13 @@ test.describe('join flow (free invitee)', () => {
     )
 
     const page = await bobContext.newPage()
-    await page.goto(`/flocks/join?token=${encodeURIComponent(expiredToken)}`)
+    await page.goto(`/sharedtrips/join?token=${encodeURIComponent(expiredToken)}`)
     await expect(page.getByRole('button', { name: 'Accept' })).toBeVisible({
       timeout: 30_000,
     })
 
     const joinResponse = page.waitForResponse(
-      (r) => r.url().endsWith('/flocks/join') && r.request().method() === 'POST',
+      (r) => r.url().endsWith('/sharedtrips/join') && r.request().method() === 'POST',
     )
     await page.getByRole('button', { name: 'Accept' }).click()
     const res = await joinResponse
@@ -232,31 +234,31 @@ test.describe('join flow (free invitee)', () => {
 
     // First redeem: succeed.
     const firstPage = await bobContext.newPage()
-    await firstPage.goto(`/flocks/join?token=${encodeURIComponent(token)}`)
+    await firstPage.goto(`/sharedtrips/join?token=${encodeURIComponent(token)}`)
     await expect(
       firstPage.getByRole('button', { name: 'Accept' }),
     ).toBeVisible({ timeout: 30_000 })
     const firstResponse = firstPage.waitForResponse(
-      (r) => r.url().endsWith('/flocks/join') && r.request().method() === 'POST',
+      (r) => r.url().endsWith('/sharedtrips/join') && r.request().method() === 'POST',
     )
     await firstPage.getByRole('button', { name: 'Accept' }).click()
     expect((await firstResponse).status()).toBe(200)
     await firstPage.waitForURL('**/settings', { timeout: 10_000 })
 
-    const userFlocksAfterFirst = await readUserFlocksDoc(couchAdmin, BOB_EMAIL)
+    const userSharedTripsAfterFirst = await readUserSharedTripsDoc(couchAdmin, BOB_EMAIL)
     const honeymoonEntries =
-      userFlocksAfterFirst?.flocks.filter((f) => f.id === FLOCK_ID) || []
+      userSharedTripsAfterFirst?.flocks.filter((f) => f.id === FLOCK_ID) || []
     expect(honeymoonEntries).toHaveLength(1)
     await firstPage.close()
 
     // Second redeem with the same token: server returns 409.
     const secondPage = await bobContext.newPage()
-    await secondPage.goto(`/flocks/join?token=${encodeURIComponent(token)}`)
+    await secondPage.goto(`/sharedtrips/join?token=${encodeURIComponent(token)}`)
     await expect(
       secondPage.getByRole('button', { name: 'Accept' }),
     ).toBeVisible({ timeout: 30_000 })
     const secondResponse = secondPage.waitForResponse(
-      (r) => r.url().endsWith('/flocks/join') && r.request().method() === 'POST',
+      (r) => r.url().endsWith('/sharedtrips/join') && r.request().method() === 'POST',
     )
     await secondPage.getByRole('button', { name: 'Accept' }).click()
     expect((await secondResponse).status()).toBe(409)
@@ -265,10 +267,10 @@ test.describe('join flow (free invitee)', () => {
       secondPage.getByText('already a member', { exact: false }),
     ).toBeVisible({ timeout: 10_000 })
 
-    // user:flocks didn't gain a duplicate Honeymoon entry.
-    const userFlocksAfterSecond = await readUserFlocksDoc(couchAdmin, BOB_EMAIL)
+    // user:sharedtrips didn't gain a duplicate Honeymoon entry.
+    const userSharedTripsAfterSecond = await readUserSharedTripsDoc(couchAdmin, BOB_EMAIL)
     const stillOne =
-      userFlocksAfterSecond?.flocks.filter((f) => f.id === FLOCK_ID) || []
+      userSharedTripsAfterSecond?.flocks.filter((f) => f.id === FLOCK_ID) || []
     expect(stillOne).toHaveLength(1)
   })
 })

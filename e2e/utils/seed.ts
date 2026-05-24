@@ -32,12 +32,12 @@ export type SeedExpense = {
 }
 
 /**
- * Flock seed shape — writes a `flock:meta` doc and registers it in
- * `user:flocks`. Both docs go into the user's personal PouchDB so the
- * change feed routes the meta up as a `FlockMeta` event and the Settings
- * Flocks card renders without requiring a real remote sync.
+ * Shared trip seed shape — writes a `sharedtrip:meta` doc and registers it
+ * in `user:sharedtrips`. Both docs go into the user's personal PouchDB so
+ * the change feed routes the meta up as a `SharedTripMeta` event and the
+ * Settings shared trips card renders without requiring a real remote sync.
  *
- * `id` must be 12 lowercase hex chars (matches `Data.FlockId.fromString`).
+ * `id` must be 12 lowercase hex chars (matches `Data.SharedTripId.fromString`).
  * `members` is the email of every member; `owner` must be one of them.
  */
 export type SeedFlock = {
@@ -51,7 +51,7 @@ export type SeedFlock = {
 
 export type SeedData = {
   expenses?: SeedExpense[]
-  flocks?: SeedFlock[]
+  sharedTrips?: SeedFlock[]
   trips?: SeedTrip[]
 }
 
@@ -126,60 +126,61 @@ const buildDocs = (data: SeedData): Record<string, unknown>[] => {
     })
   }
 
-  // Note on flocks: `data.flocks` is intentionally NOT written here.
-  // `pouch.js` only routes `flock:meta` docs to Elm via the live changes
-  // feed (`since: 'now'`), and reads `user:flocks` only after the first
-  // remote sync settles. Pre-loading them into IndexedDB before the app
-  // boots makes them invisible to the app. Use `pushFlocksLive` from a
-  // spec after the page is loaded if you need the flock card to render.
+  // Note on shared trips: `data.sharedTrips` is intentionally NOT written
+  // here. `pouch.js` only routes `sharedtrip:meta` docs to Elm via the live
+  // changes feed (`since: 'now'`), and reads `user:sharedtrips` only after
+  // the first remote sync settles. Pre-loading them into IndexedDB before
+  // the app boots makes them invisible to the app. Use `pushSharedTripsLive`
+  // from a spec after the page is loaded if you need the shared trip card to
+  // render.
   return docs
 }
 
 /**
- * Writes flock-related documents into the live app page's PouchDB after
- * the Elm app has booted. Use this for any seed that must be observed by
- * `pouch.js`'s `since: 'now'` changes feed — most notably `flock:meta`
- * and `user:flocks`, which `pouch.js` only routes to Elm when they
- * arrive via the live changes feed (there's no startup fetch for them
- * yet).
+ * Writes shared-trip-related documents into the live app page's PouchDB
+ * after the Elm app has booted. Use this for any seed that must be observed
+ * by `pouch.js`'s `since: 'now'` changes feed — most notably
+ * `sharedtrip:meta` and `user:sharedtrips`, which `pouch.js` only routes to
+ * Elm when they arrive via the live changes feed (there's no startup fetch
+ * for them yet).
  *
- * NOTE — harness gap (#76): in practice, only the `user:flocks` write
+ * NOTE — harness gap (#76): in practice, only the `user:sharedtrips` write
  * reliably propagates from this injected PouchDB instance to the app's
- * bundled instance. The `flock:meta` write lands in IndexedDB but the
- * app's change feed on the per-flock handle doesn't observe it across
- * separate PouchDB library copies. As a result the Flocks card doesn't
+ * bundled instance. The `sharedtrip:meta` write lands in IndexedDB but the
+ * app's change feed on the per-shared-trip handle doesn't observe it across
+ * separate PouchDB library copies. As a result the shared trips card doesn't
  * render today even with this helper — closing the gap likely needs
  * either (a) a port-level test seam in `src/main.js` (e.g. expose
  * `window.__pouchInject__` that calls `app.ports.pouchIn.send` with a
- * synthetic `FlockMeta` event), or (b) a real CouchDB-backed sync
+ * synthetic `SharedTripMeta` event), or (b) a real CouchDB-backed sync
  * round-trip in the harness. Leave this helper in place for when
  * either path lands.
  *
  * The page must already have the app loaded (i.e. `goto('/settings')`
  * or similar before calling).
  */
-export const pushFlocksLive = async (
+export const pushSharedTripsLive = async (
   page: import('@playwright/test').Page,
   flocks: SeedFlock[],
 ): Promise<void> => {
   if (flocks.length === 0) return
-  // Order matters. We write `user:flocks` first — that triggers
-  // `reconcileFlocks` in `pouch.js`, which opens a per-flock PouchDB
-  // handle (`ternpike-${dbName}`). The flock card needs that handle's
-  // `flockId` to be known by the time the `flock:meta` doc arrives,
-  // otherwise `FlocksReconciled` will filter the meta out of
-  // `as_.flocks` on arrival. We then write `flock:meta` into the
-  // per-flock DB so the change feed there routes it up.
-  const userFlocksDoc = {
-    _id: 'user:flocks',
+  // Order matters. We write `user:sharedtrips` first — that triggers
+  // `reconcileSharedTrips` in `pouch.js`, which opens a per-shared-trip
+  // PouchDB handle (`ternpike-${dbName}`). The shared trip card needs that
+  // handle's `flockId` to be known by the time the `sharedtrip:meta` doc
+  // arrives, otherwise `SharedTripsReconciled` will filter the meta out of
+  // `as_.flocks` on arrival. We then write `sharedtrip:meta` into the
+  // per-shared-trip DB so the change feed there routes it up.
+  const userSharedTripsDoc = {
+    _id: 'user:sharedtrips',
     flocks: flocks.map((f) => ({
-      dbName: f.dbName || `ternpike-flock-${f.id}`,
+      dbName: f.dbName || `ternpike-sharedtrip-${f.id}`,
       flockId: f.id,
     })),
-    type: 'user:flocks',
+    type: 'user:sharedtrips',
   }
-  const flockMetaDocs = flocks.map((flock) => ({
-    dbName: flock.dbName || `ternpike-flock-${flock.id}`,
+  const sharedTripMetaDocs = flocks.map((flock) => ({
+    dbName: flock.dbName || `ternpike-sharedtrip-${flock.id}`,
     doc: {
       _id: flock.id,
       billingLapsedAt: null,
@@ -189,7 +190,7 @@ export const pushFlocksLive = async (
       createdBy: flock.owner,
       members: flock.members,
       name: flock.name,
-      type: 'flock:meta',
+      type: 'sharedtrip:meta',
     },
   }))
   // The Elm app's bundled PouchDB is not exposed on `window`, so we
@@ -203,26 +204,26 @@ export const pushFlocksLive = async (
     { timeout: 5_000 },
   )
   await page.evaluate(
-    async ([userFlocks, metas]) => {
+    async ([userSharedTrips, metas]) => {
       const PouchDB = (window as unknown as { PouchDB: new (n: string) => unknown }).PouchDB
       type DbHandle = {
         bulkDocs: (docs: unknown[]) => Promise<unknown>
         put: (doc: unknown) => Promise<unknown>
       }
       const personal = new PouchDB('ternpike') as DbHandle
-      await personal.put(userFlocks)
-      // Give `reconcileFlocks` in `src/pouch.js` time to open each
-      // per-flock handle before we write into it. Without this wait
-      // the per-flock PouchDB the app holds and the one we open
+      await personal.put(userSharedTrips)
+      // Give `reconcileSharedTrips` in `src/pouch.js` time to open each
+      // per-shared-trip handle before we write into it. Without this wait
+      // the per-shared-trip PouchDB the app holds and the one we open
       // below can race and our write lands before the app's change
       // feed is attached.
       await new Promise((r) => setTimeout(r, 250))
       for (const { dbName, doc } of metas as { dbName: string; doc: unknown }[]) {
-        const flockDb = new PouchDB(`ternpike-${dbName}`) as DbHandle
-        await flockDb.put(doc)
+        const sharedTripDb = new PouchDB(`ternpike-${dbName}`) as DbHandle
+        await sharedTripDb.put(doc)
       }
     },
-    [userFlocksDoc, flockMetaDocs] as const,
+    [userSharedTripsDoc, sharedTripMetaDocs] as const,
   )
 }
 

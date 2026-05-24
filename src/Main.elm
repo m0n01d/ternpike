@@ -300,9 +300,9 @@ encodePouchOut msg =
                 , ( "tripId", E.string (TripId.toString id) )
                 ]
 
-        OpenFlock { dbName, flockId } ->
+        OpenSharedTrip { dbName, flockId } ->
             E.object
-                [ ( "tag", E.string "OpenFlock" )
+                [ ( "tag", E.string "OpenSharedTrip" )
                 , ( "flockId", Data.SharedTripId.encode flockId )
                 , ( "dbName", E.string dbName )
                 ]
@@ -384,11 +384,11 @@ pouchInDecoder =
                             (D.field "expenseId" ExpenseId.decode)
                             expenseBundleDecoder
 
-                    "FlockMeta" ->
-                        D.map FlockMetaChanged (D.field "doc" SharedTrip.decoder)
+                    "SharedTripMeta" ->
+                        D.map SharedTripMetaChanged (D.field "doc" SharedTrip.decoder)
 
-                    "FlocksReconciled" ->
-                        D.map FlocksReconciled (D.field "flockIds" (D.list Data.SharedTripId.decoder))
+                    "SharedTripsReconciled" ->
+                        D.map SharedTripsReconciled (D.field "flockIds" (D.list Data.SharedTripId.decoder))
 
                     "SyncState" ->
                         D.map SyncStateMsg (D.field "state" syncStateDecoder)
@@ -418,10 +418,10 @@ docChangeDecoder =
                     "expense" ->
                         D.map ExpenseChanged Expense.decoder
 
-                    "flock:meta" ->
-                        -- Routed up as a top-level FlockMeta event by
+                    "sharedtrip:meta" ->
+                        -- Routed up as a top-level SharedTripMeta event by
                         -- pouch.js; ignored here.
-                        D.fail "flock:meta routed as FlockMeta event"
+                        D.fail "sharedtrip:meta routed as SharedTripMeta event"
 
                     "trip" ->
                         D.map TripChanged Trip.decoder
@@ -1975,7 +1975,7 @@ updateAuth msg as_ =
                 Ok (DbError msg_) ->
                     ( AuthModel { as_ | error = Just msg_ }, Cmd.none )
 
-                Ok (FlockMetaChanged flock) ->
+                Ok (SharedTripMetaChanged flock) ->
                     ( AuthModel
                         { as_
                             | sharedTrips =
@@ -1987,7 +1987,7 @@ updateAuth msg as_ =
                     , Cmd.none
                     )
 
-                Ok (FlocksReconciled flockIds) ->
+                Ok (SharedTripsReconciled flockIds) ->
                     let
                         keep =
                             flockIds
@@ -2907,9 +2907,9 @@ updateAuth msg as_ =
                     ( AuthModel { as_ | tripForm = Just updatedForm }
                     , Cmd.batch
                         ([ sendPouch
-                            (OpenFlock
+                            (OpenSharedTrip
                                 { flockId = response.sharedTripId
-                                , dbName = "flock-" ++ Data.SharedTripId.toString response.sharedTripId
+                                , dbName = "sharedtrip-" ++ Data.SharedTripId.toString response.sharedTripId
                                 }
                             )
                          , Task.perform GotSaveTripTime Time.now
@@ -3510,7 +3510,7 @@ viewAuth as_ =
                 RouteEditEntry _ _ ->
                     Pages.Add.viewTab as_
 
-                RouteJoinFlock token ->
+                RouteJoinSharedTrip token ->
                     Pages.JoinSharedTrip.viewAuth as_ token
 
                 RouteLedger _ ->

@@ -1,12 +1,12 @@
-// Provision a flock the same way `POST /flocks` would — CouchDB db, the
+// Provision a shared trip the same way `POST /sharedtrips` would — CouchDB db, the
 // `_security` object with the `flock` mirror, the `validate_doc_update`
-// design doc, and `flock:meta`. Used by tests that need a pre-existing flock
+// design doc, and `sharedtrip:meta`. Used by tests that need a pre-existing shared trip
 // rather than calling the endpoint.
 
 import {
-  FLOCK_DESIGN_DOC_ID,
-  buildFlockDesignDoc,
-} from '../../couch/flockValidator.js'
+  SHARED_TRIP_DESIGN_DOC_ID,
+  buildSharedTripDesignDoc,
+} from '../../couch/sharedTripValidator.js'
 import { couchAdminFetch } from './couch.js'
 
 const randomId = () => {
@@ -16,7 +16,7 @@ const randomId = () => {
   return s
 }
 
-export const flockDbName = (flockId) => `flock-${flockId}`
+export const flockDbName = (flockId) => `sharedtrip-${flockId}`
 
 export async function provisionFlock(couch, { name, owner, members }) {
   const flockId = randomId()
@@ -28,8 +28,8 @@ export async function provisionFlock(couch, { name, owner, members }) {
   }
 
   const meta = {
-    _id: 'flock:meta',
-    type: 'flock',
+    _id: 'sharedtrip:meta',
+    type: 'sharedtrip',
     name,
     members,
     billingOwner: owner,
@@ -53,33 +53,33 @@ export async function provisionFlock(couch, { name, owner, members }) {
   })
   if (!sec.ok) throw new Error(`_security PUT ${sec.status}`)
 
-  const design = buildFlockDesignDoc(null)
+  const design = buildSharedTripDesignDoc(null)
   const designRes = await couchAdminFetch(
     couch,
-    `/${dbName}/${encodeURIComponent(FLOCK_DESIGN_DOC_ID)}`,
+    `/${dbName}/${encodeURIComponent(SHARED_TRIP_DESIGN_DOC_ID)}`,
     { method: 'PUT', body: JSON.stringify(design) },
   )
   if (!designRes.ok) throw new Error(`design PUT ${designRes.status}`)
 
   const metaRes = await couchAdminFetch(
     couch,
-    `/${dbName}/flock%3Ameta`,
+    `/${dbName}/sharedtrip%3Ameta`,
     { method: 'PUT', body: JSON.stringify(meta) },
   )
-  if (!metaRes.ok) throw new Error(`flock:meta PUT ${metaRes.status}`)
+  if (!metaRes.ok) throw new Error(`sharedtrip:meta PUT ${metaRes.status}`)
 
-  // Mirror `user:flocks` for each member so endpoints that touch it work.
+  // Mirror `user:sharedtrips` for each member so endpoints that touch it work.
   for (const m of members) {
-    await appendUserFlocks(couch, m, { id: flockId, name, dbName })
+    await appendUserSharedTrips(couch, m, { id: flockId, name, dbName })
   }
 
   return { flockId, dbName, meta }
 }
 
-async function appendUserFlocks(couch, email, entry) {
+async function appendUserSharedTrips(couch, email, entry) {
   const personalDb =
     'ternpike-' + email.toLowerCase().replace(/[^a-z0-9_$()+/-]/g, '-')
-  const url = `/${personalDb}/user%3Aflocks`
+  const url = `/${personalDb}/user%3Asharedtrips`
   const cur = await couchAdminFetch(couch, url)
   let doc
   if (cur.ok) {
@@ -87,19 +87,19 @@ async function appendUserFlocks(couch, email, entry) {
     const without = (doc.flocks || []).filter((f) => f.id !== entry.id)
     doc.flocks = [...without, entry]
   } else if (cur.status === 404) {
-    doc = { _id: 'user:flocks', type: 'userFlocks', flocks: [entry] }
+    doc = { _id: 'user:sharedtrips', type: 'userFlocks', flocks: [entry] }
   } else {
-    throw new Error(`user:flocks GET ${cur.status}`)
+    throw new Error(`user:sharedtrips GET ${cur.status}`)
   }
   const put = await couchAdminFetch(couch, url, {
     method: 'PUT',
     body: JSON.stringify(doc),
   })
-  if (!put.ok) throw new Error(`user:flocks PUT ${put.status}`)
+  if (!put.ok) throw new Error(`user:sharedtrips PUT ${put.status}`)
 }
 
 export async function readMeta(couch, dbName) {
-  const r = await couchAdminFetch(couch, `/${dbName}/flock%3Ameta`)
+  const r = await couchAdminFetch(couch, `/${dbName}/sharedtrip%3Ameta`)
   if (!r.ok) throw new Error(`meta GET ${r.status}`)
   return r.json()
 }

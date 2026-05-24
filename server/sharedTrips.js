@@ -1,15 +1,15 @@
-// Flock provisioning, membership, and billing-grace machinery.
+// SharedTrip provisioning, membership, and billing-grace machinery.
 //
 // Scheduled freeze choice: Cloudflare Worker Cron Trigger (hourly), not
 // Durable Object alarms. DOs require migrations + per-flock object
-// instantiation; a single cron handler that scans flocks in `grace` and
+// instantiation; a single cron handler that scans shared trips in `grace` and
 // freezes any whose `billingLapsedAt + 14d <= now` is the smaller change and
 // scales fine at our user volume. See `scheduled()` at the bottom.
 
 import {
-  FLOCK_DESIGN_DOC_ID,
-  buildFlockDesignDoc,
-} from './couch/flockValidator.js'
+  SHARED_TRIP_DESIGN_DOC_ID,
+  buildSharedTripDesignDoc,
+} from './couch/sharedTripValidator.js'
 import { signJwt, verifyJwt } from './jwt.js'
 
 // The Resend Worker SDK reads its baseUrl from `process.env.RESEND_BASE_URL`
@@ -41,7 +41,7 @@ const sendResendEmail = async (env, payload) => {
 const encoder = new TextEncoder()
 const GRACE_PERIOD_MS = 14 * 24 * 60 * 60 * 1000
 const INVITE_EXPIRY_SECONDS = 7 * 24 * 60 * 60
-const APP_JOIN_URL = 'https://app.ternpike.com/flocks/join'
+const APP_JOIN_URL = 'https://app.ternpike.com/sharedtrips/join'
 
 const importHmacKey = (secret) =>
   crypto.subtle.importKey(
@@ -77,12 +77,12 @@ const derivePassword = async (email, secret) => {
   return bytesToHex(new Uint8Array(sig)).slice(0, 32)
 }
 
-const randomFlockId = () => {
+const randomSharedTripId = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(6))
   return bytesToHex(bytes)
 }
 
-const flockDbName = (flockId) => `flock-${flockId}`
+const sharedTripDbName = (sharedTripId) => `sharedtrip-${sharedTripId}`
 
 const personalDbName = (email) =>
   'ternpike-' + email.toLowerCase().replace(/[^a-z0-9_$()+/-]/g, '-')
@@ -167,12 +167,12 @@ async function couchPutJson(env, path, body) {
   return r.json()
 }
 
-async function readFlockMeta(env, dbName) {
-  return couchGetJson(env, `/${dbName}/flock%3Ameta`)
+async function readSharedTripMeta(env, dbName) {
+  return couchGetJson(env, `/${dbName}/sharedtrip%3Ameta`)
 }
 
-async function writeFlockMeta(env, dbName, meta) {
-  return couchPutJson(env, `/${dbName}/flock%3Ameta`, meta)
+async function writeSharedTripMeta(env, dbName, meta) {
+  return couchPutJson(env, `/${dbName}/sharedtrip%3Ameta`, meta)
 }
 
 async function readSecurity(env, dbName) {
@@ -200,14 +200,14 @@ async function writeSecurity(env, dbName, security) {
 async function installDesignDoc(env, dbName) {
   const existing = await couchAdmin(
     env,
-    `/${dbName}/${encodeURIComponent(FLOCK_DESIGN_DOC_ID)}`,
+    `/${dbName}/${encodeURIComponent(SHARED_TRIP_DESIGN_DOC_ID)}`,
   )
   let rev = null
   if (existing.ok) rev = (await existing.json())._rev
-  const doc = buildFlockDesignDoc(rev)
+  const doc = buildSharedTripDesignDoc(rev)
   const put = await couchAdmin(
     env,
-    `/${dbName}/${encodeURIComponent(FLOCK_DESIGN_DOC_ID)}`,
+    `/${dbName}/${encodeURIComponent(SHARED_TRIP_DESIGN_DOC_ID)}`,
     { method: 'PUT', body: JSON.stringify(doc) },
   )
   if (!put.ok) {
@@ -231,9 +231,9 @@ async function syncSecurity(env, dbName, members, meta) {
   await writeSecurity(env, dbName, securityForMembers(members, meta))
 }
 
-async function appendUserFlocks(env, email, entry) {
+async function appendUserSharedTrips(env, email, entry) {
   const dbName = personalDbName(email)
-  const url = `/${dbName}/user%3Aflocks`
+  const url = `/${dbName}/user%3Asharedtrips`
   const cur = await couchAdmin(env, url)
   let doc
   if (cur.ok) {
@@ -242,48 +242,48 @@ async function appendUserFlocks(env, email, entry) {
     doc.flocks = [...without, entry]
   } else if (cur.status === 404) {
     doc = {
-      _id: 'user:flocks',
+      _id: 'user:sharedtrips',
       type: 'userFlocks',
       flocks: [entry],
     }
   } else {
-    throw new Error(`user:flocks GET ${cur.status}`)
+    throw new Error(`user:sharedtrips GET ${cur.status}`)
   }
   await couchPutJson(env, url, doc)
 }
 
-async function removeUserFlocks(env, email, flockId) {
+async function removeUserSharedTrips(env, email, sharedTripId) {
   const dbName = personalDbName(email)
-  const url = `/${dbName}/user%3Aflocks`
+  const url = `/${dbName}/user%3Asharedtrips`
   const cur = await couchAdmin(env, url)
   if (!cur.ok) return
   const doc = await cur.json()
-  doc.flocks = (doc.flocks || []).filter((f) => f.id !== flockId)
+  doc.flocks = (doc.flocks || []).filter((f) => f.id !== sharedTripId)
   await couchPutJson(env, url, doc)
 }
 
-async function listOwnedFlocksFor(env, email) {
+async function listOwnedSharedTripsFor(env, email) {
   const dbName = personalDbName(email)
-  const url = `/${dbName}/user%3Aflocks`
+  const url = `/${dbName}/user%3Asharedtrips`
   const cur = await couchAdmin(env, url)
   if (!cur.ok) return []
   const doc = await cur.json()
   const owned = []
   for (const entry of doc.flocks || []) {
     try {
-      const meta = await readFlockMeta(env, entry.dbName)
+      const meta = await readSharedTripMeta(env, entry.dbName)
       if (meta.billingOwner === email.toLowerCase()) {
         owned.push({ entry, meta })
       }
     } catch {
-      // skip flocks we can't read
+      // skip shared trips we can't read
     }
   }
   return owned
 }
 
-export function registerFlockRoutes(app) {
-  app.post('/flocks', async (c) => {
+export function registerSharedTripRoutes(app) {
+  app.post('/sharedtrips', async (c) => {
     const env = c.env
     const caller = await authenticateCaller(c)
     if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
@@ -302,18 +302,18 @@ export function registerFlockRoutes(app) {
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     if (!name) return c.json({ ok: false, error: 'name_required' }, 400)
 
-    const flockId = randomFlockId()
-    const dbName = flockDbName(flockId)
-    // CouchDB doc id stays at the well-known `flock:meta` so the Elm
-    // client's PouchDB hydration (`local.get('flock:meta')`) can find it,
+    const sharedTripId = randomSharedTripId()
+    const dbName = sharedTripDbName(sharedTripId)
+    // CouchDB doc id stays at the well-known `sharedtrip:meta` so the Elm
+    // client's PouchDB hydration (`local.get('sharedtrip:meta')`) can find it,
     // and so the validator's admin-only branch matches by id. The wire
-    // shape Elm decodes (see `src/Data/Flock.elm`) expects the per-flock
-    // identifier on `flockId` and the marker type as `flock:meta`, so
+    // shape Elm decodes (see `src/Data/SharedTrip.elm`) expects the per-shared-trip
+    // identifier on `flockId` and the marker type as `sharedtrip:meta`, so
     // we encode both alongside the existing fields.
     const meta = {
-      _id: 'flock:meta',
-      type: 'flock:meta',
-      flockId,
+      _id: 'sharedtrip:meta',
+      type: 'sharedtrip:meta',
+      flockId: sharedTripId,
       name,
       members: [caller.email],
       billingOwner: caller.email,
@@ -330,35 +330,35 @@ export function registerFlockRoutes(app) {
       }
       await syncSecurity(env, dbName, [caller.email], meta)
       await installDesignDoc(env, dbName)
-      await writeFlockMeta(env, dbName, meta)
-      await appendUserFlocks(env, caller.email, {
-        id: flockId,
+      await writeSharedTripMeta(env, dbName, meta)
+      await appendUserSharedTrips(env, caller.email, {
+        id: sharedTripId,
         name,
         dbName,
       })
-      return c.json({ ok: true, flockId, dbName }, 201)
+      return c.json({ ok: true, flockId: sharedTripId, dbName }, 201)
     } catch (err) {
-      console.error('flocks/create:', err)
+      console.error('sharedtrips/create:', err)
       return c.json({ ok: false, error: 'provision_failed' }, 500)
     }
   })
 
-  app.post('/flocks/:id/invite', async (c) => {
+  app.post('/sharedtrips/:id/invite', async (c) => {
     const env = c.env
     const caller = await authenticateCaller(c)
     if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
 
-    const flockId = c.req.param('id')
-    const dbName = flockDbName(flockId)
+    const sharedTripId = c.req.param('id')
+    const dbName = sharedTripDbName(sharedTripId)
 
     let meta
     try {
-      meta = await readFlockMeta(env, dbName)
+      meta = await readSharedTripMeta(env, dbName)
     } catch (err) {
       if (err.status === 404) {
         return c.json({ ok: false, error: 'not_found' }, 404)
       }
-      console.error('flocks/invite read meta:', err)
+      console.error('sharedtrips/invite read meta:', err)
       return c.json({ ok: false, error: 'read_failed' }, 500)
     }
     if (!meta.members.includes(caller.email)) {
@@ -391,7 +391,7 @@ export function registerFlockRoutes(app) {
     const now = Math.floor(Date.now() / 1000)
     const token = await signJwt(
       {
-        flockId,
+        flockId: sharedTripId,
         inviteeEmail,
         inviter: caller.email,
         iat: now,
@@ -405,26 +405,26 @@ export function registerFlockRoutes(app) {
       await sendResendEmail(env, {
         from: 'Ternpike <noreply@ternpike.com>',
         to: inviteeEmail,
-        subject: `Join the ${meta.name} flock on Ternpike`,
+        subject: `Join the ${meta.name} shared trip on Ternpike`,
         text:
-          `${caller.email} invited you to join the "${meta.name}" flock on Ternpike, ` +
+          `${caller.email} invited you to join the "${meta.name}" shared trip on Ternpike, ` +
           `where you'll share expenses and trips together.\n\n` +
           `Open in Ternpike: ${joinUrl}\n\n` +
           `This invite expires in 7 days.\n`,
         html: inviteEmailHtml({
-          flockName: meta.name,
+          tripName: meta.name,
           inviterEmail: caller.email,
           joinUrl,
         }),
       })
     } catch (err) {
-      console.error('flocks/invite sendMail:', err)
+      console.error('sharedtrips/invite sendMail:', err)
       return c.json({ ok: false, error: 'email_failed' }, 500)
     }
     return c.json({ ok: true })
   })
 
-  app.post('/flocks/join', async (c) => {
+  app.post('/sharedtrips/join', async (c) => {
     const env = c.env
     const caller = await authenticateCaller(c)
     if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
@@ -443,24 +443,24 @@ export function registerFlockRoutes(app) {
       const status = verified.reason === 'expired' ? 410 : 401
       return c.json({ ok: false, error: verified.reason }, status)
     }
-    const { flockId, inviteeEmail } = verified.payload
+    const { flockId: sharedTripId, inviteeEmail } = verified.payload
     if (
-      typeof flockId !== 'string' ||
+      typeof sharedTripId !== 'string' ||
       typeof inviteeEmail !== 'string' ||
       inviteeEmail.toLowerCase() !== caller.email
     ) {
       return c.json({ ok: false, error: 'email_mismatch' }, 403)
     }
 
-    const dbName = flockDbName(flockId)
+    const dbName = sharedTripDbName(sharedTripId)
     let meta
     try {
-      meta = await readFlockMeta(env, dbName)
+      meta = await readSharedTripMeta(env, dbName)
     } catch (err) {
       if (err.status === 404) {
         return c.json({ ok: false, error: 'not_found' }, 404)
       }
-      console.error('flocks/join read meta:', err)
+      console.error('sharedtrips/join read meta:', err)
       return c.json({ ok: false, error: 'read_failed' }, 500)
     }
     if (meta.members.includes(caller.email)) {
@@ -471,39 +471,39 @@ export function registerFlockRoutes(app) {
     const updatedMeta = { ...meta, members }
     try {
       await syncSecurity(env, dbName, members, updatedMeta)
-      await writeFlockMeta(env, dbName, updatedMeta)
-      await appendUserFlocks(env, caller.email, {
-        id: flockId,
+      await writeSharedTripMeta(env, dbName, updatedMeta)
+      await appendUserSharedTrips(env, caller.email, {
+        id: sharedTripId,
         name: meta.name,
         dbName,
       })
-      return c.json({ ok: true, flockId, dbName, name: meta.name })
+      return c.json({ ok: true, flockId: sharedTripId, dbName, name: meta.name })
     } catch (err) {
-      console.error('flocks/join:', err)
+      console.error('sharedtrips/join:', err)
       return c.json({ ok: false, error: 'join_failed' }, 500)
     }
   })
 
-  app.post('/flocks/:id/leave', async (c) => {
+  app.post('/sharedtrips/:id/leave', async (c) => {
     const env = c.env
     const caller = await authenticateCaller(c)
     if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
 
-    const flockId = c.req.param('id')
-    const dbName = flockDbName(flockId)
+    const sharedTripId = c.req.param('id')
+    const dbName = sharedTripDbName(sharedTripId)
 
     let meta
     try {
-      meta = await readFlockMeta(env, dbName)
+      meta = await readSharedTripMeta(env, dbName)
     } catch (err) {
       if (err.status === 404) {
         return c.json({ ok: false, error: 'not_found' }, 404)
       }
-      console.error('flocks/leave read meta:', err)
+      console.error('sharedtrips/leave read meta:', err)
       return c.json({ ok: false, error: 'read_failed' }, 500)
     }
     if (!meta.members.includes(caller.email)) {
-      // Return 404 (not 403) so we don't confirm the flock's existence to
+      // Return 404 (not 403) so we don't confirm the shared trip's existence to
       // a caller who has no business knowing about it. See #68.
       return c.json({ ok: false, error: 'not_found' }, 404)
     }
@@ -514,9 +514,9 @@ export function registerFlockRoutes(app) {
           409,
         )
       }
-      // Sole-member owner self-leave is out of scope for v1 (delete-flock
+      // Sole-member owner self-leave is out of scope for v1 (delete-sharedtrip
       // is not yet implemented). Reject explicitly rather than orphan the
-      // flock db. See #68.
+      // sharedtrip db. See #68.
       return c.json({ ok: false, error: 'sole_owner_cannot_leave' }, 409)
     }
 
@@ -524,22 +524,22 @@ export function registerFlockRoutes(app) {
     const updatedMeta = { ...meta, members }
     try {
       await syncSecurity(env, dbName, members, updatedMeta)
-      await writeFlockMeta(env, dbName, updatedMeta)
-      await removeUserFlocks(env, caller.email, flockId)
+      await writeSharedTripMeta(env, dbName, updatedMeta)
+      await removeUserSharedTrips(env, caller.email, sharedTripId)
       return c.json({ ok: true })
     } catch (err) {
-      console.error('flocks/leave:', err)
+      console.error('sharedtrips/leave:', err)
       return c.json({ ok: false, error: 'leave_failed' }, 500)
     }
   })
 
-  app.post('/flocks/:id/transfer-ownership', async (c) => {
+  app.post('/sharedtrips/:id/transfer-ownership', async (c) => {
     const env = c.env
     const caller = await authenticateCaller(c)
     if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
 
-    const flockId = c.req.param('id')
-    const dbName = flockDbName(flockId)
+    const sharedTripId = c.req.param('id')
+    const dbName = sharedTripDbName(sharedTripId)
 
     let body
     try {
@@ -557,12 +557,12 @@ export function registerFlockRoutes(app) {
 
     let meta
     try {
-      meta = await readFlockMeta(env, dbName)
+      meta = await readSharedTripMeta(env, dbName)
     } catch (err) {
       if (err.status === 404) {
         return c.json({ ok: false, error: 'not_found' }, 404)
       }
-      console.error('flocks/transfer read meta:', err)
+      console.error('sharedtrips/transfer read meta:', err)
       return c.json({ ok: false, error: 'read_failed' }, 500)
     }
     if (meta.billingOwner !== caller.email) {
@@ -584,11 +584,11 @@ export function registerFlockRoutes(app) {
 
     const updatedMeta = { ...meta, billingOwner: newOwnerEmail }
     try {
-      await writeFlockMeta(env, dbName, updatedMeta)
+      await writeSharedTripMeta(env, dbName, updatedMeta)
       await syncSecurity(env, dbName, meta.members, updatedMeta)
       return c.json({ ok: true, billingOwner: newOwnerEmail })
     } catch (err) {
-      console.error('flocks/transfer:', err)
+      console.error('sharedtrips/transfer:', err)
       return c.json({ ok: false, error: 'transfer_failed' }, 500)
     }
   })
@@ -596,7 +596,7 @@ export function registerFlockRoutes(app) {
   // Test-only hook: flip a user's tier and run the downgrade/upgrade cascade.
   // This is the integration point the real Stripe webhook will call once
   // billing lands (#16-#22). Body: { email, tier }.
-  app.post('/flocks/test/tier-changed', async (c) => {
+  app.post('/sharedtrips/test/tier-changed', async (c) => {
     const env = c.env
     if (!env.TIER_WEBHOOK_SECRET) {
       return c.json({ ok: false, error: 'webhook_not_configured' }, 503)
@@ -635,7 +635,7 @@ export function registerFlockRoutes(app) {
 }
 
 export async function onTierChanged(env, email, newTier) {
-  const owned = await listOwnedFlocksFor(env, email)
+  const owned = await listOwnedSharedTripsFor(env, email)
   for (const { entry, meta } of owned) {
     if (!isPaidTier(newTier)) {
       if (meta.billingStatus === 'active') {
@@ -644,7 +644,7 @@ export async function onTierChanged(env, email, newTier) {
           billingStatus: 'grace',
           billingLapsedAt: nowIso(),
         }
-        await writeFlockMeta(env, entry.dbName, updated)
+        await writeSharedTripMeta(env, entry.dbName, updated)
         await syncSecurity(env, entry.dbName, meta.members, updated)
       }
     } else {
@@ -654,7 +654,7 @@ export async function onTierChanged(env, email, newTier) {
           billingStatus: 'active',
           billingLapsedAt: null,
         }
-        await writeFlockMeta(env, entry.dbName, updated)
+        await writeSharedTripMeta(env, entry.dbName, updated)
         await syncSecurity(env, entry.dbName, meta.members, updated)
       }
       // billingStatus === 'frozen' requires a manual re-activation; the
@@ -664,25 +664,25 @@ export async function onTierChanged(env, email, newTier) {
 }
 
 export async function runGraceFreezeSweep(env) {
-  // Iterate every `flock-` database and freeze any whose grace window has
-  // elapsed. Cheap at our scale; revisit if flock count grows past ~10k.
+  // Iterate every `sharedtrip-` database and freeze any whose grace window has
+  // elapsed. Cheap at our scale; revisit if shared trip count grows past ~10k.
   const list = await couchAdmin(env, '/_all_dbs')
   if (!list.ok) {
     console.error('cron: _all_dbs failed', list.status)
     return
   }
-  const dbs = (await list.json()).filter((d) => d.startsWith('flock-'))
+  const dbs = (await list.json()).filter((d) => d.startsWith('sharedtrip-'))
   const cutoff = Date.now() - GRACE_PERIOD_MS
   for (const dbName of dbs) {
     try {
-      const meta = await readFlockMeta(env, dbName)
+      const meta = await readSharedTripMeta(env, dbName)
       if (meta.billingStatus !== 'grace') continue
       if (!meta.billingLapsedAt) continue
       const lapsedMs = Date.parse(meta.billingLapsedAt)
       if (Number.isNaN(lapsedMs)) continue
       if (lapsedMs > cutoff) continue
       const updated = { ...meta, billingStatus: 'frozen' }
-      await writeFlockMeta(env, dbName, updated)
+      await writeSharedTripMeta(env, dbName, updated)
       await syncSecurity(env, dbName, meta.members, updated)
     } catch (err) {
       console.error('cron freeze sweep', dbName, err)
@@ -690,12 +690,12 @@ export async function runGraceFreezeSweep(env) {
   }
 }
 
-function inviteEmailHtml({ flockName, inviterEmail, joinUrl }) {
-  const safeFlock = escapeHtml(flockName)
+function inviteEmailHtml({ tripName, inviterEmail, joinUrl }) {
+  const safeName = escapeHtml(tripName)
   const safeInviter = escapeHtml(inviterEmail)
   return `<!doctype html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; color: #222; padding: 24px;">
-  <p>${safeInviter} invited you to join the <strong>${safeFlock}</strong> flock on Ternpike.</p>
+  <p>${safeInviter} invited you to join the <strong>${safeName}</strong> shared trip on Ternpike.</p>
   <p>You'll share expenses and trips together, in real time.</p>
   <p style="margin: 24px 0;">
     <a href="${joinUrl}" style="background:#4a5e3a; color:#fff; padding: 12px 20px; border-radius: 6px; text-decoration:none; display:inline-block;">Open in Ternpike</a>

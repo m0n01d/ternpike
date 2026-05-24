@@ -4,7 +4,7 @@
 // validate_doc_update), so we can be sure the validator is actually firing.
 //
 // Issue: https://github.com/m0n01d/ternpike/issues/66
-// Validator source: server/couch/flockValidator.js
+// Validator source: server/couch/sharedTripValidator.js
 
 import { after, before, describe, test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -253,7 +253,7 @@ describe('owner-only doc types', () => {
   })
 })
 
-describe('flock:meta admin-only', () => {
+describe('sharedtrip:meta admin-only', () => {
   let dbName
 
   before(async () => {
@@ -265,31 +265,31 @@ describe('flock:meta admin-only', () => {
     dbName = f.dbName
   })
 
-  test('non-owner member writing flock:meta is rejected', async () => {
-    const cur = await couchAdminFetch(couch, `/${dbName}/flock%3Ameta`)
+  test('non-owner member writing sharedtrip:meta is rejected', async () => {
+    const cur = await couchAdminFetch(couch, `/${dbName}/sharedtrip%3Ameta`)
     const meta = await cur.json()
     meta.billingStatus = 'active' // attempt to mutate
-    const res = await putAs(bobCreds, dbName, 'flock:meta', meta)
+    const res = await putAs(bobCreds, dbName, 'sharedtrip:meta', meta)
     assert.equal(res.status, 403)
     const body = await res.json()
     assert.match(body.reason, /admin/i)
   })
 
-  test('owner (non-admin) writing flock:meta is rejected', async () => {
-    const cur = await couchAdminFetch(couch, `/${dbName}/flock%3Ameta`)
+  test('owner (non-admin) writing sharedtrip:meta is rejected', async () => {
+    const cur = await couchAdminFetch(couch, `/${dbName}/sharedtrip%3Ameta`)
     const meta = await cur.json()
     meta.name = 'renamed-by-owner'
-    const res = await putAs(aliceCreds, dbName, 'flock:meta', meta)
+    const res = await putAs(aliceCreds, dbName, 'sharedtrip:meta', meta)
     assert.equal(res.status, 403)
     const body = await res.json()
     assert.match(body.reason, /admin/i)
   })
 
-  test('positive control — couchdb admin can write flock:meta', async () => {
-    const cur = await couchAdminFetch(couch, `/${dbName}/flock%3Ameta`)
+  test('positive control — couchdb admin can write sharedtrip:meta', async () => {
+    const cur = await couchAdminFetch(couch, `/${dbName}/sharedtrip%3Ameta`)
     const meta = await cur.json()
     meta.name = 'renamed-by-admin'
-    const res = await putAsAdmin(dbName, 'flock:meta', meta)
+    const res = await putAsAdmin(dbName, 'sharedtrip:meta', meta)
     assert.ok(res.ok, `admin meta PUT ${res.status}`)
   })
 })

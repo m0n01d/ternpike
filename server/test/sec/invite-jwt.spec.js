@@ -1,14 +1,14 @@
 // [Flock-Sec] #67 — invite JWT abuse.
 //
 // Adversarial coverage for the invite-token surface introduced in #57:
-// `/flocks/invite` mints an HS256 JWT bound to `inviteeEmail`, signed with
-// `SERVER_SECRET`. `/flocks/join` is the redemption endpoint. Every failure
+// `/sharedtrips/invite` mints an HS256 JWT bound to `inviteeEmail`, signed with
+// `SERVER_SECRET`. `/sharedtrips/join` is the redemption endpoint. Every failure
 // mode below is a potential bypass; we pin each as a test.
 //
 // We mint tokens directly via `signJwt` (rather than driving the invite
 // endpoint) so each attack can hand-shape the payload, signing secret, or
 // header without relying on the happy-path encoder. The positive control at
-// the bottom does drive `/flocks/invite` → `/flocks/join` end-to-end so any
+// the bottom does drive `/sharedtrips/invite` → `/sharedtrips/join` end-to-end so any
 // regression in the real signing path also surfaces here.
 
 import { after, before, beforeEach, describe, test } from 'node:test'
@@ -51,7 +51,7 @@ const authed = async (email) => ({
 const nowSec = () => Math.floor(Date.now() / 1000)
 
 // Shared helper — mint an invite JWT for `inviteeEmail` against `flockId`.
-// Mirrors the production payload in `flocks.js#/flocks/:id/invite`.
+// Mirrors the production payload in `sharedTrips.js#/sharedtrips/:id/invite`.
 async function mintInvite({
   flockId,
   inviteeEmail,
@@ -102,7 +102,7 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
 
   test('wrong recipient: token for bob, redeemed by carol → 403, no leak', async () => {
     const token = await mintInvite({ flockId, inviteeEmail: BOB })
-    const res = await request(env, 'POST', '/flocks/join', {
+    const res = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(CAROL),
       body: { token },
     })
@@ -124,7 +124,7 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
       inviteeEmail: BOB,
       secret: 'attacker-controlled-secret',
     })
-    const res = await request(env, 'POST', '/flocks/join', {
+    const res = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token },
     })
@@ -141,7 +141,7 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
     payloadJson.flockId = 'attacker-flock-id'
     const tampered =
       headerPart + '.' + b64urlEncode(JSON.stringify(payloadJson)) + '.' + sigPart
-    const res = await request(env, 'POST', '/flocks/join', {
+    const res = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token: tampered },
     })
@@ -155,11 +155,11 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
       inviteeEmail: BOB,
       expSeconds: -60,
     })
-    const res = await request(env, 'POST', '/flocks/join', {
+    const res = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token },
     })
-    // verifyJwt distinguishes expired from other failures; flocks.js maps
+    // verifyJwt distinguishes expired from other failures; sharedTrips.js maps
     // 'expired' → 410. If that mapping ever changes the test below pins it.
     assert.equal(res.status, 410)
     assert.equal(res.body.error, 'expired')
@@ -167,12 +167,12 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
 
   test('replay: same valid token redeemed twice → 200 then 409', async () => {
     const token = await mintInvite({ flockId, inviteeEmail: BOB })
-    const first = await request(env, 'POST', '/flocks/join', {
+    const first = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token },
     })
     assert.equal(first.status, 200)
-    const second = await request(env, 'POST', '/flocks/join', {
+    const second = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token },
     })
@@ -190,7 +190,7 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
     // header.payload (two segments). Test both.
     const variants = [`${noneHeader}.${payloadPart}.`, `${noneHeader}.${payloadPart}`]
     for (const token of variants) {
-      const res = await request(env, 'POST', '/flocks/join', {
+      const res = await request(env, 'POST', '/sharedtrips/join', {
         headers: await authed(BOB),
         body: { token },
       })
@@ -210,7 +210,7 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
       inviteeEmail: BOB,
       nbf: nowSec() + 3600,
     })
-    const res = await request(env, 'POST', '/flocks/join', {
+    const res = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token },
     })
@@ -222,12 +222,12 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
   test('token for a deleted flock: admin-delete the db, then redeem → 404', async () => {
     const token = await mintInvite({ flockId, inviteeEmail: BOB })
     const del = await couchAdminFetch(couch, `/${dbName}`, { method: 'DELETE' })
-    assert.ok(del.ok, `flock db delete failed (${del.status})`)
-    const res = await request(env, 'POST', '/flocks/join', {
+    assert.ok(del.ok, `sharedtrip db delete failed (${del.status})`)
+    const res = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token },
     })
-    // /flocks/join reads flock:meta first; a missing db surfaces as 404.
+    // /sharedtrips/join reads sharedtrip:meta first; a missing db surfaces as 404.
     // (410 would also be defensible — the spec accepts either; we pin the
     // current behavior so future shifts are intentional.)
     assert.equal(res.status, 404)
@@ -236,7 +236,7 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
 
   test('positive control: valid token for bob → 200, bob in _security.members', async () => {
     const token = await mintInvite({ flockId, inviteeEmail: BOB })
-    const res = await request(env, 'POST', '/flocks/join', {
+    const res = await request(env, 'POST', '/sharedtrips/join', {
       headers: await authed(BOB),
       body: { token },
     })

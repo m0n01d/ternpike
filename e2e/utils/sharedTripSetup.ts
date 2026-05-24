@@ -5,14 +5,16 @@ import { readHarnessState } from './state'
 import type { CouchClient } from './couch'
 
 /**
- * Helpers for seeding a multi-user flock state directly via the CouchDB admin
- * client, mirroring what `server/flocks.js` would do via its HTTP endpoints.
+ * Helpers for seeding a multi-user shared trip state directly via the CouchDB
+ * admin client, mirroring what `server/sharedTrips.js` would do via its HTTP
+ * endpoints.
  *
- * Used by the leave/remove spec where the pre-state (a flock with two members
- * and a trip with expenses from both) is needed before any UI interaction.
- * Driving the same setup through `/auth/request-code` + `/flocks` +
- * `/flocks/:id/invite` + `/flocks/join` would work end-to-end but balloons
- * the setup to a half-dozen email round-trips per spec.
+ * Used by the leave/remove spec where the pre-state (a shared trip with two
+ * members and a trip with expenses from both) is needed before any UI
+ * interaction. Driving the same setup through `/auth/request-code` +
+ * `/sharedtrips` + `/sharedtrips/:id/invite` + `/sharedtrips/join` would work
+ * end-to-end but balloons the setup to a half-dozen email round-trips per
+ * spec.
  */
 
 const SERVER_SECRET = 'e2e-server-secret'
@@ -34,9 +36,9 @@ export const personalDbName = (email: string): string =>
   'ternpike-' + email.toLowerCase().replace(/[^a-z0-9_$()+/-]/g, '-')
 
 /**
- * Flock-DB name. Mirrors `flockDbName` in `server/flocks.js`.
+ * Shared-trip DB name. Mirrors `sharedTripDbName` in `server/sharedTrips.js`.
  */
-export const flockDbName = (flockId: string): string => `flock-${flockId}`
+export const sharedTripDbName = (sharedTripId: string): string => `sharedtrip-${sharedTripId}`
 
 const ensureUser = async (
   couch: CouchClient,
@@ -126,13 +128,13 @@ const upsertDoc = async (
   }
 }
 
-const appendUserFlocks = async (
+const appendUserSharedTrips = async (
   couch: CouchClient,
   email: string,
   entry: { dbName: string; id: string; name: string },
 ): Promise<void> => {
   const dbName = personalDbName(email)
-  const docId = 'user:flocks'
+  const docId = 'user:sharedtrips'
   const path = `/${dbName}/${encodeURIComponent(docId)}`
   const cur = await couch.request(path)
   let doc: { _rev?: string; flocks: typeof entry[] }
@@ -146,7 +148,7 @@ const appendUserFlocks = async (
   } else if (cur.status === 404) {
     doc = { flocks: [entry] }
   } else {
-    throw new Error(`user:flocks GET ${dbName} ${cur.status}`)
+    throw new Error(`user:sharedtrips GET ${dbName} ${cur.status}`)
   }
   const put = await couch.request(path, {
     method: 'PUT',
@@ -158,11 +160,11 @@ const appendUserFlocks = async (
     }),
   })
   if (!put.ok) {
-    throw new Error(`user:flocks PUT ${put.status}: ${await put.text()}`)
+    throw new Error(`user:sharedtrips PUT ${put.status}: ${await put.text()}`)
   }
 }
 
-export type FlockSeedExpense = {
+export type SharedTripSeedExpense = {
   amount: number
   category: string
   createdBy: string
@@ -171,9 +173,9 @@ export type FlockSeedExpense = {
   note?: string
 }
 
-export type FlockSeed = {
-  expenses?: FlockSeedExpense[]
-  flockId: string
+export type SharedTripSeed = {
+  expenses?: SharedTripSeedExpense[]
+  sharedTripId: string
   members: string[]
   name: string
   owner: string
@@ -182,16 +184,17 @@ export type FlockSeed = {
 }
 
 /**
- * Provisions a flock CouchDB database with `flock:meta`, `_security` listing
- * every member, one trip, and any expenses attributed via `createdBy`. Adds
- * a matching `user:flocks` entry to every member's personal DB so the
- * client-side `reconcileFlocks` opens the handle on next change-feed update.
+ * Provisions a shared trip CouchDB database with `sharedtrip:meta`,
+ * `_security` listing every member, one trip, and any expenses attributed via
+ * `createdBy`. Adds a matching `user:sharedtrips` entry to every member's
+ * personal DB so the client-side `reconcileSharedTrips` opens the handle on
+ * next change-feed update.
  */
-export const seedFlock = async (
+export const seedSharedTrip = async (
   couch: CouchClient,
-  seed: FlockSeed,
+  seed: SharedTripSeed,
 ): Promise<{ dbName: string; tripId: string }> => {
-  const dbName = flockDbName(seed.flockId)
+  const dbName = sharedTripDbName(seed.sharedTripId)
   const create = await couch.request(`/${dbName}`, { method: 'PUT' })
   if (!create.ok && create.status !== 412) {
     throw new Error(`db PUT ${dbName} ${create.status}: ${await create.text()}`)
@@ -202,10 +205,10 @@ export const seedFlock = async (
     billingStatus: 'active',
     createdAt: new Date().toISOString(),
     createdBy: seed.owner.toLowerCase(),
-    flockId: seed.flockId,
+    flockId: seed.sharedTripId,
     members: seed.members.map((m) => m.toLowerCase()),
     name: seed.name,
-    type: 'flock:meta',
+    type: 'sharedtrip:meta',
   }
   const security = {
     admins: { names: [], roles: [] },
@@ -224,10 +227,10 @@ export const seedFlock = async (
       `_security PUT ${dbName} ${secRes.status}: ${await secRes.text()}`,
     )
   }
-  await upsertDoc(couch, dbName, 'flock:meta', meta)
+  await upsertDoc(couch, dbName, 'sharedtrip:meta', meta)
 
   const tripIso = new Date('2026-03-01T00:00:00Z').toISOString()
-  const tripId = `trip::${tripIso}::${seed.flockId.slice(0, 8)}`
+  const tripId = `trip::${tripIso}::${seed.sharedTripId.slice(0, 8)}`
   await upsertDoc(couch, dbName, tripId, {
     budget: seed.tripBudget ?? 0,
     coverPhotoUrl: '',
@@ -260,9 +263,9 @@ export const seedFlock = async (
   }
 
   for (const member of meta.members) {
-    await appendUserFlocks(couch, member, {
+    await appendUserSharedTrips(couch, member, {
       dbName,
-      id: seed.flockId,
+      id: seed.sharedTripId,
       name: seed.name,
     })
   }
@@ -271,17 +274,17 @@ export const seedFlock = async (
 }
 
 /**
- * Reads the current `flock:meta` doc — useful when a spec needs to confirm
- * the server-side state after a leave/remove HTTP call.
+ * Reads the current `sharedtrip:meta` doc — useful when a spec needs to
+ * confirm the server-side state after a leave/remove HTTP call.
  */
-export const readFlockMeta = async (
+export const readSharedTripMeta = async (
   couch: CouchClient,
-  flockId: string,
+  sharedTripId: string,
 ): Promise<{ billingOwner: string; members: string[]; name: string }> => {
-  const path = `/${flockDbName(flockId)}/${encodeURIComponent('flock:meta')}`
+  const path = `/${sharedTripDbName(sharedTripId)}/${encodeURIComponent('sharedtrip:meta')}`
   const res = await couch.request(path)
   if (!res.ok) {
-    throw new Error(`flock:meta GET ${flockId} ${res.status}`)
+    throw new Error(`sharedtrip:meta GET ${sharedTripId} ${res.status}`)
   }
   return res.json() as Promise<{
     billingOwner: string
@@ -291,13 +294,14 @@ export const readFlockMeta = async (
 }
 
 /**
- * Mints an invite JWT the same way `/flocks/:id/invite` would, so the spec
- * can drive Bob's rejoin without intercepting the mock-Resend email.
+ * Mints an invite JWT the same way `/sharedtrips/:id/invite` would, so the
+ * spec can drive Bob's rejoin without intercepting the mock-Resend email.
  *
- * Mirrors `signJwt` in `server/jwt.js`: HS256 over base64url(header).base64url(payload).
+ * Mirrors `signJwt` in `server/jwt.js`: HS256 over
+ * base64url(header).base64url(payload).
  */
 export const mintInviteJwt = (
-  flockId: string,
+  sharedTripId: string,
   inviteeEmail: string,
   inviter: string,
 ): string => {
@@ -305,7 +309,7 @@ export const mintInviteJwt = (
   const header = { alg: 'HS256', typ: 'JWT' }
   const payload = {
     exp: now + 7 * 24 * 60 * 60,
-    flockId,
+    flockId: sharedTripId,
     iat: now,
     inviteeEmail: inviteeEmail.toLowerCase(),
     inviter: inviter.toLowerCase(),
@@ -320,7 +324,7 @@ export const mintInviteJwt = (
 
 /**
  * Convenience: returns the wrangler auth-server URL, derived from harness
- * state. Specs that need to call `/flocks/*` HTTP endpoints route through
+ * state. Specs that need to call `/sharedtrips/*` HTTP endpoints route through
  * here rather than the real api.ternpike.com hostname.
  */
 export const authServerBaseUrl = (): string => {

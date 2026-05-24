@@ -1,5 +1,5 @@
 /**
- * Helpers for the join-flock E2E spec (#73).
+ * Helpers for the join-shared-trip E2E spec (#73).
  *
  * The harness's mock Resend can't capture the real outbound invite email —
  * `RESEND_BASE_URL` isn't wired to the Worker SDK (per #71's report). To
@@ -12,7 +12,7 @@
  * Similarly, the auth-server's HTTP Basic check derives the expected
  * password from `HMAC-SHA256("couch:" + email, SERVER_SECRET)` truncated
  * to 32 hex chars. The default fixture uses a placeholder
- * (`e2e-stub-password`); when a test needs to call /flocks/* endpoints
+ * (`e2e-stub-password`); when a test needs to call /sharedtrips/* endpoints
  * we override the IndexedDB stub with the real derived password via
  * `stubAuthCreds`.
  */
@@ -34,7 +34,7 @@ const base64UrlEncodeString = (s: string): string => base64UrlEncode(Buffer.from
 
 /**
  * Compute the server-side derived CouchDB password for an email. Mirrors
- * `derivePassword` in `server/flocks.js`.
+ * `derivePassword` in `server/sharedTrips.js`.
  */
 export const deriveCouchPassword = (email: string, serverSecret: string): string => {
   const hmac = createHmac('sha256', serverSecret)
@@ -45,7 +45,7 @@ export const deriveCouchPassword = (email: string, serverSecret: string): string
 export const personalDbName = (email: string): string =>
   'ternpike-' + email.toLowerCase().replace(/[^a-z0-9_$()+/-]/g, '-')
 
-export const flockDbName = (flockId: string): string => `flock-${flockId}`
+export const sharedTripDbName = (sharedTripId: string): string => `sharedtrip-${sharedTripId}`
 
 export type InviteClaims = {
   flockId: string
@@ -82,7 +82,7 @@ export const signInviteJwt = (claims: InviteClaims, serverSecret: string): strin
   return `${data}.${base64UrlEncode(sig)}`
 }
 
-const FLOCK_VALIDATOR_SOURCE = `
+const SHARED_TRIP_VALIDATOR_SOURCE = `
 function (newDoc, oldDoc, userCtx, secObj) {
   function reject(reason) { throw({ forbidden: reason }); }
   function unauthorized(reason) { throw({ unauthorized: reason }); }
@@ -103,8 +103,8 @@ function (newDoc, oldDoc, userCtx, secObj) {
     return;
   }
 
-  if (newDoc._id === 'flock:meta') {
-    if (!isAdmin) reject('flock:meta is admin-only');
+  if (newDoc._id === 'sharedtrip:meta') {
+    if (!isAdmin) reject('sharedtrip:meta is admin-only');
     return;
   }
 
@@ -120,26 +120,26 @@ function (newDoc, oldDoc, userCtx, secObj) {
 }
 `.trim()
 
-const FLOCK_DESIGN_DOC_ID = '_design/flock_validator'
+const SHARED_TRIP_DESIGN_DOC_ID = '_design/sharedtrip_validator'
 
 /**
- * Create or reset a flock CouchDB:
- *   - `flock-<flockId>` db
+ * Create or reset a shared trip CouchDB:
+ *   - `sharedtrip-<sharedTripId>` db
  *   - `_security` listing the owner as a member
- *   - `flock:meta` doc
- *   - the design doc carrying the per-flock validator
+ *   - `sharedtrip:meta` doc
+ *   - the design doc carrying the per-shared-trip validator
  *
  * Idempotent: removes a prior db with the same name first.
  */
-export const provisionFlockDb = async (
+export const provisionSharedTripDb = async (
   couch: CouchClient,
   args: {
-    flockId: string
+    sharedTripId: string
     name: string
     ownerEmail: string
   },
 ): Promise<void> => {
-  const dbName = flockDbName(args.flockId)
+  const dbName = sharedTripDbName(args.sharedTripId)
   await requestWithRetry(couch, `/${dbName}`, { method: 'DELETE' }).catch(
     () => {},
   )
@@ -150,9 +150,9 @@ export const provisionFlockDb = async (
 
   const owner = args.ownerEmail.toLowerCase()
   const meta = {
-    _id: 'flock:meta',
-    type: 'flock:meta',
-    flockId: args.flockId,
+    _id: 'sharedtrip:meta',
+    type: 'sharedtrip:meta',
+    flockId: args.sharedTripId,
     name: args.name,
     members: [owner],
     billingOwner: owner,
@@ -175,25 +175,25 @@ export const provisionFlockDb = async (
   }
   const design = await requestWithRetry(
     couch,
-    `/${dbName}/${encodeURIComponent(FLOCK_DESIGN_DOC_ID)}`,
+    `/${dbName}/${encodeURIComponent(SHARED_TRIP_DESIGN_DOC_ID)}`,
     {
       method: 'PUT',
       body: JSON.stringify({
-        _id: FLOCK_DESIGN_DOC_ID,
+        _id: SHARED_TRIP_DESIGN_DOC_ID,
         language: 'javascript',
-        validate_doc_update: FLOCK_VALIDATOR_SOURCE,
+        validate_doc_update: SHARED_TRIP_VALIDATOR_SOURCE,
       }),
     },
   )
   if (!design.ok) {
     throw new Error(`PUT design failed: ${design.status} ${await design.text()}`)
   }
-  const metaPut = await requestWithRetry(couch, `/${dbName}/flock%3Ameta`, {
+  const metaPut = await requestWithRetry(couch, `/${dbName}/sharedtrip%3Ameta`, {
     method: 'PUT',
     body: JSON.stringify(meta),
   })
   if (!metaPut.ok) {
-    throw new Error(`PUT flock:meta failed: ${metaPut.status} ${await metaPut.text()}`)
+    throw new Error(`PUT sharedtrip:meta failed: ${metaPut.status} ${await metaPut.text()}`)
   }
 }
 
@@ -225,7 +225,7 @@ const requestWithRetry = async (
 
 /**
  * Create a user's personal CouchDB if missing. Required because the
- * join handler writes `user:flocks` there and 500s if the db doesn't
+ * join handler writes `user:sharedtrips` there and 500s if the db doesn't
  * exist. The real signup flow creates this at email-code verification.
  *
  * Idempotent: re-running against an existing db is a no-op.
@@ -242,19 +242,19 @@ export const provisionPersonalDb = async (
 }
 
 /**
- * Remove the `user:flocks` doc from a user's personal db so the next
+ * Remove the `user:sharedtrips` doc from a user's personal db so the next
  * join lands on a clean slate. Tolerates 404 (the doc may not exist).
  */
-export const purgeUserFlocks = async (
+export const purgeUserSharedTrips = async (
   couch: CouchClient,
   email: string,
 ): Promise<void> => {
   const dbName = personalDbName(email)
-  const url = `/${dbName}/user%3Aflocks`
+  const url = `/${dbName}/user%3Asharedtrips`
   const get = await requestWithRetry(couch, url, undefined)
   if (get.status === 404) return
   if (!get.ok) {
-    throw new Error(`GET user:flocks failed: ${get.status} ${await get.text()}`)
+    throw new Error(`GET user:sharedtrips failed: ${get.status} ${await get.text()}`)
   }
   const doc = (await get.json()) as { _rev: string }
   const del = await requestWithRetry(
@@ -263,23 +263,23 @@ export const purgeUserFlocks = async (
     { method: 'DELETE' },
   )
   if (!del.ok && del.status !== 404) {
-    throw new Error(`DELETE user:flocks failed: ${del.status} ${await del.text()}`)
+    throw new Error(`DELETE user:sharedtrips failed: ${del.status} ${await del.text()}`)
   }
 }
 
-/** Read the user's `user:flocks` doc via admin; null if absent. */
-export const readUserFlocksDoc = async (
+/** Read the user's `user:sharedtrips` doc via admin; null if absent. */
+export const readUserSharedTripsDoc = async (
   couch: CouchClient,
   email: string,
 ): Promise<{ flocks: Array<{ id: string; name: string; dbName: string }> } | null> => {
   const res = await requestWithRetry(
     couch,
-    `/${personalDbName(email)}/user%3Aflocks`,
+    `/${personalDbName(email)}/user%3Asharedtrips`,
     undefined,
   )
   if (res.status === 404) return null
   if (!res.ok) {
-    throw new Error(`GET user:flocks failed: ${res.status} ${await res.text()}`)
+    throw new Error(`GET user:sharedtrips failed: ${res.status} ${await res.text()}`)
   }
   return (await res.json()) as { flocks: Array<{ id: string; name: string; dbName: string }> }
 }

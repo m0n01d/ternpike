@@ -54,7 +54,7 @@ type PouchOutbound
     = GetAllTrips
     | GetExpense TripTarget ExpenseId
     | GetTripExpenses TripTarget TripId
-    | OpenFlock { dbName : String, flockId : SharedTripId }
+    | OpenSharedTrip { dbName : String, flockId : SharedTripId }
     | SaveAmend TripTarget Json.Decode.Value
     | SaveExpense TripTarget Json.Decode.Value
     | SaveTrip TripTarget Json.Decode.Value
@@ -71,11 +71,11 @@ type PouchOutbound
   - `DbError` — non-fatal error message to surface as a toast/banner.
   - `ExpenseFetched` / `TripExpensesFetched` / `TripsFetched` —
     responses to the corresponding outbound queries.
-  - `FlockMetaChanged` — a `flock:meta` document arrived (initial
+  - `SharedTripMetaChanged` — a `sharedtrip:meta` document arrived (initial
     hydration after first sync, or a live change). Carries the full
     decoded `SharedTrip`.
-  - `FlocksReconciled` — the JS side has finished opening / closing
-    flock handles after seeing a `user:flocks` doc; payload is the
+  - `SharedTripsReconciled` — the JS side has finished opening / closing
+    shared trip handles after seeing a `user:sharedtrips` doc; payload is the
     list of `SharedTripId`s the user belongs to right now (so Elm can drop
     cached shared trips the user has left).
   - `SyncStateMsg` — sync health update.
@@ -87,8 +87,8 @@ type PouchInbound
     | DbDeleted String
     | DbError String
     | ExpenseFetched ExpenseId ExpenseBundle
-    | FlockMetaChanged SharedTrip
-    | FlocksReconciled (List SharedTripId)
+    | SharedTripMetaChanged SharedTrip
+    | SharedTripsReconciled (List SharedTripId)
     | SyncStateMsg SyncState
     | TripExpensesFetched TripId TripBundle
     | TripsFetched (Dict String Trip)
