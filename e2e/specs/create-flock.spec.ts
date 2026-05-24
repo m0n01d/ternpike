@@ -238,18 +238,18 @@ test('Alice (Fly) creates a flock and invites Bob', async ({
   // Open the Create Flock modal. The row Create button and the modal
   // confirm button share the same accessible name; the row one renders
   // first in DOM order so `.first()` is the row, `.last()` is the modal.
-  await page.getByRole('button', { name: 'Create' }).first().click()
-  await expect(page.getByText('New Flock')).toBeVisible()
+  await page.getByRole('button', { name: 'Share a trip' }).first().click()
+  await expect(page.getByText('New shared trip')).toBeVisible()
 
   // Fill and submit (modal confirm = last "Create" button on the page).
   await page.getByPlaceholder('Honeymoon').fill('Honeymoon')
-  await page.getByRole('button', { name: 'Create' }).last().click()
+  await page.getByRole('button', { name: 'Share a trip' }).last().click()
 
   // Server returned ok → modal closes, toast surfaces.
   const created = await responsePromise
-  await expect(page.getByText('New Flock')).toBeHidden()
+  await expect(page.getByText('New shared trip')).toBeHidden()
   await expect(
-    page.getByText(/Flock created\. It'll show up here once sync settles\./),
+    page.getByText(/Shared trip created\. It'll show up here once sync settles\./),
   ).toBeVisible()
 
   // Simulate sync delivery so the flock card appears (see header comment
@@ -274,7 +274,7 @@ test('Alice (Fly) creates a flock and invites Bob', async ({
 
   // Open the Invite modal.
   await page.getByRole('button', { name: 'Invite' }).click()
-  await expect(page.getByText('Invite to flock')).toBeVisible()
+  await expect(page.getByText('Invite to this trip')).toBeVisible()
 
   // Snapshot: invite modal in its initial state.
   await expect(page).toHaveScreenshot('create-flock-invite-modal.png', {
@@ -287,7 +287,7 @@ test('Alice (Fly) creates a flock and invites Bob', async ({
   await page.getByRole('button', { name: 'Send invite' }).click()
 
   // Modal closes + success toast surfaces.
-  await expect(page.getByText('Invite to flock')).toBeHidden()
+  await expect(page.getByText('Invite to this trip')).toBeHidden()
   await expect(page.getByText('Invite sent.')).toBeVisible()
 
   // Snapshot: post-send state.
@@ -323,11 +323,11 @@ test('inviting the same email twice surfaces an inline error', async ({
   })
 
   // Create the flock as in the happy path.
-  await page.getByRole('button', { name: 'Create' }).first().click()
+  await page.getByRole('button', { name: 'Share a trip' }).first().click()
   await page.getByPlaceholder('Honeymoon').fill('Duplicate Test')
-  await page.getByRole('button', { name: 'Create' }).last().click()
+  await page.getByRole('button', { name: 'Share a trip' }).last().click()
   const created = await responsePromise
-  await expect(page.getByText('Flock created.')).toBeVisible()
+  await expect(page.getByText('Shared trip created.')).toBeVisible()
 
   await seedFlockLocally(page, ALICE_EMAIL, {
     flockId: created.flockId,
@@ -429,13 +429,13 @@ test.describe('Fledgling cannot create a flock', () => {
     // The Fledgling copy on the Create row.
     await expect(
       page.getByText(
-        'Flocks let you log expenses together with a partner. Upgrade to Fly to create one.',
+        'Share a trip with a partner or household so you can log expenses together. Upgrade to Osprey to start one.',
       ),
     ).toBeVisible()
 
     // The Create button is rendered as a plain disabled <button>, not the
     // primary action variant. We assert via the accessible name.
-    const createBtn = page.getByRole('button', { name: 'Create' }).first()
+    const createBtn = page.getByRole('button', { name: 'Share a trip' }).first()
     await expect(createBtn).toBeDisabled()
 
     await expect(page).toHaveScreenshot('create-flock-fledgling.png', {
