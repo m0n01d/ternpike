@@ -3218,10 +3218,10 @@ updateAuth msg as_ =
             ( AuthModel
                 (setSharedTripModal SharedTripUi.NoModal
                     { as_
-                        | toast = Just "Flock created. It'll show up here once sync settles."
+                        | toast = Just "Shared trip created. It'll show up here once sync settles."
                     }
                 )
-            , toastFor "Flock created."
+            , toastFor "Shared trip created."
             )
 
         OpenInviteModal flockId ->
@@ -3280,8 +3280,8 @@ updateAuth msg as_ =
             ( AuthModel (storeFlockError err as_), Cmd.none )
 
         LeaveSharedTripResult (Ok ()) ->
-            ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Left flock." })
-            , toastFor "Left flock."
+            ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Left shared trip." })
+            , toastFor "Left shared trip."
             )
 
         OpenTransferModal flockId ->
