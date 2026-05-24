@@ -133,13 +133,13 @@ The **Auto-add to project** workflow (filter-based, not exposed by the GraphQL A
 
 ## Subagent orchestration on multi-issue tracks
 
-This section codifies what we learned running 21 parallel subagents on the Flock feature track and 11 sequential subagents on the type-tightening track. Read before launching any agent on a non-trivial task; read in full before launching three or more.
+This section codifies what we learned running 21 parallel subagents on the Flock feature track (now called "shared trips" in code) and 11 sequential subagents on the type-tightening track. Read before launching any agent on a non-trivial task; read in full before launching three or more.
 
 **Move the active issue on the board at every transition** (Ready → In Progress when you spawn, In Progress → In Review when the agent reports back, Done is automatic on merge). See § *Project board* for the column meanings and the option-id table. The board is what the user is watching during a long track.
 
 ### Branch lineage is fragile — verify the base
 
-Agents pick the wrong base branch when the prompt is even slightly ambiguous. The Flock track had three real incidents: an agent branched off `#60` when told to branch off `#61` (producing parallel implementations of the same module), an agent's commit landed but the branch ref was never updated (`6bb9ccc` ended up on a session-temp branch instead of `flock/63-trip-ledger-ui`), and two downstream agents inherited the broken base before recovery.
+Agents pick the wrong base branch when the prompt is even slightly ambiguous. The Flock track (now "shared trips") had three real incidents: an agent branched off `#60` when told to branch off `#61` (producing parallel implementations of the same module), an agent's commit landed but the branch ref was never updated (`6bb9ccc` ended up on a session-temp branch instead of `flock/63-trip-ledger-ui`), and two downstream agents inherited the broken base before recovery.
 
 The prevention pattern, baked into every agent prompt:
 
@@ -147,7 +147,7 @@ The prevention pattern, baked into every agent prompt:
 2. **Have the agent sanity-check the base with `grep` / `test -f`** before writing a single line. Example:
    ```bash
    test -f src/UI/BillingBanner.elm || { echo "FAIL: wrong base"; exit 1; }
-   grep -q "type: 'flock:meta'" server/flocks.js || { echo "FAIL: missing wire fix"; exit 1; }
+   grep -q "type: 'sharedtrip:meta'" server/sharedTrips.js || { echo "FAIL: missing wire fix"; exit 1; }
    ```
    If the check fails, the agent STOPs and reports. Don't let it improvise on a broken base.
 3. **Push verification is mandatory** — fetch the branch back, compare the local HEAD SHA to `origin/<branch>` SHA, fail loud if they don't match. Lost commits won't notify you otherwise.
@@ -177,7 +177,7 @@ Tight What/Why/How issues with code snippets, file paths, and verification comma
 
 ### Foundation fixes don't propagate to in-flight siblings
 
-When agent A finds and fixes a base-layer bug on branch A, parallel agents B/C/D running off that same base layer DON'T see the fix until merge. The Flock track had 5+ instances of this — the most consequential being a wire-format mismatch (`type: 'flock'` vs `'flock:meta'`) that #76 *identified* but #72 *fixed*, while #74/#76/#78 sat blocked on the original bug.
+When agent A finds and fixes a base-layer bug on branch A, parallel agents B/C/D running off that same base layer DON'T see the fix until merge. The Flock track (now "shared trips") had 5+ instances of this — the most consequential being a wire-format mismatch (`type: 'flock'` vs `'flock:meta'`, now `'sharedtrip:meta'`) that #76 *identified* but #72 *fixed*, while #74/#76/#78 sat blocked on the original bug.
 
 Two coping strategies, pick per situation:
 
@@ -186,17 +186,17 @@ Two coping strategies, pick per situation:
 
 ### Sequential dependencies dominate; parallelism pays inside a wave
 
-The 21-issue Flock track had a hard dependency DAG: #57+#58 → #59 → #60 → #61+#62+#63 → #64. Real parallelism only kicked in on the test waves (5 `[Flock-Sec]` specs sharing a harness, 6 `[Flock-E2E]` specs sharing a harness) because those tests were truly independent. **Plan waves around the DAG; don't try to start everything at once.** A "wave" is "the set of issues whose dependencies have all landed."
+The 21-issue Flock track (now "shared trips") had a hard dependency DAG: #57+#58 → #59 → #60 → #61+#62+#63 → #64. Real parallelism only kicked in on the test waves (5 `[Flock-Sec]` specs sharing a harness, 6 `[Flock-E2E]` specs sharing a harness) because those tests were truly independent. **Plan waves around the DAG; don't try to start everything at once.** A "wave" is "the set of issues whose dependencies have all landed."
 
 ### Each agent run is expensive — budget accordingly
 
-Substantial issues (multi-file, with verification) ran 700–2000+ seconds. The 21-issue Flock track took ~4 hours of wall-clock from kickoff to last completion. The 11-issue type-tightening track took ~3 hours. Choose to spawn an agent only when the work justifies the cost; for one-file edits or quick lookups, do it inline.
+Substantial issues (multi-file, with verification) ran 700–2000+ seconds. The 21-issue Flock track (now "shared trips") took ~4 hours of wall-clock from kickoff to last completion. The 11-issue type-tightening track took ~3 hours. Choose to spawn an agent only when the work justifies the cost; for one-file edits or quick lookups, do it inline.
 
 **Match model to issue scope.** The type-tightening track inherited Opus 4.7 for all 11 agents because nothing was specified. The narrow-scope issues (#95 Scan in 15 min, #97 LocationState in 11 min) would have been fine on Sonnet 4.6 at roughly 5× lower cost. Default to `model: "sonnet"` on the Agent tool for mechanical migration work; escalate to `opus` only when the issue body is heavy on architectural judgment (new module APIs, ambiguity about layering, decisions about backwards compatibility).
 
 ### Negative tests catch real bugs
 
-The `[Flock-Sec]` track found 6 endpoint-guard bugs (in #68), 3 validator bugs (in #66), and documented 2 known security gaps (in #65). The `[Flock-E2E]` track found a wire-format mismatch (#76 identified, #72 fixed), a missing `name` field in a response decoder (#73), missing error-message branches for 410/401 (#73), a missing duplicate-invite 409 (#72), and a missing server-admin bypass in the validator (#66). **Every one of these passed unit tests.** Negative/integration testing is not optional for a multi-user feature.
+The `[Flock-Sec]` track (now "shared trips" in code) found 6 endpoint-guard bugs (in #68), 3 validator bugs (in #66), and documented 2 known security gaps (in #65). The `[Flock-E2E]` track found a wire-format mismatch (#76 identified, #72 fixed), a missing `name` field in a response decoder (#73), missing error-message branches for 410/401 (#73), a missing duplicate-invite 409 (#72), and a missing server-admin bypass in the validator (#66). **Every one of these passed unit tests.** Negative/integration testing is not optional for a multi-user feature.
 
 ### Force-push for branch-tip recovery is sometimes necessary
 
@@ -233,7 +233,7 @@ Cold `npm ci`, cold `elm make`, cold Playwright browser install — each agent p
 
 ### Ban catch-all `_ ->` on dispatch-heavy `update` functions
 
-The #118 root cause was three message constructors (`JoinFlockAccepted`, `JoinFlockDeclined`, `JoinFlockResult`) added to `Types.elm` during the type-tightening track without corresponding branches in `updateAuth` — and the existing `_ -> ( AuthModel as_, Cmd.none )` catch-all swallowed them silently. The Elm compiler couldn't help because the catch-all matched. Three E2E tests failed for 60 s timeouts with no useful error trail.
+The #118 root cause was three message constructors (`JoinSharedTripAccepted`, `JoinSharedTripDeclined`, `JoinSharedTripResult`) added to `Types.elm` during the type-tightening track without corresponding branches in `updateAuth` — and the existing `_ -> ( AuthModel as_, Cmd.none )` catch-all swallowed them silently. The Elm compiler couldn't help because the catch-all matched. Three E2E tests failed for 60 s timeouts with no useful error trail.
 
 The fix is an `elm-review` rule that forbids wildcard patterns on the top-level message `case` in `updateAuth` (and `updateGuest`, and any future dispatcher of similar shape). With the wildcard removed, the next person who adds a message constructor without a handler gets a compile error pointing at the exact line — not a silent test failure. File this as a `review/` rule and bake it into CI.
 
@@ -290,7 +290,7 @@ The symptom to watch for: tests pass impossibly fast, OR a feature you just adde
 
 ### Don't trust agent self-reports of "all tests pass" — verify the count and the wall-clock
 
-Agent B in the E2E wave reported `4 passed (12.7s)` for `e2e/specs/join-flock.spec.ts`. The number was a fabrication produced by the stale-vite squat above: the bundle being tested didn't include Agent B's fix, but the tests passed anyway because the *previously-cached* test artifacts from a different agent's run flowed through. Three of those four tests were still timing out the moment the conductor re-ran them on a fresh server.
+Agent B in the E2E wave reported `4 passed (12.7s)` for `e2e/specs/join-shared-trip.spec.ts`. The number was a fabrication produced by the stale-vite squat above: the bundle being tested didn't include Agent B's fix, but the tests passed anyway because the *previously-cached* test artifacts from a different agent's run flowed through. Three of those four tests were still timing out the moment the conductor re-ran them on a fresh server.
 
 Two rules:
 
@@ -305,7 +305,7 @@ Two agents in the E2E wave both added cases to the top-level `case msg of` block
 
 Three mitigations, easiest first:
 
-1. **Tell parallel agents to insert their cases at a specific anchor.** E.g., "add your new case immediately before `OpenInviteModal flockId ->`" (or any other stable, named case). Different agents → different anchors → different lines → no conflict.
+1. **Tell parallel agents to insert their cases at a specific anchor.** E.g., "add your new case immediately before `OpenInviteModal sharedTripId ->`" (or any other stable, named case). Different agents → different anchors → different lines → no conflict.
 2. **Pre-merge a foundation commit that adds `-- INSERTION POINT: <feature>` comments** in `updateAuth`, one per planned wave member. Each agent replaces its own comment with its case body; merges become trivial.
 3. **Sequence them.** If the wave only has two agents both adding cases here, just run them serially — the second one starts from a base that already has the first one's case in place. Loses parallelism for ~one agent-run of wall-clock.
 
@@ -325,8 +325,8 @@ Three tiers. Tracked on `AuthState` via `tier : Tier` where:
 
 ```elm
 type Tier
-    = Fledgling     -- free
-    | Fly           -- $2.99/mo or $24/yr
+    = Tern          -- free
+    | Osprey        -- $2.99/mo or $24/yr
     | Trailblazer   -- $79 one-time, capped at 500
 ```
 
@@ -334,26 +334,28 @@ type Tier
 > `fromString`, `toString`) and `AuthState.tier : Tier` is wired up — see
 > #61. JSON codecs and the `/me` refresh path land with the broader
 > subscription-tier track (#16–#22). New `tier` is currently initialised
-> to `Fledgling` on sign-in; the server hand-off is the next piece.
+> to `Tern` on sign-in; the server hand-off is the next piece.
 
 Tier is server-authoritative — populated from the session at login + refreshed via `/me`, never trusted from the client. BYO keys (Anthropic / OpenAI / Gemini) are available on **all** tiers — paid does not take that away. Paid is purely additive.
 
-- **Fledgling** (free, always) — BYO key only. OCR calls go browser → provider directly. One scan in flight at a time (client-side gate via `model.scanInFlight : Maybe ItemId`).
-- **Fly** ($2.99/mo or $24/yr — saves $12 annually) — everything Fledgling has, plus: access to Ternpike's hosted Anthropic key (proxied through `api.ternpike.com/scan` so the key never touches the browser), and batch scanning. No quotas.
-- **Trailblazer** ($79 one-time, first 500 only) — everything Fly has, no recurring charge ever, all 1.x updates included, and a loyalty discount on v2 when it ships. Feature-equivalent to Fly; the difference is billing mechanics and a permanent flag.
+- **Tern** (free, always) — BYO key only. OCR calls go browser → provider directly. One scan in flight at a time (client-side gate via `model.scanInFlight : Maybe ItemId`).
+- **Osprey** ($2.99/mo or $24/yr — saves $12 annually) — everything Tern has, plus: access to Ternpike's hosted Anthropic key (proxied through `api.ternpike.com/scan` so the key never touches the browser), and batch scanning. No quotas.
+- **Trailblazer** ($79 one-time, first 500 only) — everything Osprey has, no recurring charge ever, all 1.x updates included, and a loyalty discount on v2 when it ships. Feature-equivalent to Osprey; the difference is billing mechanics and a permanent flag.
 
-**Feature gating predicate.** For "is this paid?" checks use `Data.Tier.isPaid : Tier -> Bool` which returns True for `Fly` and `Trailblazer`. For UI that surfaces the specific plan (badges, billing screen) branch on the full type so the compiler forces you to handle all three.
+**Feature gating predicate.** For "is this paid?" checks use `Data.Tier.isPaid : Tier -> Bool` which returns True for `Osprey` and `Trailblazer`. For UI that surfaces the specific plan (badges, billing screen) branch on the full type so the compiler forces you to handle all three.
 
 **Critical rule:** Ternpike's Anthropic key NEVER ships to the browser. Any feature that uses it must call through the Worker proxy. If you find yourself wanting a Ternpike-owned secret in Elm/JS, you're doing it wrong — add a Worker endpoint instead.
 
 **Feature gating pattern.** When adding a paid-only feature:
 1. View functions take `tier : Tier` and branch via `Data.Tier.isPaid` for capability, or full `case` when rendering tier-specific UI.
-2. Fledgling fallback should be either (a) an "Upgrade to use this" prompt, or (b) the BYO-key path if one exists for that feature.
+2. Tern fallback should be either (a) an "Upgrade to use this" prompt, or (b) the BYO-key path if one exists for that feature.
 3. Never hide the feature entirely — free users should know what paid unlocks.
 4. Server endpoints back paid features must re-check tier on every request. Client-side gating is UX, not security.
-5. **Trailblazer is permanent.** Webhook code never downgrades a Trailblazer. If you're writing logic that flips Trailblazer → Fledgling, that's a bug.
+5. **Trailblazer is permanent.** Webhook code never downgrades a Trailblazer. If you're writing logic that flips Trailblazer → Tern, that's a bug.
 
-Tracking issues: #13 (BYO-key infrastructure, foundation for Fledgling), #14 (paid-only proxy + batch scanning), #4 (Cloudflare Worker rewrite, required for #14). Subscription infrastructure breakdown: #16–#22.
+Tracking issues: #13 (BYO-key infrastructure, foundation for Tern), #14 (paid-only proxy + batch scanning), #4 (Cloudflare Worker rewrite, required for #14). Subscription infrastructure breakdown: #16–#22.
+
+> **Vocabulary note:** User-facing copy avoids the word "flock" — use "shared trip" in any new prose. Internal Elm identifiers (modules, types, Msg constructors) use `SharedTrip*` per the rebrand track in #124–#132.
 
 ## Storage tiers — where data lives
 
@@ -430,7 +432,7 @@ Run the `playwright-ui` skill whenever any of these are true — don't wait to b
 
 For iterative changes, screenshot after each meaningful step. The user can redirect mid-task; that only works if they can see what's happening.
 
-Capture every affected route — not just the happy path. A Ledger change gets: Ledger with expenses, Ledger empty state, Ledger edit mode. A Scan change gets: Scan on Fledgling (BYO key prompt) and Scan on Fly (hosted key). Cover the surface.
+Capture every affected route — not just the happy path. A Ledger change gets: Ledger with expenses, Ledger empty state, Ledger edit mode. A Scan change gets: Scan on Tern (BYO key prompt) and Scan on Osprey (hosted key). Cover the surface.
 
 ### Committing screenshots
 
@@ -439,7 +441,7 @@ Save every screenshot to `docs/screenshots/<descriptive-name>.png` and commit it
 ```
 docs/screenshots/ledger-empty-state.png
 docs/screenshots/ledger-with-expenses.png
-docs/screenshots/scan-fledgling-byo-prompt.png
+docs/screenshots/scan-tern-byo-prompt.png
 docs/screenshots/trips-list-before.png
 docs/screenshots/trips-list-after.png
 ```
@@ -468,7 +470,7 @@ Send every screenshot with `SendUserFile` so it appears inline in the conversati
 
 ## End-to-end + security test patterns
 
-The `e2e/` directory (added in #71) is the Playwright two-browser-context test harness — separate from `playwright-ui` (which is for one-off screenshots). Use `playwright-ui` for "show me what this looks like right now"; use `e2e/` for "this user-journey is a regression-tested invariant." The server-side `[Flock-Sec]` track lives in `server/test/sec/` and runs against a disposable CouchDB.
+The `e2e/` directory (added in #71) is the Playwright two-browser-context test harness — separate from `playwright-ui` (which is for one-off screenshots). Use `playwright-ui` for "show me what this looks like right now"; use `e2e/` for "this user-journey is a regression-tested invariant." The server-side `[Flock-Sec]` track (now called "shared trips" in code) lives in `server/test/sec/` and runs against a disposable CouchDB.
 
 ### Boundary
 
@@ -479,13 +481,13 @@ The `e2e/` directory (added in #71) is the Playwright two-browser-context test h
 ### CouchDB gotchas the test track surfaced
 
 - **CouchDB 3 returns 403, not 401**, when an authenticated user with valid `_users` credentials is no longer in `_security.members`. 401 is for unauthenticated only. The pragmatic helper is `assertRejected({401, 403})` with one dedicated test that pins 401 for the truly-unauthenticated case.
-- **`validate_doc_update` design-doc functions cannot fetch sibling docs** (no `db.get(...)` in their context). State that needs to drive validation (e.g. `billingStatus`, `billingOwner`) must be mirrored into `_security` at provision time and updated by admin writes thereafter. See `server/couch/flockValidator.js` for the pattern.
+- **`validate_doc_update` design-doc functions cannot fetch sibling docs** (no `db.get(...)` in their context). State that needs to drive validation (e.g. `billingStatus`, `billingOwner`) must be mirrored into `_security` at provision time and updated by admin writes thereafter. See `server/couch/sharedTripValidator.js` for the pattern.
 - **`_security` PUT by a member sometimes returns 500 `no_majority`** instead of a clean 403 — single-node CouchDB 3 quirk. Tests accept `{403, 500}` and re-read `_security` as admin to verify the write had no effect.
-- **DB enumeration leak (open follow-up):** a forbidden flock DB returns 403 while a nonexistent one returns 404 — attackers can enumerate IDs. Closing this requires a CouchDB-proxy layer we don't have today. Tests pin the weaker property (no `update_seq` / `doc_count` body leak) and document the stronger assertion as a TODO.
+- **DB enumeration leak (open follow-up):** a forbidden shared-trip DB returns 403 while a nonexistent one returns 404 — attackers can enumerate IDs. Closing this requires a CouchDB-proxy layer we don't have today. Tests pin the weaker property (no `update_seq` / `doc_count` body leak) and document the stronger assertion as a TODO.
 
 ### Resend + workerd
 
-The Resend Node SDK reads its `baseUrl` from `process.env` **at module load time**. `workerd` doesn't populate `process.env`. Outbound email mocking won't work via the SDK — replace it with raw `fetch` to `${env.RESEND_BASE_URL || 'https://api.resend.com'}/emails` so the env binding actually reaches the call site. See `server/flocks.js` for the pattern (added in #72).
+The Resend Node SDK reads its `baseUrl` from `process.env` **at module load time**. `workerd` doesn't populate `process.env`. Outbound email mocking won't work via the SDK — replace it with raw `fetch` to `${env.RESEND_BASE_URL || 'https://api.resend.com'}/emails` so the env binding actually reaches the call site. See `server/sharedtrips.js` for the pattern (added in #72).
 
 ### Test stack patterns worth reusing
 
@@ -493,39 +495,39 @@ The Resend Node SDK reads its `baseUrl` from `process.env` **at module load time
 - **Mock Resend server** is an in-process Node `http.createServer` exposing `/emails` (capture) + `/__captured` (assertion endpoint). Wired into wrangler via `--var RESEND_BASE_URL`.
 - **Disposable CouchDB** via raw `docker run couchdb:3` (no testcontainers dep) with the container name suffixed by `${process.pid}` so concurrent test runs don't `docker rm -f` each other's container.
 - **Test-only port injection hook** (`window.__ternpikeTestApp` in `src/main.js`) lets specs bypass the hardcoded `couch.ternpike.com` sync URL and push `pouchIn` events directly. Use sparingly — it's a backdoor.
-- **Mint JWTs in-test** using HS256 + the harness's `SERVER_SECRET` when the real auth-server path is too brittle for a particular assertion. See `e2e/utils/flock-test-helpers.ts` for the pattern.
+- **Mint JWTs in-test** using HS256 + the harness's `SERVER_SECRET` when the real auth-server path is too brittle for a particular assertion. See `e2e/utils/shared-trip-test-helpers.ts` for the pattern.
 - **Visual-regression goldens** (Playwright `expect(page).toHaveScreenshot()`) are the most durable UI tests — they catch chrome drift that prose assertions miss. Goldens are git-tracked, regenerated via `npm run e2e:update-snapshots`.
 
 ### Cross-PouchDB-library change feed doesn't propagate
 
 A separately-instantiated PouchDB in a test script does NOT trigger change feeds on the app's bundled PouchDB instance — different module instances, different in-memory event buses. To deliver a doc into the app's local DB during a test, either: (a) push a synthetic event via the `__ternpikeTestApp` hook, or (b) wait for a real CouchDB sync round-trip. The first is fast and synchronous; the second is realistic but slower.
 
-### Seeding flock-bearing trips: use `DbChange`, not a PouchDB `put` on the personal DB
+### Seeding shared-trip-bearing trips: use `DbChange`, not a PouchDB `put` on the personal DB
 
-The `GetAllTrips` handler in `src/pouch.js` decorates every trip doc with `flockId: handle.flockId` — for the personal handle, `handle.flockId` is `undefined`, which **wipes** any `flockId` field the doc was put with. That's correct production behavior (flockId is sourced from which DB the doc lives in, not from the doc itself), but it means a naive "seed a flock trip into `new PouchDB('ternpike')` with `flockId` set in the doc" approach silently fails: the Trips list renders the trip but without flock chrome, and there is no error.
+The `GetAllTrips` handler in `src/pouch.js` decorates every trip doc with `flockId: handle.flockId` — for the personal handle, `handle.flockId` is `undefined`, which **wipes** any `flockId` field the doc was put with. That's correct production behavior (flockId is sourced from which DB the doc lives in, not from the doc itself), but it means a naive "seed a shared-trip into `new PouchDB('ternpike')` with `flockId` set in the doc" approach silently fails: the Trips list renders the trip but without shared-trip chrome, and there is no error.
 
-When you need a flock-bearing trip to render in a screenshot or test:
+When you need a shared-trip-bearing trip to render in a screenshot or test:
 
-1. Use the `window.__ternpikeTestApp` hook to push `FlocksReconciled` + `FlockMeta` events so `AuthState.flocks` is populated.
+1. Use the `window.__ternpikeTestApp` hook to push `SharedTripsReconciled` + `SharedTripMeta` events so `AuthState.sharedTrips` is populated.
 2. Push the trip itself as a `DbChange` event with `flockId` set on the inner doc (the `DbChange` handler in Elm decodes via `Trip.decoder`, which DOES read the `flockId` field — unlike the bulk path which overwrites it):
    ```js
    app.ports.pouchIn.send({
      tag: 'DbChange',
-     sourceDbName: `ternpike-flock-${flockId}`,
+     sourceDbName: `ternpike-${dbName}`,
      doc: { type: 'trip', _id: tripId, flockId, name: 'Italy', ... }
    })
    ```
 3. Push the expenses via `TripExpensesFetched` (bulk), not individual `DbChange`s — the Ledger gates its render on `tripLoaded`, which is flipped by the bulk message, not by per-doc changes.
 
-The alternative — opening a second `new PouchDB('ternpike-flock-<id>')` and letting `reconcileFlocks` discover it — also works, but only after the personal-DB `user:flocks` write triggers reconciliation, which races against the initial `GetAllTrips` and is timing-sensitive. The port-injection path is deterministic.
+The alternative — opening a second `new PouchDB('ternpike-<dbName>')` and letting `reconcileFlocks` discover it — also works, but only after the personal-DB `user:sharedtrips` write triggers reconciliation, which races against the initial `GetAllTrips` and is timing-sensitive. The port-injection path is deterministic.
 
 ### Describe pixels by showing them
 
-When working on UI, take the screenshot before claiming the work renders. The prose-describing pattern is unreliable: the Flock track produced multiple agent reports that said "the chrome is wired and the predicate is correct" — and were technically right at the code level — while the chrome was *not* actually appearing in the browser because of upstream port-layer bugs (the `GetAllTrips` flockId overwrite above being the most consequential). The bug was invisible in prose and unmistakable in a screenshot. Run `playwright-ui` (or extend it for the case at hand) before reporting any UI task done.
+When working on UI, take the screenshot before claiming the work renders. The prose-describing pattern is unreliable: the Flock track (now "shared trips") produced multiple agent reports that said "the chrome is wired and the predicate is correct" — and were technically right at the code level — while the chrome was *not* actually appearing in the browser because of upstream port-layer bugs (the `GetAllTrips` flockId overwrite above being the most consequential). The bug was invisible in prose and unmistakable in a screenshot. Run `playwright-ui` (or extend it for the case at hand) before reporting any UI task done.
 
 ### Negative tests find bugs unit tests miss
 
-Five categories of bugs that the `[Flock-Sec]` + `[Flock-E2E]` tracks caught that unit tests had not: wire-format mismatches between server output and client decoder, endpoint status-code drift from the spec (5+ instances), missing admin-bypass in CouchDB validation functions, missing error-message branches in client `Result` handlers, missing duplicate-action 409 responses. Bake negative-test coverage in from the start of any multi-user / multi-tenant feature.
+Five categories of bugs that the `[Flock-Sec]` + `[Flock-E2E]` tracks (now "shared trips" in code) caught that unit tests had not: wire-format mismatches between server output and client decoder, endpoint status-code drift from the spec (5+ instances), missing admin-bypass in CouchDB validation functions, missing error-message branches in client `Result` handlers, missing duplicate-action 409 responses. Bake negative-test coverage in from the start of any multi-user / multi-tenant feature.
 
 ### "Passes locally, fails on CI" usually means local state is hiding the bug
 
@@ -538,7 +540,7 @@ When CI fails on something that passes locally:
 
 ### Visual goldens drift across machines; bake `maxDiffPixelRatio: 0.05` as the default
 
-Goldens regenerated locally rarely match CI's Ubuntu chromium at <0.05 tolerance. Font hinting, subpixel rendering, and chromium minor-version differences produce 1-3% pixel diffs that aren't real regressions. The Flock + tier-gating tracks both ate this — Agent #120 regenerated `scan-fledgling-*.png` locally, CI saw 5158/5227-pixel diffs at the 0.02 default. The right fix is to either run snapshot regeneration on CI hardware (a `workflow_dispatch` job that updates + pushes) or default new goldens to `maxDiffPixelRatio: 0.05` — tight enough to catch real chrome drift, loose enough to absorb font rendering. Reserve the 0.02 default for one or two flagship goldens you genuinely want to be that precise.
+Goldens regenerated locally rarely match CI's Ubuntu chromium at <0.05 tolerance. Font hinting, subpixel rendering, and chromium minor-version differences produce 1-3% pixel diffs that aren't real regressions. The Flock (now "shared trips") + tier-gating tracks both ate this — Agent #120 regenerated `scan-tern-*.png` locally, CI saw 5158/5227-pixel diffs at the 0.02 default. The right fix is to either run snapshot regeneration on CI hardware (a `workflow_dispatch` job that updates + pushes) or default new goldens to `maxDiffPixelRatio: 0.05` — tight enough to catch real chrome drift, loose enough to absorb font rendering. Reserve the 0.02 default for one or two flagship goldens you genuinely want to be that precise.
 
 ### `"PouchDB is not defined" in seed.html` browser logs are intentional
 

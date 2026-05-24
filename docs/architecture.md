@@ -312,7 +312,7 @@ come back through one `pouchIn` port, also tagged.
 | `SaveExpense` | expense JSON | Upsert expense doc |
 | `SaveAmend` | amendment JSON | Upsert amendment doc |
 | `SaveVoid` | void JSON | Upsert void doc (soft delete) |
-| `OpenFlock` | `{ flockId, dbName }` | Open a flock-local PouchDB handle immediately (used by the New Trip flow after `POST /flocks` succeeds — avoids racing the personal-DB sync that would otherwise hydrate the handle via `reconcileFlocks`). Idempotent. |
+| `OpenSharedTrip` | `{ flockId, dbName }` | Open a shared-trip-local PouchDB handle immediately (used by the New Trip flow after `POST /sharedtrips` succeeds — avoids racing the personal-DB sync that would otherwise hydrate the handle via `reconcileFlocks`). Idempotent. |
 
 Example:
 ```json
@@ -592,8 +592,8 @@ moment loading completes.
 ## CouchDB sync
 
 `pouch.js` keeps a `Map<string, Handle>` of open PouchDBs — the personal
-DB (`ternpike` ↔ `ternpike-<email>`) plus one entry per flock the user
-belongs to (`ternpike-<flockDbName>` ↔ `<flockDbName>`). Each handle
+DB (`ternpike` ↔ `ternpike-<email>`) plus one entry per shared trip the user
+belongs to (`ternpike-<dbName>` ↔ `<dbName>`). Each handle
 runs its own `db.sync(remote, { live: true, retry: true })`; CouchDB's
 `_security` doc gates membership per remote, so we don't reimplement
 permission routing in JS.
@@ -604,28 +604,28 @@ const handles = new Map() // localName -> { local, remote, sync, changes, flockI
 handles.get('ternpike')   // personal handle, flockId === null
 ```
 
-Solo users (no flocks) keep exactly one handle — no regression on the
+Solo users (no shared trips) keep exactly one handle — no regression on the
 single-user path.
 
 ### Startup sequence
 
 1. Open the personal local DB and start its sync.
 2. On the first non-error `paused` event (PouchDB's "fully caught up"
-   signal), `db.get('user:flocks')` from the personal DB. If 404, no
-   flocks — done.
-3. For each `{ flockId, dbName }` entry in `flocks[]`, open a local DB
+   signal), `db.get('user:sharedtrips')` from the personal DB. If 404, no
+   shared trips — done.
+3. For each `{ flockId, dbName }` entry in the `flocks[]` array of the `user:sharedtrips` doc, open a local DB
    named `ternpike-<dbName>` and start syncing it to `<dbName>` using
    the same CouchDB credentials (one user, many DBs).
-4. The personal handle watches its own `changes` stream for `user:flocks`
+4. The personal handle watches its own `changes` stream for `user:sharedtrips`
    updates; reconciliation opens new handles and closes departed ones
-   without a reload. Server admin-writes `user:flocks` on
+   without a reload. Server admin-writes `user:sharedtrips` on
    create/join/leave, so the change stream is the trigger.
 
 ### Port message fan-out
 
 - `GetAllTrips` queries every handle in parallel, merges by `_id`
   (globally unique — timestamp + nonce), and tags each trip with
-  `flockId` (`null` for personal, the flock id otherwise). The field is
+  `flockId` (`null` for personal, the shared-trip id otherwise). The field is
   derived from the source DB, **not** stored on disk.
 - `GetTripExpenses` / `GetExpense` / `Save*` take a `target` field on the
   outbound message: `{ kind: "Personal" }` or
@@ -646,32 +646,34 @@ ignores it for now.
   reconnects on network drops.
 - A 401/403 from **any** handle's sync is sent back as `auth_error`,
   which transitions Elm to `GuestModel SessionExpired` and kicks the
-  user to the login screen. We don't try to keep some flocks alive
+  user to the login screen. We don't try to keep some shared trips alive
   while others are dead.
 - `clearStorage` / `clearAllStorage` cancel every sync, close every
   remote, and `local.destroy()` every local DB — so a sign-out / 401
-  wipes IndexedDB for all flock DBs, not just the personal one.
+  wipes IndexedDB for all shared-trip DBs, not just the personal one.
 
-### Flocks in Elm
+### Shared trips in Elm
 
-The Elm-side types for the multi-DB world live in three modules:
+The Elm-side types for the multi-DB world live in four modules:
 
-- `Data.FlockId` — opaque wrapper around a 12-character lowercase hex
-  nonce. `fromString` validates the shape and returns `Maybe FlockId`.
-- `Data.Flock` — the `Flock` record. Members are modeled as
+- `Data.SharedTripId` — opaque wrapper around a 12-character lowercase hex
+  nonce. `fromString` validates the shape and returns `Maybe SharedTripId`.
+- `Data.SharedTrip` — the `SharedTrip` record. Members are modeled as
   `billingOwner :: otherMembers` so "the owner is always a member" is
-  a structural invariant; `members : Flock -> List UserId` derives the
-  provably-non-empty flat list on demand. On the wire (`flock:meta`
+  a structural invariant; `members : SharedTrip -> List UserId` derives the
+  provably-non-empty flat list on demand. On the wire (`sharedtrip:meta`
   doc) the field is flat — the decoder picks the owner out and
   hard-rejects (`Json.Decode.fail`) any doc where `billingOwner` is
   not in `members`. The CouchDB document id is the literal marker
-  string `flock:meta` (one such doc per per-flock DB), so the per-flock
-  identifier rides on a separate `flockId` field that `Data.Flock.decoder`
-  reads via `Data.FlockId.decoder`.
-- `Data.Flocks` — `Dict String Flock` keyed by `FlockId.toString`,
-  lives at `AuthState.flocks`. `ownedBy` / `joinedBy` filter by user.
+  string `sharedtrip:meta` (one such doc per per-shared-trip DB), so the
+  per-shared-trip identifier rides on a separate `flockId` field that
+  `Data.SharedTrip.decoder` reads via `Data.SharedTripId.decoder`.
+- `Data.SharedTrips` — `Dict String SharedTrip` keyed by `SharedTripId.toString`,
+  lives at `AuthState.sharedTrips`. `ownedBy` / `joinedBy` filter by user.
+- `Data.SharedTripUi` — UI state for the shared-trip settings modals
+  (`SharedTripUiState`), lives at `AuthState.sharedTripUi`.
 
-`Trip.flockId : Maybe FlockId` is in-memory only: `Trip.encoder`
+`Trip.flockId : Maybe SharedTripId` is in-memory only: `Trip.encoder`
 deliberately omits it and `Trip.decoder` only reads it if present.
 `src/pouch.js` is the source of truth — it tags trip docs with the
 handle's `flockId` at the port boundary on the way in from
@@ -679,122 +681,122 @@ handle's `flockId` at the port boundary on the way in from
 doc would let it diverge from the DB it actually lives in.
 
 Startup hydration is JS-driven: after the personal DB's first
-non-error `paused` event, `pouch.js` reads `user:flocks` from the
-personal DB and (a) opens / closes flock handles via `reconcileFlocks`,
-(b) emits `FlocksReconciled flockIds` so Elm can drop cached entries
-for flocks the user has left, and (c) fetches each flock's
-`flock:meta` doc and emits it as `FlockMeta`. The Elm decoder turns
-that into a `Flock` and inserts into `AuthState.flocks`. Subsequent
-live changes to `flock:meta` docs are routed up as `FlockMeta` events
+non-error `paused` event, `pouch.js` reads `user:sharedtrips` from the
+personal DB and (a) opens / closes shared-trip handles via `reconcileFlocks`,
+(b) emits `SharedTripsReconciled flockIds` so Elm can drop cached entries
+for shared trips the user has left, and (c) fetches each shared trip's
+`sharedtrip:meta` doc and emits it as `SharedTripMeta`. The Elm decoder turns
+that into a `SharedTrip` and inserts into `AuthState.sharedTrips`. Subsequent
+live changes to `sharedtrip:meta` docs are routed up as `SharedTripMeta` events
 too, so membership/billing transitions converge without a reload.
 
 The `Data.Pouch` inbound protocol carries the new tags:
 
-- `FlocksReconciled (List FlockId)` — replaces the known-flock set.
-- `FlockMetaChanged Flock` — upserts one flock.
+- `SharedTripsReconciled (List SharedTripId)` — replaces the known-shared-trip set.
+- `SharedTripMetaChanged SharedTrip` — upserts one shared trip.
 
 ### Paid-feature gating: `Trip.effectiveTier`
 
 Any predicate that asks "can the user do X on **this trip**?" must consult
-`Trip.effectiveTier : Trip -> { a | flocks, tier } -> Tier` (defined in
+`Trip.effectiveTier : Trip -> { a | sharedTrips, tier } -> Tier` (defined in
 `Data/Trip.elm`), **not** `as_.tier` directly. The rule:
 
 - **Personal trip** (`trip.flockId == Nothing`) → `as_.tier`.
-- **Trip in a flock with `billingStatus == Active`** → `Fly`. The flock's
-  billing owner pays for the flock, and we don't carry the owner's exact
+- **Trip in a shared trip with `billingStatus == Active`** → `Osprey`. The shared trip's
+  billing owner pays for the shared trip, and we don't carry the owner's exact
   tier locally — `Active` is sufficient evidence that they're at least
-  `Fly`. (`Trailblazer` is a billing distinction, not a feature one.)
-- **Flock in `Grace` or `Frozen`** → falls back to `as_.tier`. The
+  `Osprey`. (`Trailblazer` is a billing distinction, not a feature one.)
+- **Shared trip in `Grace` or `Frozen`** → falls back to `as_.tier`. The
   lapsed-billing banner handles user messaging.
-- **Trip references a flock we don't yet have data for** → falls back to
+- **Trip references a shared trip we don't yet have data for** → falls back to
   `as_.tier`, never crashes.
 
 Two convenience wrappers — `Trip.canUseProxiedOCR` and `Trip.canBatchScan`
 — resolve `Tier.isPaid (effectiveTier trip as_)` so call sites stay terse.
 
 The opposite rule still holds: predicates that ask "is the **logged-in
-user** paid?" (Settings tier badge, "Create Flock" upgrade prompt, billing
-screen) keep reading `as_.tier` directly. The headline UX — a Fledgling
-invitee gets paid OCR inside a flock trip but stays Fledgling on personal
+user** paid?" (Settings tier badge, "Create shared trip" upgrade prompt, billing
+screen) keep reading `as_.tier` directly. The headline UX — a Tern
+invitee gets paid OCR inside a shared trip but stays Tern on personal
 data — falls straight out of this split.
 
 Server endpoints back paid features still re-check the actual tier
-(caller's or flock-owner's depending on the call). Client-side gating is
+(caller's or shared-trip-owner's depending on the call). Client-side gating is
 UX, not security.
 
-### Flocks settings UI
+### Shared trips settings UI
 
-`src/Pages/Settings/Flocks.elm` is the **manage** surface — invite,
-leave, transfer ownership for flocks the user already belongs to.
-Modals and inline errors sit on `AuthState.flockUi : Data.FlockUi.FlockUiState`
-and the HTTP wrappers for `inviteToFlock`, `joinFlock`, `leaveFlock`,
-`transferOwnership` live in `src/Http/FlockApi.elm`.
+`src/Pages/Settings/SharedTrips.elm` is the **manage** surface — invite,
+leave, transfer ownership for shared trips the user already belongs to.
+Modals and inline errors sit on `AuthState.sharedTripUi : Data.SharedTripUi.SharedTripUiState`
+and the HTTP wrappers for `inviteToSharedTrip`, `joinSharedTrip`, `leaveSharedTrip`,
+`transferOwnership` live in `src/Http/SharedTripApi.elm`.
 
 **Creation does not happen here.** The unified "+ New shared trip"
 flow on the Trips page is the only entry point for creating a new
-flock (see the Trip + Ledger UI section below). If the user has zero
-flocks, this section renders an empty-state card pointing back at
+shared trip (see the Trip + Ledger UI section below). If the user has zero
+shared trips, this section renders an empty-state card pointing back at
 `/trips` rather than offering its own Create button.
 
-Invite links land on a new `RouteJoinFlock String` route at
-`/flocks/join?token=<jwt>` (path-segment-safe — the token has no `:`
+Invite links land on a new `RouteJoinSharedTrip String` route at
+`/sharedtrips/join?token=<jwt>` (path-segment-safe — the token has no `:`
 collisions). Signed-out users get the token parked on
 `GuestState.pendingJoinToken` and the verify-code success path
-redirects to `/flocks/join?token=…` instead of `/trips`, so the
+redirects to `/sharedtrips/join?token=…` instead of `/trips`, so the
 invite is consumed immediately after auth. The signed-in view
-(`src/Pages/JoinFlock.elm`) decodes the JWT payload locally for
+(`src/Pages/JoinSharedTrip.elm`) decodes the JWT payload locally for
 display only — the server checks the signature — and surfaces a
 friendly "this invite is for someone else" error when the token's
 `inviteeEmail` doesn't match `creds.email`.
 
-### Trip + Ledger UI in flock-shared trips
+### Trip + Ledger UI in shared trips
 
-The day-to-day flock chrome lives in five places (#63):
+The day-to-day shared-trip chrome lives in five places (#63):
 
 - **Trip card / hero** — `src/Pages/Trips.elm` overlays a
-  `UI.FlockBadge` and an overlapping `UI.Avatar.viewStack` on the
+  `UI.SharedTripBadge` and an overlapping `UI.Avatar.viewStack` on the
   meta row, only for trips with a `flockId`. Personal trips render
   unchanged.
 - **Ledger row** — `src/Pages/Ledger.elm` resolves the active trip's
-  flock membership into `Dict String FlockMember` and threads it to
+  shared-trip membership into `Dict String SharedTripMember` and threads it to
   `viewEntryRow`, which renders an initials avatar + first name
   (Variant A) on the existing `mt-1.5 flex items-center gap-2` band.
   Personal trips pass `Dict.empty` so the chip never renders.
 - **Add / Scan context strip** — `src/Pages/Add.elm` and
   `src/Pages/Scan.elm` render a persistent "ADDING TO / Trip Name"
   strip at the top of the form when the active trip belongs to a
-  flock, plus a `visible to <first names>` caption under the amount
-  input. The caption collapses to `+ N more` when the flock has
+  shared trip, plus a `visible to <first names>` caption under the amount
+  input. The caption collapses to `+ N more` when the shared trip has
   more than three members.
 - **Trip Picker drawer** — `src/UI/TripPicker.elm` decorates each
-  candidate row with the flock badge and avatar stack.
+  candidate row with the shared-trip badge and avatar stack.
 - **New Trip dialog** — `src/Pages/Trips.elm` `viewTargetPicker` asks
   "WHO'S ON THIS TRIP?" with one tile per option:
   - **Just me** (default) — personal trip, written to the user's
     solo PouchDB.
-  - **One tile per owned flock** (`Flocks.ownedBy currentUser`) —
-    writes the trip into that existing flock's local DB.
-  - **+ New shared trip** — the unified flock-creation entry point.
+  - **One tile per owned shared trip** (`SharedTrips.ownedBy currentUser`) —
+    writes the trip into that existing shared trip's local DB.
+  - **+ New shared trip** — the unified shared-trip-creation entry point.
     Expands inline to an emails chip-input + an `Advanced — Group
     Name` reveal (defaults to the trip name; the override matters
     when the user wants a reusable group across multiple trips).
-    Fledgling users see this tile but selecting it surfaces a
+    Tern users see this tile but selecting it surfaces a
     contextual upgrade prompt; the form's Create button stays
     disabled until they pick a different tile or upgrade. This
-    replaces the old standalone Settings → "Create Flock" button.
+    replaces the old standalone Settings → "Create Shared Trip" button.
 
   The picker writes to `TripForm.target : Data.Trip.CreateTarget`
-  (`ToPersonal | ToExistingFlock FlockId | ToNewFlock NewFlockDraft`).
+  (`ToPersonal | ToExistingSharedTrip SharedTripId | ToNewSharedTrip NewSharedTripDraft`).
   `CreateTarget` is form-only — by the time the trip actually gets
   written to PouchDB, the orchestration in `Main.elm`'s submit
-  handler has resolved any `ToNewFlock` to `ToExistingFlock <newId>`
-  by sequencing `Http.FlockApi.createFlock` → `Cmd.batch` of
-  `OpenFlock` port message + `Time.now` + fan-out
-  `Http.FlockApi.inviteToFlock` calls.
+  handler has resolved any `ToNewSharedTrip` to `ToExistingSharedTrip <newId>`
+  by sequencing `Http.SharedTripApi.createSharedTrip` → `Cmd.batch` of
+  `OpenSharedTrip` port message + `Time.now` + fan-out
+  `Http.SharedTripApi.inviteToSharedTrip` calls.
 
   Invite failures are non-blocking — the user can re-invite from
   Settings if a specific email bounced (server returns 409 for
-  duplicates, the standard signal). Flock-creation failures abort
+  duplicates, the standard signal). Shared-trip-creation failures abort
   the whole submit and surface in the form's existing error block.
 
 `UI.Avatar` hashes `UserId.toString` into a five-slot palette
@@ -805,18 +807,18 @@ the hashing function fail loudly.
 
 ### Tier resolution in shared trips
 
-Paid features in a flock are gated by the **billing owner's** tier,
+Paid features in a shared trip are gated by the **billing owner's** tier,
 not the writer's, via `Data.Trip.effectiveTier`. The wrappers
 `canUseProxiedOCR` / `canBatchScan` are convenience predicates over
-the same answer — a free Fledgling member of a Fly-owned flock gets
-hosted OCR inside that flock's trips because that's the whole point
+the same answer — a free Tern member of an Osprey-owned shared trip gets
+hosted OCR inside that shared trip's trips because that's the whole point
 of pooling under one billing relationship. The tier-aware footnote
 in `src/Pages/Scan.elm` is the first call site; the proxied-OCR
 network path itself is still wired through #14.
 
 `Data.Trip.TripTarget` is the routing tag carried on every outbound
 `Save*` / `Get*` port message: `Personal` writes to the user's solo
-PouchDB handle, `InFlock fid` writes to the matching flock handle.
+PouchDB handle, `InFlock fid` writes to the matching shared-trip handle.
 `Main.targetForTripId` resolves the tag by looking up the trip in
 the loaded zipper; missing trips fall back to `Personal` so legacy
 call sites stay safe. The encoder produces
@@ -825,16 +827,16 @@ matching the `targetHandle` reader in `src/pouch.js`.
 
 ### Billing-status UX contract
 
-Every flock carries `billingStatus : BillingStatus` from
-`flock:meta` (one of `Active`, `Grace`, `Frozen`) plus an optional
+Every shared trip carries `billingStatus : BillingStatus` from
+`sharedtrip:meta` (one of `Active`, `Grace`, `Frozen`) plus an optional
 `billingLapsedAt : Maybe String` ISO timestamp. The server enforces
-the same gate at the CouchDB `validate_doc_update` layer (#57); the
-client gates the UI so users don't submit and then see a 403.
+the same gate at the CouchDB `validate_doc_update` layer via `_design/sharedtrip_validator`
+(#57); the client gates the UI so users don't submit and then see a 403.
 
-  - `Active` — flock is writable. No banner, no disable.
+  - `Active` — shared trip is writable. No banner, no disable.
   - `Grace` — billing has lapsed but writes are still allowed for the
     14-day grace window (mirrored by `UI.BillingBanner.graceWindowDays`).
-    The full-bleed `UI.BillingBanner` shows on every flock-scoped trip
+    The full-bleed `UI.BillingBanner` shows on every shared-trip-scoped trip
     page (Ledger / Stats / Add / Scan) with status-specific copy and a
     days-remaining countdown derived from
     `(billingLapsedAt + 14 days) - today`. **Writes are pre-disabled**
@@ -842,7 +844,7 @@ client gates the UI so users don't submit and then see a 403.
     coming but not pile on more entries while billing is sorted out."
   - `Frozen` — read-only indefinitely. Same banner, no countdown.
 
-`Data.Flock.isReadOnly : Flock -> Bool` is the single source of truth
+`Data.SharedTrip.isReadOnly : SharedTrip -> Bool` is the single source of truth
 for the predicate (`True` for `Grace`/`Frozen`, `False` for `Active`).
 Every disable site consults it: the Add submit button, the Ledger row
 menu items (Duplicate / Move / Delete), and the Scan-tab dropzone. Do
@@ -850,23 +852,23 @@ not inline the predicate at call sites — go through `isReadOnly` so
 the rule stays in one place.
 
 The banner is inserted once in `Main.viewAuth` between the error
-banner and the page content, so all four flock-scoped tabs render it
+banner and the page content, so all four shared-trip-scoped tabs render it
 identically without each page reproducing the chrome.
 
-The role-aware copy matrix (owner / paid member / Fledgling member ×
+The role-aware copy matrix (owner / paid member / Tern member ×
 Grace / Frozen) lives in `UI.BillingBanner.graceCopy` and `frozenCopy`
 — the matrix is in the #64 issue body and transcribed verbatim into
 those two functions. The "Transfer billing to me" CTA fires
-`TakeOverBilling FlockId`, which calls
-`Http.FlockApi.transferOwnership` with the calling user's email; the
-button is hidden (not disabled) for Fledgling members since the
+`TakeOverBilling SharedTripId`, which calls
+`Http.SharedTripApi.transferOwnership` with the calling user's email; the
+button is hidden (not disabled) for Tern members since the
 server would 403 their request anyway. The "Renew" CTA is a deep
 link to `/settings#billing` — a placeholder until the dedicated
 billing screen lands.
 
-Settings/Flocks renders the smaller `UI.BillingBanner.viewInline`
-chrome inside each flock card so the status is also visible without
-opening the flock's trip.
+Settings/SharedTrips renders the smaller `UI.BillingBanner.viewInline`
+chrome inside each shared-trip card so the status is also visible without
+opening the shared trip's trip.
 
 ---
 
