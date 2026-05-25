@@ -1,9 +1,11 @@
 module Data.Notifications exposing
     ( NotificationPrefs
+    , NotificationToggle(..)
     , Permission(..)
     , StandaloneState(..)
     , decodePrefs
     , defaultPrefs
+    , encodePrefs
     , permissionFromString
     )
 
@@ -35,13 +37,15 @@ The data model:
     (`weeklyScanReminder`); the record is designed to grow as more
     notification kinds land. Persisted to PouchDB (per the storage-tier
     rules: user preferences, syncs across devices, not secret).
-  - `NotificationToggle` (the discriminator for which pref a Toggle Msg
-    is flipping) and `PushSubscription` (the trio of strings the
-    browser hands back from `pushManager.subscribe`) are both deferred
-    to the issue that first imports them — the Settings UI for
-    `NotificationToggle`, the server-route for `PushSubscription`.
-    Landing them here would trip `NoUnused.Exports` with no consumer;
-    follow the `Data.Tier` precedent and add types as they're imported.
+  - `NotificationToggle` (the discriminator for which pref a Toggle
+    Msg is flipping; today the only variant is `WeeklyScanReminder`
+    but the type exists so adding more prefs is a one-line `Msg`
+    change rather than a constructor explosion) lands here alongside
+    the port-wiring issue that first imports it. The push-subscription
+    triple (endpoint, auth, p256dh) lives entirely on the JS side —
+    it's constructed by `pushManager.subscribe()` and POSTed straight
+    to the server without round-tripping through Elm, so it has no
+    type on this side.
 
 Wire formats:
 
@@ -49,13 +53,14 @@ Wire formats:
     via the `NotificationStateChanged` port as a raw string and
     `permissionFromString` parses it.
   - `NotificationPrefs` decodes via `decodePrefs` (the persisted
-    PouchDB doc). The encoder lands with the Settings issue that
-    first writes back to PouchDB — landing it here would trip
-    `NoUnused.Exports`.
+    PouchDB doc) and encodes via `encodePrefs` (sent both to the JS
+    `savePushPrefs` port for server-side persistence and, eventually,
+    to the per-device server endpoint for cron-driven scheduling).
 
 -}
 
 import Json.Decode
+import Json.Encode
 
 
 
@@ -173,6 +178,20 @@ defaultPrefs =
     }
 
 
+{-| Discriminator for which pref a `ToggleNotificationPref` Msg is
+flipping.
+
+Today there's just `WeeklyScanReminder`, mirroring the single field on
+`NotificationPrefs`. Future kinds (trip-budget alerts, shared-trip
+member-joined pings, etc.) add a constructor here and a field on
+`NotificationPrefs` together; the `updateAuth` `case` on this type then
+gets a new branch and the compiler enforces the wiring end-to-end.
+
+-}
+type NotificationToggle
+    = WeeklyScanReminder
+
+
 
 -- CODECS
 
@@ -192,3 +211,19 @@ decodePrefs =
             , Json.Decode.succeed defaultPrefs.weeklyScanReminder
             ]
         )
+
+
+{-| Encode `NotificationPrefs` as JSON.
+
+Mirrors `decodePrefs` — one field per opt-in. Sent through the
+`savePushPrefs` outbound port whenever the user flips a toggle in the
+Settings UI; the JS handler PUTs it to the server's per-device
+preferences endpoint so the cron-driven scheduler can read it without
+loading the user's PouchDB.
+
+-}
+encodePrefs : NotificationPrefs -> Json.Encode.Value
+encodePrefs prefs =
+    Json.Encode.object
+        [ ( "weeklyScanReminder", Json.Encode.bool prefs.weeklyScanReminder )
+        ]

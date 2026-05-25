@@ -43,7 +43,7 @@ import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
 import Data.Guest exposing (GuestSession)
 import Data.Navigation exposing (Route)
-import Data.Notifications exposing (NotificationPrefs, Permission, StandaloneState)
+import Data.Notifications exposing (NotificationPrefs, NotificationToggle, Permission, StandaloneState)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PendingEntry exposing (ParsedEntry, PendingForm)
 import Data.Scan exposing (ScanItem)
@@ -339,6 +339,7 @@ type Msg
     | PushSubscribeReceived { error : String, ok : Bool }
     | RefreshClicked
     | RequestCodeResult (Result Http.Error ())
+    | RequestPushPermission
     | ResetSettingsClicked
     | ReviewScanItem String
     | SaveTripForm
@@ -360,6 +361,7 @@ type Msg
     | ToggleGuestSettings
     | ToggleLedgerMap
     | ToggleLedgerMapExpanded
+    | ToggleNotificationPref NotificationToggle
     | TransferTargetChanged String
     | TransferToSharedTripResult (Result Http.Error ())
     | TriggerInstallPrompt

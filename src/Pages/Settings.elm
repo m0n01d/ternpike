@@ -2,6 +2,8 @@ module Pages.Settings exposing (viewPanel, viewTab)
 
 import Data.Auth exposing (AppConfig)
 import Data.ColorScheme exposing (ColorScheme(..))
+import Data.Notifications as Notifications
+import Data.Tier as Tier
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -19,7 +21,7 @@ viewTab as_ =
     , body =
         Html.div []
             [ viewAppearanceSection as_.colorScheme
-            , viewBody as_.config (Just as_.showDayIntensity) as_.showInstallPrompt as_.version
+            , viewBody as_.config (Just as_) (Just as_.showDayIntensity) as_.showInstallPrompt as_.version
             , Pages.Settings.SharedTrips.view as_
             ]
     , hero = viewHero
@@ -32,6 +34,7 @@ viewPanel cfg isSignedIn version =
         [ viewHero
         , Html.div [ Html.Attributes.class "mt-4" ]
             [ viewBody cfg
+                Nothing
                 (if isSignedIn then
                     Just True
 
@@ -50,8 +53,8 @@ viewHero =
         [ Html.text "Local-first preferences. Nothing here leaves the device." ]
 
 
-viewBody : AppConfig -> Maybe Bool -> Bool -> String -> Html Msg
-viewBody cfg maybeDayIntensity showInstallPrompt version =
+viewBody : AppConfig -> Maybe AuthState -> Maybe Bool -> Bool -> String -> Html Msg
+viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt version =
     let
         isSignedIn =
             maybeDayIntensity /= Nothing
@@ -60,6 +63,12 @@ viewBody cfg maybeDayIntensity showInstallPrompt version =
         [ case maybeDayIntensity of
             Just dayIntensity ->
                 viewDisplaySection dayIntensity
+
+            Nothing ->
+                Html.text ""
+        , case maybeAuthState of
+            Just as_ ->
+                viewNotificationsSection as_
 
             Nothing ->
                 Html.text ""
@@ -157,6 +166,60 @@ viewInstallSection =
                 [ Html.text "Add Ternpike to your home screen for an app-like, full-screen experience." ]
             , UI.Button.secondary { label = "Install app", onClick = TriggerInstallPrompt }
             ]
+        ]
+
+
+viewNotificationsSection : AuthState -> Html Msg
+viewNotificationsSection as_ =
+    Html.div []
+        [ UI.Rule.kicker "NOTIFICATIONS"
+        , UI.Card.subCard (viewNotificationsBody as_)
+        ]
+
+
+viewNotificationsBody : AuthState -> List (Html Msg)
+viewNotificationsBody as_ =
+    if as_.notificationPermission == Notifications.Unsupported then
+        [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
+            [ Html.text "Notifications aren't available in this browser." ]
+        ]
+
+    else if not (Tier.isPaid as_.tier) then
+        [ Html.div [ Html.Attributes.class "flex items-start justify-between gap-3" ]
+            [ Html.p [ Html.Attributes.class "text-xs text-muted flex-1" ]
+                [ Html.text "Upgrade to Osprey to enable weekly scan reminders." ]
+            , Html.button
+                [ Html.Attributes.type_ "button"
+                , Html.Attributes.disabled True
+                , Html.Attributes.class "shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg bg-cream-deep text-muted border border-tan cursor-not-allowed"
+                ]
+                [ Html.text "Enable notifications" ]
+            ]
+        ]
+
+    else if as_.standalone == Notifications.InBrowser then
+        [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
+            [ Html.text "Install Ternpike to your home screen to enable notifications. Tap the Share button in Safari, then choose Add to Home Screen." ]
+        ]
+
+    else if as_.notificationPermission == Notifications.Denied then
+        [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
+            [ Html.text "Notifications are blocked. Re-enable them in iOS Settings → Notifications → Ternpike." ]
+        ]
+
+    else if as_.notificationPermission == Notifications.Granted && as_.pushSubscribed then
+        [ viewToggleRow
+            { helper = "Every Friday at 5pm UTC, we'll nudge you to scan this week's receipts."
+            , label = "Weekly receipt reminder"
+            , msg = ToggleNotificationPref Notifications.WeeklyScanReminder
+            , value = as_.notificationPrefs.weeklyScanReminder
+            }
+        ]
+
+    else
+        [ Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
+            [ Html.text "Weekly Friday reminder to scan receipts. You can turn it off anytime." ]
+        , UI.Button.primary { label = "Enable notifications", onClick = RequestPushPermission }
         ]
 
 

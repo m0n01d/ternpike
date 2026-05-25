@@ -47,9 +47,14 @@ type alias Creds =
     when not configured; the Scan tab silently skips OCR when empty.
   - `backendUrl` — base URL for the auth server (`/auth/request-code`,
     `/auth/verify-code`, eventually `/me` and `/scan`).
+  - `vapidPublicKey` — the Web Push VAPID public key the JS handler
+    passes to `pushManager.subscribe()`. Empty string when not
+    configured (dev environments without VAPID set); the Settings
+    UI's "Enable notifications" path silently no-ops in that case.
 
 -}
 type alias AppConfig =
     { anthropicKey : String
     , backendUrl : String
+    , vapidPublicKey : String
     }

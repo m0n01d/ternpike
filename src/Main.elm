@@ -186,6 +186,18 @@ port triggerInstallPrompt : () -> Cmd msg
 port canInstall : (Bool -> msg) -> Sub msg
 
 
+port requestNotificationPermission : () -> Cmd msg
+
+
+port savePushPrefs : D.Value -> Cmd msg
+
+
+port subscribePush : { prefs : D.Value, vapidPublicKey : String } -> Cmd msg
+
+
+port unsubscribePush : () -> Cmd msg
+
+
 port notificationState : ({ permission : String, prefs : D.Value, standalone : Bool, subscribed : Bool } -> msg) -> Sub msg
 
 
@@ -1330,6 +1342,7 @@ init flagsJson url key =
         cfg =
             { anthropicKey = dec "anthropicKey"
             , backendUrl = dec "backendUrl"
+            , vapidPublicKey = dec "vapidPublicKey"
             }
 
         basePath =
@@ -1592,6 +1605,9 @@ update msg model =
         RequestCodeResult _ ->
             ( nextModel, cmd )
 
+        RequestPushPermission ->
+            ( nextModel, cmd )
+
         ResetSettingsClicked ->
             ( nextModel, cmd )
 
@@ -1653,6 +1669,9 @@ update msg model =
             ( nextModel, cmd )
 
         ToggleLedgerMapExpanded ->
+            ( nextModel, cmd )
+
+        ToggleNotificationPref _ ->
             ( nextModel, cmd )
 
         TransferTargetChanged _ ->
@@ -1802,7 +1821,7 @@ updateGuest msg gs =
                     | authError = Nothing
                     , codeInput = ""
                     , emailInput = ""
-                    , session = { config = { anthropicKey = "", backendUrl = "" }, reason = NotLoggedIn }
+                    , session = { config = { anthropicKey = "", backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
                     , showSettings = False
                 }
             , clearAllStorage ()
@@ -2002,6 +2021,9 @@ updateGuest msg gs =
         RefreshClicked ->
             ( GuestModel gs, Cmd.none )
 
+        RequestPushPermission ->
+            ( GuestModel gs, Cmd.none )
+
         ReviewScanItem _ ->
             ( GuestModel gs, Cmd.none )
 
@@ -2051,6 +2073,9 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         ToggleLedgerMapExpanded ->
+            ( GuestModel gs, Cmd.none )
+
+        ToggleNotificationPref _ ->
             ( GuestModel gs, Cmd.none )
 
         TransferTargetChanged _ ->
@@ -2231,7 +2256,7 @@ updateAuth msg as_ =
                 , key = as_.key
                 , networkOffline = as_.networkOffline
                 , pendingJoinToken = Nothing
-                , session = { config = { anthropicKey = "", backendUrl = "" }, reason = NotLoggedIn }
+                , session = { config = { anthropicKey = "", backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
                 , showSettings = False
                 , today = as_.today
                 , version = as_.version
@@ -3710,6 +3735,58 @@ updateAuth msg as_ =
         -- for now we mirror the `ok` flag into AuthState.
         PushSubscribeReceived payload ->
             ( AuthModel { as_ | pushSubscribed = payload.ok }, Cmd.none )
+
+        -- Fired by the Settings UI's "Enable notifications" button. The
+        -- JS handler shows the browser's permission prompt and re-emits
+        -- `notificationState` with the user's decision; we don't update
+        -- AuthState here — `NotificationStateChanged` does that. We also
+        -- kick off `subscribePush` so the JS handler can register a push
+        -- subscription as soon as the user grants. If permission is
+        -- denied the JS handler ignores the request.
+        RequestPushPermission ->
+            ( AuthModel as_
+            , Cmd.batch
+                [ requestNotificationPermission ()
+                , subscribePush
+                    { prefs = Notifications.encodePrefs as_.notificationPrefs
+                    , vapidPublicKey = as_.config.vapidPublicKey
+                    }
+                ]
+            )
+
+        -- Optimistic flip of the local pref + fire-and-forget save to
+        -- the server. The encoded prefs go to the JS port which PUTs
+        -- them to `/notifications/preferences`; if the request fails
+        -- we don't roll back (Elm state stays optimistic — the cron
+        -- re-checks tier independently). New `NotificationToggle`
+        -- variants get a new branch here and the compiler enforces it.
+        -- When the last opt-in flips off we also call `unsubscribePush`
+        -- so the browser drops the registration entirely — no point
+        -- keeping the endpoint live on the server if nothing will fire.
+        ToggleNotificationPref Notifications.WeeklyScanReminder ->
+            let
+                oldPrefs : Notifications.NotificationPrefs
+                oldPrefs =
+                    as_.notificationPrefs
+
+                newPrefs : Notifications.NotificationPrefs
+                newPrefs =
+                    { oldPrefs | weeklyScanReminder = not oldPrefs.weeklyScanReminder }
+
+                anyEnabled : Bool
+                anyEnabled =
+                    newPrefs.weeklyScanReminder
+            in
+            ( AuthModel { as_ | notificationPrefs = newPrefs }
+            , Cmd.batch
+                [ savePushPrefs (Notifications.encodePrefs newPrefs)
+                , if anyEnabled then
+                    Cmd.none
+
+                  else
+                    unsubscribePush ()
+                ]
+            )
 
         -- Messages that only apply to the guest (unauthenticated) state.
         -- They reach updateAuth when the top-level update dispatches before
