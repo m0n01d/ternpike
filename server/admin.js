@@ -616,4 +616,59 @@ export function registerAdminRoutes(app) {
     const result = await sendTestPush(c.env, email)
     return c.json(result)
   })
+
+  // GET /admin/notifications/list
+  //
+  // Returns all push subscribers grouped by email, with per-device prefs and
+  // a live tier lookup per unique email (one getTier call, not one per device).
+  // Alphabetized by email. Does not require PUSH_KV — returns an empty list
+  // if the binding is absent so the endpoint degrades gracefully in dev.
+  app.get('/admin/notifications/list', async (c) => {
+    const denied = guard(c)
+    if (denied) return denied
+    const env = c.env
+    if (!env.PUSH_KV) {
+      return c.json({ ok: true, users: [] })
+    }
+
+    const PUSH_PREFIX = 'push:sub:'
+    const PREF_PREFIX = 'push:pref:'
+
+    const byEmail = new Map()
+    let cursor
+
+    do {
+      const page = await env.PUSH_KV.list({ cursor, prefix: PUSH_PREFIX })
+      for (const k of page.keys) {
+        const email = k.name.slice(PUSH_PREFIX.length).split(':')[0]
+        const subRaw = await env.PUSH_KV.get(k.name)
+        if (!subRaw) continue
+        const sub = JSON.parse(subRaw)
+        const prefKey = k.name.replace(PUSH_PREFIX, PREF_PREFIX)
+        const prefRaw = await env.PUSH_KV.get(prefKey)
+        const prefs = prefRaw ? JSON.parse(prefRaw) : { weeklyScanReminder: true }
+        if (!byEmail.has(email)) {
+          byEmail.set(email, { devices: [], email, tier: null })
+        }
+        byEmail.get(email).devices.push({
+          createdAt: sub.createdAt,
+          endpoint: sub.endpoint,
+          prefs,
+        })
+      }
+      cursor = page.list_complete ? undefined : page.cursor
+    } while (cursor)
+
+    // Resolve tier per unique email — one getTier call each, not per device.
+    for (const entry of byEmail.values()) {
+      entry.tier = await getTier(env, entry.email)
+    }
+
+    return c.json({
+      ok: true,
+      users: Array.from(byEmail.values()).sort((a, b) =>
+        a.email.localeCompare(b.email),
+      ),
+    })
+  })
 }
