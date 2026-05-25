@@ -27,10 +27,20 @@ id = "0828b3748638455e964b7120ab0a46a5"
 # `{lat, lon}`, TTL: 30d for hits, 1d for no-match). Shared across all
 # users — addresses resolve to the same point regardless of who asked.
 # Provision with:
-#   wrangler kv:namespace create GEOCODE_CACHE_KV
+#   wrangler kv namespace create GEOCODE_CACHE_KV
 [[kv_namespaces]]
 binding = "GEOCODE_CACHE_KV"
 id = "4a9baf82359545ef981e7dcc6a646f94"
+
+# Per-device push subscriptions + notification prefs for PWA push notifications.
+# Schema:
+#   push:sub::<userId>::<deviceId>  -> { endpoint, auth, p256dh, createdAt, tierAtSubscribe }
+#   push:pref::<userId>::<deviceId> -> { weeklyScanReminder: bool, ... }
+# Subscriptions are per-device (a user may opt out on iPad while keeping iPhone on).
+# Provision with: wrangler kv namespace create PUSH_KV
+[[kv_namespaces]]
+binding = "PUSH_KV"
+id = "679c582bcded4fef8fdb3cebcb8940cc"
 
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
@@ -44,17 +54,21 @@ RESEND_AUDIENCE_ID = "206e97c4-13b7-4a6a-a85b-01414c35449b"
 pattern = "api.ternpike.com"
 custom_domain = true
 
-# Hourly sweep of flocks in `grace` whose 14-day window has elapsed; flips
-# them to `frozen`. See server/flocks.js `runGraceFreezeSweep`.
+# Hourly: grace-to-frozen sharedtrip sweep (see server/sharedTrips.js `runGraceFreezeSweep`).
+# Friday 17:00 UTC: weekly scan reminder push (see server/notifications.js
+# `sendWeeklyScanReminders`); dispatched in scheduled() via event.cron branching.
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "0 17 * * 5"]
 
 # Set secrets via: wrangler secret put NAME
-#   COUCH_ADMIN_USER
+#   ADMIN_SECRET          (gates /admin/* — required by the ternpike-admin TUI)
 #   COUCH_ADMIN_PASS
-#   SERVER_SECRET
+#   COUCH_ADMIN_USER
+#   GOOGLE_GEOCODING_API_KEY  (Geocoding API key from the Google Cloud project — see issue #171)
 #   RESEND_API_KEY
 #   RESEND_WAITLIST_API_KEY  (separate Resend token scoped to the waitlist audience)
+#   SERVER_SECRET
 #   TIER_WEBHOOK_SECRET   (shared with the future Stripe webhook + test hook)
-#   ADMIN_SECRET          (gates /admin/* — required by the ternpike-admin TUI)
-#   GOOGLE_GEOCODING_API_KEY  (Geocoding API key from the Google Cloud project — see issue #171)
+#   VAPID_PRIVATE_KEY     (base64url; PERMANENT — re-keying invalidates all push subscriptions)
+#   VAPID_PUBLIC_KEY      (base64url; also shipped to client as VITE_VAPID_PUBLIC_KEY at build time)
+#   VAPID_SUBJECT         (mailto: URL, e.g. mailto:ops@ternpike.com)
