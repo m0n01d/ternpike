@@ -4,9 +4,10 @@
 // `TIERS_KV`, both of which we stub with the in-memory KV from
 // fixtures/env.js. The test mirrors the geocode.spec.js pattern.
 
-import { beforeEach, describe, test } from 'node:test'
+import { afterEach, beforeEach, describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 
+import { sendWeeklyScanReminders, sha256Hex } from '../notifications.js'
 import { request } from './fixtures/app.js'
 import { basicAuthHeader, tamperedAuthHeader } from './fixtures/auth.js'
 import { memoryKv } from './fixtures/env.js'
@@ -361,5 +362,162 @@ describe('PUT /notifications/preferences', () => {
       { headers: await authed(ALICE) },
     )
     assert.deepEqual(res.body.prefs, { weeklyScanReminder: false })
+  })
+})
+
+describe('sendWeeklyScanReminders', () => {
+  // Seed a real subscribe call so the PUSH_KV has the canonical record
+  // shape (auth/p256dh/endpoint/createdAt/tierAtSubscribe) the sweep
+  // expects. Caller controls who the seed runs as + which endpoint +
+  // optional prefs override.
+  async function seedSubscription(email, endpoint, subscriptions) {
+    const body = { endpoint, keys: KEYS }
+    if (subscriptions) body.subscriptions = subscriptions
+    const res = await request(env, 'POST', '/notifications/subscribe', {
+      body,
+      headers: await authed(email),
+    })
+    assert.equal(res.status, 200, `seedSubscription ${email} ${endpoint}`)
+  }
+
+  // Hook the no-crypto path: tests assert KV iteration + filter +
+  // fetch-call shape, not VAPID signing. Returns a Request-shaped
+  // object that `fetch` will accept as the second arg's init.
+  function stubBuildPushPayload() {
+    return async (_msg, _sub, _vapid) => ({
+      body: 'test-encrypted-payload',
+      headers: { 'content-type': 'application/octet-stream' },
+      method: 'POST',
+    })
+  }
+
+  // Capture every `fetch` call the sweep makes. Resolves each one to
+  // whatever `responder(url, init, callIndex)` returns. Restored in
+  // afterEach via the captured `realFetch` reference.
+  let realFetch
+  function installFetchSpy(responder) {
+    const calls = []
+    realFetch = globalThis.fetch
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.url
+      const idx = calls.length
+      calls.push({ init, url })
+      return responder(url, init, idx)
+    }
+    return calls
+  }
+
+  afterEach(() => {
+    if (realFetch) {
+      globalThis.fetch = realFetch
+      realFetch = undefined
+    }
+  })
+
+  function envWithStub() {
+    return {
+      ...env,
+      VAPID_PRIVATE_KEY: 'test-vapid-private',
+      VAPID_PUBLIC_KEY: 'test-vapid-public',
+      VAPID_SUBJECT: 'mailto:test@ternpike.com',
+      __buildPushPayload: stubBuildPushPayload(),
+    }
+  }
+
+  test('skips downgraded users — only paid endpoints receive a push', async () => {
+    await seedSubscription(ALICE, ENDPOINT) // paid (osprey)
+    // Seed Eve via a direct PUSH_KV put so we don't have to flip her
+    // tier mid-test: the subscribe endpoint 402s for Tern.
+    await env.TIERS_KV.put(ALICE.toLowerCase(), 'osprey')
+    // Manually plant a subscription for a tern user — the real route
+    // would reject it, but this models "user downgraded after a prior
+    // paid subscribe", which is exactly what the sweep must guard.
+    const eveEndpoint = 'https://push.example.com/eve-device'
+    const eveHash = await sha256Hex(eveEndpoint)
+    await env.PUSH_KV.put(
+      `push:sub:${EVE.toLowerCase()}:${eveHash}`,
+      JSON.stringify({
+        auth: KEYS.auth,
+        createdAt: '2026-05-01T00:00:00.000Z',
+        endpoint: eveEndpoint,
+        p256dh: KEYS.p256dh,
+        tierAtSubscribe: 'osprey',
+      }),
+    )
+    await env.PUSH_KV.put(
+      `push:pref:${EVE.toLowerCase()}:${eveHash}`,
+      JSON.stringify({ weeklyScanReminder: true }),
+    )
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendWeeklyScanReminders(envWithStub())
+
+    assert.equal(calls.length, 1, 'fetch called exactly once')
+    assert.equal(calls[0].url, ENDPOINT, 'paid user endpoint reached')
+  })
+
+  test('skips opted-out devices — only the opted-in device receives a push', async () => {
+    await seedSubscription(ALICE, ENDPOINT, { weeklyScanReminder: true })
+    await seedSubscription(ALICE, ENDPOINT_OTHER, {
+      weeklyScanReminder: false,
+    })
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendWeeklyScanReminders(envWithStub())
+
+    assert.equal(calls.length, 1, 'fetch called exactly once')
+    assert.equal(calls[0].url, ENDPOINT, 'opted-in endpoint reached')
+  })
+
+  test('deletes both push:sub: and push:pref: keys on 410 Gone', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    assert.equal(env.PUSH_KV._dump().length, 2)
+
+    installFetchSpy(() => new Response('', { status: 410 }))
+    await sendWeeklyScanReminders(envWithStub())
+
+    const remaining = env.PUSH_KV._dump()
+    assert.equal(remaining.length, 0, 'both sub + pref deleted')
+  })
+
+  test('deletes both keys on 404 Not Found', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    assert.equal(env.PUSH_KV._dump().length, 2)
+
+    installFetchSpy(() => new Response('', { status: 404 }))
+    await sendWeeklyScanReminders(envWithStub())
+
+    assert.equal(env.PUSH_KV._dump().length, 0)
+  })
+
+  test('logs non-fatal errors and continues — neither sub deleted on 500', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    await seedSubscription(ALICE, ENDPOINT_OTHER)
+    assert.equal(env.PUSH_KV._dump().length, 4)
+
+    // First call fails 500, second succeeds 201. Capture console.error
+    // so the test output stays clean while still asserting the call.
+    const errors = []
+    const realError = console.error
+    console.error = (...args) => {
+      errors.push(args)
+    }
+    try {
+      const calls = installFetchSpy((_url, _init, idx) =>
+        idx === 0
+          ? new Response('', { status: 500 })
+          : new Response('', { status: 201 }),
+      )
+      await sendWeeklyScanReminders(envWithStub())
+      assert.equal(calls.length, 2, 'both endpoints attempted')
+    } finally {
+      console.error = realError
+    }
+
+    assert.equal(env.PUSH_KV._dump().length, 4, 'no keys deleted')
+    assert.ok(
+      errors.some(([msg]) => msg === 'push send failed'),
+      'logged the 500 failure',
+    )
   })
 })
