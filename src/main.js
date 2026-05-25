@@ -674,17 +674,6 @@ import './global.css'
   // don't gate the rest of init on it.
   emitNotificationState()
 
-  if (notificationsSupported && app.ports.requestNotificationPermission) {
-    app.ports.requestNotificationPermission.subscribe(async () => {
-      try {
-        await Notification.requestPermission()
-      } catch (err) {
-        console.error('[notifications] requestPermission failed:', err)
-      }
-      await emitNotificationState()
-    })
-  }
-
   if (notificationsSupported && app.ports.subscribePush) {
     app.ports.subscribePush.subscribe(async ({ prefs, vapidPublicKey }) => {
       if (!vapidPublicKey) {
@@ -692,6 +681,26 @@ import './global.css'
           ok: false,
           error: 'VAPID public key not configured',
         })
+        return
+      }
+      // iOS Safari (16.4+ PWA) requires Notification.permission to be
+      // 'granted' BEFORE pushManager.subscribe is called, and the whole
+      // chain must stay inside the user-gesture context that triggered
+      // the port. So we await the prompt here (only when needed) rather
+      // than letting Elm fire it in parallel via Cmd.batch.
+      if (Notification.permission === 'default') {
+        try {
+          await Notification.requestPermission()
+        } catch (err) {
+          console.error('[notifications] requestPermission failed:', err)
+        }
+      }
+      if (Notification.permission !== 'granted') {
+        app.ports.pushSubscribeResult.send({
+          ok: false,
+          error: 'Notification permission not granted',
+        })
+        await emitNotificationState()
         return
       }
       try {
