@@ -132,12 +132,21 @@ export function registerGeocodeRoutes(app) {
       return c.json({ ok: false, error: 'rate_limited' }, 429)
     }
 
-    const cacheKey = `addr:${await sha256Hex(normalized)}`
+    // Cache key includes the provider name so a future upstream swap
+    // doesn't serve stale results from the previous provider — when we
+    // moved from Nominatim to Google (#173), no-match entries under the
+    // old `addr:<sha>` key kept returning null/null until their 1-day
+    // TTL rolled off, masking Google hits.
+    const cacheKey = `addr:google:${await sha256Hex(normalized)}`
     if (env.GEOCODE_CACHE_KV) {
       const cached = await env.GEOCODE_CACHE_KV.get(cacheKey)
       if (cached) {
         try {
           const parsed = JSON.parse(cached)
+          console.log(
+            'geocode hit:',
+            JSON.stringify({ lat: parsed.lat, lon: parsed.lon, cached: true })
+          )
           return c.json({
             ok: true,
             lat: parsed.lat,
@@ -158,6 +167,11 @@ export function registerGeocodeRoutes(app) {
       console.error('geocode upstream:', err)
       return c.json({ ok: false, error: 'upstream' }, 502)
     }
+
+    console.log(
+      'geocode hit:',
+      JSON.stringify({ lat: result.lat, lon: result.lon, cached: false })
+    )
 
     if (env.GEOCODE_CACHE_KV) {
       const ttl =
