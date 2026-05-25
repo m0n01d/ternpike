@@ -4,12 +4,13 @@ import React, { useState } from 'react'
 import { Layout } from './components/Layout.js'
 import { DbsList } from './components/DbsList.js'
 import { DocBrowser } from './components/DocBrowser.js'
+import { NotificationsList } from './components/NotificationsList.js'
 import { SeedScreen } from './components/SeedScreen.js'
 import { SharedTripsList } from './components/SharedTripsList.js'
 import { UserDetail } from './components/UserDetail.js'
 import { UsersList } from './components/UsersList.js'
 
-type Section = 'users' | 'dbs' | 'sharedtrips' | 'seed'
+type Section = 'users' | 'dbs' | 'sharedtrips' | 'seed' | 'notifications'
 
 type View =
   | { kind: 'users' }
@@ -18,12 +19,14 @@ type View =
   | { kind: 'doc-browser'; db: string; from: Section }
   | { kind: 'sharedtrips' }
   | { kind: 'seed' }
+  | { kind: 'notifications' }
 
 const sectionFor = (view: View): Section => {
   if (view.kind === 'users' || view.kind === 'user-detail') return 'users'
   if (view.kind === 'dbs') return 'dbs'
   if (view.kind === 'sharedtrips') return 'sharedtrips'
   if (view.kind === 'seed') return 'seed'
+  if (view.kind === 'notifications') return 'notifications'
   return view.from
 }
 
@@ -38,7 +41,7 @@ export const App: React.FC = () => {
   useInput((input, key) => {
     if (input === 'q' || (key.ctrl && input === 'c')) exit()
     if (key.tab) {
-      const order: Section[] = ['users', 'dbs', 'sharedtrips', 'seed']
+      const order: Section[] = ['users', 'dbs', 'sharedtrips', 'seed', 'notifications']
       const cur = sectionFor(view)
       const next = order[(order.indexOf(cur) + 1) % order.length]
       setView({ kind: next as any })
@@ -104,6 +107,11 @@ export const App: React.FC = () => {
   } else if (view.kind === 'seed') {
     hints = `${baseHints} · enter create · tab switch`
     content = <SeedScreen setStatus={setStatus} setError={setError} />
+  } else if (view.kind === 'notifications') {
+    hints = `${baseHints} · tab switch`
+    content = (
+      <NotificationsList setStatus={setStatus} setError={setError} />
+    )
   }
 
   return (

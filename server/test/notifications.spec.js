@@ -1,4 +1,5 @@
-// Coverage for the four `/notifications/*` routes (#179).
+// Coverage for the four `/notifications/*` routes (#179) and the
+// `/admin/notifications/list` admin route (#200).
 //
 // No CouchDB dependency — these endpoints only touch `PUSH_KV` and
 // `TIERS_KV`, both of which we stub with the in-memory KV from
@@ -628,5 +629,89 @@ describe('sendTestPush', () => {
     assert.equal(result.sent, 0, 'gone subscription not counted as sent')
     const remaining = env.PUSH_KV._dump()
     assert.equal(remaining.length, 0, 'both sub + pref keys deleted on 410')
+  })
+})
+
+describe('GET /admin/notifications/list', () => {
+  const ADMIN_SECRET = 'test-admin-secret'
+  const BOB = 'bob@test.ternpike.com'
+  const ADMIN_HEADER = { 'x-admin-secret': ADMIN_SECRET }
+
+  // Seed a subscription via the real subscribe route. Caller must be paid.
+  async function seedSubscription(email, endpoint) {
+    const res = await request(env, 'POST', '/notifications/subscribe', {
+      body: { endpoint, keys: KEYS },
+      headers: { Authorization: await basicAuthHeader(email, SERVER_SECRET) },
+    })
+    assert.equal(res.status, 200, `seedSubscription ${email} ${endpoint}`)
+  }
+
+  beforeEach(async () => {
+    env = {
+      ADMIN_SECRET,
+      PUSH_KV: memoryKv(),
+      SERVER_SECRET,
+      TIERS_KV: memoryKv(),
+    }
+    // Alice is osprey, Bob is trailblazer — both paid so both can subscribe.
+    await env.TIERS_KV.put(ALICE.toLowerCase(), 'osprey')
+    await env.TIERS_KV.put(BOB.toLowerCase(), 'trailblazer')
+  })
+
+  test('returns 401 when x-admin-secret header is missing', async () => {
+    const res = await request(env, 'GET', '/admin/notifications/list')
+    assert.equal(res.status, 401)
+    assert.equal(res.body.ok, false)
+  })
+
+  test('returns ok:true and empty users array when PUSH_KV is empty', async () => {
+    const res = await request(env, 'GET', '/admin/notifications/list', {
+      headers: ADMIN_HEADER,
+    })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.ok, true)
+    assert.deepEqual(res.body.users, [])
+  })
+
+  test('returns grouped shape for 2 users x 2 devices each', async () => {
+    // Seed 2 devices for Alice and 2 for Bob.
+    await seedSubscription(ALICE, ENDPOINT)
+    await seedSubscription(ALICE, ENDPOINT_OTHER)
+    await seedSubscription(BOB, ENDPOINT)
+    await seedSubscription(BOB, ENDPOINT_OTHER)
+
+    const res = await request(env, 'GET', '/admin/notifications/list', {
+      headers: ADMIN_HEADER,
+    })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.ok, true)
+
+    const { users } = res.body
+    assert.equal(users.length, 2, 'two unique users')
+
+    // Users are alphabetized by email.
+    assert.equal(users[0].email, ALICE)
+    assert.equal(users[1].email, BOB)
+
+    // Tier is resolved live per user.
+    assert.equal(users[0].tier, 'osprey')
+    assert.equal(users[1].tier, 'trailblazer')
+
+    // Each user has 2 devices.
+    assert.equal(users[0].devices.length, 2)
+    assert.equal(users[1].devices.length, 2)
+
+    // Each device has the expected shape.
+    for (const user of users) {
+      for (const device of user.devices) {
+        assert.ok(
+          device.endpoint === ENDPOINT || device.endpoint === ENDPOINT_OTHER,
+          'endpoint matches a seeded endpoint',
+        )
+        assert.equal(typeof device.createdAt, 'string')
+        assert.ok(device.prefs !== undefined, 'prefs present')
+        assert.equal(typeof device.prefs.weeklyScanReminder, 'boolean')
+      }
+    }
   })
 })

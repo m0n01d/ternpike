@@ -103,6 +103,18 @@ export type SharedTrip = {
   error?: string
 }
 
+export type NotificationDevice = {
+  createdAt: string
+  endpoint: string
+  prefs: { weeklyScanReminder: boolean }
+}
+
+export type NotificationUser = {
+  devices: NotificationDevice[]
+  email: string
+  tier: Tier
+}
+
 export const api = {
   ping: () =>
     request<{ ok: true; users: User[] }>('GET', '/admin/users'),
@@ -184,4 +196,17 @@ export const api = {
       tripCount,
       expensesPerTrip,
     }),
+
+  listNotificationUsers: () =>
+    request<{ ok: true; users: NotificationUser[] }>(
+      'GET',
+      '/admin/notifications/list',
+    ),
+
+  testPush: (email: string) =>
+    request<{ ok: boolean; sent?: number; reason?: string }>(
+      'POST',
+      '/admin/test-push',
+      { email },
+    ),
 }
