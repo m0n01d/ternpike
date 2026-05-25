@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { sendWeeklyScanReminders, sha256Hex } from '../notifications.js'
+import { sendTestPush, sendWeeklyScanReminders, sha256Hex } from '../notifications.js'
 import { request } from './fixtures/app.js'
 import { basicAuthHeader, tamperedAuthHeader } from './fixtures/auth.js'
 import { memoryKv } from './fixtures/env.js'
@@ -519,5 +519,114 @@ describe('sendWeeklyScanReminders', () => {
       errors.some(([msg]) => msg === 'push send failed'),
       'logged the 500 failure',
     )
+  })
+})
+
+describe('sendTestPush', () => {
+  // Seed a real subscribe call so PUSH_KV has the canonical record shape.
+  async function seedSubscription(email, endpoint, subscriptions) {
+    const body = { endpoint, keys: KEYS }
+    if (subscriptions) body.subscriptions = subscriptions
+    const res = await request(env, 'POST', '/notifications/subscribe', {
+      body,
+      headers: await authed(email),
+    })
+    assert.equal(res.status, 200, `seedSubscription ${email} ${endpoint}`)
+  }
+
+  function stubBuildPushPayload() {
+    return async (_msg, _sub, _vapid) => ({
+      body: 'test-encrypted-payload',
+      headers: { 'content-type': 'application/octet-stream' },
+      method: 'POST',
+    })
+  }
+
+  let realFetch
+  function installFetchSpy(responder) {
+    const calls = []
+    realFetch = globalThis.fetch
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.url
+      const idx = calls.length
+      calls.push({ init, url })
+      return responder(url, init, idx)
+    }
+    return calls
+  }
+
+  afterEach(() => {
+    if (realFetch) {
+      globalThis.fetch = realFetch
+      realFetch = undefined
+    }
+  })
+
+  function envWithStub() {
+    return {
+      ...env,
+      VAPID_PRIVATE_KEY: 'test-vapid-private',
+      VAPID_PUBLIC_KEY: 'test-vapid-public',
+      VAPID_SUBJECT: 'mailto:test@ternpike.com',
+      __buildPushPayload: stubBuildPushPayload(),
+    }
+  }
+
+  test('tern user gets { ok: false, reason: not-paid, sent: 0 } — fetch not called', async () => {
+    // EVE is tern tier; put a subscription in KV manually since the
+    // subscribe route 402s for tern callers — simulates a user who
+    // downgraded after subscribing.
+    const eveEndpoint = 'https://push.example.com/eve-test-device'
+    const eveHash = await sha256Hex(eveEndpoint)
+    await env.PUSH_KV.put(
+      `push:sub:${EVE.toLowerCase()}:${eveHash}`,
+      JSON.stringify({
+        auth: KEYS.auth,
+        createdAt: '2026-05-01T00:00:00.000Z',
+        endpoint: eveEndpoint,
+        p256dh: KEYS.p256dh,
+        tierAtSubscribe: 'osprey',
+      }),
+    )
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    const result = await sendTestPush(envWithStub(), EVE)
+    assert.deepEqual(result, { ok: false, reason: 'not-paid', sent: 0 })
+    assert.equal(calls.length, 0, 'fetch must not be called for tern user')
+  })
+
+  test('sends to all subscriptions for a paid user — fetch called twice, sent: 2', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    await seedSubscription(ALICE, ENDPOINT_OTHER)
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    const result = await sendTestPush(envWithStub(), ALICE)
+
+    assert.equal(result.ok, true)
+    assert.equal(result.sent, 2, 'both subscriptions dispatched')
+    assert.equal(calls.length, 2, 'fetch called exactly twice')
+  })
+
+  test('ignores weeklyScanReminder: false — fetch called even when opted out', async () => {
+    await seedSubscription(ALICE, ENDPOINT, { weeklyScanReminder: false })
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    const result = await sendTestPush(envWithStub(), ALICE)
+
+    assert.equal(result.ok, true)
+    assert.equal(result.sent, 1, 'opted-out subscription still receives test push')
+    assert.equal(calls.length, 1, 'fetch called once')
+  })
+
+  test('410 response deletes both push:sub: and push:pref: keys', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    assert.equal(env.PUSH_KV._dump().length, 2)
+
+    installFetchSpy(() => new Response('', { status: 410 }))
+    const result = await sendTestPush(envWithStub(), ALICE)
+
+    assert.equal(result.ok, true)
+    assert.equal(result.sent, 0, 'gone subscription not counted as sent')
+    const remaining = env.PUSH_KV._dump()
+    assert.equal(remaining.length, 0, 'both sub + pref keys deleted on 410')
   })
 })
