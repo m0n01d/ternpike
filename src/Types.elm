@@ -43,6 +43,7 @@ import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
 import Data.Guest exposing (GuestSession)
 import Data.Navigation exposing (Route)
+import Data.Notifications exposing (NotificationPrefs, Permission, StandaloneState)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PendingEntry exposing (ParsedEntry, PendingForm)
 import Data.Scan exposing (ScanItem)
@@ -179,13 +180,17 @@ type alias AuthState =
     , loadingTrips : Set String
     , movePicker : Maybe Expense
     , networkOffline : Bool
+    , notificationPermission : Permission
+    , notificationPrefs : NotificationPrefs
     , openLedgerMenu : Maybe ExpenseId
+    , pushSubscribed : Bool
     , route : Route
     , scanQueue : Dict String ScanItem
     , showDayIntensity : Bool
     , showInstallPrompt : Bool
     , showLedgerMap : Bool
     , showMapPicker : Bool
+    , standalone : StandaloneState
     , statsGranularity : Maybe Granularity
     , statsHover : Hover
     , submitting : Bool
@@ -319,6 +324,7 @@ type Msg
     | MoveEntry Expense TripId
     | NetworkStatusChanged Bool
     | NoteChanged String
+    | NotificationStateChanged { permission : String, prefs : Json.Decode.Value, standalone : Bool, subscribed : Bool }
     | OcrImagePrepared { dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int }
     | OpenEditTripForm Trip
     | OpenCreateSharedTripModal
@@ -330,6 +336,7 @@ type Msg
     | OpenNewTripForm
     | OpenTransferModal SharedTripId
     | PaymentMethodChanged (Maybe PaymentMethod)
+    | PushSubscribeReceived { error : String, ok : Bool }
     | RefreshClicked
     | RequestCodeResult (Result Http.Error ())
     | ResetSettingsClicked
