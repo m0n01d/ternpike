@@ -521,4 +521,78 @@ export function registerAdminRoutes(app) {
     }
     return c.json({ ok: true, written: docs.length })
   })
+
+  // --- geocode diagnostics -------------------------------------------------
+
+  // Smoke-test the Google upstream end-to-end without touching the cache or
+  // the user-facing rate limiter. Returns the raw Google `status` +
+  // `error_message` so misconfigurations (missing key, billing disabled,
+  // referrer restrictions) are visible instead of being collapsed into a
+  // 502 the way the user-facing endpoint does.
+  app.post('/admin/geocode/test', async (c) => {
+    const denied = guard(c)
+    if (denied) return denied
+    const env = c.env
+    if (!env.GOOGLE_GEOCODING_API_KEY) {
+      return c.json({ ok: false, error: 'api_key_not_configured' }, 503)
+    }
+    const body = await c.req.json().catch(() => ({}))
+    const address = typeof body.address === 'string' ? body.address.trim() : ''
+    if (!address) {
+      return c.json({ ok: false, error: 'address_required' }, 400)
+    }
+    const baseUrl =
+      env.GOOGLE_GEOCODING_BASE_URL || 'https://maps.googleapis.com'
+    const url =
+      `${baseUrl}/maps/api/geocode/json` +
+      `?address=${encodeURIComponent(address)}` +
+      `&key=${encodeURIComponent(env.GOOGLE_GEOCODING_API_KEY)}`
+    let res
+    try {
+      res = await fetch(url, { headers: { Accept: 'application/json' } })
+    } catch (err) {
+      return c.json(
+        { ok: false, error: 'fetch_failed', detail: String(err.message || err) },
+        502,
+      )
+    }
+    const upstreamBody = await res.json().catch(() => null)
+    const loc = upstreamBody?.results?.[0]?.geometry?.location
+    return c.json({
+      ok: true,
+      httpStatus: res.status,
+      googleStatus: upstreamBody?.status || null,
+      googleErrorMessage: upstreamBody?.error_message || null,
+      lat: typeof loc?.lat === 'number' ? loc.lat : null,
+      lon: typeof loc?.lng === 'number' ? loc.lng : null,
+      formattedAddress: upstreamBody?.results?.[0]?.formatted_address || null,
+    })
+  })
+
+  // Purge cached geocode entries by KV prefix. Defaults to `addr:` which
+  // matches both the legacy Nominatim entries (`addr:<sha>`) and the new
+  // Google entries (`addr:google:<sha>`). Pass `{prefix: "addr:google:"}`
+  // to scope to just the new entries.
+  app.post('/admin/geocode/cache/purge', async (c) => {
+    const denied = guard(c)
+    if (denied) return denied
+    const env = c.env
+    if (!env.GEOCODE_CACHE_KV) {
+      return c.json({ ok: false, error: 'cache_not_configured' }, 503)
+    }
+    const body = await c.req.json().catch(() => ({}))
+    const prefix = typeof body.prefix === 'string' ? body.prefix : 'addr:'
+    let cursor = undefined
+    let deleted = 0
+    while (true) {
+      const page = await env.GEOCODE_CACHE_KV.list({ prefix, cursor })
+      for (const key of page.keys) {
+        await env.GEOCODE_CACHE_KV.delete(key.name)
+        deleted += 1
+      }
+      if (page.list_complete) break
+      cursor = page.cursor
+    }
+    return c.json({ ok: true, prefix, deleted })
+  })
 }
