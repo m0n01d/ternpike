@@ -635,9 +635,10 @@ import './global.css'
     let subscribed = false
     let endpoint = null
     let prefs = { weeklyScanReminder: false }
+    let sub = null
     try {
       const reg = await navigator.serviceWorker.ready
-      const sub = await reg.pushManager.getSubscription()
+      sub = await reg.pushManager.getSubscription()
       if (sub) {
         subscribed = true
         endpoint = sub.endpoint
@@ -661,9 +662,43 @@ import './global.css'
               }
             }
           }
-          // Tolerate 404 silently — endpoint lands in #179.
         } catch (err) {
           console.error('[notifications] preferences fetch failed:', err)
+        }
+      }
+    }
+    // Self-heal: re-register this device's subscription with the server.
+    // Idempotent — the server upserts by sha256(endpoint). Covers the
+    // case where the original POST failed silently (e.g. the Worker
+    // route wasn't deployed yet, network blip, transient 5xx), leaving
+    // the browser with a local subscription but no server-side record.
+    // Fire-and-forget so it doesn't delay the boot-time UI hydration.
+    if (subscribed && endpoint) {
+      const auth = basicAuthHeader()
+      if (auth) {
+        const raw = sub.toJSON ? sub.toJSON() : null
+        const keys = raw && raw.keys ? raw.keys : null
+        if (keys && keys.auth && keys.p256dh) {
+          fetch(`${flags.backendUrl}/notifications/subscribe`, {
+            method: 'POST',
+            headers: {
+              Authorization: auth,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              endpoint,
+              keys: { auth: keys.auth, p256dh: keys.p256dh },
+              subscriptions: prefs,
+            }),
+          })
+            .then((res) => {
+              if (!res.ok) {
+                console.error('[notifications] self-heal POST returned', res.status)
+              }
+            })
+            .catch((err) => {
+              console.error('[notifications] self-heal POST failed:', err)
+            })
         }
       }
     }
@@ -718,7 +753,7 @@ import './global.css'
         }
         if (auth) {
           try {
-            await fetch(`${flags.backendUrl}/notifications/subscribe`, {
+            const res = await fetch(`${flags.backendUrl}/notifications/subscribe`, {
               method: 'POST',
               headers: {
                 Authorization: auth,
@@ -726,7 +761,9 @@ import './global.css'
               },
               body: JSON.stringify(body),
             })
-            // Tolerate non-2xx silently — endpoint lands in #179.
+            if (!res.ok) {
+              console.error('[notifications] subscribe POST returned', res.status, await res.text().catch(() => ''))
+            }
           } catch (err) {
             console.error('[notifications] subscribe POST failed:', err)
           }
