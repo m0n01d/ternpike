@@ -214,7 +214,7 @@ test.describe('Osprey user notification states', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ weeklyScanReminder: true }),
+        body: JSON.stringify({ ok: true, prefs: { weeklyScanReminder: true } }),
       }),
     )
 
