@@ -85,6 +85,7 @@ import Data.Iso8601 as Iso8601
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
+import Data.Notifications as Notifications
 import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
 import Data.Scan as Scan exposing (ScanItem, ScanStatus(..))
@@ -185,6 +186,12 @@ port triggerInstallPrompt : () -> Cmd msg
 port canInstall : (Bool -> msg) -> Sub msg
 
 
+port notificationState : ({ permission : String, prefs : D.Value, standalone : Bool, subscribed : Bool } -> msg) -> Sub msg
+
+
+port pushSubscribeResult : ({ error : String, ok : Bool } -> msg) -> Sub msg
+
+
 
 -- ROUTING
 -- See src/Routing.elm
@@ -229,13 +236,17 @@ toAuthState creds initialRoute gs =
     , loadingTrips = Set.empty
     , movePicker = Nothing
     , networkOffline = gs.networkOffline
+    , notificationPermission = Notifications.Default
+    , notificationPrefs = Notifications.defaultPrefs
     , openLedgerMenu = Nothing
+    , pushSubscribed = False
     , route = initialRoute
     , scanQueue = Dict.empty
     , showDayIntensity = True
     , showInstallPrompt = False
     , showLedgerMap = False
     , showMapPicker = False
+    , standalone = Notifications.InBrowser
     , statsGranularity = Nothing
     , statsHover = StatsHover.empty
     , submitting = False
@@ -1536,6 +1547,9 @@ update msg model =
         NoteChanged _ ->
             ( nextModel, cmd )
 
+        NotificationStateChanged _ ->
+            ( nextModel, cmd )
+
         OcrImagePrepared _ ->
             ( nextModel, cmd )
 
@@ -1567,6 +1581,9 @@ update msg model =
             ( nextModel, cmd )
 
         PaymentMethodChanged _ ->
+            ( nextModel, cmd )
+
+        PushSubscribeReceived _ ->
             ( nextModel, cmd )
 
         RefreshClicked ->
@@ -1943,6 +1960,9 @@ updateGuest msg gs =
         NoteChanged _ ->
             ( GuestModel gs, Cmd.none )
 
+        NotificationStateChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
         OcrImagePrepared _ ->
             ( GuestModel gs, Cmd.none )
 
@@ -1974,6 +1994,9 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         PaymentMethodChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        PushSubscribeReceived _ ->
             ( GuestModel gs, Cmd.none )
 
         RefreshClicked ->
@@ -3649,6 +3672,45 @@ updateAuth msg as_ =
         JoinSharedTripResult (Err err) ->
             ( AuthModel { as_ | error = Just (joinErrorMessage err) }, Cmd.none )
 
+        -- PWA notifications (foundation #175): the `notificationState`
+        -- port reports the browser's permission state, the subscribe
+        -- flag, the standalone-PWA flag, and the persisted prefs blob
+        -- on every relevant event. We mirror all four into AuthState
+        -- here. Hydration via the JS handler + persistence via PouchDB
+        -- land in the downstream port-wiring + Settings issues.
+        NotificationStateChanged payload ->
+            let
+                prefs =
+                    case D.decodeValue Notifications.decodePrefs payload.prefs of
+                        Ok p ->
+                            p
+
+                        Err _ ->
+                            as_.notificationPrefs
+
+                standalone =
+                    if payload.standalone then
+                        Notifications.Standalone
+
+                    else
+                        Notifications.InBrowser
+            in
+            ( AuthModel
+                { as_
+                    | notificationPermission = Notifications.permissionFromString payload.permission
+                    , notificationPrefs = prefs
+                    , pushSubscribed = payload.subscribed
+                    , standalone = standalone
+                }
+            , Cmd.none
+            )
+
+        -- Server-route handling (storing the subscription server-side,
+        -- surfacing errors in the Settings UI) lands in later issues;
+        -- for now we mirror the `ok` flag into AuthState.
+        PushSubscribeReceived payload ->
+            ( AuthModel { as_ | pushSubscribed = payload.ok }, Cmd.none )
+
         -- Messages that only apply to the guest (unauthenticated) state.
         -- They reach updateAuth when the top-level update dispatches before
         -- model state has been evaluated — return unchanged.
@@ -3929,6 +3991,8 @@ main =
                     , networkStatus NetworkStatusChanged
                     , canInstall CanInstall
                     , ocrImagePrepared OcrImagePrepared
+                    , notificationState NotificationStateChanged
+                    , pushSubscribeResult PushSubscribeReceived
                     ]
         , update = update
         , view = view
