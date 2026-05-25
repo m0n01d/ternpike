@@ -186,9 +186,6 @@ port triggerInstallPrompt : () -> Cmd msg
 port canInstall : (Bool -> msg) -> Sub msg
 
 
-port requestNotificationPermission : () -> Cmd msg
-
-
 port savePushPrefs : D.Value -> Cmd msg
 
 
@@ -3736,22 +3733,23 @@ updateAuth msg as_ =
         PushSubscribeReceived payload ->
             ( AuthModel { as_ | pushSubscribed = payload.ok }, Cmd.none )
 
-        -- Fired by the Settings UI's "Enable notifications" button. The
-        -- JS handler shows the browser's permission prompt and re-emits
-        -- `notificationState` with the user's decision; we don't update
-        -- AuthState here — `NotificationStateChanged` does that. We also
-        -- kick off `subscribePush` so the JS handler can register a push
-        -- subscription as soon as the user grants. If permission is
-        -- denied the JS handler ignores the request.
+        -- Fired by the Settings UI's "Enable notifications" button. We
+        -- emit `subscribePush` and let the JS handler request browser
+        -- permission first (if needed) and then call
+        -- `pushManager.subscribe` inside the same await chain. iOS
+        -- Safari requires the entire flow to run within the user-gesture
+        -- context AND requires permission to be Granted before
+        -- subscribe is called — emitting permission + subscribe in
+        -- parallel via Cmd.batch breaks both invariants. The JS handler
+        -- re-emits `notificationState` + `pushSubscribeResult` so
+        -- `NotificationStateChanged` / `PushSubscribeReceived` update
+        -- AuthState.
         RequestPushPermission ->
             ( AuthModel as_
-            , Cmd.batch
-                [ requestNotificationPermission ()
-                , subscribePush
-                    { prefs = Notifications.encodePrefs as_.notificationPrefs
-                    , vapidPublicKey = as_.config.vapidPublicKey
-                    }
-                ]
+            , subscribePush
+                { prefs = Notifications.encodePrefs as_.notificationPrefs
+                , vapidPublicKey = as_.config.vapidPublicKey
+                }
             )
 
         -- Optimistic flip of the local pref + fire-and-forget save to
@@ -3975,7 +3973,7 @@ viewAuth as_ =
         , UI.Layout.viewOfflineBanner as_.networkOffline
         , UI.Layout.viewErrorBanner as_.error
         , viewBillingBannerForRoute as_ route
-        , Html.div [ Html.Attributes.class "pb-20" ]
+        , Html.div [ Html.Attributes.class "pb-[calc(env(safe-area-inset-bottom)+5rem)]" ]
             [ UI.Layout.page
                 { actions = tab.actions
                 , body = tab.body

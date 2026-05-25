@@ -181,7 +181,7 @@ viewNotificationsBody : AuthState -> List (Html Msg)
 viewNotificationsBody as_ =
     if as_.notificationPermission == Notifications.Unsupported then
         [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-            [ Html.text "Notifications aren't available in this browser." ]
+            [ Html.text "Notifications aren't available in this browser. On iPhone or iPad, install Ternpike to your home screen first — tap the Share button in Safari, then choose Add to Home Screen." ]
         ]
 
     else if not (Tier.isPaid as_.tier) then

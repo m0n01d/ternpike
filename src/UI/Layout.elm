@@ -36,7 +36,7 @@ viewHeader as_ =
                 as_.basePath ++ "settings"
     in
     Html.div
-        [ Html.Attributes.class "sticky top-0 z-10 h-14 flex items-center justify-between px-5 border-b bg-cream border-moss/25" ]
+        [ Html.Attributes.class "sticky top-0 z-10 h-[calc(env(safe-area-inset-top)+3.5rem)] pt-[env(safe-area-inset-top)] flex items-center justify-between px-5 border-b bg-cream border-moss/25" ]
         [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
             [ Html.span
                 [ Html.Attributes.class "inline-block hover:rotate-[-3deg] transition-transform duration-200" ]
@@ -131,7 +131,7 @@ viewOfflineBanner : Bool -> Html Msg
 viewOfflineBanner networkOffline =
     if networkOffline then
         Html.div
-            [ Html.Attributes.class "sticky top-14 z-10 px-5 py-1.5 text-xs text-center font-mono tracking-wide bg-tan/50 text-forest border-b border-moss/25" ]
+            [ Html.Attributes.class "sticky top-[calc(env(safe-area-inset-top)+3.5rem)] z-10 px-5 py-1.5 text-xs text-center font-mono tracking-wide bg-tan/50 text-forest border-b border-moss/25" ]
             [ Html.text "You're offline · changes will sync when you reconnect" ]
 
     else
@@ -141,7 +141,7 @@ viewOfflineBanner networkOffline =
 viewBottomNav : AuthState -> Html Msg
 viewBottomNav as_ =
     Html.nav
-        [ Html.Attributes.class "fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10" ]
+        [ Html.Attributes.class "fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10 pb-[env(safe-area-inset-bottom)]" ]
         (List.map (viewNavTab as_)
             [ ( ScanTab, UI.Icons.camera, "Scan" )
             , ( AddTab, UI.Icons.plus, "Add" )
