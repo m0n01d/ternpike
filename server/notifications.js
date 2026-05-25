@@ -180,6 +180,71 @@ export function registerNotificationRoutes(app) {
   })
 }
 
+// One-off test push for admin verification. Dispatched from
+// `POST /admin/test-push` in `server/admin.js`. Sends a push to every
+// subscription registered for the given email, ignoring the
+// `weeklyScanReminder` pref (this is a test, not a scheduled delivery).
+// Still re-checks tier so a Tern caller can't use the admin endpoint as
+// a free pass — returns `{ ok: false, reason: 'not-paid', sent: 0 }` for
+// non-paid users.
+//
+// On 404/410 the subscription is stale — delete both KV keys. On other
+// non-OK statuses, log and continue (transient push-service failure).
+//
+// `env.__buildPushPayload` is the same test hook as `sendWeeklyScanReminders`.
+export async function sendTestPush(env, email) {
+  const tier = await getTier(env, email)
+  if (!isPaidTier(tier)) return { ok: false, reason: 'not-paid', sent: 0 }
+  const build = env.__buildPushPayload || buildPushPayload
+  const vapid = {
+    privateKey: env.VAPID_PRIVATE_KEY,
+    publicKey: env.VAPID_PUBLIC_KEY,
+    subject: env.VAPID_SUBJECT,
+  }
+  const payload = JSON.stringify({
+    body: 'If you see this, push delivery is working.',
+    tag: 'admin-test-push',
+    title: 'Ternpike test push',
+    url: '/settings',
+  })
+  let cursor
+  let sent = 0
+  do {
+    const page = await env.PUSH_KV.list({ cursor, prefix: `${PUSH_PREFIX}${email}:` })
+    for (const k of page.keys) {
+      const subRaw = await env.PUSH_KV.get(k.name)
+      if (!subRaw) continue
+      const stored = JSON.parse(subRaw)
+      const subscription = {
+        endpoint: stored.endpoint,
+        expirationTime: null,
+        keys: { auth: stored.auth, p256dh: stored.p256dh },
+      }
+      const prefKey = k.name.replace(PUSH_PREFIX, PREF_PREFIX)
+      try {
+        const req = await build(
+          { data: payload, options: { ttl: 3600 } },
+          subscription,
+          vapid,
+        )
+        const res = await fetch(stored.endpoint, req)
+        if (res.ok || res.status === 201) {
+          sent++
+        } else if (res.status === 404 || res.status === 410) {
+          await env.PUSH_KV.delete(k.name)
+          await env.PUSH_KV.delete(prefKey)
+        } else {
+          console.error('test push send failed', { email, status: res.status })
+        }
+      } catch (err) {
+        console.error('test push send threw', { email, err: String(err) })
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
+  return { ok: true, sent }
+}
+
 // Friday 17:00 UTC cron sweep. Dispatched from `scheduled()` in
 // `server/index.js` when `event.cron === '0 17 * * 5'`. Iterates every
 // stored subscription, re-checks tier per user (downgrades since

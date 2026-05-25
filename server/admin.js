@@ -9,6 +9,7 @@
 // endpoints reuse the same provisioning + cascade helpers the real auth
 // flow uses (`setTier` + `onTierChanged` in sharedTrips.js).
 
+import { sendTestPush } from './notifications.js'
 import {
   constantTimeEqual,
   couchAdmin,
@@ -594,5 +595,25 @@ export function registerAdminRoutes(app) {
       cursor = page.cursor
     }
     return c.json({ ok: true, prefix, deleted })
+  })
+
+  // --- push notifications --------------------------------------------------
+
+  // Fire a one-off test push to every subscription registered for the
+  // given email. Useful for real-device verification without waiting for
+  // the Friday 17:00 UTC cron. Ignores the `weeklyScanReminder` pref but
+  // still re-checks tier — non-paid users get { ok: false, reason:
+  // 'not-paid', sent: 0 }. Requires PUSH_KV + VAPID secrets to be
+  // configured; returns the count of successfully dispatched pushes.
+  app.post('/admin/test-push', async (c) => {
+    const denied = guard(c)
+    if (denied) return denied
+    const body = await c.req.json().catch(() => ({}))
+    const email = body.email
+    if (!email || typeof email !== 'string') {
+      return c.json({ error: 'missing-email', ok: false }, 400)
+    }
+    const result = await sendTestPush(c.env, email)
+    return c.json(result)
   })
 }
