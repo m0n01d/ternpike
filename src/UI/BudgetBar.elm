@@ -110,6 +110,9 @@ output where the spent/budget chips dropped cents via `round` (so
 `12.50` → `13`, not `12`). The small-text "spent / budget" labels sit
 next to the amount and a cents tail would break the line height. Use
 `Money.format` elsewhere when you want the canonical `$X.XX` shape.
+
+Pending removal in #38: will be replaced by `<tp-amount value="..." maximumFractionDigits="0">`.
+
 -}
 formatWholeDollars : Money -> String
 formatWholeDollars m =

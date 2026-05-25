@@ -16,6 +16,22 @@ so the Ledger row layout doesn't shift when call sites migrate.
 
 @docs GeoPoint, decoderPair, format, fromDegrees, latDegrees, lonDegrees
 
+
+## Stable invariants (PINNED-KEEP)
+
+  - `format` always returns `"lat, lon"` with a comma-space separator.
+  - `format` truncates each component to at most 9 characters of
+    `String.fromFloat` output — this controls Ledger row alignment and is
+    a permanent structural invariant unrelated to locale.
+  - See `tests/Data/GeoPointTest.elm` for the canonical pinned assertions.
+
+
+## Open for evolution under #38
+
+  - `format` is not directly used for DOM-facing display; it feeds Leaflet
+    popup label strings (`src/Helpers.elm:encodeWaypoints`) and chart label
+    closures. No #38 changes are expected for this helper.
+
 -}
 
 import Angle exposing (Angle)
@@ -70,6 +86,10 @@ lonDegrees (GeoPoint { longitude }) =
 {-| Render a `GeoPoint` as `"lat, lon"`, truncated to the first 9 characters
 of each `String.fromFloat` for display alignment. Matches the previous
 `Helpers.formatCoord` byte-for-byte.
+
+PINNED-KEEP: the `"lat, lon"` shape and 9-char truncation are stable invariants
+(tested in `tests/Data/GeoPointTest.elm`). This helper is used for non-HTML
+contexts (Leaflet popup labels, chart closures) so no #38 Intl changes apply.
 
     format (fromDegrees 45 -90)
     --> "45, -90"
