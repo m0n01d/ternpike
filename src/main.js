@@ -655,9 +655,9 @@ import './global.css'
           )
           if (res.ok) {
             const body = await res.json()
-            if (body && typeof body === 'object') {
+            if (body && body.prefs && typeof body.prefs === 'object') {
               prefs = {
-                weeklyScanReminder: body.weeklyScanReminder === true,
+                weeklyScanReminder: body.prefs.weeklyScanReminder === true,
               }
             }
           }
@@ -714,7 +714,7 @@ import './global.css'
         const body = {
           endpoint: sub.endpoint,
           keys: raw && raw.keys ? raw.keys : {},
-          prefs: prefs,
+          subscriptions: prefs,
         }
         if (auth) {
           try {
