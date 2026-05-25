@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 import { registerAdminRoutes } from './admin.js'
 import { getTier } from './auth.js'
 import { registerGeocodeRoutes } from './geocode.js'
+import { registerNotificationRoutes } from './notifications.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
 
 const CODE_TTL_SECONDS = 600
@@ -137,7 +138,7 @@ const corsConfig = cors({
     if (LOCAL_DEV_ORIGIN.test(origin)) return origin
     return null
   },
-  allowMethods: ['POST', 'OPTIONS'],
+  allowMethods: ['DELETE', 'GET', 'OPTIONS', 'POST', 'PUT'],
   allowHeaders: ['Authorization', 'Content-Type', 'X-Webhook-Secret'],
   maxAge: 86400,
 })
@@ -147,6 +148,7 @@ app.use('/sharedtrips/*', corsConfig)
 app.use('/sharedtrips', corsConfig)
 app.use('/marketing/*', corsConfig)
 app.use('/geocode', corsConfig)
+app.use('/notifications/*', corsConfig)
 
 app.post('/auth/request-code', async (c) => {
   const env = c.env
@@ -252,6 +254,7 @@ app.post('/marketing/waitlist', async (c) => {
 
 registerSharedTripRoutes(app)
 registerGeocodeRoutes(app)
+registerNotificationRoutes(app)
 registerAdminRoutes(app)
 
 export default {
