@@ -3739,9 +3739,20 @@ updateAuth msg as_ =
         -- Fired by the Settings UI's "Enable notifications" button. The
         -- JS handler shows the browser's permission prompt and re-emits
         -- `notificationState` with the user's decision; we don't update
-        -- AuthState here — `NotificationStateChanged` does that.
+        -- AuthState here — `NotificationStateChanged` does that. We also
+        -- kick off `subscribePush` so the JS handler can register a push
+        -- subscription as soon as the user grants. If permission is
+        -- denied the JS handler ignores the request.
         RequestPushPermission ->
-            ( AuthModel as_, requestNotificationPermission () )
+            ( AuthModel as_
+            , Cmd.batch
+                [ requestNotificationPermission ()
+                , subscribePush
+                    { prefs = Notifications.encodePrefs as_.notificationPrefs
+                    , vapidPublicKey = as_.config.vapidPublicKey
+                    }
+                ]
+            )
 
         -- Optimistic flip of the local pref + fire-and-forget save to
         -- the server. The encoded prefs go to the JS port which PUTs
@@ -3749,6 +3760,9 @@ updateAuth msg as_ =
         -- we don't roll back (Elm state stays optimistic — the cron
         -- re-checks tier independently). New `NotificationToggle`
         -- variants get a new branch here and the compiler enforces it.
+        -- When the last opt-in flips off we also call `unsubscribePush`
+        -- so the browser drops the registration entirely — no point
+        -- keeping the endpoint live on the server if nothing will fire.
         ToggleNotificationPref Notifications.WeeklyScanReminder ->
             let
                 oldPrefs : Notifications.NotificationPrefs
@@ -3758,9 +3772,20 @@ updateAuth msg as_ =
                 newPrefs : Notifications.NotificationPrefs
                 newPrefs =
                     { oldPrefs | weeklyScanReminder = not oldPrefs.weeklyScanReminder }
+
+                anyEnabled : Bool
+                anyEnabled =
+                    newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
-            , savePushPrefs (Notifications.encodePrefs newPrefs)
+            , Cmd.batch
+                [ savePushPrefs (Notifications.encodePrefs newPrefs)
+                , if anyEnabled then
+                    Cmd.none
+
+                  else
+                    unsubscribePush ()
+                ]
             )
 
         -- Messages that only apply to the guest (unauthenticated) state.
