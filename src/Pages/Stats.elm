@@ -687,32 +687,15 @@ dailyTooltipContent resolved d =
 viewCumulativeChart : List (CI.One CumulativePoint CI.Dot) -> List Entry.EffectiveEntry -> Html Msg
 viewCumulativeChart hovered entries =
     let
-        sorted =
-            Entry.uniqueDates entries |> List.reverse
-
         points : List CumulativePoint
         points =
-            List.indexedMap
-                (\i date ->
-                    { date = DateField.toIso date
-                    , x = toFloat (i + 1)
-                    , y =
-                        entries
-                            |> List.filter (\e -> DateField.compare e.date date /= GT)
-                            |> List.map .amount
-                            |> Money.sum
-                            |> Money.toCents
-                            |> toFloat
-                            |> (\c -> c / 100)
-                    }
-                )
-                sorted
+            Stats.cumulativePoints (toPrimEntries entries)
 
         firstDate =
-            List.head sorted |> Maybe.map DateField.toIso |> Maybe.withDefault ""
+            List.head points |> Maybe.map .date |> Maybe.withDefault ""
 
         lastDate =
-            sorted |> List.reverse |> List.head |> Maybe.map DateField.toIso |> Maybe.withDefault ""
+            points |> List.reverse |> List.head |> Maybe.map .date |> Maybe.withDefault ""
 
         finalTotal =
             points

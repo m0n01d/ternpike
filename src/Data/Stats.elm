@@ -3,6 +3,7 @@ module Data.Stats exposing
     , binEntries
     , buildMonthlyBins
     , buildWeeklyBins
+    , cumulativePoints
     , formatDateShort
     , formatDollars
     , formatIso
@@ -41,7 +42,7 @@ in the examples below.
 import Data.Entry exposing (EffectiveEntry)
 import Data.Money as Money
 import Data.StatsGranularity exposing (Granularity(..))
-import Data.StatsHover exposing (DailyDay)
+import Data.StatsHover exposing (CumulativePoint, DailyDay)
 import Date
 import Set
 
@@ -228,6 +229,60 @@ last7DaysValues entries =
                 |> centsToDollars
     in
     List.map totalForDate dates
+
+
+
+-- CUMULATIVE CHART
+
+
+{-| Build the points for the cumulative-spend chart, one per unique date
+that has spend, in ascending chronological order. For each date, `y` is
+the running total (in dollars) of every entry on-or-before that date,
+and `x` is the 1-indexed position so the chart axis reads linearly even
+when the days with spend aren't evenly spaced (gaps collapse).
+
+Sums happen in `Int` cents and divide by `100.0` at the boundary so the
+curve doesn't inherit float drift. Multiple entries on the same date
+collapse to a single point with all of that day's spend folded in.
+
+    cumulativePoints []
+    --> []
+
+    cumulativePoints [ { date = "2024-05-21", amountCents = 1230 } ]
+    --> [ { date = "2024-05-21", x = 1, y = 12.30 } ]
+
+    cumulativePoints [ { date = "2024-05-21", amountCents = 100 }, { date = "2024-05-22", amountCents = 200 }, { date = "2024-05-23", amountCents = 300 } ]
+    --> [ { date = "2024-05-21", x = 1, y = 1.0 }, { date = "2024-05-22", x = 2, y = 3.0 }, { date = "2024-05-23", x = 3, y = 6.0 } ]
+
+    -- Out-of-order input still produces ascending points:
+    cumulativePoints [ { date = "2024-05-23", amountCents = 300 }, { date = "2024-05-21", amountCents = 100 }, { date = "2024-05-22", amountCents = 200 } ]
+    --> [ { date = "2024-05-21", x = 1, y = 1.0 }, { date = "2024-05-22", x = 2, y = 3.0 }, { date = "2024-05-23", x = 3, y = 6.0 } ]
+
+    -- Multiple entries on the same date collapse to one point:
+    cumulativePoints [ { date = "2024-05-21", amountCents = 500 }, { date = "2024-05-21", amountCents = 700 }, { date = "2024-05-22", amountCents = 300 } ]
+    --> [ { date = "2024-05-21", x = 1, y = 12.0 }, { date = "2024-05-22", x = 2, y = 15.0 } ]
+
+    -- Cent-precision: 0.10 + 0.20 == 0.30 exactly:
+    cumulativePoints [ { date = "2024-05-21", amountCents = 10 }, { date = "2024-05-22", amountCents = 20 } ]
+    --> [ { date = "2024-05-21", x = 1, y = 0.10 }, { date = "2024-05-22", x = 2, y = 0.30 } ]
+
+-}
+cumulativePoints :
+    List { a | date : String, amountCents : Int }
+    -> List CumulativePoint
+cumulativePoints entries =
+    let
+        sortedIsos =
+            uniqueAscending (List.map .date entries)
+    in
+    List.indexedMap
+        (\i iso ->
+            { date = iso
+            , x = toFloat (i + 1)
+            , y = totalBetween "" iso entries
+            }
+        )
+        sortedIsos
 
 
 
