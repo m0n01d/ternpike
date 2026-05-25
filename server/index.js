@@ -5,7 +5,10 @@ import { Resend } from 'resend'
 import { registerAdminRoutes } from './admin.js'
 import { getTier } from './auth.js'
 import { registerGeocodeRoutes } from './geocode.js'
-import { registerNotificationRoutes } from './notifications.js'
+import {
+  registerNotificationRoutes,
+  sendWeeklyScanReminders,
+} from './notifications.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
 
 const CODE_TTL_SECONDS = 600
@@ -259,7 +262,16 @@ registerAdminRoutes(app)
 
 export default {
   fetch: app.fetch,
-  async scheduled(_event, env, ctx) {
-    ctx.waitUntil(runGraceFreezeSweep(env))
+  // Multiple cron triggers are configured in `wrangler.toml`; Cloudflare
+  // multiplexes them into a single `scheduled()` handler. Branch on
+  // `event.cron` to dispatch each pattern to its own sweep.
+  //   '0 17 * * 5' → Friday 17:00 UTC, push notifications
+  //   default     → hourly billing/grace freeze sweep
+  async scheduled(event, env, ctx) {
+    if (event.cron === '0 17 * * 5') {
+      ctx.waitUntil(sendWeeklyScanReminders(env))
+    } else {
+      ctx.waitUntil(runGraceFreezeSweep(env))
+    }
   },
 }

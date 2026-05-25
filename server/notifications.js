@@ -17,6 +17,8 @@
 // in a follow-up issue (#180); this file owns the read/write surface
 // only.
 
+import { buildPushPayload } from '@block65/webcrypto-web-push'
+
 import { authenticateCaller, getTier, isPaidTier } from './auth.js'
 
 const PUSH_PREFIX = 'push:sub:'
@@ -176,4 +178,76 @@ export function registerNotificationRoutes(app) {
     )
     return c.json({ ok: true })
   })
+}
+
+// Friday 17:00 UTC cron sweep. Dispatched from `scheduled()` in
+// `server/index.js` when `event.cron === '0 17 * * 5'`. Iterates every
+// stored subscription, re-checks tier per user (downgrades since
+// subscribe are skipped — never trust `tierAtSubscribe`), filters by
+// the per-device `weeklyScanReminder` pref, signs a VAPID push with
+// `@block65/webcrypto-web-push`, and POSTs to each push-service
+// endpoint. The Node `web-push` library uses Node-only crypto APIs
+// that don't run in workerd; this library is pure WebCrypto.
+//
+// On 404/410 the subscription is gone for good (browser uninstalled,
+// permission revoked) — delete BOTH `push:sub:` and `push:pref:` for
+// that endpoint. On other non-OK statuses, log and continue: the push
+// service is transiently unhappy and we'll retry next Friday.
+//
+// `env.__buildPushPayload` is an opt-in test hook so unit tests can
+// short-circuit the crypto path without spinning up VAPID keys. In
+// production it's undefined and the real `buildPushPayload` runs.
+export async function sendWeeklyScanReminders(env) {
+  const vapid = {
+    privateKey: env.VAPID_PRIVATE_KEY,
+    publicKey: env.VAPID_PUBLIC_KEY,
+    subject: env.VAPID_SUBJECT,
+  }
+  const build = env.__buildPushPayload || buildPushPayload
+  const payload = JSON.stringify({
+    body: "Capture this week's receipts in Ternpike.",
+    tag: 'weekly-scan-reminder',
+    title: 'Time to scan receipts',
+    url: '/trips',
+  })
+  let cursor
+  do {
+    const page = await env.PUSH_KV.list({ cursor, prefix: PUSH_PREFIX })
+    for (const k of page.keys) {
+      // Slice off the prefix, then read up to the first `:` — emails
+      // cannot contain `:` per RFC 5321, so this is unambiguous.
+      const email = k.name.slice(PUSH_PREFIX.length).split(':')[0]
+      const tier = await getTier(env, email)
+      if (!isPaidTier(tier)) continue
+      const prefKey = k.name.replace(PUSH_PREFIX, PREF_PREFIX)
+      const prefRaw = await env.PUSH_KV.get(prefKey)
+      const prefs = prefRaw ? JSON.parse(prefRaw) : DEFAULT_PREFS
+      if (!prefs.weeklyScanReminder) continue
+      const subRaw = await env.PUSH_KV.get(k.name)
+      if (!subRaw) continue
+      const stored = JSON.parse(subRaw)
+      const subscription = {
+        endpoint: stored.endpoint,
+        expirationTime: null,
+        keys: { auth: stored.auth, p256dh: stored.p256dh },
+      }
+      try {
+        const req = await build(
+          { data: payload, options: { ttl: 3600 } },
+          subscription,
+          vapid,
+        )
+        const res = await fetch(stored.endpoint, req)
+        if (res.status === 404 || res.status === 410) {
+          await env.PUSH_KV.delete(k.name)
+          await env.PUSH_KV.delete(prefKey)
+        } else if (!res.ok) {
+          console.error('push send failed', { email, status: res.status })
+        }
+      } catch (err) {
+        console.error('push send threw', { email, err: String(err) })
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
 }
