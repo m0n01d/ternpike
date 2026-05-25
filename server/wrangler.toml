@@ -6,6 +6,10 @@ compatibility_date = "2025-01-01"
 binding = "CODES_KV"
 id = "a3818441349d4138b8898fac4480bf1a"
 
+[[kv_namespaces]]
+binding = "PUSH_KV"
+id = "679c582bcded4fef8fdb3cebcb8940cc"
+
 # Subscription tier source of truth (server-authoritative — see CLAUDE.md
 # "Storage tiers"). Provision with:
 #   wrangler kv:namespace create TIERS_KV
