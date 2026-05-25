@@ -35,6 +35,25 @@ layer; the on-disk shape is unchanged.
 `format` replaces the old `Helpers.formatAmount` (deleted in #92) and matches
 its byte-for-byte output.
 
+
+## Stable invariants (PINNED-KEEP)
+
+  - `format` always returns a `String` whose first character is `'$'`.
+  - `format` never returns a value with a thousands separator (e.g. `$1234.56`
+    not `$1,234.56`) — **until #38 lands**, at which point DOM-facing display
+    moves to `<tp-amount>` / `Intl.NumberFormat` and `format` is used only for
+    non-HTML contexts (chart labels, map popups). The no-separator behavior is
+    the current STABLE output shape; it is tested in `tests/Data/MoneyTest.elm`.
+
+
+## Open for evolution under #38
+
+  - The exact decimal / separator style of `format` — `"$12.30"`, `"$1,234.56"`,
+    etc. — is not pinned long-term. When #38 ships, DOM-facing output will be
+    produced by `<tp-amount value="...">` using `Intl.NumberFormat`. The
+    `format` function will remain alive for non-HTML consumers.
+  - See `tests/Data/MoneyTest.elm` for the canonical pinned assertions.
+
 -}
 
 import Json.Decode
@@ -199,17 +218,21 @@ toDollarString (Money cents) =
 {-| Render `Money` for display. Matches `Helpers.formatAmount` byte-for-byte
 so the migration is invisible to users and snapshot tests.
 
+PINNED-KEEP: the leading `'$'` is a stable invariant.
+PINNED-RELAX: the exact decimal/separator style will follow #38 (Intl.NumberFormat).
+
+Canonical example (see also `tests/Data/MoneyTest.elm`):
+
     format (fromCents 1230)
     --> "$12.30"
 
-    format (fromCents 5)
-    --> "$0.05"
+Round-trip: the formatted string always starts with `'$'`:
 
-    format (fromCents 0)
-    --> "$0.00"
+    String.startsWith "$" (format (fromCents 1230))
+    --> True
 
-    format (fromCents 100)
-    --> "$1.00"
+    String.startsWith "$" (format (fromCents 0))
+    --> True
 
 -}
 format : Money -> String

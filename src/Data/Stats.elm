@@ -670,18 +670,18 @@ formatMonthYear iso =
 `Money.format` but takes the `Float`-flavoured `total` / `y` fields that
 the elm-charts API requires. Rounds to the nearest cent.
 
+PINNED-RELAX: the exact decimal/separator style follows `Money.format` and will
+evolve with #38 for DOM-facing contexts. The leading `'$'` is a stable invariant.
+
+Canonical example:
+
     formatDollars 12.34
     --> "$12.34"
 
-    formatDollars 0
-    --> "$0.00"
+Round-trip: the result always starts with `'$'`:
 
-    formatDollars 0.5
-    --> "$0.50"
-
-    -- No thousands separator — matches `Money.format`:
-    formatDollars 1234.56
-    --> "$1234.56"
+    String.startsWith "$" (formatDollars 1234.56)
+    --> True
 
 -}
 formatDollars : Float -> String

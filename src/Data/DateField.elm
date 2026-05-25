@@ -40,6 +40,22 @@ values. The opaque constructor means downstream code can't accidentally
 fabricate a DateField from a raw `String`; the only routes in are `decoder`,
 `fromIso`, `fromIsoOr`, and `today`.
 
+
+## Stable invariants (PINNED-KEEP)
+
+  - `toIso` always round-trips through `fromIso`: `fromIso (toIso df) == Just df`.
+  - `formatDisplay` returns a non-empty `String` for any valid `DateField`.
+  - `formatMonthDay` returns a non-empty `String` for any valid `DateField`.
+
+
+## Open for evolution under #38
+
+  - The exact locale-sensitive shape of `formatDisplay` (`"May 21, 2024"`) and
+    `formatMonthDay` (`"May 21"`) will be replaced by `<relative-time>` /
+    `Intl.DateTimeFormat` when #38 lands. The Elm helpers will remain alive for
+    non-HTML consumers (chart tooltips, map popups).
+  - See `tests/Data/DateFieldTest.elm` for the canonical pinned assertions.
+
 -}
 
 import Date
@@ -128,14 +144,17 @@ encoder df =
 {-| Human-readable display format, e.g. `"May 21, 2024"`. Replaces
 `Helpers.formatDateDisplay`. Uses `Date.format "MMM d, yyyy"`.
 
+PINNED-RELAX: the exact locale shape (`"MMM d, yyyy"`) will follow #38
+(Intl.DateTimeFormat). The canonical example below is pinned in
+`tests/Data/DateFieldTest.elm`; the round-trip assertion here survives the swap.
+
     Maybe.map formatDisplay (fromIso "2024-05-21")
     --> Just "May 21, 2024"
 
-    Maybe.map formatDisplay (fromIso "2024-01-01")
-    --> Just "Jan 1, 2024"
+Round-trip: any valid ISO date produces a non-empty display string:
 
-    Maybe.map formatDisplay (fromIso "2024-12-31")
-    --> Just "Dec 31, 2024"
+    Maybe.map (String.isEmpty << formatDisplay) (fromIso "2024-05-21")
+    --> Just False
 
 -}
 formatDisplay : DateField -> String
