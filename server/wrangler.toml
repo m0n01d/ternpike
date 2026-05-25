@@ -40,7 +40,7 @@ id = "4a9baf82359545ef981e7dcc6a646f94"
 # Provision with: wrangler kv namespace create PUSH_KV
 [[kv_namespaces]]
 binding = "PUSH_KV"
-id = "REPLACE_WITH_PUSH_KV_ID"
+id = "679c582bcded4fef8fdb3cebcb8940cc"
 
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
