@@ -340,6 +340,42 @@ When PR B is stacked on PR A's branch (B's branch was branched from A's, not fro
 
 This came up merging #189 (Settings UI, stacked on #188's ports branch). The squash of #189 closed both #178 and #181 at once; #188 was closed manually as superseded.
 
+### `merge_pull_request` merges into the PR's *base* — verify base=main before squashing
+
+When you dispatch an agent to ship Wave N+1 issue B that depends on Wave N issue A, and A isn't merged yet at branch-creation time, the agent may correctly base its branch on A's branch instead of main. The PR they open captures `base = <A's branch>`. Looks like a stacked PR.
+
+The trap: GitHub's `merge_pull_request` API squashes into the PR's *stored base*, not into main. If you call it without passing an explicit `base` (the MCP tool doesn't even accept one), the squash lands on `<A's branch>`. Then when A itself gets squash-merged to main, **only A's content goes to main** — B's squash commit is sitting on a different parent line and gets orphaned.
+
+Days later, the user hits a 404 on the endpoint B was supposed to ship. The PR shows `merged: true` (it WAS merged, just to the wrong target). The commit exists in git history (the squash SHA is real) but is unreachable from main.
+
+**Prevention** — pick one:
+
+1. **Verify base before every merge.** `pull_request_read get` returns `base.ref`. If it's not `main`, STOP. Either:
+   - Change the PR's base to `main` via `update_pull_request` (GitHub will recompute the diff; you may need to rebase the branch onto main first if it has merge conflicts with main after A's squash)
+   - Or wait until A is merged to main, rebase B's branch onto main, then merge
+2. **Don't let agents pick non-main bases for new work.** When you dispatch an issue whose dependency hasn't merged yet, **wait for the dependency to land first** rather than telling the agent to base off the dependency's branch. The wall-clock cost of waiting (typically 2–5 minutes for CI + merge) is much less than the recovery cost of an orphan (15+ minutes of git surgery + a re-deploy).
+3. **If you do need stacked-PR parallelism** (rare — usually the right call is sequential), the conductor must:
+   - Track which PR is the "tip" of the stack
+   - Squash-merge them in order from base-of-stack to tip
+   - After each squash, fetch main and visually confirm the next stacked PR's `base` has been updated to main (GitHub does this automatically when the previous PR merges — verify it happened)
+   - Never call `merge_pull_request` on a stacked PR whose base hasn't auto-updated to main
+
+**Recovery** when an orphan is discovered:
+
+```bash
+# Identify the orphaned squash SHA (from the original merge_pull_request response, or via:)
+git log --all --oneline --grep="#<PR>" | head -5
+
+# Find the original branch's commit (still on the remote — GitHub doesn't auto-delete)
+git fetch origin --prune
+git log origin/<orphaned-branch> --oneline -5
+
+# Cherry-pick onto a fresh branch off main, open a new PR with base=main explicitly,
+# verify base in the response JSON before merging
+```
+
+The PWA notifications track ate this on PR #192 (admin /admin/test-push). The agent based on `pwa-notifications/cron-sweep` since #180 (cron sweep) hadn't merged when #182's worktree was created. The conductor squash-merged #192 without checking base, which landed on cron-sweep. When #191 (#180) was later squashed to main, /admin/test-push didn't come with it. Discovery: user hit 404 on the endpoint hours later. Recovery: cherry-pick the original branch's commit to a fresh branch off main, open PR #198 with `base=main`, merge cleanly.
+
 ### User-pushed commits sometimes land on the wrong branch — verify before assuming
 
 When the user is asked to push a config edit to a specific PR (e.g., "paste the KV namespace id into PR #186"), they may push it to a different branch in their local checkout — a sibling PR's branch, a stale branch, or `main` directly. Before assuming "user pushed the fix":
