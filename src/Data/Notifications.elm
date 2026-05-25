@@ -1,9 +1,12 @@
 module Data.Notifications exposing
     ( NotificationPrefs
+    , NotificationToggle(..)
     , Permission(..)
+    , PushSubscription
     , StandaloneState(..)
     , decodePrefs
     , defaultPrefs
+    , encodePrefs
     , permissionFromString
     )
 
@@ -35,13 +38,13 @@ The data model:
     (`weeklyScanReminder`); the record is designed to grow as more
     notification kinds land. Persisted to PouchDB (per the storage-tier
     rules: user preferences, syncs across devices, not secret).
-  - `NotificationToggle` (the discriminator for which pref a Toggle Msg
-    is flipping) and `PushSubscription` (the trio of strings the
-    browser hands back from `pushManager.subscribe`) are both deferred
-    to the issue that first imports them — the Settings UI for
-    `NotificationToggle`, the server-route for `PushSubscription`.
-    Landing them here would trip `NoUnused.Exports` with no consumer;
-    follow the `Data.Tier` precedent and add types as they're imported.
+  - `NotificationToggle` (the discriminator for which pref a Toggle
+    Msg is flipping; today the only variant is `WeeklyScanReminder`
+    but the type exists so adding more prefs is a one-line `Msg`
+    change rather than a constructor explosion) and `PushSubscription`
+    (the trio of strings the browser hands back from
+    `pushManager.subscribe` — `endpoint`, `auth`, `p256dh`) land here
+    alongside the port-wiring issue that first imports them.
 
 Wire formats:
 
@@ -49,13 +52,19 @@ Wire formats:
     via the `NotificationStateChanged` port as a raw string and
     `permissionFromString` parses it.
   - `NotificationPrefs` decodes via `decodePrefs` (the persisted
-    PouchDB doc). The encoder lands with the Settings issue that
-    first writes back to PouchDB — landing it here would trip
-    `NoUnused.Exports`.
+    PouchDB doc) and encodes via `encodePrefs` (sent both to the JS
+    `savePushPrefs` port for server-side persistence and, eventually,
+    to the per-device server endpoint for cron-driven scheduling).
+  - `PushSubscription` has no codec here — it's constructed on the JS
+    side from `pushManager.subscribe()` and POSTed straight to the
+    server `/notifications/subscribe` endpoint, never serialised
+    through Elm. The type exists so Settings UI / future helpers can
+    refer to the shape.
 
 -}
 
 import Json.Decode
+import Json.Encode
 
 
 
@@ -173,6 +182,45 @@ defaultPrefs =
     }
 
 
+{-| Discriminator for which pref a `ToggleNotificationPref` Msg is
+flipping.
+
+Today there's just `WeeklyScanReminder`, mirroring the single field on
+`NotificationPrefs`. Future kinds (trip-budget alerts, shared-trip
+member-joined pings, etc.) add a constructor here and a field on
+`NotificationPrefs` together; the `updateAuth` `case` on this type then
+gets a new branch and the compiler enforces the wiring end-to-end.
+
+-}
+type NotificationToggle
+    = WeeklyScanReminder
+
+
+
+-- SUBSCRIPTION
+
+
+{-| The trio of strings returned by `pushManager.subscribe()`.
+
+  - `endpoint` — the per-device push URL the server pings to deliver a
+    notification. Treated as a stable device identifier on the server
+    (`/notifications/subscribe` keys on this).
+  - `auth` — the auth secret the server uses to encrypt payloads (base64).
+  - `p256dh` — the public key the server uses to encrypt payloads (base64).
+
+The whole triple is opaque to Elm — it's constructed on the JS side
+from the browser's `PushSubscription` object and POSTed straight to
+the server without ever round-tripping through an Elm decoder. The
+type exists so Settings UI / future helpers can refer to the shape.
+
+-}
+type alias PushSubscription =
+    { auth : String
+    , endpoint : String
+    , p256dh : String
+    }
+
+
 
 -- CODECS
 
@@ -192,3 +240,19 @@ decodePrefs =
             , Json.Decode.succeed defaultPrefs.weeklyScanReminder
             ]
         )
+
+
+{-| Encode `NotificationPrefs` as JSON.
+
+Mirrors `decodePrefs` — one field per opt-in. Sent through the
+`savePushPrefs` outbound port whenever the user flips a toggle in the
+Settings UI; the JS handler PUTs it to the server's per-device
+preferences endpoint so the cron-driven scheduler can read it without
+loading the user's PouchDB.
+
+-}
+encodePrefs : NotificationPrefs -> Json.Encode.Value
+encodePrefs prefs =
+    Json.Encode.object
+        [ ( "weeklyScanReminder", Json.Encode.bool prefs.weeklyScanReminder )
+        ]

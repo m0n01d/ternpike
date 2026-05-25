@@ -106,13 +106,14 @@ import './global.css'
   }
 
   const flags = {
-    authCreds:    authCreds,
-    anthropicKey: anthropicKey  || '',
-    backendUrl:   'https://api.ternpike.com',
-    basePath:     import.meta.env.BASE_URL,
-    colorScheme:  localStorage.getItem('color_scheme') || 'auto',
-    today:        new Date().toISOString().slice(0, 10),
-    version:      __BUILD_SHA__,
+    authCreds:      authCreds,
+    anthropicKey:   anthropicKey  || '',
+    backendUrl:     'https://api.ternpike.com',
+    basePath:       import.meta.env.BASE_URL,
+    colorScheme:    localStorage.getItem('color_scheme') || 'auto',
+    today:          new Date().toISOString().slice(0, 10),
+    vapidPublicKey: import.meta.env.VITE_VAPID_PUBLIC_KEY || '',
+    version:        __BUILD_SHA__,
   }
 
   // ── <map-picker> custom element ────────────────────────────────────────
@@ -567,6 +568,224 @@ import './global.css'
         })
       })
       .catch(err => console.error('[sw] registration failed:', err))
+  }
+
+  // ── PWA notifications (push) ───────────────────────────────────────────
+  //
+  // Bridges Elm's `notificationState` / `pushSubscribeResult` ports to the
+  // Web Push API. The Elm side stays purely declarative — it asks for
+  // permission, asks to subscribe, asks to flip a pref — and the JS side
+  // does the imperative browser work and reports the resulting state.
+  //
+  // Boot-time emit: feature-detect Notifications + PushManager + SW. If
+  // missing, send one `{ permission: 'unsupported', ... }` event so Elm
+  // can render the "not supported" UI and skip wiring further handlers.
+  // If present, read the current Notification.permission, standalone
+  // mode, and existing subscription state — then send that one combined
+  // event before subscribing the outbound ports.
+  //
+  // The subscribe / preferences endpoints don't exist yet (server work
+  // is filed under #179 / #180). subscribePush + savePushPrefs will 404
+  // until those land — handlers tolerate it gracefully so the local UI
+  // state stays consistent.
+
+  // Convert a URL-safe base64 VAPID public key into the Uint8Array
+  // pushManager.subscribe expects. Standard MDN snippet.
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+    const raw = atob(base64)
+    const out = new Uint8Array(raw.length)
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
+    return out
+  }
+
+  // Build a Basic auth header from the cached auth_creds. Returns null
+  // if the user isn't signed in (the notification endpoints are auth-
+  // gated, so callers should bail in that case).
+  function basicAuthHeader() {
+    if (!authCreds || !authCreds.email || !authCreds.password) return null
+    return 'Basic ' + btoa(`${authCreds.email}:${authCreds.password}`)
+  }
+
+  const notificationsSupported =
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    'PushManager' in window &&
+    'serviceWorker' in navigator
+
+  // Read the current per-device subscription (if any) and the persisted
+  // server-side prefs, then emit a single `notificationState` event so
+  // Elm hydrates `notificationPermission`, `notificationPrefs`,
+  // `pushSubscribed`, and `standalone` from frame zero.
+  async function emitNotificationState() {
+    if (!notificationsSupported) {
+      app.ports.notificationState.send({
+        permission: 'unsupported',
+        prefs: { weeklyScanReminder: false },
+        standalone: false,
+        subscribed: false,
+      })
+      return
+    }
+    const standalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true
+    const permission = Notification.permission
+    let subscribed = false
+    let endpoint = null
+    let prefs = { weeklyScanReminder: false }
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) {
+        subscribed = true
+        endpoint = sub.endpoint
+      }
+    } catch (err) {
+      console.error('[notifications] getSubscription failed:', err)
+    }
+    if (subscribed && endpoint) {
+      const auth = basicAuthHeader()
+      if (auth) {
+        try {
+          const res = await fetch(
+            `${flags.backendUrl}/notifications/preferences?endpoint=${encodeURIComponent(endpoint)}`,
+            { headers: { Authorization: auth } },
+          )
+          if (res.ok) {
+            const body = await res.json()
+            if (body && typeof body === 'object') {
+              prefs = {
+                weeklyScanReminder: body.weeklyScanReminder === true,
+              }
+            }
+          }
+          // Tolerate 404 silently — endpoint lands in #179.
+        } catch (err) {
+          console.error('[notifications] preferences fetch failed:', err)
+        }
+      }
+    }
+    app.ports.notificationState.send({ permission, prefs, standalone, subscribed })
+  }
+
+  // Fire-and-forget initial emit. The await chain is internal — we
+  // don't gate the rest of init on it.
+  emitNotificationState()
+
+  if (notificationsSupported && app.ports.requestNotificationPermission) {
+    app.ports.requestNotificationPermission.subscribe(async () => {
+      try {
+        await Notification.requestPermission()
+      } catch (err) {
+        console.error('[notifications] requestPermission failed:', err)
+      }
+      await emitNotificationState()
+    })
+  }
+
+  if (notificationsSupported && app.ports.subscribePush) {
+    app.ports.subscribePush.subscribe(async ({ prefs, vapidPublicKey }) => {
+      if (!vapidPublicKey) {
+        app.ports.pushSubscribeResult.send({
+          ok: false,
+          error: 'VAPID public key not configured',
+        })
+        return
+      }
+      try {
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.subscribe({
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+          userVisibleOnly: true,
+        })
+        const auth = basicAuthHeader()
+        const raw = sub.toJSON ? sub.toJSON() : null
+        const body = {
+          endpoint: sub.endpoint,
+          keys: raw && raw.keys ? raw.keys : {},
+          prefs: prefs,
+        }
+        if (auth) {
+          try {
+            await fetch(`${flags.backendUrl}/notifications/subscribe`, {
+              method: 'POST',
+              headers: {
+                Authorization: auth,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(body),
+            })
+            // Tolerate non-2xx silently — endpoint lands in #179.
+          } catch (err) {
+            console.error('[notifications] subscribe POST failed:', err)
+          }
+        }
+        app.ports.pushSubscribeResult.send({ ok: true, error: '' })
+      } catch (err) {
+        console.error('[notifications] pushManager.subscribe failed:', err)
+        app.ports.pushSubscribeResult.send({
+          ok: false,
+          error: String(err && err.message ? err.message : err),
+        })
+      }
+      await emitNotificationState()
+    })
+  }
+
+  if (notificationsSupported && app.ports.unsubscribePush) {
+    app.ports.unsubscribePush.subscribe(async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.getSubscription()
+        if (sub) {
+          const auth = basicAuthHeader()
+          if (auth) {
+            try {
+              await fetch(`${flags.backendUrl}/notifications/subscribe`, {
+                method: 'DELETE',
+                headers: {
+                  Authorization: auth,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ endpoint: sub.endpoint }),
+              })
+            } catch (err) {
+              console.error('[notifications] unsubscribe DELETE failed:', err)
+            }
+          }
+          await sub.unsubscribe()
+        }
+      } catch (err) {
+        console.error('[notifications] unsubscribe failed:', err)
+      }
+      await emitNotificationState()
+    })
+  }
+
+  if (notificationsSupported && app.ports.savePushPrefs) {
+    app.ports.savePushPrefs.subscribe(async (prefs) => {
+      try {
+        const reg = await navigator.serviceWorker.ready
+        const sub = await reg.pushManager.getSubscription()
+        if (!sub) return
+        const auth = basicAuthHeader()
+        if (!auth) return
+        await fetch(`${flags.backendUrl}/notifications/preferences`, {
+          method: 'PUT',
+          headers: {
+            Authorization: auth,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ endpoint: sub.endpoint, prefs }),
+        })
+        // Tolerate failure silently — Elm state is the optimistic
+        // source of truth, cron re-checks tier independently.
+      } catch (err) {
+        console.error('[notifications] savePushPrefs failed:', err)
+      }
+    })
   }
 
 })()
