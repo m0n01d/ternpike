@@ -2,7 +2,6 @@ module Data.Notifications exposing
     ( NotificationPrefs
     , NotificationToggle(..)
     , Permission(..)
-    , PushSubscription
     , StandaloneState(..)
     , decodePrefs
     , defaultPrefs
@@ -41,10 +40,12 @@ The data model:
   - `NotificationToggle` (the discriminator for which pref a Toggle
     Msg is flipping; today the only variant is `WeeklyScanReminder`
     but the type exists so adding more prefs is a one-line `Msg`
-    change rather than a constructor explosion) and `PushSubscription`
-    (the trio of strings the browser hands back from
-    `pushManager.subscribe` — `endpoint`, `auth`, `p256dh`) land here
-    alongside the port-wiring issue that first imports them.
+    change rather than a constructor explosion) lands here alongside
+    the port-wiring issue that first imports it. The push-subscription
+    triple (endpoint, auth, p256dh) lives entirely on the JS side —
+    it's constructed by `pushManager.subscribe()` and POSTed straight
+    to the server without round-tripping through Elm, so it has no
+    type on this side.
 
 Wire formats:
 
@@ -55,11 +56,6 @@ Wire formats:
     PouchDB doc) and encodes via `encodePrefs` (sent both to the JS
     `savePushPrefs` port for server-side persistence and, eventually,
     to the per-device server endpoint for cron-driven scheduling).
-  - `PushSubscription` has no codec here — it's constructed on the JS
-    side from `pushManager.subscribe()` and POSTed straight to the
-    server `/notifications/subscribe` endpoint, never serialised
-    through Elm. The type exists so Settings UI / future helpers can
-    refer to the shape.
 
 -}
 
@@ -194,31 +190,6 @@ gets a new branch and the compiler enforces the wiring end-to-end.
 -}
 type NotificationToggle
     = WeeklyScanReminder
-
-
-
--- SUBSCRIPTION
-
-
-{-| The trio of strings returned by `pushManager.subscribe()`.
-
-  - `endpoint` — the per-device push URL the server pings to deliver a
-    notification. Treated as a stable device identifier on the server
-    (`/notifications/subscribe` keys on this).
-  - `auth` — the auth secret the server uses to encrypt payloads (base64).
-  - `p256dh` — the public key the server uses to encrypt payloads (base64).
-
-The whole triple is opaque to Elm — it's constructed on the JS side
-from the browser's `PushSubscription` object and POSTed straight to
-the server without ever round-tripping through an Elm decoder. The
-type exists so Settings UI / future helpers can refer to the shape.
-
--}
-type alias PushSubscription =
-    { auth : String
-    , endpoint : String
-    , p256dh : String
-    }
 
 
 
