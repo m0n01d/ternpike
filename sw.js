@@ -67,3 +67,34 @@ self.addEventListener('fetch', event => {
       .catch(() => caches.match(event.request))
   );
 });
+
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) {}
+  const title = data.title || 'Ternpike';
+  const body  = data.body  || 'Time to scan your receipts.';
+  const url   = data.url   || '/trips';
+  const tag   = data.tag   || 'weekly-scan-reminder';
+  event.waitUntil(self.registration.showNotification(title, {
+    badge: '/icon-192.png',
+    body,
+    data: { url },
+    icon: '/icon-192.png',
+    tag,
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/trips';
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+    for (const c of all) {
+      if (c.url.includes(self.registration.scope)) {
+        c.navigate(target);
+        return c.focus();
+      }
+    }
+    return self.clients.openWindow(target);
+  })());
+});
