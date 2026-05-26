@@ -62,6 +62,7 @@ crons = ["0 * * * *", "0 17 * * 5"]
 
 # Set secrets via: wrangler secret put NAME
 #   ADMIN_SECRET          (gates /admin/* — required by the ternpike-admin TUI)
+#   ANTHROPIC_API_KEY     (Ternpike-owned key for POST /scan — NEVER committed, NEVER sent to browser)
 #   COUCH_ADMIN_PASS
 #   COUCH_ADMIN_USER
 #   GOOGLE_GEOCODING_API_KEY  (Geocoding API key from the Google Cloud project — see issue #171)
