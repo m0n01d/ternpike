@@ -12,6 +12,7 @@ import Pages.Settings.SharedTrips
 import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Card
+import UI.DateView
 import UI.Layout
 import UI.Rule
 
@@ -106,20 +107,23 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt =
 viewSyncSection : AuthState -> Html Msg
 viewSyncSection as_ =
     let
-        valueText =
-            case as_.lastSyncedLabel of
-                Just label ->
-                    label
+        valueChildren =
+            case as_.lastSyncedAt of
+                Just at ->
+                    [ UI.DateView.dateOf at
+                    , Html.text " at "
+                    , UI.DateView.timeOf at
+                    ]
 
                 Nothing ->
-                    "Not yet this session"
+                    [ Html.text "Not yet this session" ]
     in
     Html.div []
         [ UI.Rule.kicker "SYNC"
         , UI.Card.subCard
             [ Html.div [ Html.Attributes.class "flex items-center justify-between gap-4" ]
                 [ Html.span [ Html.Attributes.class "text-sm text-ink" ] [ Html.text "Last synced" ]
-                , Html.span [ Html.Attributes.class "text-sm text-muted" ] [ Html.text valueText ]
+                , Html.span [ Html.Attributes.class "text-sm text-muted" ] valueChildren
                 ]
             ]
         ]

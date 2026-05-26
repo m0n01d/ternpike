@@ -184,12 +184,13 @@ The second `SubmitEntry` with a non-`Nothing` `duplicateWarning` bypasses the
 check and submits. Cleared on any field edit (amount, merchant, date) or
 after the expense is saved. In-memory only.
 
-`lastSyncedLabel : Maybe String` is the pre-formatted "Last synced" label
-the Settings page renders. Captured via `Task.map2 Time.here Time.now |>
-Task.perform` whenever `SyncStateMsg` transitions into `Synced` —
-`Helpers.formatSyncTime` renders the local-zone label (e.g.
-`"May 26 at 5:42 PM"`) so the view doesn't need to carry a `Time.Zone`. In
--memory only; never syncs to PouchDB.
+`lastSyncedAt : Maybe Time.Posix` is the instant the last successful sync
+landed. Captured via `Task.perform GotSyncTime Time.now` whenever
+`SyncStateMsg` transitions into `Synced`. The Settings page renders it via
+`UI.DateView.dateOf` + `UI.DateView.timeOf`, both of which emit
+`<relative-time>` web components — the browser converts to the user's local
+zone via `Intl.DateTimeFormat`, so no `Time.Zone` is tracked on the model.
+In-memory only; never syncs to PouchDB.
 
 ---
 
