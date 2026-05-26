@@ -5,6 +5,7 @@ module UI.Icons exposing
     , close
     , collapse
     , copy
+    , download
     , expand
     , journal
     , kebab
@@ -90,6 +91,17 @@ copy classes =
     Svg.svg (common classes)
         [ Svg.path [ Svg.Attributes.d "M9 9 H19 A1 1 0 0 1 20 10 V20 A1 1 0 0 1 19 21 H9 A1 1 0 0 1 8 20 V10 A1 1 0 0 1 9 9 Z" ] []
         , Svg.path [ Svg.Attributes.d "M5 15 H4 A1 1 0 0 1 3 14 V4 A1 1 0 0 1 4 3 H14 A1 1 0 0 1 15 4 V5" ] []
+        ]
+
+
+{-| Arrow pointing down into a tray — download / export action.
+-}
+download : String -> Svg.Svg msg
+download classes =
+    Svg.svg (common classes)
+        [ Svg.path [ Svg.Attributes.d "M12 3 L12 15" ] []
+        , Svg.path [ Svg.Attributes.d "M8 11 L12 15 L16 11" ] []
+        , Svg.path [ Svg.Attributes.d "M3 18 L3 21 L21 21 L21 18" ] []
         ]
 
 

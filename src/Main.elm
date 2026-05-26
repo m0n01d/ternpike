@@ -75,6 +75,7 @@ import Data.AmendmentId as AmendmentId
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category(..))
 import Data.ColorScheme as ColorScheme
+import Data.CsvExport as CsvExport
 import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
 import Data.Expense as Expense
@@ -199,6 +200,9 @@ port notificationState : ({ permission : String, prefs : D.Value, standalone : B
 
 
 port pushSubscribeResult : ({ error : String, ok : Bool } -> msg) -> Sub msg
+
+
+port downloadFile : { content : String, filename : String, mimeType : String } -> Cmd msg
 
 
 
@@ -2259,6 +2263,24 @@ updateAuth msg as_ =
                 , version = as_.version
                 }
             , Cmd.batch [ clearAllStorage (), stopSync () ]
+            )
+
+        ExportCsv tripId ->
+            let
+                rows =
+                    Dict.get (TripId.toString tripId) as_.expenses
+                        |> Maybe.withDefault Dict.empty
+                        |> Dict.values
+
+                filename =
+                    "expenses-" ++ TripId.toString tripId ++ ".csv"
+            in
+            ( AuthModel as_
+            , downloadFile
+                { content = CsvExport.toCsv rows
+                , filename = filename
+                , mimeType = "text/csv"
+                }
             )
 
         FilesSelected files ->

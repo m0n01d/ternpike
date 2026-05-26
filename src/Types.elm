@@ -294,6 +294,7 @@ type Msg
     | DismissMapPicker
     | DuplicateEntry Expense
     | EmailInputChanged String
+    | ExportCsv Data.TripId.TripId
     | FilesSelected (List File)
     | GeolocationDenied
     | GotDeleteTripTime Trip Time.Posix
