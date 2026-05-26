@@ -269,6 +269,12 @@ viewNotificationsBody as_ =
             , value = as_.notificationPrefs.sharedTripActivity
             }
         , viewToggleRow
+            { helper = "Get a push when someone invites you to a shared trip. Tap to accept or decline in Settings."
+            , label = "Shared trip invite"
+            , msg = ToggleNotificationPref Notifications.SharedTripInvite
+            , value = as_.notificationPrefs.sharedTripInvite
+            }
+        , viewToggleRow
             { helper = "Get notified if your data hasn't backed up in 3 days. Recommended — this is a data protection alert, not an engagement nudge."
             , label = "Sync stalled alert"
             , msg = ToggleNotificationPref Notifications.SyncStalled

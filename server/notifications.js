@@ -27,9 +27,16 @@ const PREF_PREFIX = 'push:pref:'
 const DEFAULT_PREFS = {
   sharedTripAccessChange: true,
   sharedTripActivity: true,
+  sharedTripInvite: true,
   syncStalled: true,
   weeklyScanReminder: true,
 }
+
+// KV prefix for shared-trip invite dedup keys.
+const INVITE_DEDUP_PREFIX = 'push:invite-dedup:'
+
+// 24 hours in seconds — TTL for per-invite dedup keys.
+const INVITE_DEDUP_TTL_SECONDS = 24 * 60 * 60
 
 // SHA-256 of `s`, hex-encoded. Used to bound KV key length when the
 // caller-supplied push endpoint is long (Mozilla autopush endpoints
@@ -758,4 +765,107 @@ export async function sendSharedTripAccessChangePush(
     }
     cursor = page.list_complete ? undefined : page.cursor
   } while (cursor)
+}
+
+// Send a push notification to the invitee when they are added to a shared trip.
+//
+// Fires from the invite-create endpoint in `sharedTrips.js` alongside the
+// Resend email send. Fire-and-forget — invite creation success must not
+// depend on push delivery. Hook with:
+//   c.executionCtx?.waitUntil(sendSharedTripInvitePush(env, {...}).catch(...))
+//
+// Dedup: if the same (inviterEmail, inviteeEmail, sharedTripId) tuple was
+// already pushed within the last 24h, return early without re-pushing. This
+// prevents spamming the invitee when an owner accidentally re-sends the same
+// invite. The dedup key is `push:invite-dedup:<inviter>:<invitee>:<tripId>`.
+//
+// Pref check: each subscription's `sharedTripInvite` pref must be true.
+// Defaults to true for users who subscribed before this pref was added.
+//
+// Tap action: `/settings` — the SharedTrips section there shows the pending invite.
+//
+// `env.__buildPushPayload` is the same test hook used by the other push fns.
+export async function sendSharedTripInvitePush(
+  env,
+  { inviteeEmail, inviterEmail, sharedTripId, tripName },
+) {
+  if (!env.PUSH_KV) return
+
+  // Check dedup key first — if it exists, skip silently.
+  const dedupKey = `${INVITE_DEDUP_PREFIX}${inviterEmail.toLowerCase()}:${inviteeEmail.toLowerCase()}:${sharedTripId}`
+  const alreadySent = await env.PUSH_KV.get(dedupKey)
+  if (alreadySent) return
+
+  const build = env.__buildPushPayload || buildPushPayload
+  const vapid = {
+    privateKey: env.VAPID_PRIVATE_KEY,
+    publicKey: env.VAPID_PUBLIC_KEY,
+    subject: env.VAPID_SUBJECT,
+  }
+
+  const inviterHandle = emailHandle(inviterEmail)
+  const payloadJson = JSON.stringify({
+    body: 'Tap to accept or decline.',
+    data: { url: '/settings' },
+    tag: `shared-trip-invite:${sharedTripId}:${inviteeEmail.toLowerCase()}`,
+    title: `${inviterHandle} invited you to ${tripName}`,
+  })
+
+  const lower = inviteeEmail.toLowerCase()
+  let sentAny = false
+  let cursor
+  do {
+    const page = await env.PUSH_KV.list({
+      cursor,
+      prefix: `${PUSH_PREFIX}${lower}:`,
+    })
+    for (const k of page.keys) {
+      const subRaw = await env.PUSH_KV.get(k.name)
+      if (!subRaw) continue
+      const stored = JSON.parse(subRaw)
+      const prefKey = k.name.replace(PUSH_PREFIX, PREF_PREFIX)
+      const prefRaw = await env.PUSH_KV.get(prefKey)
+      const prefs = prefRaw ? JSON.parse(prefRaw) : DEFAULT_PREFS
+      // Default true for legacy subscriptions that don't have this pref yet.
+      const wantsInvite = prefs.sharedTripInvite !== false
+      if (!wantsInvite) continue
+
+      const subscription = {
+        endpoint: stored.endpoint,
+        expirationTime: null,
+        keys: { auth: stored.auth, p256dh: stored.p256dh },
+      }
+      try {
+        const req = await build(
+          { data: payloadJson, options: { ttl: 3600 } },
+          subscription,
+          vapid,
+        )
+        const res = await fetch(stored.endpoint, req)
+        if (res.ok || res.status === 201) {
+          sentAny = true
+        } else if (res.status === 404 || res.status === 410) {
+          await env.PUSH_KV.delete(k.name)
+          await env.PUSH_KV.delete(prefKey)
+        } else {
+          console.error('invite push send failed', {
+            inviteeEmail,
+            status: res.status,
+          })
+        }
+      } catch (err) {
+        console.error('invite push send threw', {
+          inviteeEmail,
+          err: String(err),
+        })
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
+
+  // Write dedup key regardless of whether any push was sent — even if the
+  // invitee has no subscriptions today, we still suppress a re-push within
+  // 24h (so newly-registered devices don't get a stale invite push).
+  await env.PUSH_KV.put(dedupKey, '1', { expirationTtl: INVITE_DEDUP_TTL_SECONDS })
+  return sentAny
 }

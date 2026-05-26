@@ -4037,7 +4037,7 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.sharedTripInvite || newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch
@@ -4062,7 +4062,32 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.sharedTripInvite || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+            in
+            ( AuthModel { as_ | notificationPrefs = newPrefs }
+            , Cmd.batch
+                [ savePushPrefs (Notifications.encodePrefs newPrefs)
+                , if anyEnabled then
+                    Cmd.none
+
+                  else
+                    unsubscribePush ()
+                ]
+            )
+
+        ToggleNotificationPref Notifications.SharedTripInvite ->
+            let
+                oldPrefs : Notifications.NotificationPrefs
+                oldPrefs =
+                    as_.notificationPrefs
+
+                newPrefs : Notifications.NotificationPrefs
+                newPrefs =
+                    { oldPrefs | sharedTripInvite = not oldPrefs.sharedTripInvite }
+
+                anyEnabled : Bool
+                anyEnabled =
+                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.sharedTripInvite || newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch
@@ -4087,7 +4112,7 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.sharedTripInvite || newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch
@@ -4112,7 +4137,7 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.sharedTripInvite || newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch
