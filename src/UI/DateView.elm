@@ -1,4 +1,4 @@
-module UI.DateView exposing (monthDay, short)
+module UI.DateView exposing (dateOf, monthDay, short, timeOf)
 
 {-| Elm-side wrappers around the `<relative-time>` web component.
 
@@ -25,8 +25,10 @@ so the a11y attributes never drift.
 -}
 
 import Data.DateField as DateField exposing (DateField)
+import Data.Iso8601
 import Html exposing (Html)
 import Html.Attributes
+import Time
 
 
 {-| Long absolute shape — "May 21, 2024" in en-US, locale-adapted elsewhere.
@@ -71,6 +73,51 @@ monthDay df =
         , Html.Attributes.attribute "day" "numeric"
         , Html.Attributes.attribute "month" "short"
         , Html.Attributes.attribute "year" ""
+        , Html.Attributes.attribute "no-title" ""
+        ]
+        []
+
+
+{-| Short month + day shape derived from a `Time.Posix` instant — the
+browser converts to the user's local zone for display.
+
+Counterpart to `monthDay` for cases where the source is a wall-clock
+moment (e.g. "last synced at"), not a calendar date.
+
+-}
+dateOf : Time.Posix -> Html msg
+dateOf posix =
+    Html.node "relative-time"
+        [ Html.Attributes.attribute "datetime" (Data.Iso8601.fromPosix posix)
+        , Html.Attributes.attribute "format" "datetime"
+        , Html.Attributes.attribute "weekday" ""
+        , Html.Attributes.attribute "day" "numeric"
+        , Html.Attributes.attribute "month" "short"
+        , Html.Attributes.attribute "year" ""
+        , Html.Attributes.attribute "no-title" ""
+        ]
+        []
+
+
+{-| Time-of-day shape — "5:42 PM" in en-US, locale-adapted elsewhere.
+
+Renders only the hour + minute from the given `Time.Posix`; the
+underlying `<relative-time>` element converts the UTC ISO into the
+user's local zone via `Intl.DateTimeFormat`, so no `Time.Zone` is
+required in Elm.
+
+-}
+timeOf : Time.Posix -> Html msg
+timeOf posix =
+    Html.node "relative-time"
+        [ Html.Attributes.attribute "datetime" (Data.Iso8601.fromPosix posix)
+        , Html.Attributes.attribute "format" "datetime"
+        , Html.Attributes.attribute "weekday" ""
+        , Html.Attributes.attribute "day" ""
+        , Html.Attributes.attribute "month" ""
+        , Html.Attributes.attribute "year" ""
+        , Html.Attributes.attribute "hour" "numeric"
+        , Html.Attributes.attribute "minute" "2-digit"
         , Html.Attributes.attribute "no-title" ""
         ]
         []

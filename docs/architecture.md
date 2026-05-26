@@ -91,8 +91,17 @@ stay tidy and the attribute names don't drift.
   top of `src/elements/tp-amount.js`.
 - **`<relative-time datetime="2024-05-21">`** — the
   `@github/relative-time-element` package, registered as a side-effect
-  import. Wrapped in Elm by `UI.DateView.short` (long shape:
-  `"May 21, 2024"`) and `UI.DateView.monthDay` (short shape: `"May 21"`).
+  import. Wrapped in Elm by `UI.DateView`:
+  - `short : DateField -> Html msg` — long absolute shape (`"May 21, 2024"`)
+  - `monthDay : DateField -> Html msg` — short shape (`"May 21"`)
+  - `dateOf : Time.Posix -> Html msg` — short shape derived from an
+    instant; the browser converts UTC to the user's local zone via
+    `Intl.DateTimeFormat`.
+  - `timeOf : Time.Posix -> Html msg` — hour + minute only (`"5:42 PM"`);
+    suppresses every date field explicitly (`weekday=""`, `day=""`,
+    `month=""`, `year=""`) because missing attrs default ON and the
+    library renders an unwanted weekday + date prefix.
+
   Always set `no-title=""` per the library's own a11y guidance.
 - **`<map-picker>` / `<waypoint-map>`** — Leaflet-backed elements. No Elm
   wrapper today; called via `Html.node` directly because they show up in
@@ -183,6 +192,14 @@ warning above the submit button and changes the button label to "Add anyway".
 The second `SubmitEntry` with a non-`Nothing` `duplicateWarning` bypasses the
 check and submits. Cleared on any field edit (amount, merchant, date) or
 after the expense is saved. In-memory only.
+
+`lastSyncedAt : Maybe Time.Posix` is the instant the last successful sync
+landed. Captured via `Task.perform GotSyncTime Time.now` whenever
+`SyncStateMsg` transitions into `Synced`. The Settings page renders it via
+`UI.DateView.dateOf` + `UI.DateView.timeOf`, both of which emit
+`<relative-time>` web components — the browser converts to the user's local
+zone via `Intl.DateTimeFormat`, so no `Time.Zone` is tracked on the model.
+In-memory only; never syncs to PouchDB.
 
 ---
 

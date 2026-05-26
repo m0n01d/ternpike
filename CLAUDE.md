@@ -680,6 +680,15 @@ The *real* seed path (`seedPouchDB` in `e2e/utils/seed.ts`) uses a different sen
 - **One escape hatch:** `@layer components` with `@apply` is allowed when the same multi-utility chain repeats across N>1 rows of structurally identical markup (the Ledger row is the canonical example). Name the class after what it is (`.ledger-row`, not `.row`). One use = inline the utilities.
 - `src/theme.css` is the single source of truth. Both `src/global.css` (app) and `marketing/src/styles.css` (marketing) `@import` it. Don't redeclare tokens anywhere else.
 
+## Rendering dates, times, and money
+
+**Every DOM render of a date, time, or money value goes through a typed UI element wrapper.** The wrappers (`UI.DateView.short` / `monthDay` / `dateOf` / `timeOf`, `UI.MoneyView.amount` / `wholeDollars`) emit registered web components (`<relative-time>`, `<tp-amount>`) that delegate locale, timezone, currency, and a11y (machine-readable `<time>` semantics, spoken-form `aria-label`s on money) to the browser via `Intl.*`. The Elm side has no business duplicating any of that.
+
+- **Models store typed values, never pre-formatted display strings.** `Time.Posix`, `Date`, `DateField`, `Money` — not `String`. If you find yourself adding `Time.here` to capture a zone just so you can pre-format a label, stop: emit a `<relative-time>` and let the browser handle it. PR #243's first iteration shipped `lastSyncedLabel : Maybe String` with a hand-rolled formatter; the right shape was `lastSyncedAt : Maybe Time.Posix` + `UI.DateView.dateOf` / `timeOf` in the view.
+- **Never call `Html.text (DateField.formatMonthDay df)` or `Html.text (Money.format m)` on the DOM render path.** Those formatters are intentionally still exposed for non-HTML consumers (Leaflet popup labels in `Helpers.encodeWaypoints`, elm-charts tick labels in `Pages.Stats`) — DOM sites go through the wrappers.
+- **Need a presentation shape that doesn't exist yet?** Add a helper to `UI.DateView` / `UI.MoneyView` (typically a thin `<relative-time>` / `<tp-amount>` node with different Intl attributes), not a new `Helpers.format*` returning a String. For `<relative-time>` time-of-day shapes, explicitly suppress every unwanted date field with empty-string attributes (`weekday=""`, `day=""`, `month=""`, `year=""`) — missing attrs default ON and you'll get unwanted "Tue, May 26, 1:19 PM" when you only wanted "1:19 PM".
+- Full element catalogue and the rationale for each formatter that's still exposed: `docs/architecture.md` → "Custom HTML elements".
+
 ## Working with `.elm` files: prefer `elmq`
 
 `elmq` is on PATH — a tree-sitter-aware CLI for reading and editing `.elm` files. Use it for Elm reads and writes whenever it fits, instead of `cat`/`Read`/`grep`/`rg`/`Edit`. It returns the enclosing declaration for free on searches, edits structurally without dumping whole files into context, and handles project-wide operations (rename module, move decls, add/remove variants) atomically across the dependency graph.
