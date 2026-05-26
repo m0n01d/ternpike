@@ -11,7 +11,7 @@
  *
  * We stub both endpoints so no real OCR call leaves the test environment.
  * The harness verifies which URL was hit (or that neither was) after
- * dropping a tiny JPEG data-URL into the file input.
+ * dropping a real JPEG into the file input.
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -29,9 +29,13 @@ import { readHarnessState } from '../utils/state'
 const BOB_EMAIL = 'bob-scan@test.ternpike.com'
 const ALICE_EMAIL = 'alice-scan@test.ternpike.com'
 
-/** Minimal 1×1 white JPEG as a data-URL for triggering OCR without a real file. */
-const TINY_JPEG_DATA_URL =
-  'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k='
+/**
+ * A real JPEG fixture (8×8 pixels, ~330 bytes). Using a real image rather
+ * than a 1×1 synthetic avoids canvas/decode edge-cases in prepareOcrImage.
+ * The fast path (originalBytes <= maxBytes) fires for this size, so the
+ * image is passed straight through to makeOcrCall without resizing.
+ */
+const TEST_JPEG_BUFFER = readFileSync(resolve(__dirname, '../fixtures/test-receipt.jpg'))
 
 /** Fake Anthropic /v1/messages response that looks like a successful OCR. */
 const FAKE_ANTHROPIC_RESPONSE = JSON.stringify({
@@ -46,6 +50,41 @@ const FAKE_ANTHROPIC_RESPONSE = JSON.stringify({
   stop_reason: 'end_turn',
   usage: { input_tokens: 100, output_tokens: 50 },
 })
+
+/** Seed an Anthropic API key into IndexedDB so the app boots with ByoPath. */
+const seedAnthropicKey = async (context: BrowserContext, key: string): Promise<void> => {
+  const vitePort = process.env.E2E_VITE_PORT || '3000'
+  const page = await context.newPage()
+  await page.route('**/pouchdb.min.js', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }),
+  )
+  await page.goto(`http://localhost:${vitePort}/seed.html`, {
+    waitUntil: 'domcontentloaded',
+  })
+  await page.evaluate(
+    async ([idbKey, idbValue]) => {
+      await new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('alaska-tracker', 1)
+        open.onupgradeneeded = (event) => {
+          const db = (event.target as IDBOpenDBRequest).result
+          if (!db.objectStoreNames.contains('kv')) {
+            db.createObjectStore('kv')
+          }
+        }
+        open.onsuccess = () => {
+          const db = open.result
+          const tx = db.transaction('kv', 'readwrite')
+          tx.objectStore('kv').put(idbValue, idbKey)
+          tx.oncomplete = () => { db.close(); resolve() }
+          tx.onerror = () => reject(tx.error)
+        }
+        open.onerror = () => reject(open.error)
+      })
+    },
+    ['anthropic_key', key] as const,
+  )
+  await page.close()
+}
 
 type ScanFixtures = {
   ospreyNoKey: BrowserContext
@@ -102,6 +141,9 @@ const test = base.extend<ScanFixtures>({
       password: 'testpassword123456789012345678',
       tier: 'osprey',
     })
+    // Seed the BYO Anthropic key before the app boots so OcrPath resolves to
+    // ByoPath on first load — no need to reload the page mid-test.
+    await seedAnthropicKey(ctx, 'sk-ant-test-key-1234567890abcdef')
     await seedPouchDB(ctx, {
       trips: [{ description: '', endDate: '2026-06-21', name: 'BYO Trip', startDate: '2026-06-14' }],
     })
@@ -162,22 +204,22 @@ const goToScanTab = async (page: Page, tripName: string): Promise<void> => {
 }
 
 /**
- * Drop a tiny JPEG data-URL into the page as if the user selected a file.
+ * Drop a real JPEG into the page as if the user selected a file.
  * Uses the hidden file input that the Elm dropzone wires up.
+ *
+ * Uses a real JPEG fixture (e2e/fixtures/test-receipt.jpg) rather than
+ * a synthetic 1×1 image. The real image exercises the same fast-path in
+ * prepareOcrImage (file is well under the 4 MB budget) while being a
+ * valid image that survives the File.toUrl → FileReader round-trip.
  */
 const dropFakeFile = async (page: Page): Promise<void> => {
-  // The Elm Scan page renders a <input type="file"> for the file picker.
-  // We set files on it programmatically, then dispatch a change event.
   const fileInput = page.locator('input[type="file"]').first()
   await expect(fileInput).toBeAttached({ timeout: 15_000 })
 
-  // Create a buffer from the base64 data-URL so Playwright can set the file.
-  const base64Data = TINY_JPEG_DATA_URL.split(',')[1]
-  const buffer = Buffer.from(base64Data, 'base64')
   await fileInput.setInputFiles({
     name: 'receipt.jpg',
     mimeType: 'image/jpeg',
-    buffer,
+    buffer: TEST_JPEG_BUFFER,
   })
 }
 
@@ -205,23 +247,13 @@ test.describe('OcrPath routing', () => {
       })
     })
 
-    // Stub the hosted proxy endpoint — should be called for HostedPath.
-    // The Elm port sends to backendUrl/scan; in the harness backendUrl is set
-    // to api.ternpike.com which is routed by twoUsers.ts to the local wrangler.
-    // The `scanProxyOut` port uses the backendUrl from AppConfig (from Vite flags).
-    // In the test env, backendUrl comes from VITE_BACKEND_URL or defaults to
-    // the wrangler dev server. We intercept at the context level.
-    await ospreyNoKey.route('**/scan', async (route) => {
-      if (route.request().method() === 'POST') {
-        proxyCalls.push(route.request().url())
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: FAKE_ANTHROPIC_RESPONSE,
-        })
-      } else {
-        await route.continue()
-      }
+    // Intercept the hosted proxy via the scanProxyOut port. This approach is
+    // independent of whether the wrangler dev backend responds: we subscribe
+    // to the port event in the page context and record the call. We use
+    // page.exposeFunction so the in-page callback can push into the outer
+    // proxyCalls array.
+    await page.exposeFunction('__recordProxyCall', (url: string) => {
+      proxyCalls.push(url)
     })
 
     await goToScanTab(page, 'Hosted Trip')
@@ -229,21 +261,35 @@ test.describe('OcrPath routing', () => {
     // The scan tab should show the dropzone (paid user, no key → HostedPath → can scan).
     await expect(page.getByText(/Tap to add receipts/i)).toBeVisible({ timeout: 20_000 })
 
+    // Subscribe to the scanProxyOut port so we can observe proxy calls from
+    // the Elm runtime. window.__ternpikeTestApp is the app handle (test hook).
+    await page.evaluate(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const app = (window as any).__ternpikeTestApp
+      if (app?.ports?.scanProxyOut?.subscribe) {
+        app.ports.scanProxyOut.subscribe((payload: { backendUrl: string }) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ;(window as any).__recordProxyCall(payload.backendUrl + '/scan')
+        })
+      }
+    })
+
     await dropFakeFile(page)
 
-    // Give the port round-trip time to complete.
-    // Wait for either a scan result or an error to appear.
-    await expect(page.getByText(/Hosted scan failed|Add an Anthropic|processing|receipt/i).first()).toBeVisible({
+    // Wait for the proxy call or a visible result/error.
+    await expect(page.getByText(/Hosted scan failed|processing|receipt/i).first()).toBeVisible({
       timeout: 20_000,
     }).catch(() => {
-      // If the above times out, we still check the call lists below.
+      // If no UI change, we still check call counts below.
     })
+    // Give the port round-trip time to propagate.
+    await page.waitForTimeout(2000)
 
     // The proxy should have been called; direct Anthropic should NOT.
     expect(anthropicCalls.length).toBe(0)
-    // proxyCalls may be 0 if the backendUrl isn't wired in test env;
-    // the important invariant is no direct Anthropic call was made.
-    // We assert the absence of the wrong path, and log what we got.
+    // The scanProxyOut port must have fired — this is the affirmative check
+    // that the HostedPath arm of makeOcrCall was actually reached.
+    expect(proxyCalls.length).toBeGreaterThan(0)
 
     await page.close()
   })
@@ -276,30 +322,8 @@ test.describe('OcrPath routing', () => {
       }
     })
 
-    await goToScanTab(page, 'BYO Trip')
-
-    // Inject an Anthropic key into IndexedDB so the app uses ByoPath.
-    // The Elm app reads ai_config from IDB on boot; we need to set it before
-    // the app boots, but here we're already on the scan page. Instead, use
-    // page.evaluate to write the key directly and trigger an ApiKeyChanged
-    // port event if the test app hook is available. Simpler: reload after
-    // writing to IDB so the Elm app reads the new key.
-    await page.evaluate(async () => {
-      await new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open('alaska-tracker', 1)
-        open.onsuccess = () => {
-          const db = open.result
-          const tx = db.transaction('kv', 'readwrite')
-          tx.objectStore('kv').put('sk-ant-test-key-1234567890abcdef', 'anthropic_key')
-          tx.oncomplete = () => { db.close(); resolve() }
-          tx.onerror = () => reject(tx.error)
-        }
-        open.onerror = () => reject(open.error)
-      })
-    })
-
-    // Reload to pick up the key.
-    await page.goto('/trips')
+    // The BYO Anthropic key was seeded into IDB in the fixture setup, so the
+    // app boots with OcrPath = ByoPath on first load — no reload needed.
     await goToScanTab(page, 'BYO Trip')
 
     // Paid user + BYO key → ByoPath → dropzone should be present.
@@ -307,7 +331,10 @@ test.describe('OcrPath routing', () => {
 
     await dropFakeFile(page)
 
-    // Wait for OCR to start (ScanProcessing status).
+    // Wait for the Anthropic call. Give the full port round-trip plus network
+    // stub time to complete: FilesSelected → GotFileUrl → prepareOcrImage
+    // (fast path, no canvas) → OcrImagePrepared → makeOcrCall (Http.request
+    // to api.anthropic.com) → intercepted by page.route → anthropicCalls++.
     await page.waitForTimeout(3000)
 
     // Direct Anthropic call should have been made.
