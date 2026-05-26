@@ -302,11 +302,39 @@ test.describe('OcrPath routing', () => {
     const anthropicCalls: string[] = []
     const proxyCalls: string[] = []
 
+    // Belt-and-suspenders observer: record every request Playwright sees going
+    // to api.anthropic.com regardless of method (OPTIONS or POST). This catches
+    // the case where the route handler doesn't fire for a particular request.
+    const observedAnthropicUrls: string[] = []
+    page.on('request', (req) => {
+      if (req.url().startsWith('https://api.anthropic.com')) {
+        observedAnthropicUrls.push(`${req.method()} ${req.url()}`)
+      }
+    })
+
     // Stub Anthropic to accept the call and return a valid response.
-    await page.route('https://api.anthropic.com/**', async (route) => {
-      anthropicCalls.push(route.request().url())
+    // Elm's Http.request with custom headers (x-api-key, anthropic-version,
+    // anthropic-dangerous-direct-browser-access) triggers a CORS preflight.
+    // We must respond to OPTIONS with the correct CORS headers; without them
+    // the browser aborts the preflight and the POST is never sent.
+    await page.route('https://api.anthropic.com/**', async (route, request) => {
+      if (request.method() === 'OPTIONS') {
+        await route.fulfill({
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers':
+              'x-api-key, anthropic-version, anthropic-dangerous-direct-browser-access, content-type',
+            'Access-Control-Max-Age': '3600',
+          },
+        })
+        return
+      }
+      anthropicCalls.push(request.url())
       await route.fulfill({
         status: 200,
+        headers: { 'Access-Control-Allow-Origin': '*' },
         contentType: 'application/json',
         body: FAKE_ANTHROPIC_RESPONSE,
       })
@@ -334,10 +362,14 @@ test.describe('OcrPath routing', () => {
     // Wait for the Anthropic call. Give the full port round-trip plus network
     // stub time to complete: FilesSelected → GotFileUrl → prepareOcrImage
     // (fast path, no canvas) → OcrImagePrepared → makeOcrCall (Http.request
-    // to api.anthropic.com) → intercepted by page.route → anthropicCalls++.
+    // to api.anthropic.com) → OPTIONS preflight → intercepted + CORS ok →
+    // POST → intercepted by page.route → anthropicCalls++.
     await page.waitForTimeout(3000)
 
-    // Direct Anthropic call should have been made.
+    // The observer must have seen at least one request to api.anthropic.com
+    // (OPTIONS or POST). If this is 0 the browser didn't even attempt the call.
+    expect(observedAnthropicUrls.length).toBeGreaterThan(0)
+    // Direct Anthropic POST call should have been made (after CORS cleared).
     expect(anthropicCalls.length).toBeGreaterThan(0)
     // Proxy should NOT have been called.
     expect(proxyCalls.length).toBe(0)
