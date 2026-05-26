@@ -151,45 +151,45 @@ type StandaloneState
 
 {-| The user's notification opt-in matrix.
 
-One field per notification kind. Today there's just
-`weeklyScanReminder`; future kinds (trip-budget alerts, shared-trip
-member-joined pings, etc.) add fields here. Always opt-in: a fresh
-user starts with everything `False` (see `defaultPrefs`).
+One field per notification kind. Fields are alphabetised. Future kinds
+add fields here. The server's `DEFAULT_PREFS` mirrors this shape.
 
 Persisted to PouchDB at `user:notificationPrefs`. Synced across the
 user's devices like any other PouchDB doc.
 
 -}
 type alias NotificationPrefs =
-    { weeklyScanReminder : Bool
+    { syncStalled : Bool
+    , weeklyScanReminder : Bool
     }
 
 
 {-| The default prefs for a brand-new user.
 
-Every pref starts `False` — notifications are strictly opt-in. The
-Settings UI is responsible for flipping individual fields on as the
-user enables them.
+`syncStalled` defaults `True` — it is a data-protection alert, not an
+engagement nudge, so it is opt-in by default. `weeklyScanReminder`
+defaults `False` — the user must opt in explicitly.
 
 -}
 defaultPrefs : NotificationPrefs
 defaultPrefs =
-    { weeklyScanReminder = False
+    { syncStalled = True
+    , weeklyScanReminder = False
     }
 
 
 {-| Discriminator for which pref a `ToggleNotificationPref` Msg is
 flipping.
 
-Today there's just `WeeklyScanReminder`, mirroring the single field on
-`NotificationPrefs`. Future kinds (trip-budget alerts, shared-trip
-member-joined pings, etc.) add a constructor here and a field on
-`NotificationPrefs` together; the `updateAuth` `case` on this type then
-gets a new branch and the compiler enforces the wiring end-to-end.
+Constructors are alphabetised. Future kinds add a constructor here and
+a field on `NotificationPrefs` together; the `updateAuth` `case` on
+this type then gets a new branch and the compiler enforces the wiring
+end-to-end.
 
 -}
 type NotificationToggle
-    = WeeklyScanReminder
+    = SyncStalled
+    | WeeklyScanReminder
 
 
 
@@ -205,7 +205,12 @@ error.
 -}
 decodePrefs : Json.Decode.Decoder NotificationPrefs
 decodePrefs =
-    Json.Decode.map NotificationPrefs
+    Json.Decode.map2 NotificationPrefs
+        (Json.Decode.oneOf
+            [ Json.Decode.field "syncStalled" Json.Decode.bool
+            , Json.Decode.succeed defaultPrefs.syncStalled
+            ]
+        )
         (Json.Decode.oneOf
             [ Json.Decode.field "weeklyScanReminder" Json.Decode.bool
             , Json.Decode.succeed defaultPrefs.weeklyScanReminder
@@ -225,5 +230,6 @@ loading the user's PouchDB.
 encodePrefs : NotificationPrefs -> Json.Encode.Value
 encodePrefs prefs =
     Json.Encode.object
-        [ ( "weeklyScanReminder", Json.Encode.bool prefs.weeklyScanReminder )
+        [ ( "syncStalled", Json.Encode.bool prefs.syncStalled )
+        , ( "weeklyScanReminder", Json.Encode.bool prefs.weeklyScanReminder )
         ]

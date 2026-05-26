@@ -7,6 +7,7 @@ import { getTier } from './auth.js'
 import { registerGeocodeRoutes } from './geocode.js'
 import {
   registerNotificationRoutes,
+  sendSyncStalledReminders,
   sendWeeklyScanReminders,
 } from './notifications.js'
 import { registerScanRoutes } from './scan.js'
@@ -276,5 +277,6 @@ export default {
     } else {
       ctx.waitUntil(runGraceFreezeSweep(env))
     }
+    ctx.waitUntil(sendSyncStalledReminders(env))
   },
 }
