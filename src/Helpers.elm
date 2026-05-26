@@ -124,50 +124,29 @@ encodePoint ( e, dayIndex, isBoundary ) =
 
 {-| Render a `Time.Posix` for the Settings "Last synced" line. Uses the
 caller's local `Time.Zone` to produce something like `"May 26 at 5:42 PM"`.
+The date portion reuses `DateField.formatMonthDay`; the time portion is
+12-hour with AM/PM and a zero-padded minute.
+
+    import Time
+
+    formatSyncTime Time.utc (Time.millisToPosix 0)
+    --> "Jan 1 at 12:00 AM"
+
+    formatSyncTime Time.utc (Time.millisToPosix (12 * 3600 * 1000))
+    --> "Jan 1 at 12:00 PM"
+
+    formatSyncTime Time.utc (Time.millisToPosix (13 * 3600 * 1000 + 42 * 60 * 1000))
+    --> "Jan 1 at 1:42 PM"
+
+    formatSyncTime Time.utc (Time.millisToPosix (9 * 3600 * 1000 + 5 * 60 * 1000))
+    --> "Jan 1 at 9:05 AM"
+
 -}
 formatSyncTime : Time.Zone -> Time.Posix -> String
 formatSyncTime zone posix =
     let
-        monthLabel =
-            case Time.toMonth zone posix of
-                Time.Jan ->
-                    "Jan"
-
-                Time.Feb ->
-                    "Feb"
-
-                Time.Mar ->
-                    "Mar"
-
-                Time.Apr ->
-                    "Apr"
-
-                Time.May ->
-                    "May"
-
-                Time.Jun ->
-                    "Jun"
-
-                Time.Jul ->
-                    "Jul"
-
-                Time.Aug ->
-                    "Aug"
-
-                Time.Sep ->
-                    "Sep"
-
-                Time.Oct ->
-                    "Oct"
-
-                Time.Nov ->
-                    "Nov"
-
-                Time.Dec ->
-                    "Dec"
-
-        day =
-            String.fromInt (Time.toDay zone posix)
+        datePart =
+            DateField.formatMonthDay (DateField.today zone posix)
 
         hour24 =
             Time.toHour zone posix
@@ -195,9 +174,7 @@ formatSyncTime zone posix =
                 |> String.padLeft 2 '0'
     in
     String.concat
-        [ monthLabel
-        , " "
-        , day
+        [ datePart
         , " at "
         , String.fromInt hour12
         , ":"
