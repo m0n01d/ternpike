@@ -156,6 +156,7 @@ describe('POST /notifications/subscribe', () => {
     const prefEntry = dump.find(([k]) => k.startsWith('push:pref:'))
     assert.ok(prefEntry, 'expected a push:pref:* key')
     assert.deepEqual(JSON.parse(prefEntry[1].value), {
+      sharedTripActivity: true,
       syncStalled: true,
       weeklyScanReminder: true,
     })
@@ -281,7 +282,11 @@ describe('GET /notifications/preferences', () => {
     )
     assert.equal(res.status, 200)
     assert.equal(res.body.ok, true)
-    assert.deepEqual(res.body.prefs, { syncStalled: true, weeklyScanReminder: true })
+    assert.deepEqual(res.body.prefs, {
+      sharedTripActivity: true,
+      syncStalled: true,
+      weeklyScanReminder: true,
+    })
   })
 
   test('returns stored prefs after a subscribe', async () => {

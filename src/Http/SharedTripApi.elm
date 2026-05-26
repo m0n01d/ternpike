@@ -5,6 +5,7 @@ module Http.SharedTripApi exposing
     , inviteToSharedTrip
     , joinSharedTrip
     , leaveSharedTrip
+    , notifyActivity
     , transferOwnership
     )
 
@@ -236,6 +237,47 @@ leaveSharedTrip creds sharedTripId toMsg =
         , headers = [ authHeader creds ]
         , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/leave"
         , body = Http.emptyBody
+        , expect = Http.expectWhatever toMsg
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| `POST /sharedtrips/:id/notify-activity` — fire push notifications to
+co-travelers when an expense is added, edited, or voided. Fire-and-forget
+— the response is handled by a no-op `Msg` branch; any delivery failure
+is logged server-side and does not affect UI state.
+
+Called after the PouchDB write succeeds so the notification emits in
+the same user action without blocking the local write.
+
+-}
+notifyActivity :
+    Creds
+    -> SharedTripId
+    -> { action : String, amount : Float, note : Maybe String }
+    -> (Result Http.Error () -> msg)
+    -> Cmd msg
+notifyActivity creds sharedTripId { action, amount, note } toMsg =
+    Http.request
+        { method = "POST"
+        , headers = [ authHeader creds ]
+        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/notify-activity"
+        , body =
+            Http.jsonBody
+                (Json.Encode.object
+                    ([ ( "action", Json.Encode.string action )
+                     , ( "amount", Json.Encode.float amount )
+                     ]
+                        ++ (case note of
+                                Just n ->
+                                    [ ( "note", Json.Encode.string n ) ]
+
+                                Nothing ->
+                                    []
+                           )
+                    )
+                )
         , expect = Http.expectWhatever toMsg
         , timeout = Nothing
         , tracker = Nothing

@@ -159,21 +159,25 @@ user's devices like any other PouchDB doc.
 
 -}
 type alias NotificationPrefs =
-    { syncStalled : Bool
+    { sharedTripActivity : Bool
+    , syncStalled : Bool
     , weeklyScanReminder : Bool
     }
 
 
 {-| The default prefs for a brand-new user.
 
+`sharedTripActivity` defaults `True` — co-traveler activity is the
+headline notification for the shared-trip feature; opt-in by default.
 `syncStalled` defaults `True` — it is a data-protection alert, not an
-engagement nudge, so it is opt-in by default. `weeklyScanReminder`
-defaults `False` — the user must opt in explicitly.
+engagement nudge. `weeklyScanReminder` defaults `False` — the user must
+opt in explicitly.
 
 -}
 defaultPrefs : NotificationPrefs
 defaultPrefs =
-    { syncStalled = True
+    { sharedTripActivity = True
+    , syncStalled = True
     , weeklyScanReminder = False
     }
 
@@ -188,7 +192,8 @@ end-to-end.
 
 -}
 type NotificationToggle
-    = SyncStalled
+    = SharedTripActivity
+    | SyncStalled
     | WeeklyScanReminder
 
 
@@ -205,7 +210,12 @@ error.
 -}
 decodePrefs : Json.Decode.Decoder NotificationPrefs
 decodePrefs =
-    Json.Decode.map2 NotificationPrefs
+    Json.Decode.map3 NotificationPrefs
+        (Json.Decode.oneOf
+            [ Json.Decode.field "sharedTripActivity" Json.Decode.bool
+            , Json.Decode.succeed defaultPrefs.sharedTripActivity
+            ]
+        )
         (Json.Decode.oneOf
             [ Json.Decode.field "syncStalled" Json.Decode.bool
             , Json.Decode.succeed defaultPrefs.syncStalled
@@ -230,6 +240,7 @@ loading the user's PouchDB.
 encodePrefs : NotificationPrefs -> Json.Encode.Value
 encodePrefs prefs =
     Json.Encode.object
-        [ ( "syncStalled", Json.Encode.bool prefs.syncStalled )
+        [ ( "sharedTripActivity", Json.Encode.bool prefs.sharedTripActivity )
+        , ( "syncStalled", Json.Encode.bool prefs.syncStalled )
         , ( "weeklyScanReminder", Json.Encode.bool prefs.weeklyScanReminder )
         ]

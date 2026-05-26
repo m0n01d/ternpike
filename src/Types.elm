@@ -342,6 +342,7 @@ type Msg
     | RefreshClicked
     | RequestCodeResult (Result Http.Error ())
     | RequestPushPermission
+    | SharedTripActivityNotified
     | ResetSettingsClicked
     | ReviewScanItem String
     | SaveTripForm

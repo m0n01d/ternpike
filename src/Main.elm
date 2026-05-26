@@ -415,6 +415,34 @@ sendPouch =
     pouchOut << encodePouchOut
 
 
+{-| Fire-and-forget push notification to co-travelers on a shared trip.
+
+Calls `Http.SharedTripApi.notifyActivity` after PouchDB already accepted
+the write — the HTTP response is handled by `SharedTripActivityNotified`
+which is a no-op; any delivery failure is logged server-side and does
+not affect UI state.
+
+Returns `Cmd.none` for personal trips (no co-travelers to notify).
+
+-}
+notifySharedTripActivity :
+    Creds
+    -> Trip.TripTarget
+    -> { action : String, amount : Float, note : Maybe String }
+    -> Cmd Msg
+notifySharedTripActivity creds target opts =
+    case target of
+        Trip.Personal ->
+            Cmd.none
+
+        Trip.InFlock sharedTripId ->
+            Http.SharedTripApi.notifyActivity
+                creds
+                sharedTripId
+                opts
+                (\_ -> SharedTripActivityNotified)
+
+
 {-| Resolve the `TripTarget` to use for an outbound `Save*` / `Get*`
 command from a trip id. Looks up the trip in the loaded zipper and
 asks `Trip.targetForTrip` to map it; falls back to `Personal` if the
@@ -1619,6 +1647,9 @@ update msg model =
         ResetSettingsClicked ->
             ( nextModel, cmd )
 
+        SharedTripActivityNotified ->
+            ( nextModel, cmd )
+
         ReviewScanItem _ ->
             ( nextModel, cmd )
 
@@ -2040,6 +2071,9 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         RequestPushPermission ->
+            ( GuestModel gs, Cmd.none )
+
+        SharedTripActivityNotified ->
             ( GuestModel gs, Cmd.none )
 
         ReviewScanItem _ ->
@@ -2608,6 +2642,17 @@ updateAuth msg as_ =
 
                                 nextRoute =
                                     routeForTab nextTab original.tripId
+
+                                editTarget =
+                                    targetForTripId original.tripId as_
+
+                                editAmountCents =
+                                    amend.amount
+                                        |> Maybe.map Money.toCents
+                                        |> Maybe.withDefault (Money.toCents parsed.amount)
+
+                                editAmountFloat =
+                                    toFloat editAmountCents / 100
                             in
                             ( AuthModel
                                 { as_
@@ -2618,7 +2663,13 @@ updateAuth msg as_ =
                                     , submitting = False
                                 }
                             , Cmd.batch
-                                [ sendPouch (SaveAmend (targetForTripId original.tripId as_) (Amendment.encoder amend))
+                                [ sendPouch (SaveAmend editTarget (Amendment.encoder amend))
+                                , notifySharedTripActivity as_.creds
+                                    editTarget
+                                    { action = "edit"
+                                    , amount = editAmountFloat
+                                    , note = Nothing
+                                    }
                                 , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath original.tripId nextTab)
                                 ]
                             )
@@ -2654,6 +2705,12 @@ updateAuth msg as_ =
 
                                 nextRoute =
                                     routeForTab nextTab tripId
+
+                                addTarget =
+                                    targetForTripId tripId as_
+
+                                addAmountFloat =
+                                    toFloat (Money.toCents expense.amount) / 100
                             in
                             ( AuthModel
                                 { as_
@@ -2664,7 +2721,13 @@ updateAuth msg as_ =
                                     , submitting = False
                                 }
                             , Cmd.batch
-                                [ sendPouch (SaveExpense (targetForTripId tripId as_) (Expense.encoder expense))
+                                [ sendPouch (SaveExpense addTarget (Expense.encoder expense))
+                                , notifySharedTripActivity as_.creds
+                                    addTarget
+                                    { action = "add"
+                                    , amount = addAmountFloat
+                                    , note = Just expense.note
+                                    }
                                 , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tripId nextTab)
                                 ]
                             )
@@ -2697,19 +2760,33 @@ updateAuth msg as_ =
                     , createdAt = createdAtIso
                     , createdBy = createdBy
                     }
+
+                voidTarget =
+                    targetForTripId expense.tripId as_
+
+                voidAmountFloat =
+                    toFloat (Money.toCents expense.amount) / 100
             in
             ( AuthModel { as_ | voids = Dict.insert voidId optimisticVoid as_.voids }
-            , sendPouch
-                (SaveVoid (targetForTripId expense.tripId as_)
-                    (E.object
-                        [ ( "_id", E.string voidId )
-                        , ( "targetId", E.string (ExpenseId.toString expense.id) )
-                        , ( "createdAt", E.string createdAtIso )
-                        , ( "createdBy", UserId.encode createdBy )
-                        , ( "type", E.string "void" )
-                        ]
+            , Cmd.batch
+                [ sendPouch
+                    (SaveVoid voidTarget
+                        (E.object
+                            [ ( "_id", E.string voidId )
+                            , ( "targetId", E.string (ExpenseId.toString expense.id) )
+                            , ( "createdAt", E.string createdAtIso )
+                            , ( "createdBy", UserId.encode createdBy )
+                            , ( "type", E.string "void" )
+                            ]
+                        )
                     )
-                )
+                , notifySharedTripActivity as_.creds
+                    voidTarget
+                    { action = "void"
+                    , amount = voidAmountFloat
+                    , note = Nothing
+                    }
+                ]
             )
 
         DuplicateEntry expense ->
@@ -3783,6 +3860,13 @@ updateAuth msg as_ =
             , Cmd.none
             )
 
+        -- Fire-and-forget: the push fan-out result does not affect UI
+        -- state. Any delivery failures are logged server-side. The
+        -- expense write has already landed in PouchDB by the time this
+        -- returns, so we never need to roll back.
+        SharedTripActivityNotified ->
+            ( AuthModel as_, Cmd.none )
+
         -- Server-route handling (storing the subscription server-side,
         -- surfacing errors in the Settings UI) lands in later issues;
         -- for now we mirror the `ok` flag into AuthState.
@@ -3817,6 +3901,31 @@ updateAuth msg as_ =
         -- When the last opt-in flips off we also call `unsubscribePush`
         -- so the browser drops the registration entirely — no point
         -- keeping the endpoint live on the server if nothing will fire.
+        ToggleNotificationPref Notifications.SharedTripActivity ->
+            let
+                oldPrefs : Notifications.NotificationPrefs
+                oldPrefs =
+                    as_.notificationPrefs
+
+                newPrefs : Notifications.NotificationPrefs
+                newPrefs =
+                    { oldPrefs | sharedTripActivity = not oldPrefs.sharedTripActivity }
+
+                anyEnabled : Bool
+                anyEnabled =
+                    newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+            in
+            ( AuthModel { as_ | notificationPrefs = newPrefs }
+            , Cmd.batch
+                [ savePushPrefs (Notifications.encodePrefs newPrefs)
+                , if anyEnabled then
+                    Cmd.none
+
+                  else
+                    unsubscribePush ()
+                ]
+            )
+
         ToggleNotificationPref Notifications.SyncStalled ->
             let
                 oldPrefs : Notifications.NotificationPrefs
@@ -3829,7 +3938,7 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.syncStalled || newPrefs.weeklyScanReminder
+                    newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch
@@ -3854,7 +3963,7 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.syncStalled || newPrefs.weeklyScanReminder
+                    newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch

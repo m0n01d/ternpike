@@ -257,6 +257,12 @@ viewNotificationsBody as_ =
 
     else if as_.notificationPermission == Notifications.Granted && as_.pushSubscribed then
         [ viewToggleRow
+            { helper = "Get a push when a co-traveler adds, edits, or voids an expense on a shared trip."
+            , label = "Shared trip activity"
+            , msg = ToggleNotificationPref Notifications.SharedTripActivity
+            , value = as_.notificationPrefs.sharedTripActivity
+            }
+        , viewToggleRow
             { helper = "Get notified if your data hasn't backed up in 3 days. Recommended — this is a data protection alert, not an engagement nudge."
             , label = "Sync stalled alert"
             , msg = ToggleNotificationPref Notifications.SyncStalled
