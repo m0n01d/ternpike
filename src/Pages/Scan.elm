@@ -8,6 +8,7 @@ import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip exposing (SharedTrip)
 import Data.SharedTrips
+import Data.Tier
 import Data.Trip as Trip exposing (Trip)
 import Data.Trips
 import Dict
@@ -65,25 +66,43 @@ viewTierAffordances as_ =
 
 viewTierLabel : Trip -> AuthState -> Html Msg
 viewTierLabel trip as_ =
-    let
-        label =
-            -- `OcrPath.resolve` is the single decision point for "how does
-            -- this credential state route OCR?". Pattern-matching on it here
-            -- forces the compiler to flag missing branches as the type evolves,
-            -- and makes the per-path label easy to evolve in #216.
-            case OcrPath.resolve as_.config.anthropicKey as_.tier of
-                ByoPath key ->
-                    "BYO key ···" ++ AnthropicKey.lastFour key
+    case OcrPath.resolve as_.config.anthropicKey as_.tier of
+        ByoPath key ->
+            -- Paid user with their own key: show key indicator + button to switch back to hosted
+            Html.div [ Html.Attributes.class "mt-4 flex flex-col items-center gap-2" ]
+                [ Html.p
+                    [ Html.Attributes.class "text-center text-[11px] font-mono uppercase tracking-widest text-moss" ]
+                    [ Html.text ("Using your key ···" ++ AnthropicKey.lastFour key) ]
+                , if Data.Tier.isPaid as_.tier then
+                    Html.button
+                        [ Html.Attributes.type_ "button"
+                        , Html.Events.onClick (ApiKeyChanged "")
+                        , Html.Attributes.class "text-[11px] font-mono uppercase tracking-widest text-muted underline underline-offset-2 cursor-pointer"
+                        ]
+                        [ Html.text "Switch to hosted key" ]
 
-                HostedPath ->
-                    paidOcrLabel trip as_
+                  else
+                    Html.text ""
+                ]
 
-                Unscannable ->
-                    "BYO key"
-    in
-    Html.p
-        [ Html.Attributes.class "mt-4 text-center text-[11px] font-mono uppercase tracking-widest text-moss" ]
-        [ Html.text label ]
+        HostedPath ->
+            -- Paid user with no BYO key (hosted path): show hosted indicator + link to Settings to add own key
+            Html.div [ Html.Attributes.class "mt-4 flex flex-col items-center gap-2" ]
+                [ Html.p
+                    [ Html.Attributes.class "text-center text-[11px] font-mono uppercase tracking-widest text-moss" ]
+                    [ Html.text (paidOcrLabel trip as_) ]
+                , Html.a
+                    [ Html.Attributes.href (as_.basePath ++ "settings")
+                    , Html.Attributes.class "text-[11px] font-mono uppercase tracking-widest text-muted underline underline-offset-2"
+                    ]
+                    [ Html.text "Use my own key →" ]
+                ]
+
+        Unscannable ->
+            -- Tern user with no key: point them at Settings to add a key
+            Html.p
+                [ Html.Attributes.class "mt-4 text-center text-[11px] font-mono uppercase tracking-widest text-moss" ]
+                [ Html.text "Add an Anthropic API key to scan" ]
 
 
 paidOcrLabel : Trip -> AuthState -> String

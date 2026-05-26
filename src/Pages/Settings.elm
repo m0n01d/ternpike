@@ -80,19 +80,7 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt version =
             Html.text ""
         , UI.Rule.kicker "CONNECTION"
         , UI.Card.subCard
-            [ UI.Layout.formField "Anthropic API key"
-                (Html.input
-                    [ Html.Attributes.type_ "password"
-                    , Html.Attributes.value (cfg.anthropicKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "")
-                    , Html.Events.onInput ApiKeyChanged
-                    , Html.Attributes.placeholder "sk-ant-..."
-                    , UI.Layout.textInputStyle
-                    ]
-                    []
-                )
-            , Html.p [ Html.Attributes.class "text-xs text-muted mt-2" ]
-                [ Html.text "Used to read receipts locally. Never sent to Ternpike servers." ]
-            ]
+            (viewAnthropicKeySection cfg maybeAuthState)
         , UI.Rule.kicker "SESSION"
         , UI.Card.subCard
             [ Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
@@ -112,6 +100,52 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt version =
           else
             Html.text ""
         ]
+
+
+viewAnthropicKeySection : AppConfig -> Maybe AuthState -> List (Html Msg)
+viewAnthropicKeySection cfg maybeAuthState =
+    let
+        isPaid =
+            maybeAuthState
+                |> Maybe.map (\as_ -> Tier.isPaid as_.tier)
+                |> Maybe.withDefault False
+
+        keyIsSet =
+            cfg.anthropicKey /= Nothing
+
+        keyInput =
+            [ UI.Layout.formField "Anthropic API key"
+                (Html.input
+                    [ Html.Attributes.type_ "password"
+                    , Html.Attributes.value (cfg.anthropicKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "")
+                    , Html.Events.onInput ApiKeyChanged
+                    , Html.Attributes.placeholder "sk-ant-..."
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
+                )
+            , Html.p [ Html.Attributes.class "text-xs text-muted mt-2" ]
+                [ Html.text "Used to read receipts locally. Never sent to Ternpike servers." ]
+            ]
+    in
+    if isPaid then
+        let
+            toggleRow =
+                viewToggleRow
+                    { helper = "Leave off to use Ternpike's hosted key. Your key never reaches our servers when this is on."
+                    , label = "Use my own Anthropic key"
+                    , msg = ApiKeyChanged ""
+                    , value = keyIsSet
+                    }
+        in
+        if keyIsSet then
+            toggleRow :: keyInput
+
+        else
+            [ toggleRow ]
+
+    else
+        keyInput
 
 
 viewAppearanceSection : ColorScheme -> Html Msg
