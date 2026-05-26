@@ -42,6 +42,15 @@ id = "4a9baf82359545ef981e7dcc6a646f94"
 binding = "PUSH_KV"
 id = "679c582bcded4fef8fdb3cebcb8940cc"
 
+# QR-sticker scan counters (key: `<slug>`, value: JSON `{count, firstAt, lastAt}`).
+# Slugs are normalized to `[a-z0-9-]{1,32}`. Sized for ad-hoc growth-hacker
+# stickers — a few dozen slugs at most. Bumped via executionCtx.waitUntil on
+# every `/qr/:slug` redirect; read by `GET /admin/qr`.
+# Provision with: wrangler kv namespace create QR_KV
+[[kv_namespaces]]
+binding = "QR_KV"
+id = "REPLACE_WITH_WRANGLER_CREATED_ID"
+
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
 # Resend audience ID for the marketing waitlist. Required path
@@ -53,6 +62,14 @@ RESEND_AUDIENCE_ID = "206e97c4-13b7-4a6a-a85b-01414c35449b"
 [[routes]]
 pattern = "api.ternpike.com"
 custom_domain = true
+
+# Short URL for printed QR stickers — `ternpike.com/qr/<slug>` is denser/easier
+# to scan than `api.ternpike.com/qr/<slug>`. Worker route preempts the
+# marketing Pages site for `/qr/*` only; everything else under ternpike.com
+# still hits Pages.
+[[routes]]
+pattern = "ternpike.com/qr/*"
+zone_name = "ternpike.com"
 
 # Hourly: grace-to-frozen sharedtrip sweep (see server/sharedTrips.js `runGraceFreezeSweep`).
 # Friday 17:00 UTC: weekly scan reminder push (see server/notifications.js

@@ -171,6 +171,7 @@ type alias AuthState =
     , duplicateWarning : Maybe Expense
     , error : Maybe String
     , expenses : Dict String (Dict String Expense)
+    , shareModalOpen : Bool
     , sharedTripUi : SharedTripUiState
     , sharedTrips : Data.SharedTrips.SharedTrips
     , form : PendingForm
@@ -288,6 +289,7 @@ type Msg
     | CreateSharedTripResult (Result Http.Error Http.SharedTripApi.CreateSharedTripResponse)
     | CloseLedgerMenu
     | CloseMovePicker
+    | CloseShareModal
     | CloseTripForm
     | CodeInputChanged String
     | ConfirmDeleteTrip Trip
@@ -339,8 +341,10 @@ type Msg
     | OpenMapPicker
     | OpenMovePicker Expense
     | OpenNewTripForm
+    | OpenShareModal
     | OpenTransferModal SharedTripId
     | PaymentMethodChanged (Maybe PaymentMethod)
+    | PrintShareQr
     | PushSubscribeReceived { error : String, ok : Bool }
     | RefreshClicked
     | RequestCodeResult (Result Http.Error ())

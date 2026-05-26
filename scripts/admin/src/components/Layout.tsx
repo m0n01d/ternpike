@@ -3,7 +3,7 @@ import React from 'react'
 
 import { config } from '../api.js'
 
-type Section = 'users' | 'dbs' | 'sharedtrips' | 'seed' | 'notifications'
+type Section = 'users' | 'dbs' | 'sharedtrips' | 'seed' | 'notifications' | 'qr'
 
 type Props = {
   section: Section
@@ -19,6 +19,7 @@ const SECTIONS: Array<{ key: Section; label: string }> = [
   { key: 'sharedtrips', label: 'SharedTrips' },
   { key: 'seed', label: 'Seed' },
   { key: 'notifications', label: 'Notifications' },
+  { key: 'qr', label: 'QR stickers' },
 ]
 
 export const Layout: React.FC<Props> = ({

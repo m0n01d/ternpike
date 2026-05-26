@@ -5,12 +5,13 @@ import { Layout } from './components/Layout.js'
 import { DbsList } from './components/DbsList.js'
 import { DocBrowser } from './components/DocBrowser.js'
 import { NotificationsList } from './components/NotificationsList.js'
+import { QrList } from './components/QrList.js'
 import { SeedScreen } from './components/SeedScreen.js'
 import { SharedTripsList } from './components/SharedTripsList.js'
 import { UserDetail } from './components/UserDetail.js'
 import { UsersList } from './components/UsersList.js'
 
-type Section = 'users' | 'dbs' | 'sharedtrips' | 'seed' | 'notifications'
+type Section = 'users' | 'dbs' | 'sharedtrips' | 'seed' | 'notifications' | 'qr'
 
 type View =
   | { kind: 'users' }
@@ -20,6 +21,7 @@ type View =
   | { kind: 'sharedtrips' }
   | { kind: 'seed' }
   | { kind: 'notifications' }
+  | { kind: 'qr' }
 
 const sectionFor = (view: View): Section => {
   if (view.kind === 'users' || view.kind === 'user-detail') return 'users'
@@ -27,6 +29,7 @@ const sectionFor = (view: View): Section => {
   if (view.kind === 'sharedtrips') return 'sharedtrips'
   if (view.kind === 'seed') return 'seed'
   if (view.kind === 'notifications') return 'notifications'
+  if (view.kind === 'qr') return 'qr'
   return view.from
 }
 
@@ -41,7 +44,7 @@ export const App: React.FC = () => {
   useInput((input, key) => {
     if (input === 'q' || (key.ctrl && input === 'c')) exit()
     if (key.tab) {
-      const order: Section[] = ['users', 'dbs', 'sharedtrips', 'seed', 'notifications']
+      const order: Section[] = ['users', 'dbs', 'sharedtrips', 'seed', 'notifications', 'qr']
       const cur = sectionFor(view)
       const next = order[(order.indexOf(cur) + 1) % order.length]
       setView({ kind: next as any })
@@ -112,6 +115,9 @@ export const App: React.FC = () => {
     content = (
       <NotificationsList setStatus={setStatus} setError={setError} />
     )
+  } else if (view.kind === 'qr') {
+    hints = `${baseHints} · p print · shift-P print all · n new · t template · r refresh · tab switch`
+    content = <QrList setStatus={setStatus} setError={setError} />
   }
 
   return (

@@ -52,7 +52,7 @@ For any change bigger than a one-commit fix, break the work into GitHub issues *
 
 **One issue per logical unit of work.** A unit is "something that could ship and be reviewed on its own." Foundation issues (the blocker everyone else depends on) come first; enhancements come last. Cross-reference dependencies in the issue body ("Depends on #42", "Blocks #45").
 
-**Every issue body uses What / Why / How:**
+**Every issue body uses What / Why / How (+ Mockup, for UI issues):**
 
 ```markdown
 ## What
@@ -63,7 +63,20 @@ The problem this solves. What's broken or missing today, and what the user-visib
 
 ## How
 Bullet list of the implementation moves. Reference specific files, functions, ports, types. If there are real alternatives, mention them and pick one. If the change touches a documented invariant (architecture.md, this file), call that out.
+
+## Mockup
+(UI issues only.) A picture of the target state — see the **Mockups** subsection below.
 ```
+
+**Mockups for UI issues are required.** Text-only specs drift, and starting implementation without knowing what the target looks like is wasted work. Acceptable forms, in increasing order of fidelity:
+
+1. **ASCII wireframe** in a fenced code block — fast, no tooling, conveys layout + hierarchy. Fine for "where does the button go" issues.
+2. **Hand-authored SVG/PNG** — author the SVG, render to PNG via `qlmanage -t -s 800 -o <dir> <svg>`, commit to `docs/mocks/issue-<N>-<slug>.png`, reference via raw GitHub URL (`https://github.com/m0n01d/ternpike/blob/<branch-or-sha>/docs/mocks/...?raw=true`). Branch must be pushed for the URL to resolve.
+3. **HTML/CSS mock or live screenshot** via the `playwright-ui` skill — highest fidelity, requires existing or stubbed UI to drive.
+
+For **multi-state UI** (loading / empty / error / success), one mockup per state — not just the happy path. For **modifications to existing UI**, a before screenshot (via `playwright-ui`) is mandatory plus a description or hand-edited after image.
+
+It's fine to ship an ASCII wireframe in the initial issue and upgrade to a hi-fi render later as the issue gets prioritized. Don't pre-implement the production asset (e.g., a real SVG template) just to satisfy the mockup requirement — a hand-authored stand-in is enough.
 
 **Naming:** prefix with the area in square brackets — `[PWA]`, `[Tier]`, `[Stats]`, `[Auth]`. Keep titles under 70 chars.
 

@@ -115,6 +115,19 @@ export type NotificationUser = {
   tier: Tier
 }
 
+export type QrSlug = {
+  byCity: Record<string, number>
+  byCountry: Record<string, number>
+  byRegion: Record<string, number>
+  count: number
+  firstAt: string | null
+  lastAt: string | null
+  slug: string
+}
+
+export type QrTemplate = 'trailhead' | 'sign' | 'minimal'
+export const QR_TEMPLATES: QrTemplate[] = ['trailhead', 'sign', 'minimal']
+
 export const api = {
   ping: () =>
     request<{ ok: true; users: User[] }>('GET', '/admin/users'),
@@ -209,4 +222,26 @@ export const api = {
       '/admin/test-push',
       { email },
     ),
+
+  listQrSlugs: () =>
+    request<{ ok: true; slugs: QrSlug[]; templates: QrTemplate[] }>(
+      'GET',
+      '/admin/qr',
+    ),
+}
+
+// Build a print-page URL for one or more slugs. The Worker serves it at
+// both `ternpike.com/qr/print` (production short host) and the apiUrl
+// fallback (dev or direct hits); we use apiUrl so it works in dev too.
+export const qrPrintUrl = (
+  slugs: string[],
+  template: QrTemplate,
+  label?: string,
+): string => {
+  const params = new URLSearchParams({
+    slugs: slugs.join(','),
+    template,
+  })
+  if (label) params.set('label', label)
+  return `${config.apiUrl}/qr/print?${params.toString()}`
 }

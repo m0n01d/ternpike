@@ -75,6 +75,11 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt =
 
             Nothing ->
                 Html.text ""
+        , if isSignedIn then
+            viewShareSection
+
+          else
+            Html.text ""
         , if showInstallPrompt then
             viewInstallSection
 
@@ -250,6 +255,18 @@ viewInstallSection =
             [ Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
                 [ Html.text "Add Ternpike to your home screen for an app-like, full-screen experience." ]
             , UI.Button.secondary { label = "Install app", onClick = TriggerInstallPrompt }
+            ]
+        ]
+
+
+viewShareSection : Html Msg
+viewShareSection =
+    Html.div []
+        [ UI.Rule.kicker "SHARE"
+        , UI.Card.subCard
+            [ Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
+                [ Html.text "A personal QR that friends can scan off your phone to install Ternpike." ]
+            , UI.Button.secondary { label = "Share Ternpike", onClick = OpenShareModal }
             ]
         ]
 
