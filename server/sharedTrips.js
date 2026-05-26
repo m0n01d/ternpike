@@ -14,6 +14,7 @@ import { signJwt, verifyJwt } from './jwt.js'
 import {
   sendSharedTripAccessChangePush,
   sendSharedTripActivityPush,
+  sendSharedTripInvitePush,
 } from './notifications.js'
 
 // The Resend Worker SDK reads its baseUrl from `process.env.RESEND_BASE_URL`
@@ -425,6 +426,21 @@ export function registerSharedTripRoutes(app) {
       console.error('sharedtrips/invite sendMail:', err)
       return c.json({ ok: false, error: 'email_failed' }, 500)
     }
+
+    // Fire-and-forget push to the invitee — invite creation success must not
+    // depend on push delivery. If PUSH_KV is not configured (e.g. local dev
+    // without KV bindings), sendSharedTripInvitePush returns early silently.
+    c.executionCtx?.waitUntil(
+      sendSharedTripInvitePush(env, {
+        inviteeEmail,
+        inviterEmail: caller.email,
+        sharedTripId,
+        tripName: meta.name,
+      }).catch((err) => {
+        console.error('sharedtrips/invite push:', err)
+      }),
+    )
+
     return c.json({ ok: true })
   })
 

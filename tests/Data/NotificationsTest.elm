@@ -22,14 +22,16 @@ suite =
     describe "Data.Notifications"
         [ describe "encodePrefs / decodePrefs roundtrip"
             [ fuzz
-                (Fuzz.map4
-                    (\ac a b c ->
+                (Fuzz.map5
+                    (\ac a si b c ->
                         { sharedTripAccessChange = ac
                         , sharedTripActivity = a
+                        , sharedTripInvite = si
                         , syncStalled = b
                         , weeklyScanReminder = c
                         }
                     )
+                    Fuzz.bool
                     Fuzz.bool
                     Fuzz.bool
                     Fuzz.bool

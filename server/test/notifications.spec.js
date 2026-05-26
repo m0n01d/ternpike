@@ -158,6 +158,7 @@ describe('POST /notifications/subscribe', () => {
     assert.deepEqual(JSON.parse(prefEntry[1].value), {
       sharedTripAccessChange: true,
       sharedTripActivity: true,
+      sharedTripInvite: true,
       syncStalled: true,
       weeklyScanReminder: true,
     })
@@ -286,6 +287,7 @@ describe('GET /notifications/preferences', () => {
     assert.deepEqual(res.body.prefs, {
       sharedTripAccessChange: true,
       sharedTripActivity: true,
+      sharedTripInvite: true,
       syncStalled: true,
       weeklyScanReminder: true,
     })
