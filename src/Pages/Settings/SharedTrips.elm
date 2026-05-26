@@ -163,14 +163,18 @@ viewMembersStack sharedTrip =
 
 viewMembersList : SharedTrip -> Html msg
 viewMembersList sharedTrip =
+    let
+        members =
+            SharedTrip.members sharedTrip
+    in
     Html.div [ Html.Attributes.class "mt-3 flex flex-col gap-2" ]
-        (SharedTrip.members sharedTrip
+        (members
             |> List.map
                 (\u ->
                     Html.div [ Html.Attributes.class "flex items-center gap-2" ]
                         [ UI.Avatar.viewInitial u
                         , Html.span [ Html.Attributes.class "text-sm text-ink" ]
-                            [ Html.text (UserId.toString u) ]
+                            [ Html.text (UserId.handleIn u members) ]
                         , if SharedTrip.isOwner u sharedTrip then
                             Html.span [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-rust-deep" ]
                                 [ Html.text "Owner" ]
@@ -265,8 +269,13 @@ viewModal as_ =
                     SharedTrips.get sharedTripId as_.sharedTrips
                         |> Maybe.map
                             (\sharedTrip ->
-                                sharedTrip.otherMembers
-                                    |> List.map UserId.toString
+                                let
+                                    others =
+                                        sharedTrip.otherMembers
+                                in
+                                List.map
+                                    (\u -> ( UserId.toString u, UserId.handleIn u others ))
+                                    others
                             )
                         |> Maybe.withDefault []
             in
@@ -282,12 +291,12 @@ viewModal as_ =
                             [ Html.Attributes.value "" ]
                             [ Html.text "Select a member…" ]
                             :: List.map
-                                (\email ->
+                                (\( email, displayHandle ) ->
                                     Html.option
                                         [ Html.Attributes.value email
                                         , Html.Attributes.selected (email == target)
                                         ]
-                                        [ Html.text email ]
+                                        [ Html.text displayHandle ]
                                 )
                                 memberOptions
                         )
