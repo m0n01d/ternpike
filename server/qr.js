@@ -24,7 +24,7 @@ import {
   isValidTemplate,
   renderSticker,
 } from './qrSvg.js'
-import { renderStickerPdf } from './qrPdf.js'
+import { DEFAULT_SIZE as DEFAULT_PDF_SIZE, SIZES as PDF_SIZES, renderStickerPdf } from './qrPdf.js'
 
 const SLUG_RE = /^[a-z0-9-]{1,32}$/
 const PUBLIC_BASE = 'https://ternpike.com'
@@ -115,13 +115,21 @@ const constantTimeEqual = (a, b) => {
 
 // Cloudflare populates request.cf with edge geo data; absent on local
 // `wrangler dev` without the --cf flag, hence the null-guarded reads.
+// lat/lon come from CF as strings; parse to floats and let downstream
+// consumers null-guard absent values.
 const readLocation = (c) => {
   const cf = c.req.raw?.cf
-  if (!cf) return { country: null, region: null, city: null }
+  if (!cf) return { city: null, country: null, lat: null, lon: null, region: null }
+  const parseNum = (v) => {
+    const n = typeof v === 'string' ? parseFloat(v) : null
+    return Number.isFinite(n) ? n : null
+  }
   return {
-    country: typeof cf.country === 'string' ? cf.country : null,
-    region: typeof cf.regionCode === 'string' ? cf.regionCode : null,
     city: typeof cf.city === 'string' ? cf.city : null,
+    country: typeof cf.country === 'string' ? cf.country : null,
+    lat: parseNum(cf.latitude),
+    lon: parseNum(cf.longitude),
+    region: typeof cf.regionCode === 'string' ? cf.regionCode : null,
   }
 }
 
@@ -188,23 +196,38 @@ export function registerQrRoutes(app) {
     })
   })
 
-  // --- sticker PDF (one slug, 4x6 vector, label-printer ready) ------------
+  // --- sticker PDF (one slug, 4x6 label-printer ready) --------------------
   //
   // Bypasses the browser print stack so iOS Safari "Save to PDF" doesn't
-  // letterbox the sticker onto a Letter page. Currently the share template
-  // at exactly 4x6 inches; size/template knobs are future work.
+  // letterbox the sticker onto a Letter page. `?size=large|medium|small`
+  // picks the grid layout: 1 full label, 6 mid stickers, or 12 small.
+  // All sizes render onto the same 4x6 page so the printer setup is
+  // identical regardless of choice.
 
   app.get('/qr/:slug/sticker.pdf', async (c) => {
     const slug = normalizeSlug(c.req.param('slug'))
     if (!slug) {
       return c.text('invalid slug', 400)
     }
+    const sizeParam = c.req.query('size')
+    const size = PDF_SIZES.includes(sizeParam) ? sizeParam : DEFAULT_PDF_SIZE
     const dest = stickerUrl(slug)
-    const bytes = await renderStickerPdf({ dest, slug })
+    // Stamp each sticker with the edge-geo of the print request — gives a
+    // "printed from here" record on the physical sticker. Cf precision is
+    // city-level (IP-based), good to ~3 decimals. Query-param overrides
+    // (`?lat=...&lon=...`) let local dev test without cf populated.
+    const loc = readLocation(c)
+    const queryLat = parseFloat(c.req.query('lat'))
+    const queryLon = parseFloat(c.req.query('lon'))
+    const lat = Number.isFinite(queryLat) ? queryLat : loc.lat
+    const lon = Number.isFinite(queryLon) ? queryLon : loc.lon
+    const bytes = await renderStickerPdf({ dest, lat, lon, size, slug })
     return new Response(bytes, {
       headers: {
-        'Cache-Control': 'public, max-age=3600',
-        'Content-Disposition': `inline; filename="ternpike-${slug}.pdf"`,
+        // Each print stamps live coords; can't share a cache entry across
+        // users without leaking their location to each other.
+        'Cache-Control': 'no-store',
+        'Content-Disposition': `inline; filename="ternpike-${slug}-${size}.pdf"`,
         'Content-Type': 'application/pdf',
       },
     })
