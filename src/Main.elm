@@ -72,6 +72,7 @@ import Browser.Dom
 import Browser.Navigation as Nav
 import Data.Amendment as Amendment
 import Data.AmendmentId as AmendmentId
+import Data.AnthropicKey as AnthropicKey
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category(..))
 import Data.ColorScheme as ColorScheme
@@ -1341,7 +1342,9 @@ init flagsJson url key =
                 |> Result.withDefault epochDate
 
         cfg =
-            { anthropicKey = dec "anthropicKey"
+            { anthropicKey =
+                D.decodeValue (D.field "anthropicKey" AnthropicKey.decoder) flagsJson
+                    |> Result.withDefault Nothing
             , backendUrl = dec "backendUrl"
             , vapidPublicKey = dec "vapidPublicKey"
             }
@@ -1815,8 +1818,12 @@ updateGuest msg gs =
             ( GuestModel { gs | showSettings = not gs.showSettings }, Cmd.none )
 
         ApiKeyChanged s ->
-            ( GuestModel { gs | session = mapGuestConfig (\c -> { c | anthropicKey = s }) gs.session }
-            , saveStorage { key = "anthropic_key", value = s }
+            let
+                newKey =
+                    AnthropicKey.fromInput s
+            in
+            ( GuestModel { gs | session = mapGuestConfig (\c -> { c | anthropicKey = newKey }) gs.session }
+            , saveStorage { key = "anthropic_key", value = newKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "" }
             )
 
         ResetSettingsClicked ->
@@ -1825,7 +1832,7 @@ updateGuest msg gs =
                     | authError = Nothing
                     , codeInput = ""
                     , emailInput = ""
-                    , session = { config = { anthropicKey = "", backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
+                    , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
                     , showSettings = False
                 }
             , clearAllStorage ()
@@ -2263,7 +2270,7 @@ updateAuth msg as_ =
                 , key = as_.key
                 , networkOffline = as_.networkOffline
                 , pendingJoinToken = Nothing
-                , session = { config = { anthropicKey = "", backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
+                , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
                 , showSettings = False
                 , today = as_.today
                 , version = as_.version
@@ -2308,7 +2315,7 @@ updateAuth msg as_ =
         GotFileUrl itemId dataUrl ->
             let
                 newStatus =
-                    if as_.config.anthropicKey /= "" then
+                    if as_.config.anthropicKey /= Nothing then
                         ScanProcessing
 
                     else
@@ -2319,7 +2326,7 @@ updateAuth msg as_ =
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }
             , Cmd.batch
-                [ if as_.config.anthropicKey /= "" then
+                [ if as_.config.anthropicKey /= Nothing then
                     -- Always route through the JS-side downscaler before
                     -- the OCR call. Anthropic's image limit is 5 MiB on
                     -- the base64 payload; modern phone JPEGs routinely
@@ -2366,7 +2373,7 @@ updateAuth msg as_ =
                                     as_.scanQueue
                         in
                         ( AuthModel { as_ | scanQueue = updatedQueue }
-                        , makeOcrCall payload.id as_.config.anthropicKey (extractBase64 payload.dataUrl) (getMimeType payload.dataUrl)
+                        , makeOcrCall payload.id (as_.config.anthropicKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "") (extractBase64 payload.dataUrl) (getMimeType payload.dataUrl)
                         )
 
         GotOcrResult itemId result ->
@@ -2861,9 +2868,12 @@ updateAuth msg as_ =
             let
                 cfg =
                     as_.config
+
+                newKey =
+                    AnthropicKey.fromInput s
             in
-            ( AuthModel { as_ | config = { cfg | anthropicKey = s } }
-            , saveStorage { key = "anthropic_key", value = s }
+            ( AuthModel { as_ | config = { cfg | anthropicKey = newKey } }
+            , saveStorage { key = "anthropic_key", value = newKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "" }
             )
 
         SetColorScheme scheme ->

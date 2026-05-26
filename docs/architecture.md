@@ -458,6 +458,16 @@ This is how synced remote changes appear in the UI without a page reload.
 
 ## Receipt scanning + OCR
 
+The BYO/hosted credential decision is modelled by `Data.OcrPath` (#219):
+
+- `Data.AnthropicKey` — opaque newtype wrapping the user's BYO key string.
+  `AppConfig.anthropicKey : Maybe AnthropicKey` (replaces the former `String`
+  sentinel; `Nothing` means "no key configured").
+- `Data.OcrPath.OcrPath` — sum type with three constructors: `ByoPath AnthropicKey`
+  (BYO key present), `HostedPath` (paid tier, no BYO key), `Unscannable` (Tern,
+  no BYO key). `OcrPath.resolve` is the single decision point; consumers
+  pattern-match on it.
+
 Receipts go through Anthropic's vision model via `Main.makeOcrCall`. The
 system prompt (`Main.ocrSystemPrompt`) asks Claude to extract one JSON
 object per receipt in the image, with these fields (every one optional —
