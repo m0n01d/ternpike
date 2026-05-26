@@ -176,6 +176,14 @@ the `Expense` payload is the source row's effective snapshot, used by
 `UI.TripPicker.viewMove` to render the picker header and by `MoveEntry`
 when the user picks a destination. In-memory only.
 
+`duplicateWarning : Maybe Expense` is `Just` when the Add-page submit handler
+found a likely duplicate in the same trip's expense cache (same merchant
+case-insensitively, amount within $1, same date). The UI renders an inline
+warning above the submit button and changes the button label to "Add anyway".
+The second `SubmitEntry` with a non-`Nothing` `duplicateWarning` bypasses the
+check and submits. Cleared on any field edit (amount, merchant, date) or
+after the expense is saved. In-memory only.
+
 ---
 
 ## Data modeling with Dicts

@@ -21,6 +21,7 @@ import Routing
 import Types exposing (AuthState, Msg(..))
 import UI.Button
 import UI.Card
+import UI.DuplicateWarning
 import UI.Layout
 import UI.Mascot
 import UI.Rule
@@ -212,6 +213,12 @@ viewBody model pending isEditing =
                     []
                 )
             ]
+        , case model.duplicateWarning of
+            Just match ->
+                UI.DuplicateWarning.view match
+
+            Nothing ->
+                Html.text ""
         , Html.button
             [ Html.Events.onClick SubmitEntry
             , Html.Attributes.disabled (model.submitting || readOnly)
@@ -235,6 +242,9 @@ viewBody model pending isEditing =
             [ Html.text
                 (if model.submitting then
                     "SAVING..."
+
+                 else if model.duplicateWarning /= Nothing then
+                    "ADD ANYWAY"
 
                  else if isEditing then
                     "UPDATE EXPENSE"

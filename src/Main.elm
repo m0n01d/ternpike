@@ -79,7 +79,7 @@ import Data.ColorScheme as ColorScheme
 import Data.CsvExport as CsvExport
 import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
-import Data.Expense as Expense
+import Data.Expense as Expense exposing (Expense)
 import Data.ExpenseId as ExpenseId
 import Data.GeoPoint as GeoPoint
 import Data.Guest exposing (GuestReason(..), GuestSession)
@@ -245,6 +245,7 @@ toAuthState creds initialRoute gs =
     , confirmDeleteTrip = Nothing
     , creds = creds
     , currentUser = UserId.fromString creds.email
+    , duplicateWarning = Nothing
     , error = Nothing
     , expenses = Dict.empty
     , sharedTripUi = SharedTripUi.empty
@@ -2594,22 +2595,22 @@ updateAuth msg as_ =
             )
 
         AddressChanged s ->
-            authPending (\p -> { p | address = s }) as_
+            authPending (\p -> { p | address = s }) { as_ | duplicateWarning = Nothing }
 
         AmountChanged s ->
-            authPending (\p -> { p | amount = s }) as_
+            authPending (\p -> { p | amount = s }) { as_ | duplicateWarning = Nothing }
 
         CategorySelected c ->
             authPending (\p -> { p | category = c }) as_
 
         DateChanged s ->
-            authPending (\p -> { p | date = s }) as_
+            authPending (\p -> { p | date = s }) { as_ | duplicateWarning = Nothing }
 
         LongNoteChanged s ->
             authPending (\p -> { p | longNote = s }) as_
 
         MerchantChanged s ->
-            authPending (\p -> { p | merchant = s }) as_
+            authPending (\p -> { p | merchant = s }) { as_ | duplicateWarning = Nothing }
 
         NoteChanged s ->
             authPending (\p -> { p | note = s }) as_
@@ -2620,9 +2621,55 @@ updateAuth msg as_ =
         SubmitEntry ->
             case PendingEntry.parseEntry (formPending as_.form) of
                 Ok parsed ->
-                    ( AuthModel { as_ | submitting = True, error = Nothing }
-                    , Task.perform (GotSubmitTime parsed) Time.now
-                    )
+                    case as_.duplicateWarning of
+                        Just _ ->
+                            -- User has seen the warning and clicked "Add anyway" — proceed
+                            ( AuthModel { as_ | duplicateWarning = Nothing, submitting = True, error = Nothing }
+                            , Task.perform (GotSubmitTime parsed) Time.now
+                            )
+
+                        Nothing ->
+                            -- First submit attempt — check for duplicates before proceeding
+                            let
+                                tripExpenses : List Expense
+                                tripExpenses =
+                                    case Routing.routeTripId as_.route of
+                                        Just tripId ->
+                                            Dict.get (TripId.toString tripId) as_.expenses
+                                                |> Maybe.withDefault Dict.empty
+                                                |> Dict.values
+
+                                        Nothing ->
+                                            []
+
+                                candidateExpense : Expense
+                                candidateExpense =
+                                    { address = parsed.address
+                                    , amount = parsed.amount
+                                    , category = parsed.category
+                                    , createdAt = Time.millisToPosix 0
+                                    , createdBy = as_.currentUser
+                                    , date = parsed.date
+                                    , geoPoint = parsed.geoPoint
+                                    , id = ExpenseId.fromString ""
+                                    , longNote = parsed.longNote
+                                    , merchant = parsed.merchant
+                                    , note = parsed.note
+                                    , paymentMethod = parsed.paymentMethod
+                                    , tripId = Maybe.withDefault (TripId.fromString "") (Routing.routeTripId as_.route)
+                                    }
+                            in
+                            case Expense.findLikelyDuplicate candidateExpense tripExpenses of
+                                Just match ->
+                                    -- Soft warning: show the match, don't submit yet
+                                    ( AuthModel { as_ | duplicateWarning = Just match, error = Nothing }
+                                    , Cmd.none
+                                    )
+
+                                Nothing ->
+                                    ( AuthModel { as_ | submitting = True, error = Nothing }
+                                    , Task.perform (GotSubmitTime parsed) Time.now
+                                    )
 
                 Err errs ->
                     ( AuthModel { as_ | error = Just (String.join " " errs) }, Cmd.none )
@@ -2731,6 +2778,7 @@ updateAuth msg as_ =
                             ( AuthModel
                                 { as_
                                     | activeScanItemId = Nothing
+                                    , duplicateWarning = Nothing
                                     , form = FreshForm (defaultPendingEntry as_.today)
                                     , route = nextRoute
                                     , scanQueue = updatedQueue
@@ -2789,6 +2837,7 @@ updateAuth msg as_ =
                             ( AuthModel
                                 { as_
                                     | activeScanItemId = Nothing
+                                    , duplicateWarning = Nothing
                                     , form = FreshForm (defaultPendingEntry as_.today)
                                     , route = nextRoute
                                     , scanQueue = updatedQueue
@@ -3196,6 +3245,7 @@ updateAuth msg as_ =
                     ( AuthModel
                         { as_
                             | activeScanItemId = Just (ScanItemId.fromString itemId)
+                            , duplicateWarning = Nothing
                             , error = Nothing
                             , form = FreshForm newPending
                             , route = newRoute
