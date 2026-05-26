@@ -344,7 +344,6 @@ type Msg
     | OpenShareModal
     | OpenTransferModal SharedTripId
     | PaymentMethodChanged (Maybe PaymentMethod)
-    | PrintShareQr
     | PushSubscribeReceived { error : String, ok : Bool }
     | RefreshClicked
     | RequestCodeResult (Result Http.Error ())

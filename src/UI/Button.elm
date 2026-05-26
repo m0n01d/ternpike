@@ -6,6 +6,7 @@ module UI.Button exposing
     , primary
     , primaryBusy
     , secondary
+    , secondaryLink
     )
 
 import Html exposing (Html)
@@ -80,4 +81,26 @@ secondary { label, onClick } =
         , Html.Events.onClick onClick
         , Html.Attributes.class "bg-cream-deep border border-tan text-forest font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-pointer hover:bg-tan"
         ]
+        [ Html.text label ]
+
+
+{-| Same visual as `secondary`, but renders an `<a>` so the click is a real
+navigation rather than a port dispatch. Used for actions whose handler needs
+a fresh user-gesture in Safari/iOS (window.print, AirPrint, etc.) — Elm's
+port hop is async and iOS drops user-activation across the microtask.
+-}
+secondaryLink : { href : String, label : String, newTab : Bool } -> Html msg
+secondaryLink { href, label, newTab } =
+    Html.a
+        (Html.Attributes.href href
+            :: Html.Attributes.class "inline-block text-center bg-cream-deep border border-tan text-forest font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-pointer hover:bg-tan no-underline"
+            :: (if newTab then
+                    [ Html.Attributes.target "_blank"
+                    , Html.Attributes.rel "noopener noreferrer"
+                    ]
+
+                else
+                    []
+               )
+        )
         [ Html.text label ]

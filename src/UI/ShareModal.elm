@@ -40,9 +40,20 @@ viewOpen as_ =
                 ++ "/qr/"
                 ++ slug
                 ++ "/sticker.svg?template=share"
+
+        -- Print opens the existing /qr/print page in a new tab rather than
+        -- calling window.print() from inside the PWA. iOS drops user-
+        -- activation across Elm's port hop, so an in-app window.print() is
+        -- a silent no-op on iPhone; opening the print page is reliable and
+        -- reuses the trailhead label-sized template we already ship.
+        printUrl =
+            as_.config.backendUrl
+                ++ "/qr/print?slugs="
+                ++ slug
+                ++ "&template=trailhead"
     in
     Html.div
-        [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6 print:hidden" ]
+        [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
         [ Html.div
             [ Html.Attributes.class "w-full max-w-sm p-6 bg-parchment dark:bg-cream border border-tan rounded-2xl shadow-panel relative"
             , Html.Attributes.attribute "role" "dialog"
@@ -60,7 +71,7 @@ viewOpen as_ =
                 [ Html.Attributes.class "text-sm text-muted text-center mb-5" ]
                 [ Html.text "Have a friend scan this with their phone camera." ]
             , Html.div
-                [ Html.Attributes.class "print-share-qr rounded-card overflow-hidden shadow-card mb-5" ]
+                [ Html.Attributes.class "rounded-card overflow-hidden shadow-card mb-5" ]
                 [ Html.img
                     [ Html.Attributes.src qrUrl
                     , Html.Attributes.alt "Personal Ternpike QR code"
@@ -70,7 +81,11 @@ viewOpen as_ =
                 ]
             , Html.div
                 [ Html.Attributes.class "flex flex-col gap-2" ]
-                [ UI.Button.secondary { label = "Print", onClick = PrintShareQr }
+                [ UI.Button.secondaryLink
+                    { href = printUrl
+                    , label = "Print"
+                    , newTab = True
+                    }
                 , Html.button
                     [ Html.Attributes.class "text-sm text-muted hover:text-ink py-2"
                     , Html.Events.onClick CloseShareModal
