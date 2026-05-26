@@ -1,4 +1,4 @@
-module Data.Expense exposing (Expense, decoder, encoder, snapshotWith)
+module Data.Expense exposing (Expense, decoder, encoder, findLikelyDuplicate, snapshotWith)
 
 {-| One expense as originally saved.
 
@@ -113,6 +113,114 @@ snapshotWith fields source =
         , createdAt = fields.createdAt
         , tripId = fields.tripId
     }
+
+
+{-| Find the most recently created expense in `existing` that looks like a
+likely duplicate of `candidate`. Returns `Nothing` when the candidate's
+merchant is empty or no match exists.
+
+Match criteria: same merchant (case-insensitive, trimmed), amount within
+$1 (100 cents), same date. Caller is responsible for passing only expenses
+from the relevant trip — this helper does not filter by trip.
+
+    import Data.Category
+    import Data.DateField
+    import Data.ExpenseId
+    import Data.Money
+    import Data.TripId
+    import Data.UserId
+    import Time
+
+    epoch : Data.DateField.DateField
+    epoch =
+        Data.DateField.today Time.utc (Time.millisToPosix 0)
+
+    date24 : Data.DateField.DateField
+    date24 =
+        Data.DateField.fromIsoOr epoch "2024-05-24"
+
+    date25 : Data.DateField.DateField
+    date25 =
+        Data.DateField.fromIsoOr epoch "2024-05-25"
+
+    baseExpense : Expense
+    baseExpense =
+        { address = ""
+        , amount = Data.Money.fromCents 4520
+        , category = Data.Category.Misc
+        , createdAt = Time.millisToPosix 1000
+        , createdBy = Data.UserId.unknown
+        , date = date24
+        , geoPoint = Nothing
+        , id = Data.ExpenseId.fromString "expense::2024-05-24T00:00:00Z::aaa"
+        , longNote = ""
+        , merchant = "Trattoria Vecchia"
+        , note = ""
+        , paymentMethod = Nothing
+        , tripId = Data.TripId.fromString "trip::2024-05-24T00:00:00Z::bbb"
+        }
+
+    -- Exact match: same merchant, amount, date — returns the expense
+    Maybe.map .merchant (findLikelyDuplicate baseExpense [ baseExpense ])
+    --> Just "Trattoria Vecchia"
+
+    -- Different merchant returns Nothing
+    findLikelyDuplicate { baseExpense | merchant = "Other Place" } [ baseExpense ]
+    --> Nothing
+
+    -- Empty merchant always returns Nothing (check is skipped entirely)
+    findLikelyDuplicate { baseExpense | merchant = "" } [ baseExpense ]
+    --> Nothing
+
+    -- Amount more than $1 (101 cents) different returns Nothing
+    findLikelyDuplicate { baseExpense | amount = Data.Money.fromCents 4621 } [ baseExpense ]
+    --> Nothing
+
+    -- Amount within $1 (exactly 100 cents) still matches
+    Maybe.map .merchant (findLikelyDuplicate { baseExpense | amount = Data.Money.fromCents 4620 } [ baseExpense ])
+    --> Just "Trattoria Vecchia"
+
+    -- Different date returns Nothing
+    findLikelyDuplicate { baseExpense | date = date25 } [ baseExpense ]
+    --> Nothing
+
+    -- Returns the most recently created when multiple expenses match
+    Maybe.map (Time.posixToMillis << .createdAt)
+        (findLikelyDuplicate baseExpense
+            [ { baseExpense | createdAt = Time.millisToPosix 500 }
+            , { baseExpense | createdAt = Time.millisToPosix 2000 }
+            ]
+        )
+    --> Just 2000
+
+-}
+findLikelyDuplicate : Expense -> List Expense -> Maybe Expense
+findLikelyDuplicate candidate existing =
+    let
+        normaliseMerchant : String -> String
+        normaliseMerchant m =
+            String.toLower (String.trim m)
+
+        candidateMerchant : String
+        candidateMerchant =
+            normaliseMerchant candidate.merchant
+    in
+    if String.isEmpty candidateMerchant then
+        Nothing
+
+    else
+        existing
+            |> List.filter
+                (\e ->
+                    normaliseMerchant e.merchant
+                        == candidateMerchant
+                        && Money.absDiff candidate.amount e.amount
+                        <= 100
+                        && DateField.compare candidate.date e.date
+                        == EQ
+                )
+            |> List.sortBy (\e -> -(Time.posixToMillis e.createdAt))
+            |> List.head
 
 
 decoder : Json.Decode.Decoder Expense

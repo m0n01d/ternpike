@@ -1,5 +1,6 @@
 module Data.Money exposing
     ( Money
+    , absDiff
     , add
     , decoder
     , encoder
@@ -249,6 +250,26 @@ format (Money cents) =
 
 
 -- COMBINE
+
+
+{-| Absolute difference between two `Money` values, in cents.
+
+Useful for duplicate-detection tolerances where you want to know "are
+these within $1 of each other?" without caring which is larger.
+
+    absDiff (fromCents 4520) (fromCents 4600)
+    --> 80
+
+    absDiff (fromCents 4600) (fromCents 4520)
+    --> 80
+
+    absDiff (fromCents 1000) (fromCents 1000)
+    --> 0
+
+-}
+absDiff : Money -> Money -> Int
+absDiff (Money a) (Money b) =
+    abs (a - b)
 
 
 {-| Add two `Money` values.

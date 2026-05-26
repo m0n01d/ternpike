@@ -168,6 +168,7 @@ type alias AuthState =
     , confirmDeleteTrip : Maybe Trip
     , creds : Creds
     , currentUser : Data.UserId.UserId
+    , duplicateWarning : Maybe Expense
     , error : Maybe String
     , expenses : Dict String (Dict String Expense)
     , sharedTripUi : SharedTripUiState
