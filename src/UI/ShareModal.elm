@@ -47,11 +47,16 @@ viewOpen as_ =
         -- a big page — so we ship the asset pre-sized. iOS opens the PDF
         -- inline in Safari/Files, where Share → Print → AirPrint or
         -- Share → Munbyn app both get a correctly-sized 4x6 vector.
-        printUrl =
+        --
+        -- Three sizes share the same 4x6 page; only the grid changes
+        -- (1 large / 6 medium / 12 small), so the printer setup stays
+        -- identical across choices.
+        printUrl size =
             as_.config.backendUrl
                 ++ "/qr/"
                 ++ slug
-                ++ "/sticker.pdf"
+                ++ "/sticker.pdf?size="
+                ++ size
     in
     Html.div
         [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
@@ -80,11 +85,24 @@ viewOpen as_ =
                     ]
                     []
                 ]
+            , Html.p
+                [ Html.Attributes.class "text-[10px] uppercase tracking-widest text-muted text-center mb-2 font-mono" ]
+                [ Html.text "Print on a 4×6 label" ]
             , Html.div
                 [ Html.Attributes.class "flex flex-col gap-2" ]
                 [ UI.Button.secondaryLink
-                    { href = printUrl
-                    , label = "Print"
+                    { href = printUrl "large"
+                    , label = "1 big sticker"
+                    , newTab = True
+                    }
+                , UI.Button.secondaryLink
+                    { href = printUrl "medium"
+                    , label = "6 medium stickers"
+                    , newTab = True
+                    }
+                , UI.Button.secondaryLink
+                    { href = printUrl "small"
+                    , label = "12 small stickers"
                     , newTab = True
                     }
                 , Html.button
