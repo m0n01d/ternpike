@@ -1471,6 +1471,9 @@ update msg model =
         EmailInputChanged _ ->
             ( nextModel, cmd )
 
+        ExportCsv _ ->
+            ( nextModel, cmd )
+
         FilesSelected _ ->
             ( nextModel, cmd )
 
@@ -1897,6 +1900,9 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         DuplicateEntry _ ->
+            ( GuestModel gs, Cmd.none )
+
+        ExportCsv _ ->
             ( GuestModel gs, Cmd.none )
 
         FilesSelected _ ->
