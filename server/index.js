@@ -10,6 +10,7 @@ import {
   sendSyncStalledReminders,
   sendWeeklyScanReminders,
 } from './notifications.js'
+import { registerQrRoutes } from './qr.js'
 import { registerScanRoutes } from './scan.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
 
@@ -260,6 +261,7 @@ app.post('/marketing/waitlist', async (c) => {
 
 registerGeocodeRoutes(app)
 registerNotificationRoutes(app)
+registerQrRoutes(app)
 registerScanRoutes(app)
 registerSharedTripRoutes(app)
 registerAdminRoutes(app)
