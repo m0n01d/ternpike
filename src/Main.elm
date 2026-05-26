@@ -249,6 +249,7 @@ toAuthState creds initialRoute gs =
     , duplicateWarning = Nothing
     , error = Nothing
     , expenses = Dict.empty
+    , shareLocation = Nothing
     , shareModalOpen = False
     , sharedTripUi = SharedTripUi.empty
     , sharedTrips = SharedTrips.empty
@@ -2529,7 +2530,14 @@ updateAuth msg as_ =
             ( AuthModel { as_ | movePicker = Nothing }, Cmd.none )
 
         OpenShareModal ->
-            ( AuthModel { as_ | shareModalOpen = True }, Cmd.none )
+            -- Kick off a geolocation request so the printable sticker
+            -- can stamp the user's actual GPS coords (not Cloudflare's IP
+            -- geo, which can be states away on mobile data). The Msg
+            -- handler for GotGpsCoords stashes the result on `shareLocation`
+            -- and ShareModal renders fresh print URLs when it arrives.
+            ( AuthModel { as_ | shareLocation = Nothing, shareModalOpen = True }
+            , requestGeolocation ()
+            )
 
         CloseShareModal ->
             ( AuthModel { as_ | shareModalOpen = False }, Cmd.none )
@@ -2635,7 +2643,22 @@ updateAuth msg as_ =
             ( AuthModel { as_ | error = Nothing }, Cmd.none )
 
         GotGpsCoords lat lon ->
-            authPending (setLocation (LocationGot (GeoPoint.fromDegrees lat lon) BrowserGeo)) as_
+            -- Two consumers: the Scan/Add form (existing) and the share
+            -- modal's print URL (new). The geolocation port is shared, so
+            -- update both whenever fresh coords arrive — share-modal reads
+            -- `shareLocation`, scan reads the form's location field.
+            let
+                ( nextModel, nextCmd ) =
+                    authPending (setLocation (LocationGot (GeoPoint.fromDegrees lat lon) BrowserGeo)) as_
+            in
+            ( case nextModel of
+                AuthModel next ->
+                    AuthModel { next | shareLocation = Just { lat = lat, lon = lon } }
+
+                other ->
+                    other
+            , nextCmd
+            )
 
         GeolocationDenied ->
             ( AuthModel { as_ | geoBlocked = True, form = mapForm (setLocation LocationIdle) as_.form }

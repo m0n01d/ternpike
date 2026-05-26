@@ -51,12 +51,28 @@ viewOpen as_ =
         -- Three sizes share the same 4x6 page; only the grid changes
         -- (1 large / 6 medium / 12 small), so the printer setup stays
         -- identical across choices.
+        --
+        -- shareLocation comes from `navigator.geolocation` (kicked off by
+        -- OpenShareModal). When present, lat/lon are appended so each
+        -- sticker is stamped with the user's actual GPS — not cf's IP geo,
+        -- which routes through the nearest CDN edge and can be off by
+        -- hundreds of miles on mobile data. When absent (permission
+        -- denied, slow fix, etc), the sticker omits the coord stamp.
+        coordsParam =
+            case as_.shareLocation of
+                Just loc ->
+                    "&lat=" ++ String.fromFloat loc.lat ++ "&lon=" ++ String.fromFloat loc.lon
+
+                Nothing ->
+                    ""
+
         printUrl size =
             as_.config.backendUrl
                 ++ "/qr/"
                 ++ slug
                 ++ "/sticker.pdf?size="
                 ++ size
+                ++ coordsParam
     in
     Html.div
         [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]

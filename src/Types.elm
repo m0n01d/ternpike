@@ -174,6 +174,7 @@ type alias AuthState =
     , duplicateWarning : Maybe Expense
     , error : Maybe String
     , expenses : Dict String (Dict String Expense)
+    , shareLocation : Maybe { lat : Float, lon : Float }
     , shareModalOpen : Bool
     , sharedTripUi : SharedTripUiState
     , sharedTrips : Data.SharedTrips.SharedTrips
