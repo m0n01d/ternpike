@@ -1,0 +1,13 @@
+{# Macro for legal/long-form text sections.
+   Usage:
+     {% import "partials/legal-section.njk" as legal %}
+     {{ legal.section("Heading", "<p>HTML body</p>") }}
+   The body argument is rendered raw — pass trusted HTML. #}
+{% macro section(heading, body) %}
+<section class="mb-12 last:mb-0">
+  <h2 class="font-display font-bold text-[clamp(22px,3vw,28px)] tracking-[-0.01em] leading-tight text-forest mb-4">{{ heading }}</h2>
+  <div class="font-body text-[17px] leading-[1.7] text-forest [&_p]:mb-4 [&_p:last-child]:mb-0 [&_ul]:my-4 [&_ul]:pl-6 [&_ul]:list-disc [&_ol]:my-4 [&_ol]:pl-6 [&_ol]:list-decimal [&_li]:mb-2 [&_li:last-child]:mb-0 [&_strong]:font-semibold [&_strong]:text-ink [&_em]:italic [&_a]:text-rust [&_a]:underline [&_a:hover]:text-forest [&_code]:font-mono [&_code]:text-[15px] [&_code]:text-rust">
+    {{ body | safe }}
+  </div>
+</section>
+{% endmacro %}

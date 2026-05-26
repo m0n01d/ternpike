@@ -12,12 +12,12 @@ brand:
 nav:
   links:
     - label: "How it works"
-      href: "#how"
+      href: "/#how"
     - label: "Pricing"
-      href: "#pricing"
+      href: "/#pricing"
   cta:
     label: "Get Started"
-    href: "#signup"
+    href: "/#signup"
 
 hero:
   headline:
@@ -234,13 +234,13 @@ footer:
   tagline: "Track every turn of the road."
   links:
     - label: "GitHub"
-      href: "#"
-    - label: "Docs"
-      href: "#"
+      href: "https://github.com/m0n01d/ternpike"
     - label: "Privacy"
-      href: "#"
+      href: "/privacy"
+    - label: "Terms"
+      href: "/terms"
     - label: "Contact"
-      href: "#"
+      href: "mailto:hello@ternpike.com"
   legal: "© 2026 Ternpike. Made on the Alaska Highway."
 
 analytics:

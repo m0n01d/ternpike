@@ -18,8 +18,11 @@ const contentRaw = await readFile(join(src, 'content.yaml'), 'utf8')
 const content = yaml.load(contentRaw)
 
 const env = nunjucks.configure(src, { autoescape: true, noCache: true })
-const html = env.render('index.njk', content)
-await writeFile(join(dist, 'index.html'), html)
+const pages = ['index', 'privacy', 'terms']
+for (const page of pages) {
+  const html = env.render(`${page}.njk`, content)
+  await writeFile(join(dist, `${page}.html`), html)
+}
 
 const cssRaw = await readFile(join(src, 'styles.css'), 'utf8')
 const result = await postcss([tailwindcss()]).process(cssRaw, {

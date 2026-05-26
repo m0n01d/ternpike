@@ -1,5 +1,5 @@
 <nav class="fixed inset-x-0 top-0 z-[100] flex items-center justify-between border-b border-tan/40 bg-parchment/92 px-8 py-4 backdrop-blur-sm transition-colors duration-300">
-  <a href="#" class="font-display text-[22px] font-black tracking-[-0.02em] text-forest no-underline">{{ brand.namePrefix }}<span class="text-rust">{{ brand.nameSuffix }}</span></a>
+  <a href="/" class="font-display text-[22px] font-black tracking-[-0.02em] text-forest no-underline">{{ brand.namePrefix }}<span class="text-rust">{{ brand.nameSuffix }}</span></a>
   <div class="flex items-center gap-4 sm:gap-7">
     {% for link in nav.links %}
     <a href="{{ link.href }}" class="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-moss no-underline transition-colors duration-200 hover:text-forest sm:inline">{{ link.label }}</a>

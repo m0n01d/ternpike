@@ -1,0 +1,98 @@
+{% extends "_layout.njk" %}
+{% import "partials/legal-section.njk" as legal %}
+
+{% block title %}Privacy Policy — Ternpike{% endblock %}
+{% block description %}How Ternpike collects, stores, and shares your data. Short version: as little as possible, on infrastructure we operate, never sold.{% endblock %}
+
+{% block content %}
+<article class="bg-parchment pt-[120px] pb-[100px] px-6">
+  <div class="max-w-[720px] mx-auto">
+
+    <div class="font-mono text-[10px] tracking-[0.25em] uppercase text-rust mb-4">Legal</div>
+    <h1 class="font-display font-black text-[clamp(36px,6vw,56px)] tracking-[-0.02em] leading-[1.05] text-forest mb-4">Privacy Policy</h1>
+    <p class="font-mono text-[11px] tracking-[0.18em] uppercase text-moss mb-12">Last updated: May 26, 2026</p>
+
+    {{ legal.section("In short", "
+      <p>Ternpike is a small expense-tracking app built for road trips. This policy describes what we collect, where it lives, and what we do with it. It applies to <strong>ternpike.com</strong>, <strong>app.ternpike.com</strong>, and the Ternpike apps.</p>
+    ") }}
+
+    {{ legal.section("Summary", "
+      <ul>
+        <li>We collect the minimum needed to run the service: your email and the trip data you log.</li>
+        <li>Your trip data syncs across your own devices via a per-user database. We don't read it, sell it, or share it.</li>
+        <li>Receipt-scanning happens through your own AI provider key (free tier) or through ours, proxied (paid tier). Either way, receipts are not retained on a server we operate after the scan completes.</li>
+        <li>API keys you provide for AI providers (Anthropic, OpenAI, Gemini) are stored only on your device. They never leave it.</li>
+        <li>Analytics is Cloudflare Web Analytics — no cookies, no third-party trackers, no fingerprinting.</li>
+      </ul>
+    ") }}
+
+    {{ legal.section("What we collect", "
+      <p><strong>Account info.</strong> Your email address, used to sign you in via emailed one-time codes. We store the email and a hash of each code with a 10-minute expiry. We do not store passwords.</p>
+      <p><strong>Trip data you create.</strong> Expenses (amount, category, merchant, notes), trips (name, dates), receipt images, and GPS coordinates when you choose to log them. This is your data — see <em>Where it lives</em> below.</p>
+      <p><strong>Billing info, if you subscribe.</strong> Your subscription tier (Tern, Osprey, or Trailblazer) and a Stripe customer ID. Card details go to Stripe — we never see or store them.</p>
+      <p><strong>Technical data.</strong> Standard request logs at our hosting provider (Cloudflare): IP address, user agent, request time, response code. We do not combine these logs with your account.</p>
+      <p><strong>Analytics.</strong> Aggregate page views via Cloudflare Web Analytics. No cookies, no cross-site identifiers. We can see &lsquo;X pageviews on /pricing yesterday&rsquo; — not &lsquo;user Y visited /pricing.&rsquo;</p>
+    ") }}
+
+    {{ legal.section("Where it lives", "
+      <p>Your trip data lives in two places by design:</p>
+      <ol>
+        <li><strong>On your device,</strong> in an offline-first local database so the app works without signal.</li>
+        <li><strong>On a per-user database we operate</strong> (CouchDB, on Cloudflare infrastructure), so it syncs to your other devices.</li>
+      </ol>
+      <p>Your per-user database is yours alone. Other Ternpike users cannot read it. We can technically read it as the database administrator — and we do for diagnostics if you ask us to, or to comply with the law — but routine operation does not involve us looking at your trip data.</p>
+      <p><strong>API keys you bring</strong> (Anthropic, OpenAI, Gemini) are stored exclusively in your browser's local storage. They are never sent to our servers and never sync between devices.</p>
+      <p><strong>Receipt scans:</strong></p>
+      <ul>
+        <li><em>Tern (free):</em> receipt images go from your browser directly to your AI provider using your key. Ternpike's servers are not in the request path.</li>
+        <li><em>Osprey / Trailblazer (paid):</em> receipt images are proxied through <code>api.ternpike.com/scan</code> to Anthropic. We do not retain the image after the request returns; the extracted OCR result is stored as part of the expense in your database.</li>
+      </ul>
+    ") }}
+
+    {{ legal.section("Who we share data with", "
+      <p>Third parties that process data on our behalf:</p>
+      <ul>
+        <li><strong>Cloudflare</strong> — hosting, storage, analytics.</li>
+        <li><strong>Resend</strong> — sends your login-code emails.</li>
+        <li><strong>Anthropic</strong> — processes receipt images for paid-tier OCR. See Anthropic's privacy policy for their terms.</li>
+        <li><strong>Stripe</strong> — processes payments if you subscribe.</li>
+      </ul>
+      <p>We do not sell your data. We do not run ad networks. We do not use your data to train AI models.</p>
+      <p>We may disclose data if compelled by valid legal process. If that happens, we will notify you unless legally prohibited from doing so.</p>
+    ") }}
+
+    {{ legal.section("How long we keep it", "
+      <ul>
+        <li>Account and trip data: kept while your account is active. If you delete your account, we delete the data within 30 days.</li>
+        <li>Login codes: 10-minute TTL, automatically expired.</li>
+        <li>Server logs: roughly 30 days at Cloudflare, per their defaults.</li>
+        <li>Receipt images sent to Anthropic for paid OCR: not retained by us after the call returns; in-flight handling is subject to Anthropic's retention policy.</li>
+      </ul>
+    ") }}
+
+    {{ legal.section("Your rights", "
+      <p>You can:</p>
+      <ul>
+        <li><strong>Access</strong> your data — it's already on your device, and you can export to CSV from the Ledger.</li>
+        <li><strong>Correct</strong> anything you logged — edit it in the app.</li>
+        <li><strong>Delete</strong> your account and data — email us and we will do it within 30 days.</li>
+        <li><strong>Withdraw consent</strong> — log out and uninstall.</li>
+      </ul>
+      <p>If you're in the EU, UK, California, or any other jurisdiction that grants additional data rights, those rights apply. Reach us at the contact address below.</p>
+    ") }}
+
+    {{ legal.section("Children", "
+      <p>Ternpike is not directed at children under 13. We do not knowingly collect data from anyone under 13. If we learn we have, we will delete it.</p>
+    ") }}
+
+    {{ legal.section("Changes", "
+      <p>If we change this policy, we will update the &lsquo;Last updated&rsquo; date at the top. Material changes (new third parties, new categories of data) will be announced via email to active accounts.</p>
+    ") }}
+
+    {{ legal.section("Contact", '
+      <p>Email <a href="mailto:hello@ternpike.com">hello@ternpike.com</a>.</p>
+    ') }}
+
+  </div>
+</article>
+{% endblock %}
