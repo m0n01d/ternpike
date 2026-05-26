@@ -1,8 +1,6 @@
 module Pages.Scan exposing (viewTab)
 
 import Data.Category as Category
-import Data.DateField as DateField
-import Data.Money as Money
 import Data.Navigation exposing (Tab(..))
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
@@ -20,7 +18,9 @@ import Json.Decode
 import Routing
 import Types exposing (AuthState, Msg(..))
 import UI.Button
+import UI.DateView
 import UI.Icons
+import UI.MoneyView
 import UI.SharedTripBadge
 
 
@@ -336,7 +336,9 @@ viewScanCardBody item =
                     Just date ->
                         Html.span
                             [ Html.Attributes.class "ml-2 text-muted" ]
-                            [ Html.text ("· " ++ DateField.formatMonthDay date) ]
+                            [ Html.text "· "
+                            , UI.DateView.monthDay date
+                            ]
 
                     Nothing ->
                         Html.text ""
@@ -402,7 +404,9 @@ viewOcrSummary ocr =
             case ocr.date of
                 Just date ->
                     Html.div [ Html.Attributes.class "text-xs text-forest" ]
-                        [ Html.text ("📅 " ++ DateField.formatMonthDay date) ]
+                        [ Html.text "📅 "
+                        , UI.DateView.monthDay date
+                        ]
 
                 Nothing ->
                     Html.div [ Html.Attributes.class "text-xs text-muted italic" ]
@@ -421,7 +425,13 @@ viewOcrSummary ocr =
     Html.div [ Html.Attributes.class "flex flex-col gap-1" ]
         [ Html.div [ Html.Attributes.class "flex items-baseline gap-2" ]
             [ Html.div [ Html.Attributes.class "text-rust font-mono text-base font-bold" ]
-                [ Html.text (ocr.amount |> Maybe.map Money.format |> Maybe.withDefault "—") ]
+                [ case ocr.amount of
+                    Just amt ->
+                        UI.MoneyView.amount amt
+
+                    Nothing ->
+                        Html.text "—"
+                ]
             , viewCategoryPill ocr.category
             ]
         , merchantLabel

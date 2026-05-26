@@ -65,9 +65,44 @@ JavaScript lives alongside this:
 
 ```
 src/
-├── main.js    # Elm init, port handlers for storage and geolocation
-└── pouch.js   # All PouchDB operations; subscribed to Elm ports
+├── main.js              # Elm init, port handlers for storage and geolocation
+├── pouch.js             # All PouchDB operations; subscribed to Elm ports
+└── elements/            # Custom elements registered for side effects
+    ├── map-picker.js    # <map-picker> — full-screen Leaflet picker
+    ├── waypoint-map.js  # <waypoint-map> — Leaflet map with clustered points
+    ├── relative-time.js # <relative-time> — @github/relative-time-element re-export
+    └── tp-amount.js     # <tp-amount> — Intl.NumberFormat-backed accessible currency
 ```
+
+### Custom elements
+
+Every custom element lives in its own file under `src/elements/` and is
+registered for side effects from `src/main.js`. New element? add the file
+under `src/elements/`, add a side-effect `import './elements/foo.js'` to
+`main.js`, and write an Elm wrapper under `src/UI/` so the call sites can
+stay tidy and the attribute names don't drift.
+
+- **`<tp-amount value="12.34" currency="USD">`** — renders a currency
+  amount via `Intl.NumberFormat`. Wrapped in Elm by `UI.MoneyView.amount` /
+  `UI.MoneyView.wholeDollars`. The element carries `role="text"` and a
+  spoken-form `aria-label` (e.g. `"twelve dollars and thirty-four cents"`,
+  `"negative five dollars"`); the visible `$` glyph sits inside an
+  `aria-hidden="true"` span. The full a11y contract is documented at the
+  top of `src/elements/tp-amount.js`.
+- **`<relative-time datetime="2024-05-21">`** — the
+  `@github/relative-time-element` package, registered as a side-effect
+  import. Wrapped in Elm by `UI.DateView.short` (long shape:
+  `"May 21, 2024"`) and `UI.DateView.monthDay` (short shape: `"May 21"`).
+  Always set `no-title=""` per the library's own a11y guidance.
+- **`<map-picker>` / `<waypoint-map>`** — Leaflet-backed elements. No Elm
+  wrapper today; called via `Html.node` directly because they show up in
+  exactly one place each.
+
+`Data.Money.format`, `Data.DateField.formatDisplay`, and
+`Data.DateField.formatMonthDay` are intentionally still alive — they're
+used by non-HTML consumers (Leaflet popup labels in
+`Helpers.encodeWaypoints`, elm-charts tick labels in `Pages.Stats`). DOM
+render sites must go through the web components / wrapper modules above.
 
 ---
 

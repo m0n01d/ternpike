@@ -23,8 +23,10 @@ import Types exposing (AuthState, Msg(..))
 import UI.Avatar
 import UI.BudgetBar
 import UI.Button
+import UI.DateView
 import UI.Icons
 import UI.Mascot
+import UI.MoneyView
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -164,7 +166,7 @@ viewLedgerHero budget entries =
             [ Html.text "RUNNING TOTAL" ]
         , Html.div
             [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
-            [ Html.text (Money.format total) ]
+            [ UI.MoneyView.amount total ]
         , Html.div
             [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
             [ Html.text kickerText ]
@@ -368,7 +370,7 @@ viewDayTotal total =
     Html.div
         [ Html.Attributes.class "mt-3 pt-2 text-center font-mono text-xs tracking-widest text-forest" ]
         [ Html.text "DAY TOTAL  "
-        , Html.text (Money.format total)
+        , UI.MoneyView.amount total
         ]
 
 
@@ -381,7 +383,7 @@ viewDayKicker maybeBand dayN date =
         , Html.span [ Html.Attributes.class (railClass maybeBand) ] []
         , Html.span
             [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-moss" ]
-            [ Html.text (String.toUpper (DateField.formatDisplay date)) ]
+            [ UI.DateView.short date ]
         ]
 
 
@@ -493,7 +495,7 @@ viewEntryRow opts entry =
                 ]
             , Html.div
                 [ Html.Attributes.class "font-mono text-base text-forest tabular-nums shrink-0" ]
-                [ Html.text (Money.format entry.amount) ]
+                [ UI.MoneyView.amount entry.amount ]
             ]
         , viewRowMenuButton entry
         , if isOpen then

@@ -21,6 +21,7 @@ import Types exposing (AuthState, Msg(..))
 import UI.Avatar
 import UI.BudgetBar
 import UI.Button
+import UI.DateView
 import UI.Icons
 import UI.Layout
 import UI.Mascot
@@ -124,17 +125,19 @@ viewTripHero maybeFlock activeTrip entries =
         hasEnd =
             not (isEpochDate activeTrip.endDate)
 
-        dateLine =
+        dateLineNodes : List (Html Msg)
+        dateLineNodes =
             if hasStart && hasEnd then
-                DateField.formatDisplay activeTrip.startDate
-                    ++ " — "
-                    ++ DateField.formatDisplay activeTrip.endDate
+                [ UI.DateView.short activeTrip.startDate
+                , Html.text " — "
+                , UI.DateView.short activeTrip.endDate
+                ]
 
             else if hasStart then
-                DateField.formatDisplay activeTrip.startDate
+                [ UI.DateView.short activeTrip.startDate ]
 
             else
-                ""
+                []
 
         totalDays =
             if hasStart && hasEnd then
@@ -163,15 +166,16 @@ viewTripHero maybeFlock activeTrip entries =
           else
             Html.text ""
         , Html.div [ Html.Attributes.class "mt-2 flex items-center gap-3 text-xs font-mono tracking-wide text-muted" ]
-            [ if dateLine /= "" then
+            [ if not (List.isEmpty dateLineNodes) then
                 Html.span [ Html.Attributes.class "flex items-center gap-2" ]
-                    [ Html.text dateLine
-                    , if totalDays > 0 then
-                        Html.text ("· " ++ String.fromInt totalDays ++ " DAYS")
+                    (dateLineNodes
+                        ++ (if totalDays > 0 then
+                                [ Html.text ("· " ++ String.fromInt totalDays ++ " DAYS") ]
 
-                      else
-                        Html.text ""
-                    ]
+                            else
+                                []
+                           )
+                    )
 
               else
                 Html.text ""
@@ -249,7 +253,7 @@ viewOtherTripRow as_ trip =
             , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
                 [ if not (isEpochDate trip.startDate) then
                     Html.p [ Html.Attributes.class "text-[11px] text-moss font-mono" ]
-                        [ Html.text (DateField.formatDisplay trip.startDate) ]
+                        [ UI.DateView.short trip.startDate ]
 
                   else
                     Html.text ""

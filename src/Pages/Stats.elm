@@ -25,6 +25,7 @@ import Types exposing (AuthState, Msg(..))
 import UI.BudgetBar
 import UI.Card
 import UI.Mascot
+import UI.MoneyView
 import UI.Rule
 import UI.Skeleton
 import UI.Theme
@@ -155,7 +156,7 @@ viewHeroReady model entries =
         , Html.div [ Html.Attributes.class "flex items-end justify-between gap-4" ]
             [ Html.div []
                 [ Html.div [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
-                    [ Html.text (Money.format total) ]
+                    [ UI.MoneyView.amount total ]
                 , Html.div [ Html.Attributes.class "mt-2 text-xs font-mono tracking-wide text-muted" ]
                     [ Html.text (String.fromInt numEntries ++ " ENTRIES · DAY " ++ dayOfTripStr) ]
                 ]
@@ -167,19 +168,19 @@ viewHeroReady model entries =
           else
             UI.Rule.dashedRule
         , Html.div [ Html.Attributes.class "flex gap-6" ]
-            [ statBlock "DAILY BURN" (Money.format avgPerDay)
-            , statBlock "AVG / ENTRY" (Money.format avgPerEntry)
+            [ statBlock "DAILY BURN" (UI.MoneyView.amount avgPerDay)
+            , statBlock "AVG / ENTRY" (UI.MoneyView.amount avgPerEntry)
             ]
         ]
 
 
-statBlock : String -> String -> Html Msg
+statBlock : String -> Html Msg -> Html Msg
 statBlock label_ value =
     Html.div [ Html.Attributes.class "flex-1" ]
         [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
             [ Html.text label_ ]
         , Html.div [ Html.Attributes.class "font-display text-xl font-bold text-forest mt-0.5" ]
-            [ Html.text value ]
+            [ value ]
         ]
 
 
@@ -326,34 +327,44 @@ viewBodyReady model entries =
         [ UI.Rule.kicker "AT A GLANCE"
         , UI.Card.subCard
             [ Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3" ]
-                [ statCard "MEDIAN" (Money.format median)
+                [ statCard "MEDIAN" (UI.MoneyView.amount median)
                 , statCard "TOP CATEGORY"
-                    (topCat
-                        |> Maybe.map (\c -> Category.icon c ++ " " ++ Category.label c)
-                        |> Maybe.withDefault "—"
+                    (Html.text
+                        (topCat
+                            |> Maybe.map (\c -> Category.icon c ++ " " ++ Category.label c)
+                            |> Maybe.withDefault "—"
+                        )
                     )
                 , if numDays > 1 then
                     statCard "BIGGEST DAY"
-                        (bigDay
-                            |> Maybe.map (\( d, t ) -> String.slice 5 10 (DateField.toIso d) ++ "  " ++ Money.format t)
-                            |> Maybe.withDefault "—"
+                        (case bigDay of
+                            Just ( d, t ) ->
+                                Html.span []
+                                    [ Html.text (String.slice 5 10 (DateField.toIso d) ++ "  ")
+                                    , UI.MoneyView.amount t
+                                    ]
+
+                            Nothing ->
+                                Html.text "—"
                         )
 
                   else
-                    statCard "ENTRIES TODAY" (String.fromInt numEntries)
+                    statCard "ENTRIES TODAY" (Html.text (String.fromInt numEntries))
                 , statCard "DAYS INTO TRIP"
-                    (if daysIn > 0 then
-                        String.fromInt daysIn
+                    (Html.text
+                        (if daysIn > 0 then
+                            String.fromInt daysIn
 
-                     else
-                        "—"
+                         else
+                            "—"
+                        )
                     )
                 , statCard "PROJ / 30 DAYS"
                     (if avgPerDayCents > 0 then
-                        Money.format (Money.fromCents (avgPerDayCents * 30))
+                        UI.MoneyView.amount (Money.fromCents (avgPerDayCents * 30))
 
                      else
-                        "—"
+                        Html.text "—"
                     )
                 ]
             ]
@@ -430,7 +441,7 @@ viewBodyReady model entries =
                                         , Html.div [ Html.Attributes.class "text-[11px] text-muted" ] [ Html.text (DateField.toIso entry.date) ]
                                         ]
                                     , Html.span [ Html.Attributes.class "font-mono text-rust text-base" ]
-                                        [ Html.text (Money.format entry.amount) ]
+                                        [ UI.MoneyView.amount entry.amount ]
                                     ]
                             )
                             top5
@@ -440,13 +451,13 @@ viewBodyReady model entries =
         ]
 
 
-statCard : String -> String -> Html Msg
+statCard : String -> Html Msg -> Html Msg
 statCard label_ value =
     Html.div []
         [ Html.div [ Html.Attributes.class "text-[11px] tracking-widest text-moss mb-1.5" ]
             [ Html.text label_ ]
         , Html.div [ Html.Attributes.class "text-[22px] font-mono text-rust" ]
-            [ Html.text value ]
+            [ value ]
         ]
 
 
@@ -524,7 +535,7 @@ categoryRow { isLast, maxTotalCents, row } =
         , Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
             [ categoryBar (Category.color row.cat) pct ]
         , Html.span [ Html.Attributes.class "font-mono text-sm text-rust w-20 text-right shrink-0" ]
-            [ Html.text (Money.format row.total) ]
+            [ UI.MoneyView.amount row.total ]
         ]
 
 

@@ -18,14 +18,16 @@ Render nothing for a zero budget upstream; this module assumes a positive
 budget.
 
 Spent + budget are `Data.Money.Money` (#93): the labels render via
-`Money.format` so the displayed values match the rest of the hero
-chrome byte-for-byte.
+`UI.MoneyView.wholeDollars`, which emits a `<tp-amount …
+maximumfractiondigits="0">` web component with Intl.NumberFormat-driven
+thousands separators and a screen-reader-friendly `aria-label`.
 
 -}
 
 import Data.Money as Money exposing (Money)
 import Html exposing (Html)
 import Html.Attributes
+import UI.MoneyView
 import UI.Rule
 
 
@@ -48,13 +50,13 @@ view { budget, spent } =
         , Html.div [ Html.Attributes.class "mt-2 flex justify-between items-baseline gap-3" ]
             [ Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
                 [ Html.span [ Html.Attributes.class spentAmountClass ]
-                    [ Html.text (formatWholeDollars spent) ]
+                    [ UI.MoneyView.wholeDollars spent ]
                 , Html.span [ Html.Attributes.class labelClass ]
                     [ Html.text "spent" ]
                 ]
             , Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
                 [ Html.span [ Html.Attributes.class "text-sm font-semibold text-forest" ]
-                    [ Html.text (formatWholeDollars budget) ]
+                    [ UI.MoneyView.wholeDollars budget ]
                 , Html.span [ Html.Attributes.class labelClass ]
                     [ Html.text "budget" ]
                 ]
@@ -103,32 +105,6 @@ state spent budget =
     { isOver = pct >= 1.0
     , pctInt = round (pct * 100)
     }
-
-
-{-| Whole-dollar render for the labelled hero bar — matches the pre-#93
-output where the spent/budget chips dropped cents via `round` (so
-`12.50` → `13`, not `12`). The small-text "spent / budget" labels sit
-next to the amount and a cents tail would break the line height. Use
-`Money.format` elsewhere when you want the canonical `$X.XX` shape.
-
-Pending removal in #38: will be replaced by `<tp-amount value="..." maximumFractionDigits="0">`.
-
--}
-formatWholeDollars : Money -> String
-formatWholeDollars m =
-    let
-        cents =
-            Money.toCents m
-
-        -- Round-half-up, sign-preserving — matches the pre-#93 `round (Float dollars)`.
-        whole =
-            if cents >= 0 then
-                (cents + 50) // 100
-
-            else
-                negate ((negate cents + 50) // 100)
-    in
-    "$" ++ String.fromInt whole
 
 
 track : BarState -> String -> Html msg
