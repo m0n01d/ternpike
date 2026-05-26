@@ -49,7 +49,7 @@ id = "679c582bcded4fef8fdb3cebcb8940cc"
 # Provision with: wrangler kv namespace create QR_KV
 [[kv_namespaces]]
 binding = "QR_KV"
-id = "REPLACE_WITH_WRANGLER_CREATED_ID"
+id = "5842530248344e7a996993bc38e99822"
 
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
