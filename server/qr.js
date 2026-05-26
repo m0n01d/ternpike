@@ -24,6 +24,7 @@ import {
   isValidTemplate,
   renderSticker,
 } from './qrSvg.js'
+import { renderStickerPdf } from './qrPdf.js'
 
 const SLUG_RE = /^[a-z0-9-]{1,32}$/
 const PUBLIC_BASE = 'https://ternpike.com'
@@ -183,6 +184,28 @@ export function registerQrRoutes(app) {
       headers: {
         'Cache-Control': 'public, max-age=3600',
         'Content-Type': 'image/svg+xml; charset=utf-8',
+      },
+    })
+  })
+
+  // --- sticker PDF (one slug, 4x6 vector, label-printer ready) ------------
+  //
+  // Bypasses the browser print stack so iOS Safari "Save to PDF" doesn't
+  // letterbox the sticker onto a Letter page. Currently the share template
+  // at exactly 4x6 inches; size/template knobs are future work.
+
+  app.get('/qr/:slug/sticker.pdf', async (c) => {
+    const slug = normalizeSlug(c.req.param('slug'))
+    if (!slug) {
+      return c.text('invalid slug', 400)
+    }
+    const dest = stickerUrl(slug)
+    const bytes = await renderStickerPdf({ dest, slug })
+    return new Response(bytes, {
+      headers: {
+        'Cache-Control': 'public, max-age=3600',
+        'Content-Disposition': `inline; filename="ternpike-${slug}.pdf"`,
+        'Content-Type': 'application/pdf',
       },
     })
   })

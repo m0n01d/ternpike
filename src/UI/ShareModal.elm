@@ -41,17 +41,17 @@ viewOpen as_ =
                 ++ slug
                 ++ "/sticker.svg?template=share"
 
-        -- Print opens the existing /qr/print page in a new tab rather than
-        -- calling window.print() from inside the PWA. iOS drops user-
-        -- activation across Elm's port hop, so an in-app window.print() is
-        -- a silent no-op on iPhone; opening the print page is reliable.
-        -- Uses the `share` template + its 4x6 default for full-label fill
-        -- on standard shipping-label printers (Munbyn RW403B, etc).
+        -- Direct link to the server-rendered 4x6 PDF. The browser print
+        -- stack is unreliable here — iOS Safari "Save to PDF" ignores
+        -- `@page size` and falls back to Letter, leaving a tiny sticker on
+        -- a big page — so we ship the asset pre-sized. iOS opens the PDF
+        -- inline in Safari/Files, where Share → Print → AirPrint or
+        -- Share → Munbyn app both get a correctly-sized 4x6 vector.
         printUrl =
             as_.config.backendUrl
-                ++ "/qr/print?slugs="
+                ++ "/qr/"
                 ++ slug
-                ++ "&template=share"
+                ++ "/sticker.pdf"
     in
     Html.div
         [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
