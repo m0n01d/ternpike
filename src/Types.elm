@@ -3,6 +3,7 @@ module Types exposing
     , GuestState
     , Model(..)
     , Msg(..)
+    , SharedMsg_(..)
     )
 
 {-| Top-level state and message types — the spine of the Elm
@@ -261,6 +262,9 @@ PouchDB / navigation / chrome: `GotPouchMsg`, `LinkClicked`,
 `ToggleDayIntensity`, `ToggleLedgerMap`, `ShowToast`, `ToastExpired`,
 `DismissError`.
 
+Shared (guest + auth): wrapped under `SharedMsg SharedMsg_`. See
+`SharedMsg_` for the 8 constructors that fire in both states.
+
 PWA install: `CanInstall` (JS reports the deferred
 `beforeinstallprompt` event is/isn't stashed), `TriggerInstallPrompt`
 (user tapped the Settings "Install app" button — JS replays the
@@ -278,21 +282,20 @@ chip selector.
 type Msg
     = AddressChanged String
     | AmountChanged String
-    | ApiKeyChanged String
     | BackToQueue
     | CanInstall Bool
     | CancelDeleteTrip
     | CategorySelected Category
     | ClearDoneItems
-    | CloseSharedTripModal
-    | CreateSharedTripNameChanged String
-    | CreateSharedTripResult (Result Http.Error Http.SharedTripApi.CreateSharedTripResponse)
     | CloseLedgerMenu
     | CloseMovePicker
     | CloseShareModal
+    | CloseSharedTripModal
     | CloseTripForm
     | CodeInputChanged String
     | ConfirmDeleteTrip Trip
+    | CreateSharedTripNameChanged String
+    | CreateSharedTripResult (Result Http.Error Http.SharedTripApi.CreateSharedTripResponse)
     | DateChanged String
     | DeleteTrip Trip
     | DismissError
@@ -324,17 +327,15 @@ type Msg
     | JoinSharedTripResult (Result Http.Error Http.SharedTripApi.JoinSharedTripResponse)
     | LeaveSharedTripConfirmed SharedTripId
     | LeaveSharedTripResult (Result Http.Error ())
-    | LinkClicked Browser.UrlRequest
     | LongNoteChanged String
     | MapPickerConfirmed Float Float
     | MerchantChanged String
     | MoveEntry Expense TripId
-    | NetworkStatusChanged Bool
     | NoteChanged String
     | NotificationStateChanged { permission : String, prefs : Json.Decode.Value, standalone : Bool, subscribed : Bool }
     | OcrImagePrepared { dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int }
-    | OpenEditTripForm Trip
     | OpenCreateSharedTripModal
+    | OpenEditTripForm Trip
     | OpenInviteModal SharedTripId
     | OpenLeaveConfirmModal SharedTripId
     | OpenLedgerMenu ExpenseId
@@ -348,31 +349,28 @@ type Msg
     | RefreshClicked
     | RequestCodeResult (Result Http.Error ())
     | RequestPushPermission
-    | SharedTripActivityNotified
-    | ResetSettingsClicked
     | ReviewScanItem String
     | SaveTripForm
     | ScanProxyResult { body : String, itemId : String, ok : Bool, status : Int }
-    | ScrolledToTop
-    | SetColorScheme ColorScheme
     | SetStatsGranularity Granularity
-    | ShowByoKeyInput
+    | SharedMsg SharedMsg_
+    | SharedTripActivityNotified
     | SignOutClicked
     | SkipLocation
     | SubmitCode
+    | SubmitCreateSharedTrip
     | SubmitEmail
     | SubmitEntry
-    | SubmitCreateSharedTrip
     | SubmitInvite
     | SubmitTransfer
     | TakeOverBilling SharedTripId
     | ToastExpired
     | ToggleDayIntensity
-    | ToggleSharedTripMembers SharedTripId
     | ToggleGuestSettings
     | ToggleLedgerMap
     | ToggleLedgerMapExpanded
     | ToggleNotificationPref NotificationToggle
+    | ToggleSharedTripMembers SharedTripId
     | TransferTargetChanged String
     | TransferToSharedTripResult (Result Http.Error ())
     | TriggerInstallPrompt
@@ -384,6 +382,23 @@ type Msg
     | TripInviteeDraftChanged String
     | TripInviteeRemoved Int
     | TripTargetSelected Data.Trip.CreateTarget
-    | UrlChanged Url.Url
     | VerifyCodeResult (Result Http.Error Creds)
     | VoidEntry Expense
+
+
+{-| Messages that fire in both guest and authenticated states.
+
+These are bucketed here so the compiler can verify that `updateShared`
+handles them without any per-state no-ops leaking into `updateGuest` or
+`updateAuth`.
+
+-}
+type SharedMsg_
+    = ApiKeyChanged String
+    | LinkClicked Browser.UrlRequest
+    | NetworkStatusChanged Bool
+    | ResetSettingsClicked
+    | ScrolledToTop
+    | SetColorScheme ColorScheme
+    | ShowByoKeyInput
+    | UrlChanged Url.Url

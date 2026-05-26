@@ -9,7 +9,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Pages.Settings.SharedTrips
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthState, Msg(..), SharedMsg_(..))
 import UI.Button
 import UI.Card
 import UI.DateView
@@ -103,7 +103,7 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt =
                   else
                     []
                  )
-                    ++ [ UI.Button.ghost { label = "Reset local data", onClick = ResetSettingsClicked } ]
+                    ++ [ UI.Button.ghost { label = "Reset local data", onClick = SharedMsg ResetSettingsClicked } ]
                 )
             ]
         ]
@@ -168,7 +168,7 @@ viewAnthropicKeySection cfg maybeAuthState =
                 (Html.input
                     [ Html.Attributes.type_ "password"
                     , Html.Attributes.value (cfg.anthropicKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "")
-                    , Html.Events.onInput ApiKeyChanged
+                    , Html.Events.onInput (SharedMsg << ApiKeyChanged)
                     , Html.Attributes.placeholder "sk-ant-..."
                     , UI.Layout.textInputStyle
                     ]
@@ -186,10 +186,10 @@ viewAnthropicKeySection cfg maybeAuthState =
                     , label = "Use my own Anthropic key"
                     , msg =
                         if toggleOn then
-                            ApiKeyChanged ""
+                            SharedMsg (ApiKeyChanged "")
 
                         else
-                            ShowByoKeyInput
+                            SharedMsg ShowByoKeyInput
                     , value = toggleOn
                     }
         in
@@ -209,7 +209,7 @@ viewAppearanceSection current =
         schemeBtn scheme label =
             Html.button
                 [ Html.Attributes.type_ "button"
-                , Html.Events.onClick (SetColorScheme scheme)
+                , Html.Events.onClick (SharedMsg (SetColorScheme scheme))
                 , Html.Attributes.classList
                     [ ( "flex-1 py-2 rounded-lg text-xs font-mono uppercase tracking-widest cursor-pointer border transition-colors", True )
                     , ( "bg-forest text-parchment border-forest", current == scheme )

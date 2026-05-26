@@ -18,7 +18,7 @@ import Html.Attributes
 import Html.Events
 import Json.Decode
 import Routing
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthState, Msg(..), SharedMsg_(..))
 import UI.Button
 import UI.DateView
 import UI.Icons
@@ -76,7 +76,7 @@ viewTierLabel trip as_ =
                 , if Data.Tier.isPaid as_.tier then
                     Html.button
                         [ Html.Attributes.type_ "button"
-                        , Html.Events.onClick (ApiKeyChanged "")
+                        , Html.Events.onClick (SharedMsg (ApiKeyChanged ""))
                         , Html.Attributes.class "text-[11px] font-mono uppercase tracking-widest text-muted underline underline-offset-2 cursor-pointer"
                         ]
                         [ Html.text "Switch to hosted key" ]
