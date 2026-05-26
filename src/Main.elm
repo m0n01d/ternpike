@@ -129,7 +129,7 @@ import Routing
 import Set
 import Task
 import Time
-import Types exposing (AuthState, GuestState, Model(..), Msg(..))
+import Types exposing (AuthState, GuestState, Model(..), Msg(..), SharedMsg_(..))
 import UI.BillingBanner
 import UI.Layout
 import UI.ShareModal
@@ -1623,353 +1623,141 @@ init flagsJson url key =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        ( nextModel, cmd ) =
+    case ( msg, model ) of
+        ( SharedMsg s, _ ) ->
+            updateShared s model
+
+        ( other, GuestModel gs ) ->
+            updateGuest other gs
+
+        ( other, AuthModel as_ ) ->
+            updateAuth other as_
+
+
+updateShared : SharedMsg_ -> Model -> ( Model, Cmd Msg )
+updateShared msg model =
+    case msg of
+        ApiKeyChanged s ->
             case model of
                 GuestModel gs ->
-                    updateGuest msg gs
+                    let
+                        newKey =
+                            AnthropicKey.fromInput s
+                    in
+                    ( GuestModel { gs | session = mapGuestConfig (\c -> { c | anthropicKey = newKey }) gs.session }
+                    , saveStorage { key = "anthropic_key", value = newKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "" }
+                    )
 
                 AuthModel as_ ->
-                    updateAuth msg as_
-    in
-    case msg of
-        UrlChanged _ ->
-            ( nextModel, Cmd.batch [ cmd, scrollToTop ] )
-
-        AddressChanged _ ->
-            ( nextModel, cmd )
-
-        AmountChanged _ ->
-            ( nextModel, cmd )
-
-        ApiKeyChanged _ ->
-            ( nextModel, cmd )
-
-        BackToQueue ->
-            ( nextModel, cmd )
-
-        CanInstall _ ->
-            ( nextModel, cmd )
-
-        CancelDeleteTrip ->
-            ( nextModel, cmd )
-
-        CategorySelected _ ->
-            ( nextModel, cmd )
-
-        ClearDoneItems ->
-            ( nextModel, cmd )
-
-        CloseSharedTripModal ->
-            ( nextModel, cmd )
-
-        CloseLedgerMenu ->
-            ( nextModel, cmd )
-
-        CloseMovePicker ->
-            ( nextModel, cmd )
-
-        CloseShareModal ->
-            ( nextModel, cmd )
-
-        CloseTripForm ->
-            ( nextModel, cmd )
-
-        CodeInputChanged _ ->
-            ( nextModel, cmd )
-
-        ConfirmDeleteTrip _ ->
-            ( nextModel, cmd )
-
-        CreateSharedTripNameChanged _ ->
-            ( nextModel, cmd )
-
-        CreateSharedTripResult _ ->
-            ( nextModel, cmd )
-
-        DateChanged _ ->
-            ( nextModel, cmd )
-
-        DeleteTrip _ ->
-            ( nextModel, cmd )
-
-        DismissError ->
-            ( nextModel, cmd )
-
-        DismissMapPicker ->
-            ( nextModel, cmd )
-
-        DuplicateEntry _ ->
-            ( nextModel, cmd )
-
-        EmailInputChanged _ ->
-            ( nextModel, cmd )
-
-        ExportCsv _ ->
-            ( nextModel, cmd )
-
-        FilesSelected _ ->
-            ( nextModel, cmd )
-
-        GeolocationDenied ->
-            ( nextModel, cmd )
-
-        GotDeleteTripTime _ _ ->
-            ( nextModel, cmd )
-
-        GotDuplicateTime _ _ ->
-            ( nextModel, cmd )
-
-        GotExifCoords _ _ _ _ ->
-            ( nextModel, cmd )
-
-        GotFileUrl _ _ ->
-            ( nextModel, cmd )
-
-        GotGeocodeResult _ _ ->
-            ( nextModel, cmd )
-
-        GotGpsCoords _ _ ->
-            ( nextModel, cmd )
-
-        GotMoveTime _ _ _ ->
-            ( nextModel, cmd )
-
-        GotOcrResult _ _ ->
-            ( nextModel, cmd )
-
-        GotPouchMsg _ ->
-            ( nextModel, cmd )
-
-        GotSaveTripTime _ ->
-            ( nextModel, cmd )
-
-        GotSubmitTime _ _ ->
-            ( nextModel, cmd )
-
-        GotSyncTime _ ->
-            ( nextModel, cmd )
-
-        GotVoidTime _ _ ->
-            ( nextModel, cmd )
-
-        HoverCumulativePoints _ ->
-            ( nextModel, cmd )
-
-        HoverDailyBars _ ->
-            ( nextModel, cmd )
-
-        InviteEmailChanged _ ->
-            ( nextModel, cmd )
-
-        InviteToSharedTripResult _ ->
-            ( nextModel, cmd )
-
-        JoinSharedTripAccepted _ ->
-            ( nextModel, cmd )
-
-        JoinSharedTripDeclined ->
-            ( nextModel, cmd )
-
-        JoinSharedTripResult _ ->
-            ( nextModel, cmd )
-
-        LeaveSharedTripConfirmed _ ->
-            ( nextModel, cmd )
-
-        LeaveSharedTripResult _ ->
-            ( nextModel, cmd )
-
-        LinkClicked _ ->
-            ( nextModel, cmd )
-
-        LongNoteChanged _ ->
-            ( nextModel, cmd )
-
-        MapPickerConfirmed _ _ ->
-            ( nextModel, cmd )
-
-        MerchantChanged _ ->
-            ( nextModel, cmd )
-
-        MoveEntry _ _ ->
-            ( nextModel, cmd )
-
-        NetworkStatusChanged _ ->
-            ( nextModel, cmd )
-
-        NoteChanged _ ->
-            ( nextModel, cmd )
-
-        NotificationStateChanged _ ->
-            ( nextModel, cmd )
-
-        OcrImagePrepared _ ->
-            ( nextModel, cmd )
-
-        OpenCreateSharedTripModal ->
-            ( nextModel, cmd )
-
-        OpenEditTripForm _ ->
-            ( nextModel, cmd )
-
-        OpenInviteModal _ ->
-            ( nextModel, cmd )
-
-        OpenLeaveConfirmModal _ ->
-            ( nextModel, cmd )
-
-        OpenLedgerMenu _ ->
-            ( nextModel, cmd )
-
-        OpenMapPicker ->
-            ( nextModel, cmd )
-
-        OpenMovePicker _ ->
-            ( nextModel, cmd )
-
-        OpenNewTripForm ->
-            ( nextModel, cmd )
-
-        OpenShareModal ->
-            ( nextModel, cmd )
-
-        OpenTransferModal _ ->
-            ( nextModel, cmd )
-
-        PaymentMethodChanged _ ->
-            ( nextModel, cmd )
-
-        PushSubscribeReceived _ ->
-            ( nextModel, cmd )
-
-        RefreshClicked ->
-            ( nextModel, cmd )
-
-        RequestCodeResult _ ->
-            ( nextModel, cmd )
-
-        RequestPushPermission ->
-            ( nextModel, cmd )
+                    let
+                        cfg =
+                            as_.config
+
+                        newKey =
+                            AnthropicKey.fromInput s
+
+                        newShowInput =
+                            case newKey of
+                                Just _ ->
+                                    as_.showByoKeyInput
+
+                                Nothing ->
+                                    False
+                    in
+                    ( AuthModel { as_ | config = { cfg | anthropicKey = newKey }, showByoKeyInput = newShowInput }
+                    , saveStorage { key = "anthropic_key", value = newKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "" }
+                    )
+
+        LinkClicked (Browser.Internal url) ->
+            case model of
+                GuestModel gs ->
+                    ( GuestModel gs, Nav.pushUrl gs.key (Url.toString url) )
+
+                AuthModel as_ ->
+                    ( AuthModel as_, Nav.pushUrl as_.key (Url.toString url) )
+
+        LinkClicked (Browser.External href) ->
+            ( model, Nav.load href )
+
+        NetworkStatusChanged isOnline ->
+            case model of
+                GuestModel gs ->
+                    ( GuestModel { gs | networkOffline = not isOnline }, Cmd.none )
+
+                AuthModel as_ ->
+                    ( AuthModel { as_ | networkOffline = not isOnline }, Cmd.none )
 
         ResetSettingsClicked ->
-            ( nextModel, cmd )
+            case model of
+                GuestModel gs ->
+                    ( GuestModel
+                        { gs
+                            | authError = Nothing
+                            , codeInput = ""
+                            , emailInput = ""
+                            , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
+                            , showSettings = False
+                        }
+                    , clearAllStorage ()
+                    )
 
-        SharedTripActivityNotified ->
-            ( nextModel, cmd )
-
-        ReviewScanItem _ ->
-            ( nextModel, cmd )
-
-        SaveTripForm ->
-            ( nextModel, cmd )
-
-        ScanProxyResult _ ->
-            ( nextModel, cmd )
+                AuthModel as_ ->
+                    ( GuestModel
+                        { authError = Nothing
+                        , basePath = as_.basePath
+                        , codeInput = ""
+                        , emailInput = ""
+                        , key = as_.key
+                        , networkOffline = as_.networkOffline
+                        , pendingJoinToken = Nothing
+                        , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
+                        , showSettings = False
+                        , today = as_.today
+                        , version = as_.version
+                        }
+                    , Cmd.batch [ clearAllStorage (), stopSync () ]
+                    )
 
         ScrolledToTop ->
-            ( nextModel, cmd )
+            ( model, Cmd.none )
 
-        SetColorScheme _ ->
-            ( nextModel, cmd )
+        SetColorScheme scheme ->
+            case model of
+                GuestModel gs ->
+                    ( GuestModel gs, Cmd.none )
 
-        SetStatsGranularity _ ->
-            ( nextModel, cmd )
+                AuthModel as_ ->
+                    ( AuthModel { as_ | colorScheme = scheme }
+                    , saveStorage { key = "color_scheme", value = ColorScheme.toString scheme }
+                    )
 
         ShowByoKeyInput ->
-            ( nextModel, cmd )
+            case model of
+                GuestModel gs ->
+                    ( GuestModel gs, Cmd.none )
 
-        SignOutClicked ->
-            ( nextModel, cmd )
+                AuthModel as_ ->
+                    ( AuthModel { as_ | showByoKeyInput = True }, Cmd.none )
 
-        SkipLocation ->
-            ( nextModel, cmd )
+        UrlChanged url ->
+            case model of
+                GuestModel gs ->
+                    ( GuestModel gs, scrollToTop )
 
-        SubmitCode ->
-            ( nextModel, cmd )
+                AuthModel as_ ->
+                    let
+                        newRoute =
+                            Routing.routeFromUrl as_.basePath url
 
-        SubmitCreateSharedTrip ->
-            ( nextModel, cmd )
-
-        SubmitEmail ->
-            ( nextModel, cmd )
-
-        SubmitEntry ->
-            ( nextModel, cmd )
-
-        SubmitInvite ->
-            ( nextModel, cmd )
-
-        SubmitTransfer ->
-            ( nextModel, cmd )
-
-        TakeOverBilling _ ->
-            ( nextModel, cmd )
-
-        ToastExpired ->
-            ( nextModel, cmd )
-
-        ToggleDayIntensity ->
-            ( nextModel, cmd )
-
-        ToggleSharedTripMembers _ ->
-            ( nextModel, cmd )
-
-        ToggleGuestSettings ->
-            ( nextModel, cmd )
-
-        ToggleLedgerMap ->
-            ( nextModel, cmd )
-
-        ToggleLedgerMapExpanded ->
-            ( nextModel, cmd )
-
-        ToggleNotificationPref _ ->
-            ( nextModel, cmd )
-
-        TransferTargetChanged _ ->
-            ( nextModel, cmd )
-
-        TransferToSharedTripResult _ ->
-            ( nextModel, cmd )
-
-        TriggerInstallPrompt ->
-            ( nextModel, cmd )
-
-        TripCreateSharedTripResult _ ->
-            ( nextModel, cmd )
-
-        TripFieldChanged _ _ ->
-            ( nextModel, cmd )
-
-        TripGroupNameChanged _ ->
-            ( nextModel, cmd )
-
-        TripInviteResult ->
-            ( nextModel, cmd )
-
-        TripInviteeAdded ->
-            ( nextModel, cmd )
-
-        TripInviteeDraftChanged _ ->
-            ( nextModel, cmd )
-
-        TripInviteeRemoved _ ->
-            ( nextModel, cmd )
-
-        TripTargetSelected _ ->
-            ( nextModel, cmd )
-
-        VerifyCodeResult _ ->
-            ( nextModel, cmd )
-
-        VoidEntry _ ->
-            ( nextModel, cmd )
+                        ( as1, cmd ) =
+                            fetchesForRoute { as_ | route = newRoute, tripForm = Nothing }
+                    in
+                    ( AuthModel as1, Cmd.batch [ cmd, scrollToTop ] )
 
 
 scrollToTop : Cmd Msg
 scrollToTop =
-    Task.perform (\_ -> ScrolledToTop) (Browser.Dom.setViewport 0 0)
+    Task.perform (\_ -> SharedMsg ScrolledToTop) (Browser.Dom.setViewport 0 0)
 
 
 updateGuest : Msg -> GuestState -> ( Model, Cmd Msg )
@@ -2063,38 +1851,8 @@ updateGuest msg gs =
         ToggleGuestSettings ->
             ( GuestModel { gs | showSettings = not gs.showSettings }, Cmd.none )
 
-        ApiKeyChanged s ->
-            let
-                newKey =
-                    AnthropicKey.fromInput s
-            in
-            ( GuestModel { gs | session = mapGuestConfig (\c -> { c | anthropicKey = newKey }) gs.session }
-            , saveStorage { key = "anthropic_key", value = newKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "" }
-            )
-
-        ResetSettingsClicked ->
-            ( GuestModel
-                { gs
-                    | authError = Nothing
-                    , codeInput = ""
-                    , emailInput = ""
-                    , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
-                    , showSettings = False
-                }
-            , clearAllStorage ()
-            )
-
         GotPouchMsg _ ->
             ( GuestModel gs, Cmd.none )
-
-        LinkClicked (Browser.Internal url) ->
-            ( GuestModel gs, Nav.pushUrl gs.key (Url.toString url) )
-
-        LinkClicked (Browser.External href) ->
-            ( GuestModel gs, Nav.load href )
-
-        NetworkStatusChanged isOnline ->
-            ( GuestModel { gs | networkOffline = not isOnline }, Cmd.none )
 
         -- Messages that only apply to the authenticated state.
         -- They are no-ops here: the GuestModel has no corresponding fields.
@@ -2305,16 +2063,7 @@ updateGuest msg gs =
         ScanProxyResult _ ->
             ( GuestModel gs, Cmd.none )
 
-        ScrolledToTop ->
-            ( GuestModel gs, Cmd.none )
-
-        SetColorScheme _ ->
-            ( GuestModel gs, Cmd.none )
-
         SetStatsGranularity _ ->
-            ( GuestModel gs, Cmd.none )
-
-        ShowByoKeyInput ->
             ( GuestModel gs, Cmd.none )
 
         SignOutClicked ->
@@ -2389,10 +2138,12 @@ updateGuest msg gs =
         TripTargetSelected _ ->
             ( GuestModel gs, Cmd.none )
 
-        UrlChanged _ ->
+        VoidEntry _ ->
             ( GuestModel gs, Cmd.none )
 
-        VoidEntry _ ->
+        SharedMsg _ ->
+            -- SharedMsg is dispatched by `update` before reaching updateGuest.
+            -- This branch is unreachable at runtime but required for exhaustiveness.
             ( GuestModel gs, Cmd.none )
 
 
@@ -2530,23 +2281,6 @@ updateAuth msg as_ =
         SignOutClicked ->
             ( GuestModel (toGuestState NotLoggedIn as_)
             , Cmd.batch [ clearStorage (), stopSync () ]
-            )
-
-        ResetSettingsClicked ->
-            ( GuestModel
-                { authError = Nothing
-                , basePath = as_.basePath
-                , codeInput = ""
-                , emailInput = ""
-                , key = as_.key
-                , networkOffline = as_.networkOffline
-                , pendingJoinToken = Nothing
-                , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
-                , showSettings = False
-                , today = as_.today
-                , version = as_.version
-                }
-            , Cmd.batch [ clearAllStorage (), stopSync () ]
             )
 
         ExportCsv tripId ->
@@ -3186,31 +2920,6 @@ updateAuth msg as_ =
                 Nothing ->
                     ( AuthModel as_, Cmd.none )
 
-        ApiKeyChanged s ->
-            let
-                cfg =
-                    as_.config
-
-                newKey =
-                    AnthropicKey.fromInput s
-
-                newShowInput =
-                    case newKey of
-                        Just _ ->
-                            as_.showByoKeyInput
-
-                        Nothing ->
-                            False
-            in
-            ( AuthModel { as_ | config = { cfg | anthropicKey = newKey }, showByoKeyInput = newShowInput }
-            , saveStorage { key = "anthropic_key", value = newKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "" }
-            )
-
-        SetColorScheme scheme ->
-            ( AuthModel { as_ | colorScheme = scheme }
-            , saveStorage { key = "color_scheme", value = ColorScheme.toString scheme }
-            )
-
         DismissError ->
             ( AuthModel { as_ | error = Nothing }, Cmd.none )
 
@@ -3268,9 +2977,6 @@ updateAuth msg as_ =
 
         SetStatsGranularity g ->
             ( AuthModel { as_ | statsGranularity = Just g }, Cmd.none )
-
-        ShowByoKeyInput ->
-            ( AuthModel { as_ | showByoKeyInput = True }, Cmd.none )
 
         ToastExpired ->
             ( AuthModel { as_ | toast = Nothing }, Cmd.none )
@@ -3836,25 +3542,6 @@ updateAuth msg as_ =
             , Cmd.none
             )
 
-        LinkClicked (Browser.Internal url) ->
-            ( AuthModel as_, Nav.pushUrl as_.key (Url.toString url) )
-
-        LinkClicked (Browser.External href) ->
-            ( AuthModel as_, Nav.load href )
-
-        UrlChanged url ->
-            let
-                newRoute =
-                    Routing.routeFromUrl as_.basePath url
-
-                ( as1, cmd ) =
-                    fetchesForRoute { as_ | route = newRoute, tripForm = Nothing }
-            in
-            ( AuthModel as1, cmd )
-
-        NetworkStatusChanged isOnline ->
-            ( AuthModel { as_ | networkOffline = not isOnline }, Cmd.none )
-
         CanInstall canIt ->
             ( AuthModel { as_ | showInstallPrompt = canIt }, Cmd.none )
 
@@ -4276,9 +3963,6 @@ updateAuth msg as_ =
         RequestCodeResult _ ->
             ( AuthModel as_, Cmd.none )
 
-        ScrolledToTop ->
-            ( AuthModel as_, Cmd.none )
-
         SubmitCode ->
             ( AuthModel as_, Cmd.none )
 
@@ -4289,6 +3973,11 @@ updateAuth msg as_ =
             ( AuthModel as_, Cmd.none )
 
         VerifyCodeResult _ ->
+            ( AuthModel as_, Cmd.none )
+
+        SharedMsg _ ->
+            -- SharedMsg is dispatched by `update` before reaching updateAuth.
+            -- This branch is unreachable at runtime but required for exhaustiveness.
             ( AuthModel as_, Cmd.none )
 
 
@@ -4520,8 +4209,8 @@ main : Program D.Value Model Msg
 main =
     Browser.application
         { init = init
-        , onUrlChange = UrlChanged
-        , onUrlRequest = LinkClicked
+        , onUrlChange = SharedMsg << UrlChanged
+        , onUrlRequest = SharedMsg << LinkClicked
         , subscriptions =
             \_ ->
                 Sub.batch
@@ -4542,7 +4231,7 @@ main =
                             else
                                 GotExifCoords r.id Nothing Nothing r.debug
                         )
-                    , networkStatus NetworkStatusChanged
+                    , networkStatus (SharedMsg << NetworkStatusChanged)
                     , canInstall CanInstall
                     , ocrImagePrepared OcrImagePrepared
                     , notificationState NotificationStateChanged
