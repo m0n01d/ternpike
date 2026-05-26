@@ -4,7 +4,7 @@ import Data.AnthropicKey as AnthropicKey
 import Data.Category as Category
 import Data.Navigation exposing (Tab(..))
 import Data.OcrPath as OcrPath exposing (OcrPath(..))
-import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
+import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..), needsReview)
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip exposing (SharedTrip)
 import Data.SharedTrips
@@ -252,6 +252,12 @@ viewBody model =
             items =
                 Dict.values model.scanQueue
 
+            needsReviewItem i =
+                i.status == ScanReady && Maybe.map needsReview i.ocrData == Just True
+
+            sortedItems =
+                List.filter needsReviewItem items ++ List.filter (not << needsReviewItem) items
+
             hasSubmitted =
                 List.any (\i -> i.status == ScanSubmitted) items
 
@@ -260,7 +266,7 @@ viewBody model =
         in
         Html.div []
             [ Html.div [ Html.Attributes.class "flex flex-col gap-3 mb-4" ]
-                (List.map viewScanCard items)
+                (List.map viewScanCard sortedItems)
             , if hasSubmitted then
                 Html.div [ Html.Attributes.class "mb-4 flex justify-center" ]
                     [ UI.Button.ghost { label = "Clear submitted", onClick = ClearDoneItems } ]
@@ -337,7 +343,12 @@ viewScanCardBody item =
             case item.ocrData of
                 Just ocr ->
                     Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
-                        [ viewOcrSummary ocr
+                        [ if needsReview ocr then
+                            viewNeedsReviewBadge
+
+                          else
+                            Html.text ""
+                        , viewOcrSummary ocr
                         , viewReviewButton item.id
                         ]
 
@@ -361,6 +372,17 @@ viewScanCardBody item =
                     Nothing ->
                         Html.text ""
                 ]
+
+
+{-| Badge shown on cards where the OCR result is missing amount,
+merchant, or date. Signals that the user must fill in these fields
+before the expense can be filed.
+-}
+viewNeedsReviewBadge : Html Msg
+viewNeedsReviewBadge =
+    Html.span
+        [ Html.Attributes.class "self-start px-2 py-0.5 rounded-full bg-rust-tint border border-rust/30 text-[10px] uppercase tracking-wider text-rust font-mono" ]
+        [ Html.text "Needs review" ]
 
 
 {-| Render the "OCR didn't produce usable data" block on a Scan card.

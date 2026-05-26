@@ -1,4 +1,4 @@
-module Data.Scan exposing (OcrData, ScanItem, ScanStatus(..), ocrDataDecoder, ocrDataListDecoder)
+module Data.Scan exposing (OcrData, ScanItem, ScanStatus(..), needsReview, ocrDataDecoder, ocrDataListDecoder)
 
 {-| Receipt-scan queue: one `ScanItem` per receipt the user has dropped
 into the Scan tab, plus the OCR result the Anthropic API hands back.
@@ -92,6 +92,25 @@ type alias ScanItem =
     , ocrError : Maybe String
     , status : ScanStatus
     }
+
+
+{-| True when any structural field — amount, merchant, or date — is
+missing from the OCR result. The user must fill these in before the
+expense is safe to file; the badge on the Scan card pulls focus to
+items that need attention.
+
+    -- amount missing
+    needsReview { amount = Nothing, merchant = Just "Trattoria", date = Nothing, address = Nothing, category = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
+    --> True
+
+    -- merchant missing
+    needsReview { amount = Nothing, merchant = Nothing, date = Nothing, address = Nothing, category = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
+    --> True
+
+-}
+needsReview : OcrData -> Bool
+needsReview ocr =
+    ocr.amount == Nothing || ocr.merchant == Nothing || ocr.date == Nothing
 
 
 {-| Decode one OCR JSON object into an `OcrData`. Every field is
