@@ -55,7 +55,7 @@ viewInitial userId =
                 , colourClass userId
                 ]
             )
-        , Html.Attributes.title (UserId.toString userId)
+        , Html.Attributes.title (UserId.handle userId)
         ]
         [ Html.text (initial userId) ]
 
@@ -108,7 +108,7 @@ borderedAvatar userId =
                 , colourClass userId
                 ]
             )
-        , Html.Attributes.title (UserId.toString userId)
+        , Html.Attributes.title (UserId.handle userId)
         ]
         [ Html.text (initial userId) ]
 
@@ -141,22 +141,13 @@ overflowChip n =
 
 initial : UserId -> String
 initial userId =
-    case String.uncons (localPart (UserId.toString userId)) of
+    -- handle returns "@local" or "@unknown"; drop the leading "@" to get the local-part
+    case String.uncons (String.dropLeft 1 (UserId.handle userId)) of
         Just ( c, _ ) ->
             String.fromChar (Char.toUpper c)
 
         Nothing ->
             "?"
-
-
-localPart : String -> String
-localPart s =
-    case String.split "@" s of
-        head :: _ ->
-            head
-
-        [] ->
-            s
 
 
 {-| Deterministic Tailwind background class for a user, hashed off the

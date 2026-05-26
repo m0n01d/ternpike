@@ -185,7 +185,7 @@ frozenCopy role flock =
 
         FledglingMember ->
             "Shared trip is read-only. Ask "
-                ++ UserId.toString flock.billingOwner
+                ++ UserId.handle flock.billingOwner
                 ++ " to renew, or upgrade and take over billing yourself."
 
 

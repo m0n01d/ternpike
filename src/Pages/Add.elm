@@ -326,8 +326,11 @@ viewVisibleToCaption ctx =
 visibleToLabel : SharedTrip -> String
 visibleToLabel flock =
     let
+        scope =
+            Data.SharedTrip.members flock
+
         names =
-            List.map firstNameFor (Data.SharedTrip.members flock)
+            List.map (\u -> UserId.handleIn u scope) scope
     in
     case names of
         [] ->
@@ -342,16 +345,6 @@ visibleToLabel flock =
                     ++ ", + "
                     ++ String.fromInt (List.length names - 2)
                     ++ " more"
-
-
-firstNameFor : UserId.UserId -> String
-firstNameFor user =
-    case String.split "@" (UserId.toString user) of
-        head :: _ ->
-            head
-
-        [] ->
-            UserId.toString user
 
 
 viewLoadingBody : Html Msg

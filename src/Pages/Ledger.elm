@@ -241,7 +241,7 @@ hasOtherTrips model =
 
 {-| One member of the active flock, indexed by stringified `UserId`.
 
-`displayName` is the email's local-part (everything left of `@`) so
+`displayName` is the `@handle` form (or `@handle#hash` on collision) so
 the author chip stays short on narrow rows. The full email is still
 the source of truth in `userId`.
 
@@ -287,25 +287,12 @@ membersDict users =
         |> List.map
             (\u ->
                 ( UserId.toString u
-                , { displayName = displayNameFor u
+                , { displayName = UserId.handleIn u users
                   , userId = u
                   }
                 )
             )
         |> Dict.fromList
-
-
-{-| The local-part of an email-shaped `UserId`. Falls back to the full
-string for non-email `UserId`s.
--}
-displayNameFor : UserId -> String
-displayNameFor user =
-    case String.split "@" (UserId.toString user) of
-        head :: _ ->
-            head
-
-        [] ->
-            UserId.toString user
 
 
 {-| `True` when the route's active trip belongs to a flock whose
