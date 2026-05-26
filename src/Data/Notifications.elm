@@ -159,7 +159,8 @@ user's devices like any other PouchDB doc.
 
 -}
 type alias NotificationPrefs =
-    { sharedTripActivity : Bool
+    { sharedTripAccessChange : Bool
+    , sharedTripActivity : Bool
     , syncStalled : Bool
     , weeklyScanReminder : Bool
     }
@@ -167,6 +168,8 @@ type alias NotificationPrefs =
 
 {-| The default prefs for a brand-new user.
 
+`sharedTripAccessChange` defaults `True` — access changes are informational
+(the user lost access or gained billing responsibility); opt-in by default.
 `sharedTripActivity` defaults `True` — co-traveler activity is the
 headline notification for the shared-trip feature; opt-in by default.
 `syncStalled` defaults `True` — it is a data-protection alert, not an
@@ -176,7 +179,8 @@ opt in explicitly.
 -}
 defaultPrefs : NotificationPrefs
 defaultPrefs =
-    { sharedTripActivity = True
+    { sharedTripAccessChange = True
+    , sharedTripActivity = True
     , syncStalled = True
     , weeklyScanReminder = False
     }
@@ -192,7 +196,8 @@ end-to-end.
 
 -}
 type NotificationToggle
-    = SharedTripActivity
+    = SharedTripAccessChange
+    | SharedTripActivity
     | SyncStalled
     | WeeklyScanReminder
 
@@ -210,7 +215,12 @@ error.
 -}
 decodePrefs : Json.Decode.Decoder NotificationPrefs
 decodePrefs =
-    Json.Decode.map3 NotificationPrefs
+    Json.Decode.map4 NotificationPrefs
+        (Json.Decode.oneOf
+            [ Json.Decode.field "sharedTripAccessChange" Json.Decode.bool
+            , Json.Decode.succeed defaultPrefs.sharedTripAccessChange
+            ]
+        )
         (Json.Decode.oneOf
             [ Json.Decode.field "sharedTripActivity" Json.Decode.bool
             , Json.Decode.succeed defaultPrefs.sharedTripActivity
@@ -240,7 +250,8 @@ loading the user's PouchDB.
 encodePrefs : NotificationPrefs -> Json.Encode.Value
 encodePrefs prefs =
     Json.Encode.object
-        [ ( "sharedTripActivity", Json.Encode.bool prefs.sharedTripActivity )
+        [ ( "sharedTripAccessChange", Json.Encode.bool prefs.sharedTripAccessChange )
+        , ( "sharedTripActivity", Json.Encode.bool prefs.sharedTripActivity )
         , ( "syncStalled", Json.Encode.bool prefs.syncStalled )
         , ( "weeklyScanReminder", Json.Encode.bool prefs.weeklyScanReminder )
         ]
