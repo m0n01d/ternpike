@@ -253,6 +253,7 @@ toAuthState creds initialRoute gs =
     , form = FreshForm (defaultPendingEntry gs.today)
     , geoBlocked = False
     , key = gs.key
+    , lastSyncedLabel = Nothing
     , ledgerMapExpanded = False
     , loadingExpenses = Set.empty
     , loadingTrips = Set.empty
@@ -1741,6 +1742,9 @@ update msg model =
         GotSubmitTime _ _ ->
             ( nextModel, cmd )
 
+        GotSyncTime _ ->
+            ( nextModel, cmd )
+
         GotVoidTime _ _ ->
             ( nextModel, cmd )
 
@@ -2182,6 +2186,9 @@ updateGuest msg gs =
         GotSubmitTime _ _ ->
             ( GuestModel gs, Cmd.none )
 
+        GotSyncTime _ ->
+            ( GuestModel gs, Cmd.none )
+
         GotVoidTime _ _ ->
             ( GuestModel gs, Cmd.none )
 
@@ -2482,14 +2489,22 @@ updateAuth msg as_ =
                                 _ ->
                                     False
 
-                        cmd =
+                        loadCmd =
                             if syncSettledEdge && tripsStillLoading then
                                 sendPouch GetAllTrips
 
                             else
                                 Cmd.none
+
+                        capturedSyncedAt =
+                            if state == Synced then
+                                Task.map2 (\zone posix -> GotSyncTime (Helpers.formatSyncTime zone posix)) Time.here Time.now
+                                    |> Task.perform identity
+
+                            else
+                                Cmd.none
                     in
-                    ( AuthModel { as_ | syncState = state }, cmd )
+                    ( AuthModel { as_ | syncState = state }, Cmd.batch [ loadCmd, capturedSyncedAt ] )
 
                 Ok AuthExpiredMsg ->
                     ( GuestModel (toGuestState SessionExpired as_)
@@ -2935,6 +2950,9 @@ updateAuth msg as_ =
 
                         _ ->
                             ( AuthModel { as_ | submitting = False }, Cmd.none )
+
+        GotSyncTime label ->
+            ( AuthModel { as_ | lastSyncedLabel = Just label }, Cmd.none )
 
         VoidEntry expense ->
             ( AuthModel { as_ | openLedgerMenu = Nothing }

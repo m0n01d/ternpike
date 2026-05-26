@@ -22,8 +22,9 @@ viewTab as_ =
     , body =
         Html.div []
             [ viewAppearanceSection as_.colorScheme
-            , viewBody as_.config (Just as_) (Just as_.showDayIntensity) as_.showInstallPrompt as_.version
+            , viewBody as_.config (Just as_) (Just as_.showDayIntensity) as_.showInstallPrompt
             , Pages.Settings.SharedTrips.view as_
+            , viewVersionFooter as_.version
             ]
     , hero = viewHero
     }
@@ -43,7 +44,7 @@ viewPanel cfg isSignedIn version =
                     Nothing
                 )
                 False
-                version
+            , viewVersionFooter version
             ]
         ]
 
@@ -54,8 +55,8 @@ viewHero =
         [ Html.text "Local-first preferences. Nothing here leaves the device." ]
 
 
-viewBody : AppConfig -> Maybe AuthState -> Maybe Bool -> Bool -> String -> Html Msg
-viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt version =
+viewBody : AppConfig -> Maybe AuthState -> Maybe Bool -> Bool -> Html Msg
+viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt =
     let
         isSignedIn =
             maybeDayIntensity /= Nothing
@@ -81,6 +82,12 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt version =
         , UI.Rule.kicker "CONNECTION"
         , UI.Card.subCard
             (viewAnthropicKeySection cfg maybeAuthState)
+        , case maybeAuthState of
+            Just as_ ->
+                viewSyncSection as_
+
+            Nothing ->
+                Html.text ""
         , UI.Rule.kicker "SESSION"
         , UI.Card.subCard
             [ Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
@@ -93,13 +100,39 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt version =
                     ++ [ UI.Button.ghost { label = "Reset local data", onClick = ResetSettingsClicked } ]
                 )
             ]
-        , if version /= "" then
-            Html.div [ Html.Attributes.class "mt-6 text-center text-[10px] font-mono uppercase tracking-widest text-muted" ]
-                [ Html.text ("VERSION " ++ version) ]
-
-          else
-            Html.text ""
         ]
+
+
+viewSyncSection : AuthState -> Html Msg
+viewSyncSection as_ =
+    let
+        valueText =
+            case as_.lastSyncedLabel of
+                Just label ->
+                    label
+
+                Nothing ->
+                    "Not yet this session"
+    in
+    Html.div []
+        [ UI.Rule.kicker "SYNC"
+        , UI.Card.subCard
+            [ Html.div [ Html.Attributes.class "flex items-center justify-between gap-4" ]
+                [ Html.span [ Html.Attributes.class "text-sm text-ink" ] [ Html.text "Last synced" ]
+                , Html.span [ Html.Attributes.class "text-sm text-muted" ] [ Html.text valueText ]
+                ]
+            ]
+        ]
+
+
+viewVersionFooter : String -> Html Msg
+viewVersionFooter version =
+    if version /= "" then
+        Html.div [ Html.Attributes.class "mt-6 text-center text-[10px] font-mono uppercase tracking-widest text-muted" ]
+            [ Html.text ("VERSION " ++ version) ]
+
+    else
+        Html.text ""
 
 
 viewAnthropicKeySection : AppConfig -> Maybe AuthState -> List (Html Msg)

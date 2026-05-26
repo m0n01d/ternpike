@@ -176,6 +176,7 @@ type alias AuthState =
     , form : PendingForm
     , geoBlocked : Bool
     , key : Nav.Key
+    , lastSyncedLabel : Maybe String
     , ledgerMapExpanded : Bool
     , loadingExpenses : Set String
     , loadingTrips : Set String
@@ -310,6 +311,7 @@ type Msg
     | GotPouchMsg Json.Decode.Value
     | GotSaveTripTime Time.Posix
     | GotSubmitTime ParsedEntry Time.Posix
+    | GotSyncTime String
     | GotVoidTime Expense Time.Posix
     | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
     | HoverDailyBars (List (CI.One DailyDay CI.Bar))

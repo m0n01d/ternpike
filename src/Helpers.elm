@@ -1,4 +1,4 @@
-module Helpers exposing (effectiveEntryToExpense, encodeWaypoints)
+module Helpers exposing (effectiveEntryToExpense, encodeWaypoints, formatSyncTime)
 
 import Data.Category as Category
 import Data.DateField as DateField
@@ -120,3 +120,88 @@ encodePoint ( e, dayIndex, isBoundary ) =
 
         Nothing ->
             Nothing
+
+
+{-| Render a `Time.Posix` for the Settings "Last synced" line. Uses the
+caller's local `Time.Zone` to produce something like `"May 26 at 5:42 PM"`.
+-}
+formatSyncTime : Time.Zone -> Time.Posix -> String
+formatSyncTime zone posix =
+    let
+        monthLabel =
+            case Time.toMonth zone posix of
+                Time.Jan ->
+                    "Jan"
+
+                Time.Feb ->
+                    "Feb"
+
+                Time.Mar ->
+                    "Mar"
+
+                Time.Apr ->
+                    "Apr"
+
+                Time.May ->
+                    "May"
+
+                Time.Jun ->
+                    "Jun"
+
+                Time.Jul ->
+                    "Jul"
+
+                Time.Aug ->
+                    "Aug"
+
+                Time.Sep ->
+                    "Sep"
+
+                Time.Oct ->
+                    "Oct"
+
+                Time.Nov ->
+                    "Nov"
+
+                Time.Dec ->
+                    "Dec"
+
+        day =
+            String.fromInt (Time.toDay zone posix)
+
+        hour24 =
+            Time.toHour zone posix
+
+        ampm =
+            if hour24 < 12 then
+                "AM"
+
+            else
+                "PM"
+
+        hour12 =
+            if hour24 == 0 then
+                12
+
+            else if hour24 > 12 then
+                hour24 - 12
+
+            else
+                hour24
+
+        minute =
+            Time.toMinute zone posix
+                |> String.fromInt
+                |> String.padLeft 2 '0'
+    in
+    String.concat
+        [ monthLabel
+        , " "
+        , day
+        , " at "
+        , String.fromInt hour12
+        , ":"
+        , minute
+        , " "
+        , ampm
+        ]
