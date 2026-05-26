@@ -750,7 +750,7 @@ Route patterns:
 - **Stack:** Hono + Resend + Cloudflare Worker KV (`CODES_KV`) — migration from Express/Gmail is complete
 - **Deploy:** `wrangler deploy` from `server/` — routes to `api.ternpike.com`
 - **Email:** Resend (`RESEND_API_KEY` secret), 3k emails/mo free; DKIM/SPF via Cloudflare DNS
-- **Secrets** (set via `wrangler secret put`): `COUCH_ADMIN_USER`, `COUCH_ADMIN_PASS`, `SERVER_SECRET`, `RESEND_API_KEY`
+- **Secrets** (set via `wrangler secret put`): `ANTHROPIC_API_KEY` (Ternpike-owned OCR key — never committed, never sent to browser), `COUCH_ADMIN_USER`, `COUCH_ADMIN_PASS`, `SERVER_SECRET`, `RESEND_API_KEY`
 - **KV:** `CODES_KV` stores hashed verification codes with 600-second TTL
 - **Auth flow:** email → 6-digit code stored in KV → code verified → CouchDB per-user DB credentials returned
 - **Password derivation:** HMAC-SHA256 of `"couch:" + email.toLowerCase()` using `SERVER_SECRET`, hex-encoded, first 32 chars

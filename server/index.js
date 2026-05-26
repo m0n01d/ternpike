@@ -9,6 +9,7 @@ import {
   registerNotificationRoutes,
   sendWeeklyScanReminders,
 } from './notifications.js'
+import { registerScanRoutes } from './scan.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
 
 const CODE_TTL_SECONDS = 600
@@ -147,11 +148,12 @@ const corsConfig = cors({
 })
 
 app.use('/auth/*', corsConfig)
+app.use('/geocode', corsConfig)
+app.use('/marketing/*', corsConfig)
+app.use('/notifications/*', corsConfig)
+app.use('/scan', corsConfig)
 app.use('/sharedtrips/*', corsConfig)
 app.use('/sharedtrips', corsConfig)
-app.use('/marketing/*', corsConfig)
-app.use('/geocode', corsConfig)
-app.use('/notifications/*', corsConfig)
 
 app.post('/auth/request-code', async (c) => {
   const env = c.env
@@ -255,9 +257,10 @@ app.post('/marketing/waitlist', async (c) => {
   return c.json({ ok: true })
 })
 
-registerSharedTripRoutes(app)
 registerGeocodeRoutes(app)
 registerNotificationRoutes(app)
+registerScanRoutes(app)
+registerSharedTripRoutes(app)
 registerAdminRoutes(app)
 
 export default {
