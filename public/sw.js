@@ -8,7 +8,7 @@
 const CACHE = '__CACHE_VERSION__';
 const PRECACHE_URLS = '__PRECACHE_URLS__';
 
-const APP_SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png'];
+const APP_SHELL = ['/', '/manifest.json', '/favicon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'];
 
 const SKIP_CACHE = [
   'api.ternpike.com',
