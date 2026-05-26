@@ -1,5 +1,6 @@
 module Types exposing
     ( AuthState
+    , GuestMsg_(..)
     , GuestState
     , Model(..)
     , Msg(..)
@@ -251,9 +252,8 @@ Ledger row menu: `OpenLedgerMenu`, `CloseLedgerMenu` — toggle the kebab
 popover holding secondary row actions (Duplicate, Move to trip…,
 Delete).
 
-Guest auth: `EmailInputChanged`, `SubmitEmail`, `CodeInputChanged`,
-`SubmitCode`, `RequestCodeResult`, `VerifyCodeResult`,
-`ToggleGuestSettings`.
+Guest auth: wrapped under `GuestMsg GuestMsg_`. See `GuestMsg_` for
+the 7 constructors that fire only in the guest state.
 
 Session: `SignOutClicked`, `ResetSettingsClicked`, `ApiKeyChanged`.
 
@@ -292,7 +292,6 @@ type Msg
     | CloseShareModal
     | CloseSharedTripModal
     | CloseTripForm
-    | CodeInputChanged String
     | ConfirmDeleteTrip Trip
     | CreateSharedTripNameChanged String
     | CreateSharedTripResult (Result Http.Error Http.SharedTripApi.CreateSharedTripResponse)
@@ -301,7 +300,6 @@ type Msg
     | DismissError
     | DismissMapPicker
     | DuplicateEntry Expense
-    | EmailInputChanged String
     | ExportCsv Data.TripId.TripId
     | FilesSelected (List File)
     | GeolocationDenied
@@ -318,6 +316,7 @@ type Msg
     | GotSubmitTime ParsedEntry Time.Posix
     | GotSyncTime Time.Posix
     | GotVoidTime Expense Time.Posix
+    | GuestMsg GuestMsg_
     | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
     | HoverDailyBars (List (CI.One DailyDay CI.Bar))
     | InviteEmailChanged String
@@ -347,7 +346,6 @@ type Msg
     | PaymentMethodChanged (Maybe PaymentMethod)
     | PushSubscribeReceived { error : String, ok : Bool }
     | RefreshClicked
-    | RequestCodeResult (Result Http.Error ())
     | RequestPushPermission
     | ReviewScanItem String
     | SaveTripForm
@@ -357,16 +355,13 @@ type Msg
     | SharedTripActivityNotified
     | SignOutClicked
     | SkipLocation
-    | SubmitCode
     | SubmitCreateSharedTrip
-    | SubmitEmail
     | SubmitEntry
     | SubmitInvite
     | SubmitTransfer
     | TakeOverBilling SharedTripId
     | ToastExpired
     | ToggleDayIntensity
-    | ToggleGuestSettings
     | ToggleLedgerMap
     | ToggleLedgerMapExpanded
     | ToggleNotificationPref NotificationToggle
@@ -382,7 +377,6 @@ type Msg
     | TripInviteeDraftChanged String
     | TripInviteeRemoved Int
     | TripTargetSelected Data.Trip.CreateTarget
-    | VerifyCodeResult (Result Http.Error Creds)
     | VoidEntry Expense
 
 
@@ -402,3 +396,19 @@ type SharedMsg_
     | SetColorScheme ColorScheme
     | ShowByoKeyInput
     | UrlChanged Url.Url
+
+
+{-| Messages that fire only in the guest (unauthenticated) state.
+
+These are bucketed here so the compiler can verify that `updateGuest`
+handles them without any per-state no-ops leaking into `updateAuth`.
+
+-}
+type GuestMsg_
+    = CodeInputChanged String
+    | EmailInputChanged String
+    | RequestCodeResult (Result Http.Error ())
+    | SubmitCode
+    | SubmitEmail
+    | ToggleGuestSettings
+    | VerifyCodeResult (Result Http.Error Creds)
