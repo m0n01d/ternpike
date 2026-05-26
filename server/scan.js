@@ -16,6 +16,19 @@
 
 import { authenticateCaller, getTier, isPaidTier } from './auth.js'
 
+/**
+ * Mirror of the Elm `Data.Scan.needsReview` predicate.
+ * Returns true when any structural field — amount, merchant, or date — is
+ * absent from the OCR result. Used by server-side scan notification logic
+ * (see #223) to flag items that need user attention.
+ *
+ * @param {{ amount?: unknown, merchant?: unknown, date?: unknown }} ocr
+ * @returns {boolean}
+ */
+export function needsReview(ocr) {
+  return ocr.amount == null || ocr.merchant == null || ocr.date == null
+}
+
 const ANTHROPIC_BASE_URL = 'https://api.anthropic.com'
 const ANTHROPIC_VERSION = '2023-06-01'
 const MAX_TOKENS_CAP = 4096
