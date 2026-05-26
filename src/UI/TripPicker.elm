@@ -17,7 +17,7 @@ import Data.Trip exposing (Trip)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Types exposing (Msg(..))
+import Types exposing (AuthMsg_(..), Msg(..))
 import UI.Avatar
 import UI.DateView
 import UI.Icons
@@ -52,7 +52,7 @@ viewMove { expense, flocks, trips } =
                 [ Html.button
                     [ Html.Attributes.type_ "button"
                     , Html.Attributes.class "text-sm text-muted px-3 py-2 hover:text-ink"
-                    , Html.Events.onClick CloseMovePicker
+                    , Html.Events.onClick (AuthMsg CloseMovePicker)
                     ]
                     [ Html.text "Cancel" ]
                 ]
@@ -69,7 +69,7 @@ viewCandidate expense flocks trip =
     Html.button
         [ Html.Attributes.type_ "button"
         , Html.Attributes.class "w-full text-left px-6 py-3 border-b border-dashed border-tan/60 last:border-b-0 hover:bg-cream-deep flex items-center justify-between gap-3"
-        , Html.Events.onClick (MoveEntry expense trip.id)
+        , Html.Events.onClick (AuthMsg (MoveEntry expense trip.id))
         ]
         [ Html.div [ Html.Attributes.class "min-w-0 flex-1" ]
             [ case maybeFlock of

@@ -9,7 +9,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Pages.Settings.SharedTrips
-import Types exposing (AuthState, Msg(..), SharedMsg_(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..), SharedMsg_(..))
 import UI.Button
 import UI.Card
 import UI.DateView
@@ -98,7 +98,7 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt =
         , UI.Card.subCard
             [ Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
                 ((if isSignedIn then
-                    [ UI.Button.secondary { label = "Sign out", onClick = SignOutClicked } ]
+                    [ UI.Button.secondary { label = "Sign out", onClick = AuthMsg SignOutClicked } ]
 
                   else
                     []
@@ -240,7 +240,7 @@ viewDisplaySection dayIntensity =
             [ viewToggleRow
                 { helper = "Tint the rule between DAY and date by how this day's total compares to the trip's median spend."
                 , label = "Day spending intensity"
-                , msg = ToggleDayIntensity
+                , msg = AuthMsg ToggleDayIntensity
                 , value = dayIntensity
                 }
             ]
@@ -254,7 +254,7 @@ viewInstallSection =
         , UI.Card.subCard
             [ Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
                 [ Html.text "Add Ternpike to your home screen for an app-like, full-screen experience." ]
-            , UI.Button.secondary { label = "Install app", onClick = TriggerInstallPrompt }
+            , UI.Button.secondary { label = "Install app", onClick = AuthMsg TriggerInstallPrompt }
             ]
         ]
 
@@ -266,7 +266,7 @@ viewShareSection =
         , UI.Card.subCard
             [ Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
                 [ Html.text "A personal QR that friends can scan off your phone to install Ternpike." ]
-            , UI.Button.secondary { label = "Share Ternpike", onClick = OpenShareModal }
+            , UI.Button.secondary { label = "Share Ternpike", onClick = AuthMsg OpenShareModal }
             ]
         ]
 
@@ -313,31 +313,31 @@ viewNotificationsBody as_ =
         [ viewToggleRow
             { helper = "Get a push when you're removed from a shared trip or when billing ownership is transferred to you."
             , label = "Shared trip access change"
-            , msg = ToggleNotificationPref Notifications.SharedTripAccessChange
+            , msg = AuthMsg (ToggleNotificationPref Notifications.SharedTripAccessChange)
             , value = as_.notificationPrefs.sharedTripAccessChange
             }
         , viewToggleRow
             { helper = "Get a push when a co-traveler adds, edits, or voids an expense on a shared trip."
             , label = "Shared trip activity"
-            , msg = ToggleNotificationPref Notifications.SharedTripActivity
+            , msg = AuthMsg (ToggleNotificationPref Notifications.SharedTripActivity)
             , value = as_.notificationPrefs.sharedTripActivity
             }
         , viewToggleRow
             { helper = "Get a push when someone invites you to a shared trip. Tap to accept or decline in Settings."
             , label = "Shared trip invite"
-            , msg = ToggleNotificationPref Notifications.SharedTripInvite
+            , msg = AuthMsg (ToggleNotificationPref Notifications.SharedTripInvite)
             , value = as_.notificationPrefs.sharedTripInvite
             }
         , viewToggleRow
             { helper = "Get notified if your data hasn't backed up in 3 days. Recommended — this is a data protection alert, not an engagement nudge."
             , label = "Sync stalled alert"
-            , msg = ToggleNotificationPref Notifications.SyncStalled
+            , msg = AuthMsg (ToggleNotificationPref Notifications.SyncStalled)
             , value = as_.notificationPrefs.syncStalled
             }
         , viewToggleRow
             { helper = "Every Friday at 5pm UTC, we'll nudge you to scan this week's receipts."
             , label = "Weekly receipt reminder"
-            , msg = ToggleNotificationPref Notifications.WeeklyScanReminder
+            , msg = AuthMsg (ToggleNotificationPref Notifications.WeeklyScanReminder)
             , value = as_.notificationPrefs.weeklyScanReminder
             }
         ]
@@ -345,7 +345,7 @@ viewNotificationsBody as_ =
     else
         [ Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
             [ Html.text "Weekly Friday reminder to scan receipts. You can turn it off anytime." ]
-        , UI.Button.primary { label = "Enable notifications", onClick = RequestPushPermission }
+        , UI.Button.primary { label = "Enable notifications", onClick = AuthMsg RequestPushPermission }
         ]
 
 

@@ -22,7 +22,7 @@ import Data.UserId as UserId exposing (UserId)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Avatar
 import UI.BillingBanner
 import UI.Button
@@ -65,7 +65,7 @@ viewCreateRow tier =
                     )
                 ]
             , if Tier.isPaid tier then
-                UI.Button.primary { label = "Share a trip", onClick = OpenCreateSharedTripModal }
+                UI.Button.primary { label = "Share a trip", onClick = AuthMsg OpenCreateSharedTripModal }
 
               else
                 Html.button
@@ -126,17 +126,17 @@ viewSharedTripCard as_ currentUser sharedTrip =
             }
         , Html.div [ Html.Attributes.class "flex flex-wrap gap-2 mt-3" ]
             (if owner then
-                [ UI.Button.secondary { label = "Invite", onClick = OpenInviteModal sharedTrip.id }
-                , UI.Button.ghost { label = "Transfer ownership", onClick = OpenTransferModal sharedTrip.id }
+                [ UI.Button.secondary { label = "Invite", onClick = AuthMsg (OpenInviteModal sharedTrip.id) }
+                , UI.Button.ghost { label = "Transfer ownership", onClick = AuthMsg (OpenTransferModal sharedTrip.id) }
                 ]
 
              else
-                [ UI.Button.ghost { label = "Leave", onClick = OpenLeaveConfirmModal sharedTrip.id }
+                [ UI.Button.ghost { label = "Leave", onClick = AuthMsg (OpenLeaveConfirmModal sharedTrip.id) }
                 ]
             )
         , Html.button
             [ Html.Attributes.type_ "button"
-            , Html.Events.onClick (ToggleSharedTripMembers sharedTrip.id)
+            , Html.Events.onClick (AuthMsg (ToggleSharedTripMembers sharedTrip.id))
             , Html.Attributes.class "mt-3 text-xs font-mono uppercase tracking-widest text-moss hover:text-forest bg-transparent border-0 cursor-pointer p-0"
             ]
             [ Html.text
@@ -204,7 +204,7 @@ viewModal as_ =
                     (Html.input
                         [ Html.Attributes.type_ "text"
                         , Html.Attributes.value name
-                        , Html.Events.onInput CreateSharedTripNameChanged
+                        , Html.Events.onInput (AuthMsg << CreateSharedTripNameChanged)
                         , Html.Attributes.placeholder "Honeymoon"
                         , textInputStyle
                         ]
@@ -212,8 +212,8 @@ viewModal as_ =
                     )
                 , viewError error
                 , modalActions
-                    { confirm = ( "Share a trip", SubmitCreateSharedTrip )
-                    , cancel = ( "Cancel", CloseSharedTripModal )
+                    { confirm = ( "Share a trip", AuthMsg SubmitCreateSharedTrip )
+                    , cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
                     , inFlight = as_.sharedTripUi.inFlight
                     }
                 ]
@@ -226,7 +226,7 @@ viewModal as_ =
                     (Html.input
                         [ Html.Attributes.type_ "email"
                         , Html.Attributes.value email
-                        , Html.Events.onInput InviteEmailChanged
+                        , Html.Events.onInput (AuthMsg << InviteEmailChanged)
                         , Html.Attributes.placeholder "name@example.com"
                         , textInputStyle
                         ]
@@ -234,8 +234,8 @@ viewModal as_ =
                     )
                 , viewError error
                 , modalActions
-                    { confirm = ( "Send invite", SubmitInvite )
-                    , cancel = ( "Cancel", CloseSharedTripModal )
+                    { confirm = ( "Send invite", AuthMsg SubmitInvite )
+                    , cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
                     , inFlight = as_.sharedTripUi.inFlight
                     }
                 ]
@@ -257,8 +257,8 @@ viewModal as_ =
                     ]
                 , viewError error
                 , modalActions
-                    { confirm = ( "Leave", LeaveSharedTripConfirmed sharedTripId )
-                    , cancel = ( "Cancel", CloseSharedTripModal )
+                    { confirm = ( "Leave", AuthMsg (LeaveSharedTripConfirmed sharedTripId) )
+                    , cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
                     , inFlight = as_.sharedTripUi.inFlight
                     }
                 ]
@@ -284,7 +284,7 @@ viewModal as_ =
                     [ Html.text "New owner must be on Osprey or higher. The server will reject Tern targets." ]
                 , formField "MEMBER"
                     (Html.select
-                        [ Html.Events.onInput TransferTargetChanged
+                        [ Html.Events.onInput (AuthMsg << TransferTargetChanged)
                         , textInputStyle
                         ]
                         (Html.option
@@ -303,8 +303,8 @@ viewModal as_ =
                     )
                 , viewError error
                 , modalActions
-                    { confirm = ( "Transfer", SubmitTransfer )
-                    , cancel = ( "Cancel", CloseSharedTripModal )
+                    { confirm = ( "Transfer", AuthMsg SubmitTransfer )
+                    , cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
                     , inFlight = as_.sharedTripUi.inFlight
                     }
                 ]

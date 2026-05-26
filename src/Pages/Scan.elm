@@ -18,7 +18,7 @@ import Html.Attributes
 import Html.Events
 import Json.Decode
 import Routing
-import Types exposing (AuthState, Msg(..), SharedMsg_(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..), SharedMsg_(..))
 import UI.Button
 import UI.DateView
 import UI.Icons
@@ -181,7 +181,7 @@ viewHero as_ =
                 , Html.Attributes.accept "image/*"
                 , Html.Attributes.attribute "multiple" "true"
                 , Html.Attributes.class "hidden"
-                , Html.Events.on "change" (Json.Decode.map FilesSelected (Json.Decode.at [ "target", "files" ] fileListDecoder))
+                , Html.Events.on "change" (Json.Decode.map (AuthMsg << FilesSelected) (Json.Decode.at [ "target", "files" ] fileListDecoder))
                 ]
                 []
             ]
@@ -269,7 +269,7 @@ viewBody model =
                 (List.map viewScanCard sortedItems)
             , if hasSubmitted then
                 Html.div [ Html.Attributes.class "mb-4 flex justify-center" ]
-                    [ UI.Button.ghost { label = "Clear submitted", onClick = ClearDoneItems } ]
+                    [ UI.Button.ghost { label = "Clear submitted", onClick = AuthMsg ClearDoneItems } ]
 
               else
                 Html.text ""
@@ -410,7 +410,7 @@ viewOcrFailure maybeReason =
 viewReviewButton : ScanItemId.ScanItemId -> Html Msg
 viewReviewButton id =
     Html.button
-        [ Html.Events.onClick (ReviewScanItem (ScanItemId.toString id))
+        [ Html.Events.onClick (AuthMsg (ReviewScanItem (ScanItemId.toString id)))
         , Html.Attributes.class "self-start py-1.5 px-3 rounded-lg bg-rust text-parchment text-xs font-bold cursor-pointer border-none"
         ]
         [ Html.text "Review →" ]
