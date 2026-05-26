@@ -7,7 +7,6 @@ module Data.Trip exposing
     , TripForm
     , TripTarget(..)
     , canBatchScan
-    , canUseProxiedOCR
     , decoder
     , defaultNewFlockDraft
     , effectiveTier
@@ -74,9 +73,9 @@ behave under?" For personal trips it's the user's own tier; for flock
 trips it's the **billing owner's** tier. Inside a flock owned by a
 paid user, every member's writes get paid features regardless of the
 member's personal tier — that's the whole point of pooling under one
-billing relationship. `canUseProxiedOCR` and `canBatchScan` are
-convenience predicates on top of `effectiveTier` so call sites don't
-have to know whether a particular capability is paid-only or not.
+billing relationship. `canBatchScan` is a convenience predicate on top of `effectiveTier` so
+call sites don't have to know whether a particular capability is
+paid-only or not.
 
 The flock's tier today is read off the **billing owner's** tier on
 the active session — the simplification works because the owner is
@@ -349,16 +348,6 @@ ownerTier flock ctx =
 
     else
         Data.Tier.Osprey
-
-
-{-| True if the trip can use the Ternpike-hosted Anthropic proxy for
-OCR scanning (paid-tier feature). Equivalent to `Tier.isPaid` on the
-effective tier; named for the capability so call sites read like
-`if Trip.canUseProxiedOCR trip ctx then ...`.
--}
-canUseProxiedOCR : Trip -> TierContext a -> Bool
-canUseProxiedOCR trip ctx =
-    Data.Tier.isPaid (effectiveTier trip ctx)
 
 
 {-| True if the trip can run batch (parallel) receipt scanning

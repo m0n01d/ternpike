@@ -107,7 +107,7 @@ viewTierLabel trip as_ =
 
 paidOcrLabel : Trip -> AuthState -> String
 paidOcrLabel trip as_ =
-    if Trip.canUseProxiedOCR trip as_ && Trip.canBatchScan trip as_ then
+    if Data.Tier.isPaid (Trip.effectiveTier trip as_) && Trip.canBatchScan trip as_ then
         "Hosted OCR · parallel"
 
     else

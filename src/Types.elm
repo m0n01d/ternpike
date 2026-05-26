@@ -345,6 +345,7 @@ type Msg
     | ResetSettingsClicked
     | ReviewScanItem String
     | SaveTripForm
+    | ScanProxyResult { body : String, itemId : String, ok : Bool, status : Int }
     | ScrolledToTop
     | SetColorScheme ColorScheme
     | SetStatsGranularity Granularity
