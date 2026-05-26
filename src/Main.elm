@@ -132,6 +132,7 @@ import Time
 import Types exposing (AuthState, GuestState, Model(..), Msg(..))
 import UI.BillingBanner
 import UI.Layout
+import UI.ShareModal
 import UI.TripPicker
 import Url
 import Validate
@@ -213,6 +214,9 @@ port pushSubscribeResult : ({ error : String, ok : Bool } -> msg) -> Sub msg
 port downloadFile : { content : String, filename : String, mimeType : String } -> Cmd msg
 
 
+port printShareQr : () -> Cmd msg
+
+
 
 -- ROUTING
 -- See src/Routing.elm
@@ -248,6 +252,7 @@ toAuthState creds initialRoute gs =
     , duplicateWarning = Nothing
     , error = Nothing
     , expenses = Dict.empty
+    , shareModalOpen = False
     , sharedTripUi = SharedTripUi.empty
     , sharedTrips = SharedTrips.empty
     , form = FreshForm (defaultPendingEntry gs.today)
@@ -1667,6 +1672,9 @@ update msg model =
         CloseMovePicker ->
             ( nextModel, cmd )
 
+        CloseShareModal ->
+            ( nextModel, cmd )
+
         CloseTripForm ->
             ( nextModel, cmd )
 
@@ -1826,10 +1834,16 @@ update msg model =
         OpenNewTripForm ->
             ( nextModel, cmd )
 
+        OpenShareModal ->
+            ( nextModel, cmd )
+
         OpenTransferModal _ ->
             ( nextModel, cmd )
 
         PaymentMethodChanged _ ->
+            ( nextModel, cmd )
+
+        PrintShareQr ->
             ( nextModel, cmd )
 
         PushSubscribeReceived _ ->
@@ -2120,6 +2134,9 @@ updateGuest msg gs =
         CloseMovePicker ->
             ( GuestModel gs, Cmd.none )
 
+        CloseShareModal ->
+            ( GuestModel gs, Cmd.none )
+
         CloseTripForm ->
             ( GuestModel gs, Cmd.none )
 
@@ -2264,10 +2281,16 @@ updateGuest msg gs =
         OpenNewTripForm ->
             ( GuestModel gs, Cmd.none )
 
+        OpenShareModal ->
+            ( GuestModel gs, Cmd.none )
+
         OpenTransferModal _ ->
             ( GuestModel gs, Cmd.none )
 
         PaymentMethodChanged _ ->
+            ( GuestModel gs, Cmd.none )
+
+        PrintShareQr ->
             ( GuestModel gs, Cmd.none )
 
         PushSubscribeReceived _ ->
@@ -3068,6 +3091,15 @@ updateAuth msg as_ =
 
         CloseMovePicker ->
             ( AuthModel { as_ | movePicker = Nothing }, Cmd.none )
+
+        OpenShareModal ->
+            ( AuthModel { as_ | shareModalOpen = True }, Cmd.none )
+
+        CloseShareModal ->
+            ( AuthModel { as_ | shareModalOpen = False }, Cmd.none )
+
+        PrintShareQr ->
+            ( AuthModel as_, printShareQr () )
 
         MoveEntry expense newTripId ->
             if newTripId == expense.tripId then
@@ -4457,6 +4489,7 @@ viewAuth as_ =
             _ ->
                 Html.text ""
         , Pages.Settings.SharedTrips.viewModal as_
+        , UI.ShareModal.view as_
         , UI.Layout.viewToast as_.toast
         ]
 

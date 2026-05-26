@@ -104,3 +104,36 @@
     transition: background-color 120ms ease, color 120ms ease, transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
   }
 }
+
+/* QR share print mode. JS adds `body.printing-share-qr` before calling
+   window.print(), then strips it on `afterprint`. Inside that mode we
+   hide everything except the `.print-share-qr` block and let the QR
+   scale to fit whatever page size the user picks in the print dialog
+   (letter, A4, label, etc.). The share template is 4:5 portrait, so
+   object-fit:contain centers it on any page. */
+@media print {
+  body.printing-share-qr > * {
+    visibility: hidden;
+  }
+  body.printing-share-qr .print-share-qr,
+  body.printing-share-qr .print-share-qr * {
+    visibility: visible;
+  }
+  body.printing-share-qr .print-share-qr {
+    position: fixed;
+    inset: 0;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body.printing-share-qr .print-share-qr img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  body.printing-share-qr {
+    background: white;
+  }
+}

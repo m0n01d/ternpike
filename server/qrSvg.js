@@ -26,7 +26,7 @@ const PALETTE = {
   muted: '#8a8a78',
 }
 
-export const TEMPLATES = ['trailhead', 'sign', 'minimal']
+export const TEMPLATES = ['trailhead', 'sign', 'minimal', 'share']
 export const DEFAULT_TEMPLATE = 'trailhead'
 
 export const isValidTemplate = (t) => TEMPLATES.includes(t)
@@ -46,6 +46,7 @@ const TEMPLATE_FNS = {
   trailhead: renderTrailhead,
   sign: renderSign,
   minimal: renderMinimal,
+  share: renderShare,
 }
 
 export function renderSticker({ dest, label, slug, template }) {
@@ -111,6 +112,34 @@ function renderSign({ dest, label, slug }) {
       ${labelStrip(label, PALETTE.forest, 0.45)}
     `,
   })
+}
+
+// Screen-display variant — big square card with a QR sized for someone
+// to scan across a picnic table. NOT for printing; the in-app share modal
+// is the only consumer. viewBox is 320x400 portrait; the modal CSS scales
+// it to whatever pixel size the phone has room for.
+function renderShare({ dest, slug }) {
+  const qrSize = 240
+  const qrX = 40
+  const qrY = 30
+  const cardPad = 8
+  const path = renderQrAt(dest, qrX, qrY, qrSize)
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 400" shape-rendering="crispEdges">
+  <rect width="320" height="400" fill="${PALETTE.forest}"/>
+  <rect x="${qrX - cardPad}" y="${qrY - cardPad}"
+        width="${qrSize + cardPad * 2}" height="${qrSize + cardPad * 2}"
+        rx="8" fill="${PALETTE.cream}"/>
+  <path d="${path}" fill="${PALETTE.forestDeep}"/>
+  <g fill="${PALETTE.cream}" font-family="Playfair Display, Georgia, serif" text-anchor="middle">
+    <text x="160" y="320" font-size="32" font-weight="700">Ternpike</text>
+    <text x="160" y="345" font-size="14" font-style="italic" opacity="0.85">Track every turn of the road.</text>
+  </g>
+  <g fill="${PALETTE.cream}" font-family="DM Mono, ui-monospace, monospace" text-anchor="middle">
+    <text x="160" y="370" font-size="12" opacity="0.7">ternpike.com</text>
+    <text x="160" y="388" font-size="9" opacity="0.5">${escapeXml(slug)}</text>
+  </g>
+</svg>`
 }
 
 function renderMinimal({ dest, label, slug }) {
