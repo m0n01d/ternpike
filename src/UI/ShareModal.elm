@@ -12,6 +12,8 @@ The slug is derived inline from `as_.currentUser` via
 
 -}
 
+import Data.GeoPoint as GeoPoint
+import Data.Location exposing (LocationState(..))
 import Data.UserId as UserId
 import Html exposing (Html)
 import Html.Attributes
@@ -52,18 +54,21 @@ viewOpen as_ =
         -- (1 large / 6 medium / 12 small), so the printer setup stays
         -- identical across choices.
         --
-        -- shareLocation comes from `navigator.geolocation` (kicked off by
-        -- OpenShareModal). When present, lat/lon are appended so each
-        -- sticker is stamped with the user's actual GPS — not cf's IP geo,
-        -- which routes through the nearest CDN edge and can be off by
-        -- hundreds of miles on mobile data. When absent (permission
-        -- denied, slow fix, etc), the sticker omits the coord stamp.
+        -- `currentLocation` is the shared device-GPS broadcast on
+        -- AuthState, populated by `navigator.geolocation` (kicked off by
+        -- OpenShareModal AND by Add-page nav — single source). Append
+        -- lat/lon when we have a fix; otherwise omit. iOS / Cloudflare
+        -- never sees IP-derived coords for the print, so the sticker
+        -- either shows your real GPS or no coords at all.
         coordsParam =
-            case as_.shareLocation of
-                Just loc ->
-                    "&lat=" ++ String.fromFloat loc.lat ++ "&lon=" ++ String.fromFloat loc.lon
+            case as_.currentLocation of
+                LocationGot point _ ->
+                    "&lat="
+                        ++ String.fromFloat (GeoPoint.latDegrees point)
+                        ++ "&lon="
+                        ++ String.fromFloat (GeoPoint.lonDegrees point)
 
-                Nothing ->
+                _ ->
                     ""
 
         printUrl size =

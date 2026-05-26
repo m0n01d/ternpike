@@ -442,12 +442,26 @@ viewCategoryBtn selected cat =
 
 viewLocationWidget : AuthState -> PendingEntry -> Html Msg
 viewLocationWidget model pending =
+    let
+        -- Per-entry override (map picker, EXIF, skip) wins; otherwise
+        -- fall back to the device broadcast on `currentLocation` so the
+        -- widget reflects the GPS that the Add page kicked off on nav.
+        -- Same resolution rule Main.elm's `effectiveLocation` applies at
+        -- submit time, mirrored here so what-you-see == what-you-save.
+        effective =
+            case pending.locationState of
+                LocationIdle ->
+                    model.currentLocation
+
+                other ->
+                    other
+    in
     Html.div []
-        [ viewLocationStatus pending.locationState
+        [ viewLocationStatus effective
         , if model.showMapPicker then
             Html.node "map-picker"
                 [ Html.Attributes.attribute "lat"
-                    (case pending.locationState of
+                    (case effective of
                         LocationGot point _ ->
                             String.fromFloat (GeoPoint.latDegrees point)
 
@@ -455,7 +469,7 @@ viewLocationWidget model pending =
                             "64.2008"
                     )
                 , Html.Attributes.attribute "lon"
-                    (case pending.locationState of
+                    (case effective of
                         LocationGot point _ ->
                             String.fromFloat (GeoPoint.lonDegrees point)
 

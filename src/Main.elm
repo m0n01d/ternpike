@@ -245,11 +245,11 @@ toAuthState creds initialRoute gs =
     , config = gs.session.config
     , confirmDeleteTrip = Nothing
     , creds = creds
+    , currentLocation = LocationIdle
     , currentUser = UserId.fromString creds.email
     , duplicateWarning = Nothing
     , error = Nothing
     , expenses = Dict.empty
-    , shareLocation = Nothing
     , shareModalOpen = False
     , sharedTripUi = SharedTripUi.empty
     , sharedTrips = SharedTrips.empty
@@ -1061,6 +1061,26 @@ toastFor =
 setLocation : LocationState -> PendingEntry -> PendingEntry
 setLocation ls p =
     { p | locationState = ls }
+
+
+{-| Resolve the location that will actually be attached to the entry on
+submit. Per-entry overrides (map picker, EXIF, "skip") win; otherwise we
+fall back to the shared `currentLocation` broadcast — the device's live
+GPS that the Add page and the Share modal both read from.
+
+This keeps `pendingEntry.locationState` meaning "the user's deliberate
+choice for THIS entry," and `as_.currentLocation` meaning "where the
+device is right now." Single broadcast, single read path.
+
+-}
+effectiveLocation : AuthState -> PendingEntry -> LocationState
+effectiveLocation as_ p =
+    case p.locationState of
+        LocationIdle ->
+            as_.currentLocation
+
+        other ->
+            other
 
 
 freshScanItem : String -> ScanItem
@@ -2171,7 +2191,18 @@ updateAuth msg as_ =
             authPending (\p -> { p | paymentMethod = pm }) as_
 
         SubmitEntry ->
-            case PendingEntry.parseEntry (formPending as_.form) of
+            let
+                -- Resolve the entry's location through `effectiveLocation`
+                -- so that an entry with no per-entry override picks up the
+                -- broadcast `currentLocation` instead of submitting with
+                -- LocationIdle (= no geoPoint).
+                pendingNow =
+                    formPending as_.form
+
+                pendingForSubmit =
+                    { pendingNow | locationState = effectiveLocation as_ pendingNow }
+            in
+            case PendingEntry.parseEntry pendingForSubmit of
                 Ok parsed ->
                     case as_.duplicateWarning of
                         Just _ ->
@@ -2530,12 +2561,28 @@ updateAuth msg as_ =
             ( AuthModel { as_ | movePicker = Nothing }, Cmd.none )
 
         OpenShareModal ->
-            -- Kick off a geolocation request so the printable sticker
-            -- can stamp the user's actual GPS coords (not Cloudflare's IP
-            -- geo, which can be states away on mobile data). The Msg
-            -- handler for GotGpsCoords stashes the result on `shareLocation`
-            -- and ShareModal renders fresh print URLs when it arrives.
-            ( AuthModel { as_ | shareLocation = Nothing, shareModalOpen = True }
+            -- Kick off a geolocation request so the printable sticker can
+            -- stamp the user's actual GPS coords (not Cloudflare's IP geo,
+            -- which can be states away on mobile data). GotGpsCoords
+            -- writes to `as_.currentLocation` — the single broadcast for
+            -- device location, shared by ShareModal and the Add/Edit
+            -- form's location widget.
+            --
+            -- If we already have a cached fix, leave it visible (Add page
+            -- is reading the same field and a flicker-to-Resolving would
+            -- blink its widget); the fresh result will overlay when it
+            -- arrives. Only flip to Resolving when we genuinely don't
+            -- have anything yet.
+            let
+                nextLocation =
+                    case as_.currentLocation of
+                        LocationGot _ _ ->
+                            as_.currentLocation
+
+                        _ ->
+                            LocationResolving
+            in
+            ( AuthModel { as_ | currentLocation = nextLocation, shareModalOpen = True }
             , requestGeolocation ()
             )
 
@@ -2643,25 +2690,22 @@ updateAuth msg as_ =
             ( AuthModel { as_ | error = Nothing }, Cmd.none )
 
         GotGpsCoords lat lon ->
-            -- Two consumers: the Scan/Add form (existing) and the share
-            -- modal's print URL (new). The geolocation port is shared, so
-            -- update both whenever fresh coords arrive — share-modal reads
-            -- `shareLocation`, scan reads the form's location field.
-            let
-                ( nextModel, nextCmd ) =
-                    authPending (setLocation (LocationGot (GeoPoint.fromDegrees lat lon) BrowserGeo)) as_
-            in
-            ( case nextModel of
-                AuthModel next ->
-                    AuthModel { next | shareLocation = Just { lat = lat, lon = lon } }
-
-                other ->
-                    other
-            , nextCmd
+            -- Single broadcast: device location lives on `currentLocation`
+            -- and is read by both consumers (the Add/Edit form's location
+            -- widget via `effectiveLocation`, and the ShareModal's print
+            -- URL builder). No per-consumer storage; the entry's own
+            -- `locationState` only diverges from currentLocation when the
+            -- user explicitly overrides via map picker, EXIF, or skip.
+            ( AuthModel { as_ | currentLocation = LocationGot (GeoPoint.fromDegrees lat lon) BrowserGeo }
+            , Cmd.none
             )
 
         GeolocationDenied ->
-            ( AuthModel { as_ | geoBlocked = True, form = mapForm (setLocation LocationIdle) as_.form }
+            -- `geoBlocked` gates whether to keep auto-requesting on every
+            -- Add navigation; `currentLocation = LocationIdle` tells the
+            -- view "no device location available, fall back to per-entry
+            -- override UI (pin / skip)".
+            ( AuthModel { as_ | currentLocation = LocationIdle, geoBlocked = True }
             , Cmd.none
             )
 
