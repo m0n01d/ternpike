@@ -42,6 +42,29 @@ export const deriveStubPassword = (email: string, serverSecret: string): string 
     .digest('hex')
     .slice(0, 32)
 
+/**
+ * A trivially-named placeholder trip that exists solely to keep Elm's
+ * empty-trips bounce (`src/Main.elm:943-946`) from firing during boot.
+ * When `selectedTrips == Nothing` and the route isn't `RouteJoinSharedTrip`,
+ * `Main.elm` does `Nav.replaceUrl … "trips"` — which silently knocks any
+ * spec that lands on `/settings` (or any other non-trip route) back to
+ * `/trips`, producing a mystifying "element not found" failure on whatever
+ * settings-page assertion follows. Specs that override `aliceSpec` /
+ * `bobSpec` without providing their own `seed` get this trip injected
+ * automatically. Specs that genuinely want an empty PouchDB (e.g. those
+ * that hydrate trips via CouchDB shared-trip sync after the context is
+ * built) opt out explicitly with `seed: { trips: [] }`.
+ */
+const harnessPlaceholderTrip = {
+  description: '',
+  endDate: '2026-01-31',
+  name: 'harness placeholder',
+  startDate: '2026-01-01',
+} as const
+
+const resolveSeed = (seed: SeedData | undefined): SeedData =>
+  seed === undefined ? { trips: [harnessPlaceholderTrip] } : seed
+
 const buildContext = async (
   browser: import('@playwright/test').Browser,
   spec: UserSpec,
@@ -57,9 +80,7 @@ const buildContext = async (
     password: deriveStubPassword(spec.email, state.serverSecret),
     tier: spec.tier.toLowerCase(),
   })
-  if (spec.seed) {
-    await seedPouchDB(ctx, spec.seed)
-  }
+  await seedPouchDB(ctx, resolveSeed(spec.seed))
   return ctx
 }
 
