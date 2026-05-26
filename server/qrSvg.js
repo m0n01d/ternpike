@@ -114,30 +114,30 @@ function renderSign({ dest, label, slug }) {
   })
 }
 
-// Screen-display variant — big square card with a QR sized for someone
-// to scan across a picnic table. NOT for printing; the in-app share modal
-// is the only consumer. viewBox is 320x400 portrait; the modal CSS scales
-// it to whatever pixel size the phone has room for.
+// Full-bleed 4:6 portrait — matches a standard 4x6 shipping label so the
+// QR fills the whole sticker when printed on a Munbyn / Rollo / Dymo /
+// etc, and matches the modal's `<img>` aspect ratio for an honest preview.
+// QR card is centered horizontally, brand stack below.
 function renderShare({ dest, slug }) {
-  const qrSize = 240
-  const qrX = 40
-  const qrY = 30
+  const qrSize = 280
+  const qrX = 20
+  const qrY = 28
   const cardPad = 8
   const path = renderQrAt(dest, qrX, qrY, qrSize)
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 400" shape-rendering="crispEdges">
-  <rect width="320" height="400" fill="${PALETTE.forest}"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 480" shape-rendering="crispEdges">
+  <rect width="320" height="480" fill="${PALETTE.forest}"/>
   <rect x="${qrX - cardPad}" y="${qrY - cardPad}"
         width="${qrSize + cardPad * 2}" height="${qrSize + cardPad * 2}"
-        rx="8" fill="${PALETTE.cream}"/>
+        rx="10" fill="${PALETTE.cream}"/>
   <path d="${path}" fill="${PALETTE.forestDeep}"/>
   <g fill="${PALETTE.cream}" font-family="Playfair Display, Georgia, serif" text-anchor="middle">
-    <text x="160" y="320" font-size="32" font-weight="700">Ternpike</text>
-    <text x="160" y="345" font-size="14" font-style="italic" opacity="0.85">Track every turn of the road.</text>
+    <text x="160" y="370" font-size="38" font-weight="700">Ternpike</text>
+    <text x="160" y="400" font-size="16" font-style="italic" opacity="0.85">Track every turn of the road.</text>
   </g>
   <g fill="${PALETTE.cream}" font-family="DM Mono, ui-monospace, monospace" text-anchor="middle">
-    <text x="160" y="370" font-size="12" opacity="0.7">ternpike.com</text>
-    <text x="160" y="388" font-size="9" opacity="0.5">${escapeXml(slug)}</text>
+    <text x="160" y="436" font-size="14" opacity="0.7">ternpike.com</text>
+    <text x="160" y="460" font-size="11" opacity="0.5">${escapeXml(slug)}</text>
   </g>
 </svg>`
 }
@@ -204,10 +204,13 @@ function labelStrip(label, fill, opacity) {
   `
 }
 
+// No `width`/`height` attrs — the SVG scales to whatever physical size
+// the consumer (printable HTML, an `<img>` in the share modal, etc.) sets
+// via CSS. viewBox + the default preserveAspectRatio="xMidYMid meet"
+// keeps the aspect locked, letterboxing inside non-matching containers.
 function baseSvg({ bg, body }) {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"
-     width="2in" height="1in" shape-rendering="crispEdges">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100" shape-rendering="crispEdges">
   <rect width="200" height="100" fill="${bg}"/>
   ${body}
 </svg>`

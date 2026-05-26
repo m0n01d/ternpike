@@ -48,6 +48,33 @@ const safeParse = (s) => {
 
 const stickerUrl = (slug) => `${PUBLIC_BASE}/qr/${slug}`
 
+// Default page size per template. The 2x1 templates are designed for small
+// Munbyn / Dymo label stock; the share template fills a 4x6 shipping label
+// (its 4:5 viewBox letterboxes inside 4:6 with a thin white margin).
+// Override with `?size=<W>x<H>` where W/H are inches.
+const SIZE_FOR_TEMPLATE = {
+  trailhead: { w: 2, h: 1 },
+  sign: { w: 2, h: 1 },
+  minimal: { w: 2, h: 1 },
+  share: { w: 4, h: 6 },
+}
+
+const SIZE_RE = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/
+
+const pickSize = (raw, template) => {
+  if (typeof raw === 'string') {
+    const m = SIZE_RE.exec(raw.toLowerCase().trim())
+    if (m) {
+      const w = parseFloat(m[1])
+      const h = parseFloat(m[2])
+      if (w > 0 && h > 0 && w <= 20 && h <= 20) {
+        return { w, h }
+      }
+    }
+  }
+  return SIZE_FOR_TEMPLATE[template] || SIZE_FOR_TEMPLATE.trailhead
+}
+
 const bumpCounter = async (kv, slug, loc) => {
   const raw = await kv.get(slug)
   const prev = raw ? safeParse(raw) : null
@@ -125,6 +152,7 @@ export function registerQrRoutes(app) {
       return c.text('no valid slugs (use ?slugs=a,b,c)', 400)
     }
     const template = pickTemplate(c.req.query('template'))
+    const size = pickSize(c.req.query('size'), template)
     const label = c.req.query('label') || ''
     const stickers = slugs
       .map((slug) => {
@@ -132,7 +160,7 @@ export function registerQrRoutes(app) {
         return `<div class="sticker">${stripXmlDecl(svg)}</div>`
       })
       .join('\n')
-    const html = printPage({ stickers, template, count: slugs.length })
+    const html = printPage({ count: slugs.length, size, stickers, template })
     return new Response(html, {
       headers: {
         'Cache-Control': 'no-store',
@@ -212,11 +240,18 @@ export function registerQrRoutes(app) {
 
 // ── HTML print page ─────────────────────────────────────────────────────────
 
-// One sticker per page at exactly 2"x1" so browser print → AirPrint hands
-// the printer a label-shaped page. `@page` size is honored by Chrome,
-// Safari, and Firefox. The 1in screen-rendered scale is just for preview;
-// the print stylesheet enforces actual physical dimensions.
-function printPage({ stickers, template, count }) {
+// One sticker per page at exactly the requested `size` so browser print →
+// AirPrint hands the printer a label-shaped page. `@page` size is honored
+// by Chrome, Safari, and Firefox. The screen-rendered scale matches the
+// physical dimensions for an honest preview.
+//
+// The sticker box scales the SVG to fill its width and height; the SVG's
+// own viewBox + default preserveAspectRatio letterboxes inside that box
+// when aspect ratios differ (e.g. share's 4:5 inside a 4:6 label leaves a
+// thin white margin top/bottom). The .sticker background is white so the
+// letterbox blends into the label.
+function printPage({ count, size, stickers, template }) {
+  const { w, h } = size
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -226,7 +261,7 @@ function printPage({ stickers, template, count }) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
 <style>
-  @page { size: 2in 1in; margin: 0; }
+  @page { size: ${w}in ${h}in; margin: 0; }
   html, body { margin: 0; padding: 0; background: #2d3a22; font-family: -apple-system, system-ui, sans-serif; }
   .toolbar {
     color: #f2ede3; padding: 16px 20px; display: flex; gap: 12px; align-items: center;
@@ -238,8 +273,12 @@ function printPage({ stickers, template, count }) {
   }
   .toolbar button:hover { background: #cc7050; }
   .sheet { padding: 24px; display: flex; flex-direction: column; gap: 16px; align-items: center; }
+  /* Background matches the share/trailhead forest so any letterboxing
+     from an aspect-mismatched template blends rather than showing as
+     white bands. Pure-white templates (minimal) override it themselves. */
   .sticker {
-    width: 2in; height: 1in; background: white; box-shadow: 0 4px 16px rgb(0 0 0 / 0.3);
+    width: ${w}in; height: ${h}in; background: #2d3a22;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.3); overflow: hidden;
   }
   .sticker svg { display: block; width: 100%; height: 100%; }
   @media print {
@@ -254,7 +293,7 @@ function printPage({ stickers, template, count }) {
 <body>
   <div class="toolbar">
     <strong>${count} sticker${count === 1 ? '' : 's'}</strong>
-    <span>template: ${template}</span>
+    <span>${template} · ${w}×${h}in</span>
     <span style="flex:1"></span>
     <button onclick="window.print()">Print</button>
   </div>

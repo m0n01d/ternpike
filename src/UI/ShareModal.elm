@@ -44,13 +44,14 @@ viewOpen as_ =
         -- Print opens the existing /qr/print page in a new tab rather than
         -- calling window.print() from inside the PWA. iOS drops user-
         -- activation across Elm's port hop, so an in-app window.print() is
-        -- a silent no-op on iPhone; opening the print page is reliable and
-        -- reuses the trailhead label-sized template we already ship.
+        -- a silent no-op on iPhone; opening the print page is reliable.
+        -- Uses the `share` template + its 4x6 default for full-label fill
+        -- on standard shipping-label printers (Munbyn RW403B, etc).
         printUrl =
             as_.config.backendUrl
                 ++ "/qr/print?slugs="
                 ++ slug
-                ++ "&template=trailhead"
+                ++ "&template=share"
     in
     Html.div
         [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
