@@ -175,6 +175,20 @@ Without one of these, "parallel-safe" is a lie that surfaces as a merge conflict
 
 Tight What/Why/How issues with code snippets, file paths, and verification commands produced agents that shipped clean work in one shot. Loose issues produced agents that floundered, made wrong architectural choices, or had to be re-prompted. The cost of a careful issue body is paid back many times over by not having to re-spawn the agent or untangle its output.
 
+### Spec data fields from source types, not docs
+
+When writing issue bodies for export, serialization, migration, or any work that enumerates record fields, **read the type definition first** (`elmq get src/Data/Foo.elm` or `Read` the file) and list fields from the type — not from CLAUDE.md, architecture.md, sheet schemas, or any other doc. Documentation drifts; the type is the truth.
+
+The #210 CSV export issue prescribed 10 columns copied verbatim from the `## Sheet columns` entry in this file. That schema predated `paymentMethod` being added to `Expense`. The agent implemented the spec faithfully — the spec was wrong. The fix was a conductor-side patch after the fact.
+
+**The rule:** Before finalizing any issue body that enumerates fields, run:
+```bash
+elmq get src/Data/<Type>.elm
+# or for a record alias:
+grep -A 20 "^type alias <Type>" src/Data/<Type>.elm
+```
+and diff the field list in the issue against the actual type. If they don't match, fix the issue body before filing.
+
 ### Foundation fixes don't propagate to in-flight siblings
 
 When agent A finds and fixes a base-layer bug on branch A, parallel agents B/C/D running off that same base layer DON'T see the fix until merge. The Flock track (now "shared trips") had 5+ instances of this — the most consequential being a wire-format mismatch (`type: 'flock'` vs `'flock:meta'`, now `'sharedtrip:meta'`) that #76 *identified* but #72 *fixed*, while #74/#76/#78 sat blocked on the original bug.
@@ -760,4 +774,5 @@ Route patterns:
 - Domain verification via Cloudflare DNS (DKIM/SPF records)
 
 ## Sheet columns
+**Legacy Google Sheets import schema — do not use as a field reference for code.** Read `src/Data/Expense.elm` instead.
 `A=id, B=date, C=amount, D=category, E=note, F=merchant, G=createdAt, H=lat, I=lon, J=longNote` — Range: A:J
