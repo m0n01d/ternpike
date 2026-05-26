@@ -1,43 +1,34 @@
-// Server-rendered 4x6 sticker PDF.
+// Server-rendered 4x6 sticker PDF — pure black-and-white for thermal label
+// printers (Munbyn RW403B et al). No background fill (the label IS white)
+// and no cream QR card (the white margin around the QR is its quiet zone).
+// Includes a small tern mascot above the wordmark.
 //
 // Why this exists: iOS Safari's "Save to PDF" / "Print to PDF" silently
 // ignores `@page size: 4in 6in` and renders the print page to whatever
-// the system paper default is (US Letter). Users hitting that path end
-// up with a tiny 4x6 island in the middle of an 8.5x11 sheet, useless
-// on a 4x6 label printer like the Munbyn RW403B.
+// the system paper default is (US Letter). The Worker generates the PDF
+// at exactly 4x6 inches using pdf-lib, so iOS / AirPrint / the Munbyn app
+// all get a correctly-sized vector asset with no resizing.
 //
-// This module side-steps the browser print stack entirely: the Worker
-// generates the PDF at exactly 4x6 inches using pdf-lib, and the iOS
-// PDF viewer (or AirPrint, or the Munbyn iOS app, or any other consumer)
-// gets a correctly-sized vector asset with no resizing or aspect drift.
-//
-// Mirrors the visual design of the `share` SVG template — forest bg,
-// cream QR card, Helvetica wordmark below (Playfair isn't a PDF
-// standard font and embedding ~50KB of font binary isn't worth it for
-// a label).
+// Fonts: Helvetica-Bold / Helvetica-Oblique / Courier are part of the PDF
+// base-14 font set — every PDF viewer ships them, no embedding needed.
+// Playfair (the brand display font) would add ~50KB of font binary and
+// isn't worth it on a small label.
 
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import qrcode from 'qrcode-generator'
 
-const PALETTE = {
-  forest: rgb(45 / 255, 58 / 255, 34 / 255),
-  forestDeep: rgb(26 / 255, 36 / 255, 18 / 255),
-  cream: rgb(242 / 255, 237 / 255, 227 / 255),
-}
+const BLACK = rgb(0, 0, 0)
+const WHITE = rgb(1, 1, 1)
 
 // 4x6 inches at 72pt/inch. Matches the `share` template's 320x480
-// viewBox at a 0.9pt-per-viewBox-unit scale.
+// viewBox at a 0.9pt-per-viewBox-unit scale, so layout coords below
+// can be reasoned about in viewBox space and converted at draw time.
 const PAGE_W = 288
 const PAGE_H = 432
 const SVG_W = 320
-const SVG_H = 480
 const S = PAGE_W / SVG_W // 0.9
 
 const scale = (v) => v * S
-
-// SVG positions an element by its top-left and grows down. pdf-lib
-// positions by bottom-left and grows up. svgYToPdf converts the SVG
-// top-edge y of an element of height `h` into the PDF y of its bottom.
 const svgYToPdf = (svgY, h = 0) => PAGE_H - (svgY + h) * S
 
 export async function renderStickerPdf({ dest, slug }) {
@@ -50,29 +41,15 @@ export async function renderStickerPdf({ dest, slug }) {
   const italic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique)
   const mono = await pdfDoc.embedFont(StandardFonts.Courier)
 
-  // Forest background — full bleed.
-  page.drawRectangle({
-    x: 0,
-    y: 0,
-    width: PAGE_W,
-    height: PAGE_H,
-    color: PALETTE.forest,
-  })
+  // White background isn't explicitly drawn — PDF pages default to white,
+  // and on a thermal printer "white" is the unburned label substrate, so
+  // not painting a fill saves ink/heat across the whole sheet.
 
-  // Cream QR card — same coords as the `share` SVG template.
-  // SVG: x=12, y=20, 296x296.
-  page.drawRectangle({
-    x: scale(12),
-    y: svgYToPdf(20, 296),
-    width: scale(296),
-    height: scale(296),
-    color: PALETTE.cream,
-  })
-
-  // QR modules — drawn as dark squares inside the cream card.
-  const qrX = 20
+  // QR modules. SVG-space: (40, 28), 240×240. Each module ~7.3pt at the
+  // typical 33-module count.
+  const qrX = 40
   const qrY = 28
-  const qrSize = 280
+  const qrSize = 240
   const { modules, size: n } = encodeQr(dest)
   const cell = qrSize / n
   for (let r = 0; r < n; r++) {
@@ -83,30 +60,25 @@ export async function renderStickerPdf({ dest, slug }) {
           y: svgYToPdf(qrY + r * cell, cell),
           width: scale(cell),
           height: scale(cell),
-          color: PALETTE.forestDeep,
+          color: BLACK,
         })
       }
     }
   }
 
-  // Brand chrome — text positions match the SVG template's baselines.
-  drawCentered(page, 'Ternpike', bold, 38, 370, PALETTE.cream, 1)
-  drawCentered(
-    page,
-    'Track every turn of the road.',
-    italic,
-    16,
-    400,
-    PALETTE.cream,
-    0.85,
-  )
-  drawCentered(page, 'ternpike.com', mono, 14, 436, PALETTE.cream, 0.7)
-  drawCentered(page, slug, mono, 11, 460, PALETTE.cream, 0.5)
+  // Tern mascot centered between QR and wordmark.
+  drawTern(page, { centerX: scale(160), centerY: svgYToPdf(305), width: scale(80) })
+
+  // Brand stack.
+  drawCentered(page, 'Ternpike', bold, 38, 355, BLACK)
+  drawCentered(page, 'Track every turn of the road.', italic, 16, 388, BLACK)
+  drawCentered(page, 'ternpike.com', mono, 14, 430, BLACK)
+  drawCentered(page, slug, mono, 11, 458, BLACK)
 
   return await pdfDoc.save()
 }
 
-function drawCentered(page, text, font, sizeViewBox, svgBaselineY, color, opacity) {
+function drawCentered(page, text, font, sizeViewBox, svgBaselineY, color) {
   const size = scale(sizeViewBox)
   const w = font.widthOfTextAtSize(text, size)
   page.drawText(text, {
@@ -115,8 +87,51 @@ function drawCentered(page, text, font, sizeViewBox, svgBaselineY, color, opacit
     font,
     size,
     color,
-    opacity,
   })
+}
+
+// Tern mascot mirroring public/favicon.svg, all-black silhouette with a
+// white eye dot. The favicon's wing/body/head shapes are defined in a
+// local 120×~30 coord box; we draw at the requested PDF size by scaling.
+// pdf-lib's drawSvgPath flips Y internally (negative-Y scale matrix), so
+// the (x, y) it takes are the PDF coords where the local SVG (0, 0)
+// lands; positive local Y goes down on the page from there.
+function drawTern(page, { centerX, centerY, width }) {
+  const ternScale = width / 120
+  const xOff = centerX - 60 * ternScale
+  const yOff = centerY + 35 * ternScale // tern's local vertical center is ~35
+  const localToPdf = (lx, ly) => ({
+    x: xOff + lx * ternScale,
+    y: yOff - ly * ternScale,
+  })
+
+  // Wings (mirrored cubic-bezier sweeps).
+  page.drawSvgPath('M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z', {
+    x: xOff, y: yOff, scale: ternScale, color: BLACK,
+  })
+  page.drawSvgPath('M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z', {
+    x: xOff, y: yOff, scale: ternScale, color: BLACK,
+  })
+
+  // Body + head (same fill in B&W — they merge into a single silhouette).
+  const body = localToPdf(60, 43)
+  page.drawEllipse({
+    x: body.x, y: body.y, xScale: 20 * ternScale, yScale: 7 * ternScale, color: BLACK,
+  })
+  const head = localToPdf(76, 40)
+  page.drawEllipse({
+    x: head.x, y: head.y, xScale: 9 * ternScale, yScale: 7 * ternScale, color: BLACK,
+  })
+
+  // Beak.
+  page.drawSvgPath('M84 40 L96 38.5 L84 42Z', {
+    x: xOff, y: yOff, scale: ternScale, color: BLACK,
+  })
+
+  // Eye — small white dot on the black head, the only highlight in the
+  // silhouette. Without it the tern reads as an undifferentiated blob.
+  const eye = localToPdf(79, 38.5)
+  page.drawCircle({ x: eye.x, y: eye.y, size: 1.6 * ternScale, color: WHITE })
 }
 
 function encodeQr(text) {
