@@ -1,0 +1,77 @@
+name: Snapshot refresh
+
+# Manually-triggered job that regenerates Playwright visual goldens on
+# Linux CI hardware (the source of truth for the `*-mobile-linux.png`
+# files in `e2e/screenshots/`) and commits them back to the branch.
+#
+# Why: locally-regenerated goldens are named `*-mobile-darwin.png` (or
+# whatever the dev's OS is) and don't replace the linux ones the CI
+# `Playwright (mobile)` check compares against. The canonical fix per
+# CLAUDE.md is "run snapshot regeneration on CI hardware (a
+# workflow_dispatch job that updates + pushes)" — this is that job.
+#
+# Trigger from the GitHub Actions UI on the branch whose snapshots need
+# refreshing; pass an optional --grep filter to limit the regen to
+# specific tests (recommended — full repo regen takes ~20 min).
+
+on:
+  workflow_dispatch:
+    inputs:
+      grep:
+        description: 'Optional Playwright --grep filter (regex). Leave blank to regen every snapshot.'
+        required: false
+        default: ''
+
+concurrency:
+  group: snapshot-refresh-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    name: Regenerate goldens
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Install server deps
+        run: npm --prefix server ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Build app
+        run: npm run build
+
+      - name: Regenerate snapshots
+        run: |
+          if [ -n "${{ inputs.grep }}" ]; then
+            npx playwright test --config=e2e/playwright.config.ts --project=mobile --update-snapshots --grep "${{ inputs.grep }}"
+          else
+            npx playwright test --config=e2e/playwright.config.ts --project=mobile --update-snapshots
+          fi
+
+      - name: Commit refreshed goldens
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          if git diff --quiet -- e2e/screenshots; then
+            echo "No snapshot changes — nothing to commit."
+            exit 0
+          fi
+          git add e2e/screenshots
+          git commit -m "[E2E] Refresh visual goldens via snapshot-refresh workflow${{ inputs.grep && format(' (grep: {0})', inputs.grep) || '' }}"
+          git push origin HEAD:${{ github.ref_name }}
