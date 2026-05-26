@@ -479,9 +479,9 @@ viewLocationWidget model pending =
 viewLocationStatus : LocationState -> Html Msg
 viewLocationStatus ls =
     case ls of
-        LocationCheckingExif ->
+        LocationResolving ->
             Html.div [ Html.Attributes.class "text-moss text-sm py-2" ]
-                [ Html.text "📍 Reading photo…" ]
+                [ Html.text "📍 Finding location…" ]
 
         LocationNoExifGps ->
             Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]

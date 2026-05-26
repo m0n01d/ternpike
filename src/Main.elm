@@ -91,7 +91,7 @@ import Data.Notifications as Notifications
 import Data.OcrPath as OcrPath exposing (OcrPath(..))
 import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
-import Data.Scan as Scan exposing (ScanItem, ScanStatus(..))
+import Data.Scan as Scan exposing (ExifPhase(..), GeocodePhase(..), ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip as SharedTrip
 import Data.SharedTripId
@@ -1061,10 +1061,11 @@ setLocation ls p =
 
 freshScanItem : String -> ScanItem
 freshScanItem id =
-    { exifDebug = ""
+    { exif = ExifChecking
+    , exifDebug = ""
+    , geocode = GeocodeNotAttempted
     , id = ScanItemId.fromString id
     , imageUrl = ""
-    , locationState = LocationCheckingExif
     , ocrData = Nothing
     , ocrError = Nothing
     , status = ScanQueued
@@ -1076,48 +1077,118 @@ authPending f as_ =
     ( AuthModel { as_ | form = mapForm f as_.form }, Cmd.none )
 
 
-{-| For each touched scan item that has a non-empty extracted address,
-fire a `POST /geocode` Cmd — but only on a paid-tier trip and only
-when EXIF hasn't already supplied a location (EXIF always wins). Tern
-trips skip the Cmd entirely; the server would 403 it anyway.
+{-| Propagate a scan item's `effectiveLocation` to the active form, if
+the user is reviewing that exact item AND the form's current state is
+"willing to accept" a new location (still resolving, an EXIF fallback
+that geocode can now improve on, or a stale Geocoded value to refresh).
+
+User-initiated locations — manual pin, browser geo, explicit skip —
+are never overridden; the user's intent wins. Idle is also left alone
+to match how new scans behave on the fresh form path.
+
 -}
-geocodeCmdsForItems : List String -> Dict.Dict String ScanItem -> AuthState -> List (Cmd Msg)
-geocodeCmdsForItems ids queue as_ =
-    case activeTripForGeocode as_ of
-        Just trip ->
-            if Tier.isPaid (Trip.effectiveTier trip as_) then
-                List.filterMap (geocodeCmdForItem queue as_.creds) ids
+syncScanLocationToForm : String -> AuthState -> AuthState
+syncScanLocationToForm itemId as_ =
+    case ( as_.activeScanItemId, Dict.get itemId as_.scanQueue ) of
+        ( Just activeId, Just item ) ->
+            if ScanItemId.toString activeId == itemId then
+                let
+                    formLs =
+                        (formPending as_.form).locationState
+
+                    accept =
+                        case formLs of
+                            LocationGot _ ManualPin ->
+                                False
+
+                            LocationGot _ BrowserGeo ->
+                                False
+
+                            LocationSkipped ->
+                                False
+
+                            LocationIdle ->
+                                False
+
+                            LocationGot _ ExifGps ->
+                                True
+
+                            LocationGot _ Geocoded ->
+                                True
+
+                            LocationResolving ->
+                                True
+
+                            LocationNoExifGps ->
+                                True
+                in
+                if accept then
+                    { as_ | form = mapForm (setLocation (Scan.effectiveLocation item)) as_.form }
+
+                else
+                    as_
 
             else
-                []
+                as_
+
+        _ ->
+            as_
+
+
+{-| For each touched scan item that has a non-empty OCR-extracted
+address, flip the item's `geocode` phase to `GeocodeRequested` and
+emit a `POST /geocode` Cmd. Returns the updated queue alongside the
+Cmds so the caller writes both into the model in one go.
+
+Only fires on paid-tier trips — free users skip the call entirely
+(the server would 403 it). EXIF GPS no longer blocks the dispatch:
+the receipt's printed address tells us where the _transaction_
+happened, which beats the photo's location (frequently the user's
+kitchen on batch scans). The geocode result overrides EXIF in
+`GotGeocodeResult`.
+
+-}
+geocodeDispatch :
+    List String
+    -> Dict.Dict String ScanItem
+    -> AuthState
+    -> ( Dict.Dict String ScanItem, List (Cmd Msg) )
+geocodeDispatch ids queue as_ =
+    let
+        eligible : Bool
+        eligible =
+            case activeTripForGeocode as_ of
+                Just trip ->
+                    Tier.isPaid (Trip.effectiveTier trip as_)
+
+                Nothing ->
+                    False
+    in
+    if eligible then
+        List.foldl (geocodeDispatchOne as_.creds) ( queue, [] ) ids
+
+    else
+        ( queue, [] )
+
+
+geocodeDispatchOne :
+    Data.Auth.Creds
+    -> String
+    -> ( Dict.Dict String ScanItem, List (Cmd Msg) )
+    -> ( Dict.Dict String ScanItem, List (Cmd Msg) )
+geocodeDispatchOne creds id ( queue, cmds ) =
+    case Dict.get id queue |> Maybe.andThen (\item -> Maybe.andThen .address item.ocrData) of
+        Just rawAddress ->
+            if String.trim rawAddress /= "" then
+                ( Dict.update id (Maybe.map (\item -> { item | geocode = GeocodeRequested })) queue
+                , Http.GeocodeApi.geocode creds { address = rawAddress } (GotGeocodeResult id) :: cmds
+                )
+
+            else
+                ( queue, cmds )
 
         Nothing ->
-            []
-
-
-geocodeCmdForItem : Dict.Dict String ScanItem -> Data.Auth.Creds -> String -> Maybe (Cmd Msg)
-geocodeCmdForItem queue creds id =
-    case Dict.get id queue of
-        Just item ->
-            case ( item.locationState, Maybe.andThen .address item.ocrData ) of
-                ( Data.Location.LocationGot _ Data.Location.ExifGps, _ ) ->
-                    -- EXIF already supplied a location; geocode would
-                    -- be discarded by GotGeocodeResult anyway, so save
-                    -- the round trip.
-                    Nothing
-
-                ( _, Just rawAddress ) ->
-                    if String.trim rawAddress /= "" then
-                        Just (Http.GeocodeApi.geocode creds { address = rawAddress } (GotGeocodeResult id))
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
-
-        Nothing ->
-            Nothing
+            ( queue, cmds )
 
 
 activeTripForGeocode : AuthState -> Maybe Trip
@@ -1406,10 +1477,11 @@ applyOcrResult itemId parsed queue =
                                             "scan-" ++ String.fromInt (startIdx + i)
                                     in
                                     ( rawId
-                                    , { exifDebug = source.exifDebug
+                                    , { exif = source.exif
+                                      , exifDebug = source.exifDebug
+                                      , geocode = source.geocode
                                       , id = ScanItemId.fromString rawId
                                       , imageUrl = source.imageUrl
-                                      , locationState = source.locationState
                                       , ocrData = Just data
                                       , ocrError = Nothing
                                       , status = ScanReady
@@ -2564,11 +2636,14 @@ updateAuth msg as_ =
                         Ok responseBody ->
                             parseOcrResponseBody responseBody
 
-                ( updatedQueue, touchedIds ) =
+                ( afterOcr, touchedIds ) =
                     applyOcrResult itemId parsed as_.scanQueue
+
+                ( afterGeocodeFlip, geocodeCmds ) =
+                    geocodeDispatch touchedIds afterOcr as_
             in
-            ( AuthModel { as_ | scanQueue = updatedQueue }
-            , Cmd.batch (geocodeCmdsForItems touchedIds updatedQueue as_)
+            ( AuthModel { as_ | scanQueue = afterGeocodeFlip }
+            , Cmd.batch geocodeCmds
             )
 
         ScanProxyResult { body, itemId, ok, status } ->
@@ -2587,11 +2662,14 @@ updateAuth msg as_ =
                     else
                         Err ("Hosted scan failed (HTTP " ++ String.fromInt status ++ "): " ++ body)
 
-                ( updatedQueue, touchedIds ) =
+                ( afterOcr, touchedIds ) =
                     applyOcrResult itemId result as_.scanQueue
+
+                ( afterGeocodeFlip, geocodeCmds ) =
+                    geocodeDispatch touchedIds afterOcr as_
             in
-            ( AuthModel { as_ | scanQueue = updatedQueue }
-            , Cmd.batch (geocodeCmdsForItems touchedIds updatedQueue as_)
+            ( AuthModel { as_ | scanQueue = afterGeocodeFlip }
+            , Cmd.batch geocodeCmds
             )
 
         AddressChanged s ->
@@ -3161,48 +3239,47 @@ updateAuth msg as_ =
             ( AuthModel { as_ | toast = Nothing }, Cmd.none )
 
         GotExifCoords itemId (Just lat) (Just lon) _ ->
-            ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map (\i -> { i | locationState = LocationGot (GeoPoint.fromDegrees lat lon) ExifGps })) as_.scanQueue }
+            let
+                point =
+                    GeoPoint.fromDegrees lat lon
+
+                newQueue =
+                    Dict.update itemId (Maybe.map (\i -> { i | exif = ExifFound point })) as_.scanQueue
+            in
+            ( AuthModel (syncScanLocationToForm itemId { as_ | scanQueue = newQueue })
             , Cmd.none
             )
 
         GotExifCoords itemId _ _ debug ->
-            ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map (\i -> { i | locationState = LocationNoExifGps, exifDebug = debug })) as_.scanQueue }
+            let
+                newQueue =
+                    Dict.update itemId (Maybe.map (\i -> { i | exif = ExifMissing, exifDebug = debug })) as_.scanQueue
+            in
+            ( AuthModel (syncScanLocationToForm itemId { as_ | scanQueue = newQueue })
             , Cmd.none
             )
 
         GotGeocodeResult itemId result ->
-            case result of
-                Ok geo ->
-                    case ( geo.lat, geo.lon ) of
-                        ( Just lat, Just lon ) ->
-                            let
-                                promote item =
-                                    -- EXIF wins over geocode — only promote
-                                    -- when the item's locationState wasn't
-                                    -- already set from EXIF GPS. Idle /
-                                    -- NoExifGps / browser / pinned / skipped /
-                                    -- mid-fetch all yield to the server's
-                                    -- address resolution.
-                                    case item.locationState of
-                                        LocationGot _ ExifGps ->
-                                            item
+            let
+                newPhase =
+                    case result of
+                        Ok geo ->
+                            case ( geo.lat, geo.lon ) of
+                                ( Just lat, Just lon ) ->
+                                    GeocodeResolved (GeoPoint.fromDegrees lat lon)
 
-                                        _ ->
-                                            { item | locationState = LocationGot (GeoPoint.fromDegrees lat lon) Geocoded }
-                            in
-                            ( AuthModel { as_ | scanQueue = Dict.update itemId (Maybe.map promote) as_.scanQueue }
-                            , Cmd.none
-                            )
+                                _ ->
+                                    GeocodeMissed
 
-                        _ ->
-                            -- No-match (Nominatim returned null lat/lon) —
-                            -- leave the item's locationState untouched so
-                            -- the user can pin manually.
-                            ( AuthModel as_, Cmd.none )
+                        Err _ ->
+                            GeocodeMissed
 
-                Err _ ->
-                    -- Rate-limited / network error / 4xx — same fallback.
-                    ( AuthModel as_, Cmd.none )
+                newQueue =
+                    Dict.update itemId (Maybe.map (\i -> { i | geocode = newPhase })) as_.scanQueue
+            in
+            ( AuthModel (syncScanLocationToForm itemId { as_ | scanQueue = newQueue })
+            , Cmd.none
+            )
 
         ReviewScanItem itemId ->
             case Dict.get itemId as_.scanQueue of
@@ -3227,7 +3304,7 @@ updateAuth msg as_ =
                                 ocr.date
                                     |> Maybe.withDefault as_.today
                                     |> DateField.toIso
-                            , locationState = item.locationState
+                            , locationState = Scan.effectiveLocation item
                             , longNote = Maybe.withDefault "" ocr.longNote
                             , merchant = Maybe.withDefault "" ocr.merchant
                             , note = Maybe.withDefault "" ocr.note
