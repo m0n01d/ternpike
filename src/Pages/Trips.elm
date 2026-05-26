@@ -217,16 +217,50 @@ viewBody as_ =
             Html.text ""
         , case as_.tripForm of
             Nothing ->
-                Html.button
-                    [ Html.Events.onClick OpenNewTripForm
-                    , Html.Attributes.class "w-full bg-transparent border border-dashed border-tan rounded-xl py-3.5 text-muted text-[15px] cursor-pointer flex items-center justify-center gap-2 hover:border-moss hover:text-forest"
-                    ]
-                    [ UI.Icons.plus "w-4 h-4"
-                    , Html.text "New trip"
-                    ]
+                case as_.trips of
+                    TripsLoaded trips ->
+                        if atTripLimit as_.tier trips then
+                            viewTripLimitUpgradePrompt
+
+                        else
+                            Html.button
+                                [ Html.Events.onClick OpenNewTripForm
+                                , Html.Attributes.class "w-full bg-transparent border border-dashed border-tan rounded-xl py-3.5 text-muted text-[15px] cursor-pointer flex items-center justify-center gap-2 hover:border-moss hover:text-forest"
+                                ]
+                                [ UI.Icons.plus "w-4 h-4"
+                                , Html.text "New trip"
+                                ]
+
+                    _ ->
+                        Html.button
+                            [ Html.Events.onClick OpenNewTripForm
+                            , Html.Attributes.class "w-full bg-transparent border border-dashed border-tan rounded-xl py-3.5 text-muted text-[15px] cursor-pointer flex items-center justify-center gap-2 hover:border-moss hover:text-forest"
+                            ]
+                            [ UI.Icons.plus "w-4 h-4"
+                            , Html.text "New trip"
+                            ]
 
             Just form ->
                 viewTripForm as_ form
+        ]
+
+
+atTripLimit : Tier.Tier -> Trips.Trips -> Bool
+atTripLimit tier trips =
+    not (Tier.isPaid tier) && List.length (Trips.allTrips trips) >= 3
+
+
+viewTripLimitUpgradePrompt : Html Msg
+viewTripLimitUpgradePrompt =
+    Html.div [ Html.Attributes.class "mt-3 bg-rust-tint border border-rust/30 rounded-lg px-3 py-2.5" ]
+        [ Html.p [ Html.Attributes.class "text-[13px] text-rust-deep" ]
+            [ Html.text "Free accounts are limited to 3 trips. "
+            , Html.a
+                [ Html.Attributes.href "/settings#billing"
+                , Html.Attributes.class "underline font-semibold"
+                ]
+                [ Html.text "Upgrade to Osprey →" ]
+            ]
         ]
 
 
