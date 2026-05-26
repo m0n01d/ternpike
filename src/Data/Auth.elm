@@ -17,6 +17,7 @@ Neither type ships across PouchDB sync — both are device-local.
 
 -}
 
+import Data.AnthropicKey exposing (AnthropicKey)
 import Data.Tier exposing (Tier)
 
 
@@ -43,8 +44,9 @@ type alias Creds =
 
 {-| Runtime config sourced from Vite flags.
 
-  - `anthropicKey` — the user's own Anthropic key (BYO). Empty string
-    when not configured; the Scan tab silently skips OCR when empty.
+  - `anthropicKey` — the user's own Anthropic key (BYO). `Nothing`
+    when not configured; the Scan tab silently skips OCR in that case.
+    See `Data.AnthropicKey` for the opaque type and wire-compatible codecs.
   - `backendUrl` — base URL for the auth server (`/auth/request-code`,
     `/auth/verify-code`, eventually `/me` and `/scan`).
   - `vapidPublicKey` — the Web Push VAPID public key the JS handler
@@ -54,7 +56,7 @@ type alias Creds =
 
 -}
 type alias AppConfig =
-    { anthropicKey : String
+    { anthropicKey : Maybe AnthropicKey
     , backendUrl : String
     , vapidPublicKey : String
     }

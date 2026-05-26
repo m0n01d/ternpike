@@ -1,12 +1,13 @@
 module Pages.Scan exposing (viewTab)
 
+import Data.AnthropicKey as AnthropicKey
 import Data.Category as Category
 import Data.Navigation exposing (Tab(..))
+import Data.OcrPath as OcrPath exposing (OcrPath(..))
 import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip exposing (SharedTrip)
 import Data.SharedTrips
-import Data.Tier
 import Data.Trip as Trip exposing (Trip)
 import Data.Trips
 import Dict
@@ -66,21 +67,19 @@ viewTierLabel : Trip -> AuthState -> Html Msg
 viewTierLabel trip as_ =
     let
         label =
-            -- `effectiveTier` is the source of truth for "how does this
-            -- trip route OCR?"; the boolean wrappers below are cheap
-            -- predicates over the same answer. Spelling out the case
-            -- match (rather than collapsing to `if canUseProxiedOCR …`)
-            -- forces the compiler to flag missing tiers when #19 adds
-            -- more, and keeps the per-tier label easy to evolve.
-            case Trip.effectiveTier trip as_ of
-                Data.Tier.Tern ->
+            -- `OcrPath.resolve` is the single decision point for "how does
+            -- this credential state route OCR?". Pattern-matching on it here
+            -- forces the compiler to flag missing branches as the type evolves,
+            -- and makes the per-path label easy to evolve in #216.
+            case OcrPath.resolve as_.config.anthropicKey as_.tier of
+                ByoPath key ->
+                    "BYO key ···" ++ AnthropicKey.lastFour key
+
+                HostedPath ->
+                    paidOcrLabel trip as_
+
+                Unscannable ->
                     "BYO key"
-
-                Data.Tier.Osprey ->
-                    paidOcrLabel trip as_
-
-                Data.Tier.Trailblazer ->
-                    paidOcrLabel trip as_
     in
     Html.p
         [ Html.Attributes.class "mt-4 text-center text-[11px] font-mono uppercase tracking-widest text-moss" ]

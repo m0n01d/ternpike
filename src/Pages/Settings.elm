@@ -1,5 +1,6 @@
 module Pages.Settings exposing (viewPanel, viewTab)
 
+import Data.AnthropicKey as AnthropicKey
 import Data.Auth exposing (AppConfig)
 import Data.ColorScheme exposing (ColorScheme(..))
 import Data.Notifications as Notifications
@@ -82,7 +83,7 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt version =
             [ UI.Layout.formField "Anthropic API key"
                 (Html.input
                     [ Html.Attributes.type_ "password"
-                    , Html.Attributes.value cfg.anthropicKey
+                    , Html.Attributes.value (cfg.anthropicKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "")
                     , Html.Events.onInput ApiKeyChanged
                     , Html.Attributes.placeholder "sk-ant-..."
                     , UI.Layout.textInputStyle
