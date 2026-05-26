@@ -91,8 +91,17 @@ stay tidy and the attribute names don't drift.
   top of `src/elements/tp-amount.js`.
 - **`<relative-time datetime="2024-05-21">`** — the
   `@github/relative-time-element` package, registered as a side-effect
-  import. Wrapped in Elm by `UI.DateView.short` (long shape:
-  `"May 21, 2024"`) and `UI.DateView.monthDay` (short shape: `"May 21"`).
+  import. Wrapped in Elm by `UI.DateView`:
+  - `short : DateField -> Html msg` — long absolute shape (`"May 21, 2024"`)
+  - `monthDay : DateField -> Html msg` — short shape (`"May 21"`)
+  - `dateOf : Time.Posix -> Html msg` — short shape derived from an
+    instant; the browser converts UTC to the user's local zone via
+    `Intl.DateTimeFormat`.
+  - `timeOf : Time.Posix -> Html msg` — hour + minute only (`"5:42 PM"`);
+    suppresses every date field explicitly (`weekday=""`, `day=""`,
+    `month=""`, `year=""`) because missing attrs default ON and the
+    library renders an unwanted weekday + date prefix.
+
   Always set `no-title=""` per the library's own a11y guidance.
 - **`<map-picker>` / `<waypoint-map>`** — Leaflet-backed elements. No Elm
   wrapper today; called via `Html.node` directly because they show up in
