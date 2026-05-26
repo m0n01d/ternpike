@@ -1,4 +1,14 @@
-module Data.Scan exposing (OcrData, ScanItem, ScanStatus(..), needsReview, ocrDataDecoder, ocrDataListDecoder)
+module Data.Scan exposing
+    ( ExifPhase(..)
+    , GeocodePhase(..)
+    , OcrData
+    , ScanItem
+    , ScanStatus(..)
+    , effectiveLocation
+    , needsReview
+    , ocrDataDecoder
+    , ocrDataListDecoder
+    )
 
 {-| Receipt-scan queue: one `ScanItem` per receipt the user has dropped
 into the Scan tab, plus the OCR result the Anthropic API hands back.
@@ -18,7 +28,8 @@ domain.
 
 import Data.Category as Category exposing (Category)
 import Data.DateField as DateField exposing (DateField)
-import Data.Location exposing (LocationState)
+import Data.GeoPoint exposing (GeoPoint)
+import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money exposing (Money)
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Data.ScanItemId exposing (ScanItemId)
@@ -63,16 +74,54 @@ type alias OcrData =
     }
 
 
+{-| Phase of the EXIF-GPS extraction for one scan item.
+
+  - `ExifChecking` — extraction in flight (port call out).
+  - `ExifFound point` — photo had embedded GPS; coords are kept as a
+    fallback for when no resolvable receipt address is available.
+  - `ExifMissing` — extraction returned no GPS coords.
+
+-}
+type ExifPhase
+    = ExifChecking
+    | ExifFound GeoPoint
+    | ExifMissing
+
+
+{-| Phase of the address-geocode call for one scan item.
+
+`Data.Scan` does not know how to dispatch the geocode HTTP call — that
+lives in `Main.elm` because it needs `Creds`, the trip's tier, and the
+active route. The phase here is what `Main` writes to and what
+`effectiveLocation` reads when projecting back to a `LocationState`.
+
+  - `GeocodeNotAttempted` — initial state; either OCR hasn't returned,
+    OCR returned without an `address`, or the active trip's tier isn't
+    paid (free users skip the call entirely).
+  - `GeocodeRequested` — request fired; result still in flight.
+  - `GeocodeResolved point` — Google returned coordinates.
+  - `GeocodeMissed` — Google returned ZERO\_RESULTS, the request
+    errored, or the network was offline. Caller falls through to
+    EXIF / manual.
+
+-}
+type GeocodePhase
+    = GeocodeMissed
+    | GeocodeNotAttempted
+    | GeocodeRequested
+    | GeocodeResolved GeoPoint
+
+
 {-| One receipt in the scan queue.
 
-  - `id` — local-only key (`"scan-<n>"`), never reaches PouchDB.
-  - `imageUrl` — base64 data URL of the picked image, used as both the
-    preview src and the OCR upload.
+  - `exif` — phase of the EXIF-GPS extraction (see `ExifPhase`).
   - `exifDebug` — raw EXIF dump shown in the "debug info" disclosure
     when EXIF parsing finds no GPS. Useful for diagnosing why a photo
     we'd expect to have coordinates didn't.
-  - `locationState` — independent of OCR; populated via the EXIF-GPS
-    extraction port.
+  - `geocode` — phase of the address-geocode call (see `GeocodePhase`).
+  - `id` — local-only key (`"scan-<n>"`), never reaches PouchDB.
+  - `imageUrl` — base64 data URL of the picked image, used as both the
+    preview src and the OCR upload.
   - `ocrData` — `Nothing` until OCR returns; `Just` even if the model
     extracted nothing (so we know it ran).
   - `ocrError` — human-readable reason the most recent OCR attempt
@@ -82,16 +131,119 @@ type alias OcrData =
     mode instead of guessing.
   - `status` — the lifecycle stage above.
 
+EXIF and geocode are tracked as independent phases rather than a
+single `LocationState` because they're driven by independent async
+sources and the priority between them is non-trivial (geocode wins —
+see `effectiveLocation` and the module-level doc on `Data.Location`).
+Conflating them into one state machine, as the original
+`locationState` field did, made it possible to represent
+"OCR found an address but we never tried to geocode it" — a state the
+type system should rule out.
+
 -}
 type alias ScanItem =
-    { exifDebug : String
+    { exif : ExifPhase
+    , exifDebug : String
+    , geocode : GeocodePhase
     , id : ScanItemId
     , imageUrl : String
-    , locationState : LocationState
     , ocrData : Maybe OcrData
     , ocrError : Maybe String
     , status : ScanStatus
     }
+
+
+{-| Project the scan item's EXIF + geocode phases into the
+form-facing `LocationState`. This is the priority enforcement point —
+geocode wins over EXIF (see `Data.Location` for the rationale).
+
+    import Data.GeoPoint as GeoPoint
+    import Data.Location exposing (LocationSource(..), LocationState(..))
+    import Data.ScanItemId
+
+    -- Geocode resolved: receipt's printed address wins, even when EXIF
+    -- has its own coords (the photo was taken at home).
+    effectiveLocation
+        { exif = ExifFound (GeoPoint.fromDegrees 37.7 -122.4)
+        , exifDebug = ""
+        , geocode = GeocodeResolved (GeoPoint.fromDegrees 48.8 2.3)
+        , id = Data.ScanItemId.fromString "scan-0"
+        , imageUrl = ""
+        , ocrData = Nothing
+        , ocrError = Nothing
+        , status = ScanReady
+        }
+    --> LocationGot (GeoPoint.fromDegrees 48.8 2.3) Geocoded
+
+    -- Geocode in flight: surface as "resolving" so the form doesn't
+    -- offer the manual-pin prompt yet.
+    effectiveLocation
+        { exif = ExifMissing
+        , exifDebug = ""
+        , geocode = GeocodeRequested
+        , id = Data.ScanItemId.fromString "scan-0"
+        , imageUrl = ""
+        , ocrData = Nothing
+        , ocrError = Nothing
+        , status = ScanReady
+        }
+    --> LocationResolving
+
+    -- Geocode missed / not attempted: fall through to EXIF if present.
+    effectiveLocation
+        { exif = ExifFound (GeoPoint.fromDegrees 37.7 -122.4)
+        , exifDebug = ""
+        , geocode = GeocodeMissed
+        , id = Data.ScanItemId.fromString "scan-0"
+        , imageUrl = ""
+        , ocrData = Nothing
+        , ocrError = Nothing
+        , status = ScanReady
+        }
+    --> LocationGot (GeoPoint.fromDegrees 37.7 -122.4) ExifGps
+
+    -- Nothing worked: surface "no GPS" so the user gets the manual
+    -- pin button.
+    effectiveLocation
+        { exif = ExifMissing
+        , exifDebug = ""
+        , geocode = GeocodeMissed
+        , id = Data.ScanItemId.fromString "scan-0"
+        , imageUrl = ""
+        , ocrData = Nothing
+        , ocrError = Nothing
+        , status = ScanReady
+        }
+    --> LocationNoExifGps
+
+-}
+effectiveLocation : ScanItem -> LocationState
+effectiveLocation item =
+    case item.geocode of
+        GeocodeResolved point ->
+            LocationGot point Geocoded
+
+        GeocodeRequested ->
+            LocationResolving
+
+        GeocodeMissed ->
+            fromExif item.exif
+
+        GeocodeNotAttempted ->
+            fromExif item.exif
+
+
+fromExif : ExifPhase -> LocationState
+fromExif phase =
+    case phase of
+        ExifFound point ->
+            LocationGot point ExifGps
+
+        ExifChecking ->
+            LocationResolving
+
+        ExifMissing ->
+            LocationNoExifGps
 
 
 {-| True when any structural field — amount, merchant, or date — is

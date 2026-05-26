@@ -4,19 +4,25 @@ module Data.Location exposing (LocationSource(..), LocationState(..))
 
 Four sources feed the location field, in this order of preference:
 
-1.  EXIF GPS embedded in the receipt photo — captured at the moment the
-    receipt was taken, so it's the most accurate.
-2.  Server geocode of the OCR-extracted merchant address — paid tier
-    only (#152). Wins over browser geo / manual when EXIF is absent;
-    EXIF always trumps it.
-3.  Browser geolocation — fired when the user lands on the Add tab.
-4.  Manual map pin — the fallback when the others miss or the user
-    wants to correct them.
+1.  Server geocode of the OCR-extracted merchant address — paid tier
+    only (#152). The receipt's printed address is the truth of where
+    the _transaction_ happened. For a receipt-scanning app this is the
+    most useful signal, even when EXIF GPS is also available — EXIF
+    captures where the photo was _taken_, which for batch-scanned
+    receipts is usually the user's kitchen, not the merchant.
+2.  EXIF GPS embedded in the receipt photo — falls through when the
+    receipt has no resolvable address (free tier, scan-time photo of a
+    one-off vendor, or geocode miss).
+3.  Browser geolocation — fired when the user lands on the Add tab,
+    for manually-entered expenses.
+4.  Manual map pin — the user's final say; trumps all of the above.
 
-`LocationState` models the lifecycle of trying those sources in turn.
-The Add page and the Scan queue both reuse this type — see
-`Data.PendingEntry.PendingEntry.locationState` and
-`Data.Scan.ScanItem.locationState`.
+`LocationState` is the form-facing type displayed on the Add page. The
+Scan queue tracks the underlying EXIF and geocode phases separately
+(see `Data.Scan.ExifPhase` and `Data.Scan.GeocodePhase`) and projects
+into a `LocationState` via `Data.Scan.effectiveLocation` when the user
+opens a scanned item for review — that's where the priority above is
+enforced.
 
 -}
 
@@ -28,9 +34,8 @@ provenance label ("from photo", "GPS", "from address", "pinned") so the
 user knows whether to trust it.
 
 `Geocoded` is set when the paid-tier `POST /geocode` Worker endpoint
-resolved an OCR'd merchant address to coordinates. The client-side
-handler only promotes a `ScanItem` to `Geocoded` when no EXIF source is
-already present — EXIF wins over geocode.
+resolved an OCR'd merchant address to coordinates — receipt-printed
+address wins over EXIF (see module-level doc for priority).
 
 -}
 type LocationSource
@@ -44,9 +49,11 @@ type LocationSource
 
   - `LocationIdle` — nothing requested yet; the form shows "pin manually
     / skip" buttons.
-  - `LocationCheckingExif` / `LocationFetching` — async work in flight
-    (EXIF parse or browser geolocation).
-  - `LocationNoExifGps` — EXIF returned no GPS; user can still pin.
+  - `LocationResolving` — async work in flight (EXIF parse, browser
+    geolocation, or address geocode). Used for any "we're trying to
+    figure out a location, don't show the manual prompt yet" state.
+  - `LocationNoExifGps` — EXIF returned no GPS and no other source
+    succeeded; user can still pin.
   - `LocationGot point source` — terminal success state, ready to be
     stamped onto the expense. `point` is the resolved `GeoPoint`;
     "lat without lon" is no longer representable.
@@ -54,8 +61,8 @@ type LocationSource
 
 -}
 type LocationState
-    = LocationCheckingExif
-    | LocationGot GeoPoint LocationSource
+    = LocationGot GeoPoint LocationSource
     | LocationIdle
     | LocationNoExifGps
+    | LocationResolving
     | LocationSkipped
