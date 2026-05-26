@@ -11,7 +11,10 @@ import {
   buildSharedTripDesignDoc,
 } from './couch/sharedTripValidator.js'
 import { signJwt, verifyJwt } from './jwt.js'
-import { sendSharedTripActivityPush } from './notifications.js'
+import {
+  sendSharedTripAccessChangePush,
+  sendSharedTripActivityPush,
+} from './notifications.js'
 
 // The Resend Worker SDK reads its baseUrl from `process.env.RESEND_BASE_URL`
 // at module load — which never resolves inside `workerd` (Cloudflare's
@@ -587,10 +590,101 @@ export function registerSharedTripRoutes(app) {
     try {
       await writeSharedTripMeta(env, dbName, updatedMeta)
       await syncSecurity(env, dbName, meta.members, updatedMeta)
+      c.executionCtx?.waitUntil(
+        sendSharedTripAccessChangePush(env, {
+          kind: 'transfer',
+          prevOwnerEmail: caller.email,
+          recipientEmail: newOwnerEmail,
+          tripName: meta.name,
+        }).catch((err) => {
+          console.error('sharedtrips/transfer push threw', { sharedTripId, err: String(err) })
+        }),
+      )
       return c.json({ ok: true, billingOwner: newOwnerEmail })
     } catch (err) {
       console.error('sharedtrips/transfer:', err)
       return c.json({ ok: false, error: 'transfer_failed' }, 500)
+    }
+  })
+
+  // POST /sharedtrips/:id/remove-member
+  //
+  // Owner-only endpoint: removes another member from the shared trip.
+  // The removed member gets a push notification (if they have subscriptions
+  // with `sharedTripAccessChange` enabled). The caller (owner) does not
+  // get a push — they initiated the removal.
+  //
+  // Auth:
+  //   - Caller must be authenticated and be the billing owner.
+  //   - Non-members + non-owners get 404 (don't leak existence).
+  //   - Owner cannot remove themselves (use /leave for that, and /leave
+  //     blocks the owner unless they transfer first).
+  //
+  // Body: { memberEmail: string }
+  app.post('/sharedtrips/:id/remove-member', async (c) => {
+    const env = c.env
+    const caller = await authenticateCaller(c)
+    if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
+
+    const sharedTripId = c.req.param('id')
+    const dbName = sharedTripDbName(sharedTripId)
+
+    let body
+    try {
+      body = await c.req.json()
+    } catch {
+      body = {}
+    }
+    const memberEmail =
+      typeof body.memberEmail === 'string'
+        ? body.memberEmail.toLowerCase().trim()
+        : ''
+    if (!memberEmail.includes('@')) {
+      return c.json({ ok: false, error: 'invalid_email' }, 400)
+    }
+
+    let meta
+    try {
+      meta = await readSharedTripMeta(env, dbName)
+    } catch (err) {
+      if (err.status === 404) {
+        return c.json({ ok: false, error: 'not_found' }, 404)
+      }
+      console.error('sharedtrips/remove-member read meta:', err)
+      return c.json({ ok: false, error: 'read_failed' }, 500)
+    }
+    if (!meta.members.includes(caller.email)) {
+      return c.json({ ok: false, error: 'not_found' }, 404)
+    }
+    if (meta.billingOwner !== caller.email) {
+      return c.json({ ok: false, error: 'not_owner' }, 403)
+    }
+    if (memberEmail === caller.email) {
+      return c.json({ ok: false, error: 'cannot_remove_self' }, 400)
+    }
+    if (!meta.members.includes(memberEmail)) {
+      return c.json({ ok: false, error: 'not_a_member' }, 409)
+    }
+
+    const members = meta.members.filter((m) => m !== memberEmail)
+    const updatedMeta = { ...meta, members }
+    try {
+      await syncSecurity(env, dbName, members, updatedMeta)
+      await writeSharedTripMeta(env, dbName, updatedMeta)
+      await removeUserSharedTrips(env, memberEmail, sharedTripId)
+      c.executionCtx?.waitUntil(
+        sendSharedTripAccessChangePush(env, {
+          kind: 'removed',
+          recipientEmail: memberEmail,
+          tripName: meta.name,
+        }).catch((err) => {
+          console.error('sharedtrips/remove-member push threw', { sharedTripId, err: String(err) })
+        }),
+      )
+      return c.json({ ok: true })
+    } catch (err) {
+      console.error('sharedtrips/remove-member:', err)
+      return c.json({ ok: false, error: 'remove_failed' }, 500)
     }
   })
 

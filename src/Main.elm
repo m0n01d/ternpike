@@ -3975,6 +3975,31 @@ updateAuth msg as_ =
         -- When the last opt-in flips off we also call `unsubscribePush`
         -- so the browser drops the registration entirely — no point
         -- keeping the endpoint live on the server if nothing will fire.
+        ToggleNotificationPref Notifications.SharedTripAccessChange ->
+            let
+                oldPrefs : Notifications.NotificationPrefs
+                oldPrefs =
+                    as_.notificationPrefs
+
+                newPrefs : Notifications.NotificationPrefs
+                newPrefs =
+                    { oldPrefs | sharedTripAccessChange = not oldPrefs.sharedTripAccessChange }
+
+                anyEnabled : Bool
+                anyEnabled =
+                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+            in
+            ( AuthModel { as_ | notificationPrefs = newPrefs }
+            , Cmd.batch
+                [ savePushPrefs (Notifications.encodePrefs newPrefs)
+                , if anyEnabled then
+                    Cmd.none
+
+                  else
+                    unsubscribePush ()
+                ]
+            )
+
         ToggleNotificationPref Notifications.SharedTripActivity ->
             let
                 oldPrefs : Notifications.NotificationPrefs
@@ -3987,7 +4012,7 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch
@@ -4012,7 +4037,7 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch
@@ -4037,7 +4062,7 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
+                    newPrefs.sharedTripAccessChange || newPrefs.sharedTripActivity || newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch

@@ -21,12 +21,23 @@ suite : Test
 suite =
     describe "Data.Notifications"
         [ describe "encodePrefs / decodePrefs roundtrip"
-            [ fuzz (Fuzz.map3 (\a b c -> ( a, b, c )) Fuzz.bool Fuzz.bool Fuzz.bool) "encodePrefs >> decodePrefs is identity" <|
-                \( activity, stalled, weekly ) ->
-                    let
-                        prefs =
-                            { sharedTripActivity = activity, syncStalled = stalled, weeklyScanReminder = weekly }
-                    in
+            [ fuzz
+                (Fuzz.map4
+                    (\ac a b c ->
+                        { sharedTripAccessChange = ac
+                        , sharedTripActivity = a
+                        , syncStalled = b
+                        , weeklyScanReminder = c
+                        }
+                    )
+                    Fuzz.bool
+                    Fuzz.bool
+                    Fuzz.bool
+                    Fuzz.bool
+                )
+                "encodePrefs >> decodePrefs is identity"
+              <|
+                \prefs ->
                     Notifications.encodePrefs prefs
                         |> Json.Decode.decodeValue Notifications.decodePrefs
                         |> Expect.equal (Ok prefs)

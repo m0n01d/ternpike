@@ -25,6 +25,7 @@ const PUSH_PREFIX = 'push:sub:'
 const PREF_PREFIX = 'push:pref:'
 
 const DEFAULT_PREFS = {
+  sharedTripAccessChange: true,
   sharedTripActivity: true,
   syncStalled: true,
   weeklyScanReminder: true,
@@ -660,4 +661,101 @@ export async function clearAuthFailure(env, email) {
   const lower = email.toLowerCase()
   await env.PUSH_KV.delete(`auth:failed:${lower}`)
   await env.PUSH_KV.delete(`${AUTH_EXPIRED_DEDUP_PREFIX}${lower}`)
+}
+
+// Send a push notification to a single user when their shared-trip access
+// changes: either they were removed from a trip, or they became the new
+// billing owner via a transfer.
+//
+// `kind` is either `'removed'` or `'transfer'`. For `'transfer'`, supply
+// `prevOwnerEmail` — the previous owner's email — so the body can render
+// their `@handle`. For `'removed'` and `'transfer'` the tap URL is
+// `/settings` (the SharedTrips section there will reflect the new state).
+//
+// No dedup — removal and transfer are one-shot events. If alice removes bob,
+// re-adds him, and removes him again, all three events are real.
+//
+// Fan-out to every device registered for `recipientEmail`; checks
+// `sharedTripAccessChange` pref per device. 404/410 → KV cleanup.
+//
+// `env.__buildPushPayload` is the same test hook used by the other push fns.
+export async function sendSharedTripAccessChangePush(
+  env,
+  { kind, prevOwnerEmail, recipientEmail, tripName },
+) {
+  if (!env.PUSH_KV) return
+  const build = env.__buildPushPayload || buildPushPayload
+  const vapid = {
+    privateKey: env.VAPID_PRIVATE_KEY,
+    publicKey: env.VAPID_PUBLIC_KEY,
+    subject: env.VAPID_SUBJECT,
+  }
+
+  let payloadJson
+  if (kind === 'removed') {
+    payloadJson = JSON.stringify({
+      body: 'Your local copy is read-only',
+      data: { url: '/settings' },
+      tag: `shared-trip-access-change:${recipientEmail}`,
+      title: `You were removed from ${tripName}`,
+    })
+  } else {
+    // kind === 'transfer'
+    const prevHandle = emailHandle(prevOwnerEmail)
+    payloadJson = JSON.stringify({
+      body: `${prevHandle} made you the billing owner of ${tripName}`,
+      data: { url: '/settings' },
+      tag: `shared-trip-access-change:${recipientEmail}`,
+      title: tripName,
+    })
+  }
+
+  const lower = recipientEmail.toLowerCase()
+  let cursor
+  do {
+    const page = await env.PUSH_KV.list({
+      cursor,
+      prefix: `${PUSH_PREFIX}${lower}:`,
+    })
+    for (const k of page.keys) {
+      const subRaw = await env.PUSH_KV.get(k.name)
+      if (!subRaw) continue
+      const stored = JSON.parse(subRaw)
+      const prefKey = k.name.replace(PUSH_PREFIX, PREF_PREFIX)
+      const prefRaw = await env.PUSH_KV.get(prefKey)
+      const prefs = prefRaw ? JSON.parse(prefRaw) : DEFAULT_PREFS
+      if (!prefs.sharedTripAccessChange) continue
+
+      const subscription = {
+        endpoint: stored.endpoint,
+        expirationTime: null,
+        keys: { auth: stored.auth, p256dh: stored.p256dh },
+      }
+      try {
+        const req = await build(
+          { data: payloadJson, options: { ttl: 3600 } },
+          subscription,
+          vapid,
+        )
+        const res = await fetch(stored.endpoint, req)
+        if (res.status === 404 || res.status === 410) {
+          await env.PUSH_KV.delete(k.name)
+          await env.PUSH_KV.delete(prefKey)
+        } else if (!res.ok) {
+          console.error('access-change push send failed', {
+            kind,
+            recipientEmail,
+            status: res.status,
+          })
+        }
+      } catch (err) {
+        console.error('access-change push send threw', {
+          kind,
+          recipientEmail,
+          err: String(err),
+        })
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
 }

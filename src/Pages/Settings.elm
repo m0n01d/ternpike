@@ -257,6 +257,12 @@ viewNotificationsBody as_ =
 
     else if as_.notificationPermission == Notifications.Granted && as_.pushSubscribed then
         [ viewToggleRow
+            { helper = "Get a push when you're removed from a shared trip or when billing ownership is transferred to you."
+            , label = "Shared trip access change"
+            , msg = ToggleNotificationPref Notifications.SharedTripAccessChange
+            , value = as_.notificationPrefs.sharedTripAccessChange
+            }
+        , viewToggleRow
             { helper = "Get a push when a co-traveler adds, edits, or voids an expense on a shared trip."
             , label = "Shared trip activity"
             , msg = ToggleNotificationPref Notifications.SharedTripActivity
