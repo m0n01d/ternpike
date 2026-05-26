@@ -24,7 +24,11 @@ import { authenticateCaller, getTier, isPaidTier } from './auth.js'
 const PUSH_PREFIX = 'push:sub:'
 const PREF_PREFIX = 'push:pref:'
 
-const DEFAULT_PREFS = { syncStalled: true, weeklyScanReminder: true }
+const DEFAULT_PREFS = {
+  sharedTripActivity: true,
+  syncStalled: true,
+  weeklyScanReminder: true,
+}
 
 // SHA-256 of `s`, hex-encoded. Used to bound KV key length when the
 // caller-supplied push endpoint is long (Mozilla autopush endpoints
@@ -483,6 +487,148 @@ export async function sendSyncStalledReminders(env, nowMs = Date.now()) {
     }
     cursor = page.list_complete ? undefined : page.cursor
   } while (cursor)
+}
+
+// KV prefix for shared-trip-activity coalescing windows.
+const ACTIVITY_COALESCE_PREFIX = 'push:activity:'
+
+// Rolling-window TTL in seconds — 60 s from the last write.
+const ACTIVITY_COALESCE_TTL_SECONDS = 60
+
+// Mirror of `Data.UserId.handle` — returns the `@`-prefixed local-part
+// of the email string. Used for notification copy rendered server-side.
+function emailHandle(email) {
+  const at = email.indexOf('@')
+  if (at <= 0) return '@unknown'
+  return '@' + email.slice(0, at)
+}
+
+// Send a push notification to all co-travelers of a shared trip when an
+// expense is added, edited, or voided. Called from the server-side
+// expense-notification endpoint in `sharedTrips.js`.
+//
+// Fan-out:
+//   1. For each member of `allMembers`, skip `authorEmail`.
+//   2. Look up every `push:sub:<email>:*` for that member.
+//   3. Check `push:pref:*` for `sharedTripActivity === true`.
+//   4. Coalesce rapid bursts: if the same (authorEmail, tripId,
+//      recipientEmail) tuple has had >2 events within the rolling
+//      60-second window, send a coalesced "N expenses" message instead.
+//   5. 404/410 → delete both KV keys (stale subscription).
+//
+// `env.__buildPushPayload` is the test hook short-circuiting VAPID crypto.
+export async function sendSharedTripActivityPush(
+  env,
+  {
+    action,        // 'add' | 'edit' | 'void'
+    allMembers,    // string[] — full member list from sharedtrip:meta
+    amount,        // number — raw amount in dollars, for body copy
+    authorEmail,   // string — who performed the action (excluded from fan-out)
+    note,          // string | null — note field for 'add' body
+    tripId,        // string — sharedTripId (for the deep-link and coalescing key)
+    tripName,      // string — for notification title
+  },
+) {
+  if (!env.PUSH_KV) return
+  const build = env.__buildPushPayload || buildPushPayload
+  const vapid = {
+    privateKey: env.VAPID_PRIVATE_KEY,
+    publicKey: env.VAPID_PUBLIC_KEY,
+    subject: env.VAPID_SUBJECT,
+  }
+  const authorHandle = emailHandle(authorEmail)
+  const tapUrl = `/trip/ledger?tripId=${encodeURIComponent('trip::' + tripId)}`
+
+  for (const member of allMembers) {
+    if (member.toLowerCase() === authorEmail.toLowerCase()) continue
+
+    // Coalescing: read the rolling window for this (author, trip, recipient) tuple.
+    const coalesceKey = `${ACTIVITY_COALESCE_PREFIX}${authorEmail}:${tripId}:${member}`
+    const coalesceRaw = await env.PUSH_KV.get(coalesceKey)
+    let count = coalesceRaw ? Number(coalesceRaw) : 0
+    count += 1
+    await env.PUSH_KV.put(coalesceKey, String(count), {
+      expirationTtl: ACTIVITY_COALESCE_TTL_SECONDS,
+    })
+
+    // Build the notification payload — coalesced on 3rd+ event.
+    let payloadJson
+    if (count >= 3) {
+      payloadJson = JSON.stringify({
+        body: `${authorHandle} added ${count} expenses to ${tripName}`,
+        data: { url: tapUrl },
+        tag: `shared-trip-activity:${tripId}:${authorEmail}`,
+        title: tripName,
+      })
+    } else {
+      let body
+      if (action === 'add') {
+        const noteClip = note && note.trim()
+          ? ' — ' + note.trim().slice(0, 40)
+          : ''
+        body = `${authorHandle} added $${amount.toFixed(2)} to ${tripName}${noteClip}`
+      } else if (action === 'edit') {
+        body = `${authorHandle} edited an expense on ${tripName}`
+      } else {
+        body = `${authorHandle} voided a $${amount.toFixed(2)} expense on ${tripName}`
+      }
+      payloadJson = JSON.stringify({
+        body,
+        data: { url: tapUrl },
+        tag: `shared-trip-activity:${tripId}:${authorEmail}`,
+        title: tripName,
+      })
+    }
+
+    // Fan out to every device registered for this member.
+    let cursor
+    do {
+      const page = await env.PUSH_KV.list({
+        cursor,
+        prefix: `${PUSH_PREFIX}${member.toLowerCase()}:`,
+      })
+      for (const k of page.keys) {
+        const subRaw = await env.PUSH_KV.get(k.name)
+        if (!subRaw) continue
+        const stored = JSON.parse(subRaw)
+        const prefKey = k.name.replace(PUSH_PREFIX, PREF_PREFIX)
+        const prefRaw = await env.PUSH_KV.get(prefKey)
+        const prefs = prefRaw ? JSON.parse(prefRaw) : DEFAULT_PREFS
+        if (!prefs.sharedTripActivity) continue
+
+        const subscription = {
+          endpoint: stored.endpoint,
+          expirationTime: null,
+          keys: { auth: stored.auth, p256dh: stored.p256dh },
+        }
+        try {
+          const req = await build(
+            { data: payloadJson, options: { ttl: 3600 } },
+            subscription,
+            vapid,
+          )
+          const res = await fetch(stored.endpoint, req)
+          if (res.status === 404 || res.status === 410) {
+            await env.PUSH_KV.delete(k.name)
+            await env.PUSH_KV.delete(prefKey)
+          } else if (!res.ok) {
+            console.error('shared-trip activity push failed', {
+              action,
+              member,
+              status: res.status,
+            })
+          }
+        } catch (err) {
+          console.error('shared-trip activity push threw', {
+            action,
+            member,
+            err: String(err),
+          })
+        }
+      }
+      cursor = page.list_complete ? undefined : page.cursor
+    } while (cursor)
+  }
 }
 
 // Record that a user's sync was successful at `nowMs` (defaults to now).

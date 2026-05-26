@@ -11,6 +11,7 @@ import {
   buildSharedTripDesignDoc,
 } from './couch/sharedTripValidator.js'
 import { signJwt, verifyJwt } from './jwt.js'
+import { sendSharedTripActivityPush } from './notifications.js'
 
 // The Resend Worker SDK reads its baseUrl from `process.env.RESEND_BASE_URL`
 // at module load — which never resolves inside `workerd` (Cloudflare's
@@ -591,6 +592,83 @@ export function registerSharedTripRoutes(app) {
       console.error('sharedtrips/transfer:', err)
       return c.json({ ok: false, error: 'transfer_failed' }, 500)
     }
+  })
+
+  // POST /sharedtrips/:id/notify-activity
+  //
+  // Fire push notifications to all co-travelers when an expense is added,
+  // edited, or voided on a shared trip. Called by the Elm app immediately
+  // after the PouchDB write (fire-and-forget — the HTTP response is not
+  // awaited by the critical path). Body:
+  //   { action: 'add' | 'edit' | 'void', amount: number, note?: string }
+  //
+  // Authentication:
+  //   - Caller must be an authenticated member of the shared trip. Non-members
+  //     get 404 (same pattern as /leave) so existence is not leaked.
+  //   - Re-reads `sharedtrip:meta` on every call so tier + membership changes
+  //     take effect immediately; no client-supplied membership list is trusted.
+  //
+  // The push fan-out is handled by `sendSharedTripActivityPush` in
+  // `server/notifications.js`. This endpoint merely validates the caller,
+  // reads the meta (member list + trip name), and hands off. Any push
+  // delivery failure is logged but does not affect the HTTP response — the
+  // expense write has already landed in PouchDB.
+  app.post('/sharedtrips/:id/notify-activity', async (c) => {
+    const env = c.env
+    const caller = await authenticateCaller(c)
+    if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
+
+    const sharedTripId = c.req.param('id')
+    const dbName = sharedTripDbName(sharedTripId)
+
+    let meta
+    try {
+      meta = await readSharedTripMeta(env, dbName)
+    } catch (err) {
+      if (err.status === 404) {
+        return c.json({ ok: false, error: 'not_found' }, 404)
+      }
+      console.error('notify-activity read meta:', err)
+      return c.json({ ok: false, error: 'read_failed' }, 500)
+    }
+
+    // 404, not 403 — don't confirm existence to non-members.
+    if (!meta.members.includes(caller.email)) {
+      return c.json({ ok: false, error: 'not_found' }, 404)
+    }
+
+    let body
+    try {
+      body = await c.req.json()
+    } catch {
+      body = {}
+    }
+
+    const action = body.action
+    if (action !== 'add' && action !== 'edit' && action !== 'void') {
+      return c.json({ ok: false, error: 'invalid_action' }, 400)
+    }
+
+    const amount = typeof body.amount === 'number' ? body.amount : 0
+    const note = typeof body.note === 'string' ? body.note : null
+
+    // Fan-out is fire-and-forget — any push failure is logged internally
+    // but must not block the HTTP response.
+    c.executionCtx?.waitUntil(
+      sendSharedTripActivityPush(env, {
+        action,
+        allMembers: meta.members,
+        amount,
+        authorEmail: caller.email,
+        note,
+        tripId: sharedTripId,
+        tripName: meta.name,
+      }).catch((err) => {
+        console.error('notify-activity fan-out threw', { sharedTripId, err: String(err) })
+      }),
+    )
+
+    return c.json({ ok: true })
   })
 
   // Test-only hook: flip a user's tier and run the downgrade/upgrade cascade.
