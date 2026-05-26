@@ -5,7 +5,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Pages.Settings
-import Types exposing (GuestState, Msg(..))
+import Types exposing (GuestMsg_(..), GuestState, Msg(..))
 import UI.Button
 import UI.Card
 import UI.Icons
@@ -34,7 +34,7 @@ viewGuest gs =
             [ viewFormCard gs ]
         , viewErrorChip gs
         , Html.div [ Html.Attributes.class "mt-6 text-center" ]
-            [ UI.Button.ghost { label = "Settings", onClick = ToggleGuestSettings }
+            [ UI.Button.ghost { label = "Settings", onClick = GuestMsg ToggleGuestSettings }
             , if gs.showSettings then
                 Pages.Settings.viewPanel gs.session.config False gs.version
 
@@ -85,7 +85,7 @@ viewEmailForm value { busy, label } =
                         []
 
                     else
-                        [ Html.Events.onSubmit SubmitEmail ]
+                        [ Html.Events.onSubmit (GuestMsg SubmitEmail) ]
                    )
 
         inputAttrs =
@@ -99,7 +99,7 @@ viewEmailForm value { busy, label } =
                         []
 
                     else
-                        [ Html.Events.onInput EmailInputChanged ]
+                        [ Html.Events.onInput (GuestMsg << EmailInputChanged) ]
                    )
     in
     UI.Card.subCard
@@ -109,7 +109,7 @@ viewEmailForm value { busy, label } =
                 UI.Button.primaryBusy { label = label }
 
               else
-                UI.Button.primary { label = label, onClick = SubmitEmail }
+                UI.Button.primary { label = label, onClick = GuestMsg SubmitEmail }
             ]
         ]
 
@@ -123,7 +123,7 @@ viewCodeForm email code { busy, label } =
                         []
 
                     else
-                        [ Html.Events.onSubmit SubmitCode ]
+                        [ Html.Events.onSubmit (GuestMsg SubmitCode) ]
                    )
 
         inputAttrs =
@@ -137,7 +137,7 @@ viewCodeForm email code { busy, label } =
                         []
 
                     else
-                        [ Html.Events.onInput CodeInputChanged ]
+                        [ Html.Events.onInput (GuestMsg << CodeInputChanged) ]
                    )
     in
     UI.Card.subCard
@@ -149,7 +149,7 @@ viewCodeForm email code { busy, label } =
                 UI.Button.primaryBusy { label = label }
 
               else
-                UI.Button.primary { label = label, onClick = SubmitCode }
+                UI.Button.primary { label = label, onClick = GuestMsg SubmitCode }
             ]
         ]
 

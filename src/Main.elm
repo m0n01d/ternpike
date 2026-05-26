@@ -129,7 +129,7 @@ import Routing
 import Set
 import Task
 import Time
-import Types exposing (AuthState, GuestState, Model(..), Msg(..), SharedMsg_(..))
+import Types exposing (AuthState, GuestMsg_(..), GuestState, Model(..), Msg(..), SharedMsg_(..))
 import UI.BillingBanner
 import UI.Layout
 import UI.ShareModal
@@ -907,7 +907,7 @@ requestCode gs =
         , Http.post
             { url = gs.session.config.backendUrl ++ "/auth/request-code"
             , body = Http.jsonBody (E.object [ ( "email", E.string email ) ])
-            , expect = Http.expectWhatever RequestCodeResult
+            , expect = Http.expectWhatever (GuestMsg << RequestCodeResult)
             }
         )
 
@@ -930,7 +930,7 @@ verifyCode email gs =
         , Http.post
             { url = gs.session.config.backendUrl ++ "/auth/verify-code"
             , body = Http.jsonBody (E.object [ ( "email", E.string email ), ( "code", E.string code ) ])
-            , expect = Http.expectJson VerifyCodeResult credsDecoder
+            , expect = Http.expectJson (GuestMsg << VerifyCodeResult) credsDecoder
             }
         )
 
@@ -1627,8 +1627,14 @@ update msg model =
         ( SharedMsg s, _ ) ->
             updateShared s model
 
-        ( other, GuestModel gs ) ->
-            updateGuest other gs
+        ( GuestMsg g, GuestModel gs ) ->
+            updateGuest g gs
+
+        ( GuestMsg _, AuthModel as_ ) ->
+            ( AuthModel as_, Cmd.none )
+
+        ( _, GuestModel gs ) ->
+            ( GuestModel gs, Cmd.none )
 
         ( other, AuthModel as_ ) ->
             updateAuth other as_
@@ -1760,22 +1766,14 @@ scrollToTop =
     Task.perform (\_ -> SharedMsg ScrolledToTop) (Browser.Dom.setViewport 0 0)
 
 
-updateGuest : Msg -> GuestState -> ( Model, Cmd Msg )
+updateGuest : GuestMsg_ -> GuestState -> ( Model, Cmd Msg )
 updateGuest msg gs =
     case msg of
+        CodeInputChanged s ->
+            ( GuestModel { gs | codeInput = s }, Cmd.none )
+
         EmailInputChanged s ->
             ( GuestModel { gs | emailInput = s }, Cmd.none )
-
-        SubmitEmail ->
-            case gs.session.reason of
-                NotLoggedIn ->
-                    requestCode gs
-
-                SessionExpired ->
-                    requestCode gs
-
-                _ ->
-                    ( GuestModel gs, Cmd.none )
 
         RequestCodeResult result ->
             case ( gs.session.reason, result ) of
@@ -1800,9 +1798,6 @@ updateGuest msg gs =
                 _ ->
                     ( GuestModel gs, Cmd.none )
 
-        CodeInputChanged s ->
-            ( GuestModel { gs | codeInput = s }, Cmd.none )
-
         SubmitCode ->
             case gs.session.reason of
                 AwaitingCode email ->
@@ -1810,6 +1805,20 @@ updateGuest msg gs =
 
                 _ ->
                     ( GuestModel gs, Cmd.none )
+
+        SubmitEmail ->
+            case gs.session.reason of
+                NotLoggedIn ->
+                    requestCode gs
+
+                SessionExpired ->
+                    requestCode gs
+
+                _ ->
+                    ( GuestModel gs, Cmd.none )
+
+        ToggleGuestSettings ->
+            ( GuestModel { gs | showSettings = not gs.showSettings }, Cmd.none )
 
         VerifyCodeResult result ->
             case ( gs.session.reason, result ) of
@@ -1847,304 +1856,6 @@ updateGuest msg gs =
 
                 _ ->
                     ( GuestModel gs, Cmd.none )
-
-        ToggleGuestSettings ->
-            ( GuestModel { gs | showSettings = not gs.showSettings }, Cmd.none )
-
-        GotPouchMsg _ ->
-            ( GuestModel gs, Cmd.none )
-
-        -- Messages that only apply to the authenticated state.
-        -- They are no-ops here: the GuestModel has no corresponding fields.
-        AddressChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        AmountChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        BackToQueue ->
-            ( GuestModel gs, Cmd.none )
-
-        CanInstall _ ->
-            ( GuestModel gs, Cmd.none )
-
-        CancelDeleteTrip ->
-            ( GuestModel gs, Cmd.none )
-
-        CategorySelected _ ->
-            ( GuestModel gs, Cmd.none )
-
-        ClearDoneItems ->
-            ( GuestModel gs, Cmd.none )
-
-        CloseSharedTripModal ->
-            ( GuestModel gs, Cmd.none )
-
-        CloseLedgerMenu ->
-            ( GuestModel gs, Cmd.none )
-
-        CloseMovePicker ->
-            ( GuestModel gs, Cmd.none )
-
-        CloseShareModal ->
-            ( GuestModel gs, Cmd.none )
-
-        CloseTripForm ->
-            ( GuestModel gs, Cmd.none )
-
-        ConfirmDeleteTrip _ ->
-            ( GuestModel gs, Cmd.none )
-
-        CreateSharedTripNameChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        CreateSharedTripResult _ ->
-            ( GuestModel gs, Cmd.none )
-
-        DateChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        DeleteTrip _ ->
-            ( GuestModel gs, Cmd.none )
-
-        DismissError ->
-            ( GuestModel gs, Cmd.none )
-
-        DismissMapPicker ->
-            ( GuestModel gs, Cmd.none )
-
-        DuplicateEntry _ ->
-            ( GuestModel gs, Cmd.none )
-
-        ExportCsv _ ->
-            ( GuestModel gs, Cmd.none )
-
-        FilesSelected _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GeolocationDenied ->
-            ( GuestModel gs, Cmd.none )
-
-        GotDeleteTripTime _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotDuplicateTime _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotExifCoords _ _ _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotFileUrl _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotGeocodeResult _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotGpsCoords _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotMoveTime _ _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotOcrResult _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotSaveTripTime _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotSubmitTime _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotSyncTime _ ->
-            ( GuestModel gs, Cmd.none )
-
-        GotVoidTime _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        HoverCumulativePoints _ ->
-            ( GuestModel gs, Cmd.none )
-
-        HoverDailyBars _ ->
-            ( GuestModel gs, Cmd.none )
-
-        InviteEmailChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        InviteToSharedTripResult _ ->
-            ( GuestModel gs, Cmd.none )
-
-        JoinSharedTripAccepted _ ->
-            ( GuestModel gs, Cmd.none )
-
-        JoinSharedTripDeclined ->
-            ( GuestModel gs, Cmd.none )
-
-        JoinSharedTripResult _ ->
-            ( GuestModel gs, Cmd.none )
-
-        LeaveSharedTripConfirmed _ ->
-            ( GuestModel gs, Cmd.none )
-
-        LeaveSharedTripResult _ ->
-            ( GuestModel gs, Cmd.none )
-
-        LongNoteChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        MapPickerConfirmed _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        MerchantChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        MoveEntry _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        NoteChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        NotificationStateChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        OcrImagePrepared _ ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenCreateSharedTripModal ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenEditTripForm _ ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenInviteModal _ ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenLeaveConfirmModal _ ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenLedgerMenu _ ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenMapPicker ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenMovePicker _ ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenNewTripForm ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenShareModal ->
-            ( GuestModel gs, Cmd.none )
-
-        OpenTransferModal _ ->
-            ( GuestModel gs, Cmd.none )
-
-        PaymentMethodChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        PushSubscribeReceived _ ->
-            ( GuestModel gs, Cmd.none )
-
-        RefreshClicked ->
-            ( GuestModel gs, Cmd.none )
-
-        RequestPushPermission ->
-            ( GuestModel gs, Cmd.none )
-
-        SharedTripActivityNotified ->
-            ( GuestModel gs, Cmd.none )
-
-        ReviewScanItem _ ->
-            ( GuestModel gs, Cmd.none )
-
-        SaveTripForm ->
-            ( GuestModel gs, Cmd.none )
-
-        ScanProxyResult _ ->
-            ( GuestModel gs, Cmd.none )
-
-        SetStatsGranularity _ ->
-            ( GuestModel gs, Cmd.none )
-
-        SignOutClicked ->
-            ( GuestModel gs, Cmd.none )
-
-        SkipLocation ->
-            ( GuestModel gs, Cmd.none )
-
-        SubmitCreateSharedTrip ->
-            ( GuestModel gs, Cmd.none )
-
-        SubmitEntry ->
-            ( GuestModel gs, Cmd.none )
-
-        SubmitInvite ->
-            ( GuestModel gs, Cmd.none )
-
-        SubmitTransfer ->
-            ( GuestModel gs, Cmd.none )
-
-        TakeOverBilling _ ->
-            ( GuestModel gs, Cmd.none )
-
-        ToastExpired ->
-            ( GuestModel gs, Cmd.none )
-
-        ToggleDayIntensity ->
-            ( GuestModel gs, Cmd.none )
-
-        ToggleSharedTripMembers _ ->
-            ( GuestModel gs, Cmd.none )
-
-        ToggleLedgerMap ->
-            ( GuestModel gs, Cmd.none )
-
-        ToggleLedgerMapExpanded ->
-            ( GuestModel gs, Cmd.none )
-
-        ToggleNotificationPref _ ->
-            ( GuestModel gs, Cmd.none )
-
-        TransferTargetChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        TransferToSharedTripResult _ ->
-            ( GuestModel gs, Cmd.none )
-
-        TriggerInstallPrompt ->
-            ( GuestModel gs, Cmd.none )
-
-        TripCreateSharedTripResult _ ->
-            ( GuestModel gs, Cmd.none )
-
-        TripFieldChanged _ _ ->
-            ( GuestModel gs, Cmd.none )
-
-        TripGroupNameChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        TripInviteResult ->
-            ( GuestModel gs, Cmd.none )
-
-        TripInviteeAdded ->
-            ( GuestModel gs, Cmd.none )
-
-        TripInviteeDraftChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        TripInviteeRemoved _ ->
-            ( GuestModel gs, Cmd.none )
-
-        TripTargetSelected _ ->
-            ( GuestModel gs, Cmd.none )
-
-        VoidEntry _ ->
-            ( GuestModel gs, Cmd.none )
-
-        SharedMsg _ ->
-            -- SharedMsg is dispatched by `update` before reaching updateGuest.
-            -- This branch is unreachable at runtime but required for exhaustiveness.
-            ( GuestModel gs, Cmd.none )
 
 
 updateAuth : Msg -> AuthState -> ( Model, Cmd Msg )
@@ -3951,28 +3662,9 @@ updateAuth msg as_ =
                 ]
             )
 
-        -- Messages that only apply to the guest (unauthenticated) state.
-        -- They reach updateAuth when the top-level update dispatches before
-        -- model state has been evaluated — return unchanged.
-        CodeInputChanged _ ->
-            ( AuthModel as_, Cmd.none )
-
-        EmailInputChanged _ ->
-            ( AuthModel as_, Cmd.none )
-
-        RequestCodeResult _ ->
-            ( AuthModel as_, Cmd.none )
-
-        SubmitCode ->
-            ( AuthModel as_, Cmd.none )
-
-        SubmitEmail ->
-            ( AuthModel as_, Cmd.none )
-
-        ToggleGuestSettings ->
-            ( AuthModel as_, Cmd.none )
-
-        VerifyCodeResult _ ->
+        GuestMsg _ ->
+            -- GuestMsg is dispatched by `update` before reaching updateAuth.
+            -- This branch is unreachable at runtime but required for exhaustiveness.
             ( AuthModel as_, Cmd.none )
 
         SharedMsg _ ->
