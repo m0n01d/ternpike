@@ -302,6 +302,29 @@ import './elements/tp-amount.js'
     }
   })
 
+  // Proxy OCR through the Ternpike-hosted /scan Worker endpoint.
+  // Uses Basic auth (same email:password as PouchDB sync) — Elm has no
+  // built-in base64 encoder so this must go through JS. The Worker
+  // returns Anthropic's /v1/messages response shape verbatim.
+  app.ports.scanProxyOut.subscribe(async ({ backendUrl, body, itemId }) => {
+    try {
+      const auth = basicAuthHeader()
+      if (!auth) {
+        app.ports.scanProxyIn.send({ body: 'unauthorized', itemId, ok: false, status: 401 })
+        return
+      }
+      const resp = await fetch(`${backendUrl}/scan`, {
+        method: 'POST',
+        headers: { Authorization: auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const text = await resp.text()
+      app.ports.scanProxyIn.send({ body: text, itemId, ok: resp.ok, status: resp.status })
+    } catch (err) {
+      app.ports.scanProxyIn.send({ body: String(err), itemId, ok: false, status: 0 })
+    }
+  })
+
   app.ports.extractExifGps.subscribe(async ({ id, dataUrl }) => {
     try {
       const res    = await fetch(dataUrl)

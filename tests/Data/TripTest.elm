@@ -100,7 +100,7 @@ suite =
                 in
                 Trip.effectiveTier (flockTrip "trip::7::99999999" fid) state
                     |> Expect.equal Tier.Tern
-        , test "canUseProxiedOCR is True on an active flock trip for a Tern member" <|
+        , test "isPaid(effectiveTier) is True on an active flock trip for a Tern member" <|
             \_ ->
                 let
                     fid =
@@ -112,12 +112,14 @@ suite =
                         , sharedTrips = SharedTrips.fromList [ sharedTripWith fid Active ]
                         }
                 in
-                Trip.canUseProxiedOCR (flockTrip "trip::8::88888888" fid) state
+                Tier.isPaid (Trip.effectiveTier (flockTrip "trip::8::88888888" fid) state)
                     |> Expect.equal True
-        , test "canUseProxiedOCR is False on a personal trip for a Tern" <|
+        , test "isPaid(effectiveTier) is False on a personal trip for a Tern" <|
             \_ ->
-                Trip.canUseProxiedOCR (personalTrip "trip::9::77777777")
-                    { currentUser = member, tier = Tier.Tern, sharedTrips = SharedTrips.empty }
+                Tier.isPaid
+                    (Trip.effectiveTier (personalTrip "trip::9::77777777")
+                        { currentUser = member, tier = Tier.Tern, sharedTrips = SharedTrips.empty }
+                    )
                     |> Expect.equal False
         , test "canBatchScan is True on an active flock trip for a Tern member" <|
             \_ ->

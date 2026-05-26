@@ -88,6 +88,7 @@ import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.Notifications as Notifications
+import Data.OcrPath as OcrPath exposing (OcrPath(..))
 import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
 import Data.Scan as Scan exposing (ScanItem, ScanStatus(..))
@@ -186,6 +187,12 @@ port triggerInstallPrompt : () -> Cmd msg
 
 
 port canInstall : (Bool -> msg) -> Sub msg
+
+
+port scanProxyOut : { backendUrl : String, body : E.Value, itemId : String } -> Cmd msg
+
+
+port scanProxyIn : ({ body : String, itemId : String, ok : Bool, status : Int } -> msg) -> Sub msg
 
 
 port savePushPrefs : D.Value -> Cmd msg
@@ -1049,7 +1056,7 @@ geocodeCmdsForItems : List String -> Dict.Dict String ScanItem -> AuthState -> L
 geocodeCmdsForItems ids queue as_ =
     case activeTripForGeocode as_ of
         Just trip ->
-            if Trip.canUseProxiedOCR trip as_ then
+            if Tier.isPaid (Trip.effectiveTier trip as_) then
                 List.filterMap (geocodeCmdForItem queue as_.creds) ids
 
             else
@@ -1103,8 +1110,8 @@ ocrSystemPrompt =
     "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"address\": \"<street address as printed on receipt, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
 
 
-makeOcrCall : String -> String -> String -> String -> Cmd Msg
-makeOcrCall itemId apiKey base64Data mimeType =
+makeOcrCall : String -> OcrPath -> AppConfig -> String -> String -> Cmd Msg
+makeOcrCall itemId path config base64Data mimeType =
     let
         body =
             E.object
@@ -1138,19 +1145,27 @@ makeOcrCall itemId apiKey base64Data mimeType =
                   )
                 ]
     in
-    Http.request
-        { method = "POST"
-        , headers =
-            [ Http.header "x-api-key" apiKey
-            , Http.header "anthropic-version" "2023-06-01"
-            , Http.header "anthropic-dangerous-direct-browser-access" "true"
-            ]
-        , url = "https://api.anthropic.com/v1/messages"
-        , body = Http.jsonBody body
-        , expect = Http.expectStringResponse (GotOcrResult itemId) ocrResponseToResult
-        , timeout = Nothing
-        , tracker = Nothing
-        }
+    case path of
+        ByoPath key ->
+            Http.request
+                { method = "POST"
+                , headers =
+                    [ Http.header "x-api-key" (AnthropicKey.toHeader key)
+                    , Http.header "anthropic-version" "2023-06-01"
+                    , Http.header "anthropic-dangerous-direct-browser-access" "true"
+                    ]
+                , url = "https://api.anthropic.com/v1/messages"
+                , body = Http.jsonBody body
+                , expect = Http.expectStringResponse (GotOcrResult itemId) ocrResponseToResult
+                , timeout = Nothing
+                , tracker = Nothing
+                }
+
+        HostedPath ->
+            scanProxyOut { backendUrl = config.backendUrl, body = body, itemId = itemId }
+
+        Unscannable ->
+            Cmd.none
 
 
 {-| Target max-byte budget for the base64-encoded image we send to
@@ -1269,6 +1284,114 @@ getMimeType dataUrl =
 
     else
         "image/jpeg"
+
+
+{-| Parse the raw Anthropic response body (as returned by either the
+direct-Anthropic path or the hosted proxy) into a list of `OcrData`
+records. Both paths return the same Anthropic `/v1/messages` JSON shape
+verbatim, so one parser covers both.
+-}
+parseOcrResponseBody : String -> Result String (List Scan.OcrData)
+parseOcrResponseBody responseBody =
+    case D.decodeString claudeTextDecoder responseBody of
+        Err decodeErr ->
+            Err
+                ("Couldn't read Anthropic response: "
+                    ++ D.errorToString decodeErr
+                )
+
+        Ok innerJson ->
+            let
+                stripped =
+                    stripCodeFence innerJson
+            in
+            case D.decodeString Scan.ocrDataListDecoder stripped of
+                Ok list ->
+                    Ok list
+
+                Err decodeErr ->
+                    Err
+                        ("Couldn't parse receipt JSON: "
+                            ++ D.errorToString decodeErr
+                            ++ "\n\nModel returned: "
+                            ++ truncate 240 stripped
+                        )
+
+
+{-| Apply a parsed OCR result (or error) to the scan queue, returning the
+updated queue and the list of touched item ids (for geocode dispatch).
+Shared by `GotOcrResult` and `ScanProxyResult`.
+-}
+applyOcrResult :
+    String
+    -> Result String (List Scan.OcrData)
+    -> Dict.Dict String Scan.ScanItem
+    -> ( Dict.Dict String Scan.ScanItem, List String )
+applyOcrResult itemId parsed queue =
+    let
+        markReady : Maybe Scan.OcrData -> Maybe String -> Dict.Dict String Scan.ScanItem
+        markReady ocrData ocrError =
+            Dict.update itemId
+                (Maybe.map
+                    (\i ->
+                        { i
+                            | ocrData = ocrData
+                            , ocrError = ocrError
+                            , status = ScanReady
+                        }
+                    )
+                )
+                queue
+    in
+    case parsed of
+        Err errMsg ->
+            ( markReady Nothing (Just errMsg), [ itemId ] )
+
+        Ok [] ->
+            ( markReady Nothing (Just "No receipts detected in the image — try a clearer photo or a tighter crop")
+            , [ itemId ]
+            )
+
+        Ok [ single ] ->
+            ( markReady (Just single) Nothing, [ itemId ] )
+
+        Ok ((_ :: _ :: _) as multi) ->
+            case Dict.get itemId queue of
+                Nothing ->
+                    -- item disappeared mid-flight (cleared/submitted) — no-op
+                    ( queue, [] )
+
+                Just source ->
+                    let
+                        queueWithoutSource =
+                            Dict.remove itemId queue
+
+                        startIdx =
+                            Dict.size queueWithoutSource
+
+                        indexed =
+                            List.indexedMap
+                                (\i data ->
+                                    let
+                                        rawId =
+                                            "scan-" ++ String.fromInt (startIdx + i)
+                                    in
+                                    ( rawId
+                                    , { exifDebug = source.exifDebug
+                                      , id = ScanItemId.fromString rawId
+                                      , imageUrl = source.imageUrl
+                                      , locationState = source.locationState
+                                      , ocrData = Just data
+                                      , ocrError = Nothing
+                                      , status = ScanReady
+                                      }
+                                    )
+                                )
+                                multi
+                    in
+                    ( List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
+                    , List.map Tuple.first indexed
+                    )
 
 
 
@@ -1623,6 +1746,9 @@ update msg model =
             ( nextModel, cmd )
 
         SaveTripForm ->
+            ( nextModel, cmd )
+
+        ScanProxyResult _ ->
             ( nextModel, cmd )
 
         ScrolledToTop ->
@@ -2048,6 +2174,9 @@ updateGuest msg gs =
         SaveTripForm ->
             ( GuestModel gs, Cmd.none )
 
+        ScanProxyResult _ ->
+            ( GuestModel gs, Cmd.none )
+
         ScrolledToTop ->
             ( GuestModel gs, Cmd.none )
 
@@ -2321,8 +2450,14 @@ updateAuth msg as_ =
 
         GotFileUrl itemId dataUrl ->
             let
+                ocrPath =
+                    OcrPath.resolve as_.config.anthropicKey as_.tier
+
+                canScan =
+                    ocrPath /= Unscannable
+
                 newStatus =
-                    if as_.config.anthropicKey /= Nothing then
+                    if canScan then
                         ScanProcessing
 
                     else
@@ -2333,7 +2468,7 @@ updateAuth msg as_ =
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }
             , Cmd.batch
-                [ if as_.config.anthropicKey /= Nothing then
+                [ if canScan then
                     -- Always route through the JS-side downscaler before
                     -- the OCR call. Anthropic's image limit is 5 MiB on
                     -- the base64 payload; modern phone JPEGs routinely
@@ -2380,7 +2515,7 @@ updateAuth msg as_ =
                                     as_.scanQueue
                         in
                         ( AuthModel { as_ | scanQueue = updatedQueue }
-                        , makeOcrCall payload.id (as_.config.anthropicKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "") (extractBase64 payload.dataUrl) (getMimeType payload.dataUrl)
+                        , makeOcrCall payload.id (OcrPath.resolve as_.config.anthropicKey as_.tier) as_.config (extractBase64 payload.dataUrl) (getMimeType payload.dataUrl)
                         )
 
         GotOcrResult itemId result ->
@@ -2392,94 +2527,33 @@ updateAuth msg as_ =
                             Err httpErr
 
                         Ok responseBody ->
-                            case D.decodeString claudeTextDecoder responseBody of
-                                Err decodeErr ->
-                                    Err
-                                        ("Couldn't read Anthropic response: "
-                                            ++ D.errorToString decodeErr
-                                        )
-
-                                Ok innerJson ->
-                                    let
-                                        stripped =
-                                            stripCodeFence innerJson
-                                    in
-                                    case D.decodeString Scan.ocrDataListDecoder stripped of
-                                        Ok list ->
-                                            Ok list
-
-                                        Err decodeErr ->
-                                            Err
-                                                ("Couldn't parse receipt JSON: "
-                                                    ++ D.errorToString decodeErr
-                                                    ++ "\n\nModel returned: "
-                                                    ++ truncate 240 stripped
-                                                )
-
-                markReady : Maybe Scan.OcrData -> Maybe String -> Dict.Dict String Scan.ScanItem
-                markReady ocrData ocrError =
-                    Dict.update itemId
-                        (Maybe.map
-                            (\i ->
-                                { i
-                                    | ocrData = ocrData
-                                    , ocrError = ocrError
-                                    , status = ScanReady
-                                }
-                            )
-                        )
-                        as_.scanQueue
+                            parseOcrResponseBody responseBody
 
                 ( updatedQueue, touchedIds ) =
-                    case parsed of
-                        Err errMsg ->
-                            ( markReady Nothing (Just errMsg), [ itemId ] )
+                    applyOcrResult itemId parsed as_.scanQueue
+            in
+            ( AuthModel { as_ | scanQueue = updatedQueue }
+            , Cmd.batch (geocodeCmdsForItems touchedIds updatedQueue as_)
+            )
 
-                        Ok [] ->
-                            ( markReady Nothing (Just "No receipts detected in the image — try a clearer photo or a tighter crop")
-                            , [ itemId ]
-                            )
+        ScanProxyResult { body, itemId, ok, status } ->
+            let
+                result : Result String (List Scan.OcrData)
+                result =
+                    if ok then
+                        parseOcrResponseBody body
 
-                        Ok [ single ] ->
-                            ( markReady (Just single) Nothing, [ itemId ] )
+                    else if status == 402 then
+                        Err "Hosted scanning requires an Osprey or Trailblazer subscription."
 
-                        Ok ((_ :: _ :: _) as multi) ->
-                            case Dict.get itemId as_.scanQueue of
-                                Nothing ->
-                                    -- item disappeared mid-flight (cleared/submitted) — no-op
-                                    ( as_.scanQueue, [] )
+                    else if status == 401 then
+                        Err "Sign in again to continue scanning."
 
-                                Just source ->
-                                    let
-                                        queueWithoutSource =
-                                            Dict.remove itemId as_.scanQueue
+                    else
+                        Err ("Hosted scan failed (HTTP " ++ String.fromInt status ++ "): " ++ body)
 
-                                        startIdx =
-                                            Dict.size queueWithoutSource
-
-                                        indexed =
-                                            List.indexedMap
-                                                (\i data ->
-                                                    let
-                                                        rawId =
-                                                            "scan-" ++ String.fromInt (startIdx + i)
-                                                    in
-                                                    ( rawId
-                                                    , { exifDebug = source.exifDebug
-                                                      , id = ScanItemId.fromString rawId
-                                                      , imageUrl = source.imageUrl
-                                                      , locationState = source.locationState
-                                                      , ocrData = Just data
-                                                      , ocrError = Nothing
-                                                      , status = ScanReady
-                                                      }
-                                                    )
-                                                )
-                                                multi
-                                    in
-                                    ( List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
-                                    , List.map Tuple.first indexed
-                                    )
+                ( updatedQueue, touchedIds ) =
+                    applyOcrResult itemId result as_.scanQueue
             in
             ( AuthModel { as_ | scanQueue = updatedQueue }
             , Cmd.batch (geocodeCmdsForItems touchedIds updatedQueue as_)
@@ -4149,6 +4223,7 @@ main =
                     , ocrImagePrepared OcrImagePrepared
                     , notificationState NotificationStateChanged
                     , pushSubscribeResult PushSubscribeReceived
+                    , scanProxyIn ScanProxyResult
                     ]
         , update = update
         , view = view

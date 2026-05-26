@@ -8,9 +8,9 @@ export default defineConfig({
   fullyParallel: false,
   globalSetup: require.resolve('./global-setup.ts'),
   globalTeardown: require.resolve('./global-teardown.ts'),
-  outputDir: './.results',
+  outputDir: 'e2e/.results',
   reporter: isCI
-    ? [['list'], ['html', { open: 'never', outputFolder: './.results-html' }]]
+    ? [['list'], ['html', { open: 'never', outputFolder: 'e2e/.results-html' }]]
     : [['list']],
   retries: isCI ? 1 : 0,
   snapshotDir: './screenshots',
