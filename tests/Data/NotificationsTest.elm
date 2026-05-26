@@ -21,11 +21,11 @@ suite : Test
 suite =
     describe "Data.Notifications"
         [ describe "encodePrefs / decodePrefs roundtrip"
-            [ fuzz Fuzz.bool "encodePrefs >> decodePrefs is identity" <|
-                \weekly ->
+            [ fuzz (Fuzz.map2 Tuple.pair Fuzz.bool Fuzz.bool) "encodePrefs >> decodePrefs is identity" <|
+                \( stalled, weekly ) ->
                     let
                         prefs =
-                            { weeklyScanReminder = weekly }
+                            { syncStalled = stalled, weeklyScanReminder = weekly }
                     in
                     Notifications.encodePrefs prefs
                         |> Json.Decode.decodeValue Notifications.decodePrefs

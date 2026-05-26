@@ -257,6 +257,12 @@ viewNotificationsBody as_ =
 
     else if as_.notificationPermission == Notifications.Granted && as_.pushSubscribed then
         [ viewToggleRow
+            { helper = "Get notified if your data hasn't backed up in 3 days. Recommended — this is a data protection alert, not an engagement nudge."
+            , label = "Sync stalled alert"
+            , msg = ToggleNotificationPref Notifications.SyncStalled
+            , value = as_.notificationPrefs.syncStalled
+            }
+        , viewToggleRow
             { helper = "Every Friday at 5pm UTC, we'll nudge you to scan this week's receipts."
             , label = "Weekly receipt reminder"
             , msg = ToggleNotificationPref Notifications.WeeklyScanReminder

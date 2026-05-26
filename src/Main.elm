@@ -3817,6 +3817,31 @@ updateAuth msg as_ =
         -- When the last opt-in flips off we also call `unsubscribePush`
         -- so the browser drops the registration entirely — no point
         -- keeping the endpoint live on the server if nothing will fire.
+        ToggleNotificationPref Notifications.SyncStalled ->
+            let
+                oldPrefs : Notifications.NotificationPrefs
+                oldPrefs =
+                    as_.notificationPrefs
+
+                newPrefs : Notifications.NotificationPrefs
+                newPrefs =
+                    { oldPrefs | syncStalled = not oldPrefs.syncStalled }
+
+                anyEnabled : Bool
+                anyEnabled =
+                    newPrefs.syncStalled || newPrefs.weeklyScanReminder
+            in
+            ( AuthModel { as_ | notificationPrefs = newPrefs }
+            , Cmd.batch
+                [ savePushPrefs (Notifications.encodePrefs newPrefs)
+                , if anyEnabled then
+                    Cmd.none
+
+                  else
+                    unsubscribePush ()
+                ]
+            )
+
         ToggleNotificationPref Notifications.WeeklyScanReminder ->
             let
                 oldPrefs : Notifications.NotificationPrefs
@@ -3829,7 +3854,7 @@ updateAuth msg as_ =
 
                 anyEnabled : Bool
                 anyEnabled =
-                    newPrefs.weeklyScanReminder
+                    newPrefs.syncStalled || newPrefs.weeklyScanReminder
             in
             ( AuthModel { as_ | notificationPrefs = newPrefs }
             , Cmd.batch

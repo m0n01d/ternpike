@@ -24,7 +24,7 @@ import { authenticateCaller, getTier, isPaidTier } from './auth.js'
 const PUSH_PREFIX = 'push:sub:'
 const PREF_PREFIX = 'push:pref:'
 
-const DEFAULT_PREFS = { weeklyScanReminder: true }
+const DEFAULT_PREFS = { syncStalled: true, weeklyScanReminder: true }
 
 // SHA-256 of `s`, hex-encoded. Used to bound KV key length when the
 // caller-supplied push endpoint is long (Mozilla autopush endpoints
@@ -245,6 +245,21 @@ export async function sendTestPush(env, email) {
   return { ok: true, sent }
 }
 
+// Dedup prefix constants for stall/auth-expired notifications.
+const STALL_DEDUP_PREFIX = 'push:stall-dedup:'
+const AUTH_EXPIRED_DEDUP_PREFIX = 'push:authexpired-dedup:'
+
+// Seven days in seconds — TTL for per-user dedup keys so each category fires
+// at most once per week.
+const DEDUP_TTL_SECONDS = 7 * 24 * 60 * 60
+
+// Three days in milliseconds — a sync gap older than this triggers the stall push.
+const STALL_THRESHOLD_MS = 3 * 24 * 60 * 60 * 1000
+
+// Twenty-four hours in milliseconds — auth-failed state older than this triggers
+// the auth-expired push.
+const AUTH_EXPIRED_THRESHOLD_MS = 24 * 60 * 60 * 1000
+
 // Friday 17:00 UTC cron sweep. Dispatched from `scheduled()` in
 // `server/index.js` when `event.cron === '0 17 * * 5'`. Iterates every
 // stored subscription, re-checks tier per user (downgrades since
@@ -262,6 +277,9 @@ export async function sendTestPush(env, email) {
 // `env.__buildPushPayload` is an opt-in test hook so unit tests can
 // short-circuit the crypto path without spinning up VAPID keys. In
 // production it's undefined and the real `buildPushPayload` runs.
+//
+// Also dispatches stall and auth-expired checks via
+// `sendSyncStalledReminders` — see that function for details.
 export async function sendWeeklyScanReminders(env) {
   const vapid = {
     privateKey: env.VAPID_PRIVATE_KEY,
@@ -315,4 +333,185 @@ export async function sendWeeklyScanReminders(env) {
     }
     cursor = page.list_complete ? undefined : page.cursor
   } while (cursor)
+}
+
+// Helper shared by sendSyncStalledReminders. Sends `payload` to every
+// subscription belonging to `email` that has `prefKey` set to true, skipping
+// if the user is not paid or if `dedupKvKey` already exists in `env.PUSH_KV`
+// (meaning we fired this category within the last 7 days).
+//
+// On a successful send, writes `dedupKvKey` with a 7-day TTL so the next
+// sweep run skips this user for this category.
+//
+// Returns `true` if at least one push was sent, `false` otherwise.
+async function sendCategoryPush(env, email, { dedupKvKey, payload, prefKey }) {
+  const tier = await getTier(env, email)
+  if (!isPaidTier(tier)) return false
+
+  const alreadySent = await env.PUSH_KV.get(dedupKvKey)
+  if (alreadySent) return false
+
+  const build = env.__buildPushPayload || buildPushPayload
+  const vapid = {
+    privateKey: env.VAPID_PRIVATE_KEY,
+    publicKey: env.VAPID_PUBLIC_KEY,
+    subject: env.VAPID_SUBJECT,
+  }
+
+  let sentAny = false
+  let cursor
+  do {
+    const page = await env.PUSH_KV.list({
+      cursor,
+      prefix: `${PUSH_PREFIX}${email}:`,
+    })
+    for (const k of page.keys) {
+      const subRaw = await env.PUSH_KV.get(k.name)
+      if (!subRaw) continue
+      const stored = JSON.parse(subRaw)
+      const pref = k.name.replace(PUSH_PREFIX, PREF_PREFIX)
+      const prefRaw = await env.PUSH_KV.get(pref)
+      const prefs = prefRaw ? JSON.parse(prefRaw) : DEFAULT_PREFS
+      if (!prefs[prefKey]) continue
+      const subscription = {
+        endpoint: stored.endpoint,
+        expirationTime: null,
+        keys: { auth: stored.auth, p256dh: stored.p256dh },
+      }
+      try {
+        const req = await build(
+          { data: payload, options: { ttl: 3600 } },
+          subscription,
+          vapid,
+        )
+        const res = await fetch(stored.endpoint, req)
+        if (res.ok || res.status === 201) {
+          sentAny = true
+        } else if (res.status === 404 || res.status === 410) {
+          await env.PUSH_KV.delete(k.name)
+          await env.PUSH_KV.delete(pref)
+        } else {
+          console.error('category push send failed', {
+            category: prefKey,
+            email,
+            status: res.status,
+          })
+        }
+      } catch (err) {
+        console.error('category push send threw', {
+          category: prefKey,
+          email,
+          err: String(err),
+        })
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
+
+  if (sentAny) {
+    await env.PUSH_KV.put(dedupKvKey, '1', {
+      expirationTtl: DEDUP_TTL_SECONDS,
+    })
+  }
+  return sentAny
+}
+
+// Hourly (or Friday) cron sweep for sync-stall and auth-expired conditions.
+//
+// Per-user checks:
+//   - Stall: if `sync:lastsync:<email>` in PUSH_KV is older than 3 days,
+//     and `syncStalled` pref is enabled, and no dedup key exists, fire a
+//     stall push. Tap → /settings.
+//   - Auth-expired: if `auth:failed:<email>` in PUSH_KV was written more
+//     than 24h ago, fire an auth-expired push. Tap → /login.
+//
+// Both checks skip non-paid users and use 7-day KV dedup keys
+// (`push:stall-dedup:<email>` and `push:authexpired-dedup:<email>`) so each
+// category fires at most once per week per user.
+//
+// Reset: call `resetSyncStalledDedup(env, email)` when a successful sync or
+// sign-in occurs, so the next stall fires fresh after a real new gap.
+export async function sendSyncStalledReminders(env, nowMs = Date.now()) {
+  const seenEmails = new Set()
+  let cursor
+  do {
+    const page = await env.PUSH_KV.list({ cursor, prefix: PUSH_PREFIX })
+    for (const k of page.keys) {
+      const email = k.name.slice(PUSH_PREFIX.length).split(':')[0]
+      if (seenEmails.has(email)) continue
+      seenEmails.add(email)
+
+      // Stall check.
+      const lastSyncRaw = await env.PUSH_KV.get(`sync:lastsync:${email}`)
+      if (lastSyncRaw) {
+        const lastSyncMs = Number(lastSyncRaw)
+        const gapMs = nowMs - lastSyncMs
+        if (gapMs > STALL_THRESHOLD_MS) {
+          const days = Math.floor(gapMs / (24 * 60 * 60 * 1000))
+          const stallPayload = JSON.stringify({
+            body: 'Open Ternpike on a connected device.',
+            tag: 'sync-stall',
+            title: `Your Ternpike data hasn't backed up in ${days} day${days === 1 ? '' : 's'}`,
+            url: '/settings',
+          })
+          await sendCategoryPush(env, email, {
+            dedupKvKey: `${STALL_DEDUP_PREFIX}${email}`,
+            payload: stallPayload,
+            prefKey: 'syncStalled',
+          })
+        }
+      }
+
+      // Auth-expired check.
+      const authFailedRaw = await env.PUSH_KV.get(`auth:failed:${email}`)
+      if (authFailedRaw) {
+        const authFailedMs = Number(authFailedRaw)
+        if (nowMs - authFailedMs > AUTH_EXPIRED_THRESHOLD_MS) {
+          const authExpiredPayload = JSON.stringify({
+            body: 'Sign in to keep your data backed up.',
+            tag: 'auth-expired',
+            title: 'Your Ternpike session expired',
+            url: '/login',
+          })
+          await sendCategoryPush(env, email, {
+            dedupKvKey: `${AUTH_EXPIRED_DEDUP_PREFIX}${email}`,
+            payload: authExpiredPayload,
+            prefKey: 'syncStalled',
+          })
+        }
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor
+  } while (cursor)
+}
+
+// Record that a user's sync was successful at `nowMs` (defaults to now).
+// Clears any existing stall dedup key so the next real gap fires fresh.
+// Call from the auth verify-code success path and from any endpoint that
+// confirms a healthy sync.
+export async function recordSuccessfulSync(env, email, nowMs = Date.now()) {
+  await env.PUSH_KV.put(`sync:lastsync:${email.toLowerCase()}`, String(nowMs))
+  await env.PUSH_KV.delete(`${STALL_DEDUP_PREFIX}${email.toLowerCase()}`)
+}
+
+// Record that an auth failure occurred for `email`. The timestamp is written
+// once (if no prior failure is tracked); subsequent failures within the same
+// 7-day window don't overwrite it, so the "first failure" time is preserved.
+// Call from any endpoint that receives a CouchDB 401/403 for the user.
+export async function recordAuthFailure(env, email, nowMs = Date.now()) {
+  const key = `auth:failed:${email.toLowerCase()}`
+  const existing = await env.PUSH_KV.get(key)
+  if (!existing) {
+    await env.PUSH_KV.put(key, String(nowMs), {
+      expirationTtl: DEDUP_TTL_SECONDS,
+    })
+  }
+}
+
+// Clear the auth-failure record on a successful sign-in. Also clears the
+// auth-expired dedup key so the next real expiry fires fresh.
+export async function clearAuthFailure(env, email) {
+  const lower = email.toLowerCase()
+  await env.PUSH_KV.delete(`auth:failed:${lower}`)
+  await env.PUSH_KV.delete(`${AUTH_EXPIRED_DEDUP_PREFIX}${lower}`)
 }

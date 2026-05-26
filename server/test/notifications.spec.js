@@ -8,7 +8,15 @@
 import { afterEach, beforeEach, describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { sendTestPush, sendWeeklyScanReminders, sha256Hex } from '../notifications.js'
+import {
+  clearAuthFailure,
+  recordAuthFailure,
+  recordSuccessfulSync,
+  sendSyncStalledReminders,
+  sendTestPush,
+  sendWeeklyScanReminders,
+  sha256Hex,
+} from '../notifications.js'
 import { request } from './fixtures/app.js'
 import { basicAuthHeader, tamperedAuthHeader } from './fixtures/auth.js'
 import { memoryKv } from './fixtures/env.js'
@@ -148,6 +156,7 @@ describe('POST /notifications/subscribe', () => {
     const prefEntry = dump.find(([k]) => k.startsWith('push:pref:'))
     assert.ok(prefEntry, 'expected a push:pref:* key')
     assert.deepEqual(JSON.parse(prefEntry[1].value), {
+      syncStalled: true,
       weeklyScanReminder: true,
     })
   })
@@ -272,7 +281,7 @@ describe('GET /notifications/preferences', () => {
     )
     assert.equal(res.status, 200)
     assert.equal(res.body.ok, true)
-    assert.deepEqual(res.body.prefs, { weeklyScanReminder: true })
+    assert.deepEqual(res.body.prefs, { syncStalled: true, weeklyScanReminder: true })
   })
 
   test('returns stored prefs after a subscribe', async () => {
@@ -713,5 +722,300 @@ describe('GET /admin/notifications/list', () => {
         assert.equal(typeof device.prefs.weeklyScanReminder, 'boolean')
       }
     }
+  })
+})
+
+describe('sendSyncStalledReminders', () => {
+  const NOW_MS = Date.now()
+  const FOUR_DAYS_AGO = NOW_MS - 4 * 24 * 60 * 60 * 1000
+  const TWO_HOURS_AGO = NOW_MS - 2 * 60 * 60 * 1000
+  const THREE_DAYS_AGO = NOW_MS - 3 * 24 * 60 * 60 * 1000
+  const TWENTY_FIVE_HOURS_AGO = NOW_MS - 25 * 60 * 60 * 1000
+
+  async function seedSubscription(email, endpoint, subscriptions) {
+    const body = { endpoint, keys: KEYS }
+    if (subscriptions) body.subscriptions = subscriptions
+    const res = await request(env, 'POST', '/notifications/subscribe', {
+      body,
+      headers: await authed(email),
+    })
+    assert.equal(res.status, 200, `seedSubscription ${email} ${endpoint}`)
+  }
+
+  function stubBuildPushPayload() {
+    return async (_msg, _sub, _vapid) => ({
+      body: 'test-encrypted-payload',
+      headers: { 'content-type': 'application/octet-stream' },
+      method: 'POST',
+    })
+  }
+
+  let realFetch
+  function installFetchSpy(responder) {
+    const calls = []
+    realFetch = globalThis.fetch
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.url
+      const idx = calls.length
+      calls.push({ init, url })
+      return responder(url, init, idx)
+    }
+    return calls
+  }
+
+  afterEach(() => {
+    if (realFetch) {
+      globalThis.fetch = realFetch
+      realFetch = undefined
+    }
+  })
+
+  function envWithStub() {
+    return {
+      ...env,
+      VAPID_PRIVATE_KEY: 'test-vapid-private',
+      VAPID_PUBLIC_KEY: 'test-vapid-public',
+      VAPID_SUBJECT: 'mailto:test@ternpike.com',
+      __buildPushPayload: stubBuildPushPayload(),
+    }
+  }
+
+  test('stall trigger: user with lastSyncAt 4 days ago fires push with stall body', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    await recordSuccessfulSync(env, ALICE, FOUR_DAYS_AGO)
+
+    // Capture the payload passed to buildPushPayload so we can assert the
+    // notification body without fighting the VAPID crypto stub.
+    const capturedMsgs = []
+    const captureEnv = {
+      ...envWithStub(),
+      __buildPushPayload: async (msg, sub, vapid) => {
+        capturedMsgs.push(msg)
+        return {
+          body: 'test-encrypted-payload',
+          headers: { 'content-type': 'application/octet-stream' },
+          method: 'POST',
+        }
+      },
+    }
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(captureEnv, NOW_MS)
+
+    assert.equal(calls.length, 1, 'push sent')
+    assert.equal(capturedMsgs.length, 1, 'buildPushPayload called once')
+    const sent = JSON.parse(capturedMsgs[0].data)
+    assert.ok(
+      sent.title.includes("hasn't backed up"),
+      `title should mention backup gap, got: ${sent.title}`,
+    )
+    assert.equal(sent.url, '/settings', 'tap target is /settings')
+    assert.equal(sent.tag, 'sync-stall')
+  })
+
+  test('stall negative: user with lastSyncAt 2 hours ago fires no push', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    await recordSuccessfulSync(env, ALICE, TWO_HOURS_AGO)
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+
+    assert.equal(calls.length, 0, 'no push for recent sync')
+  })
+
+  test('stall negative: no lastSyncAt recorded — no push', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+
+    assert.equal(calls.length, 0, 'no push when no sync record exists')
+  })
+
+  test('stall dedup: push fires once; 3 more days later still suppressed; 8 days later fires again', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    await recordSuccessfulSync(env, ALICE, FOUR_DAYS_AGO)
+
+    const firstCalls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+    assert.equal(firstCalls.length, 1, 'first run fires push')
+
+    // Three more days later — dedup TTL is 7 days, so still within window.
+    const THREE_DAYS_LATER = NOW_MS + 3 * 24 * 60 * 60 * 1000
+    globalThis.fetch = realFetch
+    realFetch = undefined
+    const secondCalls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), THREE_DAYS_LATER)
+    assert.equal(secondCalls.length, 0, 'second run within 7d is suppressed')
+
+    // Eight days later — dedup TTL has expired.
+    const EIGHT_DAYS_LATER = NOW_MS + 8 * 24 * 60 * 60 * 1000
+    globalThis.fetch = realFetch
+    realFetch = undefined
+
+    // Manually expire the dedup key by re-inserting without TTL guard. We
+    // simulate KV TTL expiry by deleting the key directly (the in-memory KV
+    // doesn't advance real time).
+    const dedupKey = `push:stall-dedup:${ALICE.toLowerCase()}`
+    await env.PUSH_KV.delete(dedupKey)
+
+    const thirdCalls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), EIGHT_DAYS_LATER)
+    assert.equal(thirdCalls.length, 1, 'third run after dedup expiry fires push')
+  })
+
+  test('stall skips tern user — no push for non-paid', async () => {
+    // Manually plant a subscription for Eve (tern tier) since the subscribe
+    // route 402s for tern callers.
+    const eveHash = await sha256Hex(ENDPOINT)
+    await env.PUSH_KV.put(
+      `push:sub:${EVE.toLowerCase()}:${eveHash}`,
+      JSON.stringify({
+        auth: KEYS.auth,
+        createdAt: '2026-05-01T00:00:00.000Z',
+        endpoint: ENDPOINT,
+        p256dh: KEYS.p256dh,
+        tierAtSubscribe: 'osprey',
+      }),
+    )
+    await env.PUSH_KV.put(
+      `push:pref:${EVE.toLowerCase()}:${eveHash}`,
+      JSON.stringify({ syncStalled: true, weeklyScanReminder: true }),
+    )
+    await recordSuccessfulSync(env, EVE, FOUR_DAYS_AGO)
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+
+    assert.equal(calls.length, 0, 'tern user receives no push')
+  })
+
+  test('stall skips opted-out user (syncStalled: false)', async () => {
+    await seedSubscription(ALICE, ENDPOINT, {
+      syncStalled: false,
+      weeklyScanReminder: true,
+    })
+    await recordSuccessfulSync(env, ALICE, FOUR_DAYS_AGO)
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+
+    assert.equal(calls.length, 0, 'opted-out user receives no push')
+  })
+
+  test('auth-expired trigger: failure >24h ago fires push with auth body', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    await recordAuthFailure(env, ALICE, TWENTY_FIVE_HOURS_AGO)
+
+    const capturedMsgs = []
+    const captureEnv = {
+      ...envWithStub(),
+      __buildPushPayload: async (msg, sub, vapid) => {
+        capturedMsgs.push(msg)
+        return {
+          body: 'test-encrypted-payload',
+          headers: { 'content-type': 'application/octet-stream' },
+          method: 'POST',
+        }
+      },
+    }
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(captureEnv, NOW_MS)
+
+    assert.equal(calls.length, 1, 'push sent for auth expiry')
+    assert.equal(capturedMsgs.length, 1, 'buildPushPayload called once')
+    const sent = JSON.parse(capturedMsgs[0].data)
+    assert.ok(
+      sent.title.includes('session expired'),
+      `title should mention session expired, got: ${sent.title}`,
+    )
+    assert.equal(sent.url, '/login', 'tap target is /login')
+    assert.equal(sent.tag, 'auth-expired')
+  })
+
+  test('auth-expired negative: failure <24h ago fires no push', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    await recordAuthFailure(env, ALICE, TWO_HOURS_AGO)
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+
+    assert.equal(calls.length, 0, 'no push for recent auth failure')
+  })
+
+  test('auth-expired dedup: fires once; second run suppressed; clears on clearAuthFailure', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    await recordAuthFailure(env, ALICE, TWENTY_FIVE_HOURS_AGO)
+
+    const firstCalls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+    assert.equal(firstCalls.length, 1, 'first push fired')
+
+    globalThis.fetch = realFetch
+    realFetch = undefined
+    const secondCalls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+    assert.equal(secondCalls.length, 0, 'second run within 7d suppressed')
+
+    // User signs back in — clear the failure record and dedup key.
+    await clearAuthFailure(env, ALICE)
+
+    // Plant a new auth failure to prove the dedup was really cleared.
+    await recordAuthFailure(env, ALICE, TWENTY_FIVE_HOURS_AGO)
+
+    globalThis.fetch = realFetch
+    realFetch = undefined
+    const thirdCalls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+    assert.equal(thirdCalls.length, 1, 'push fires again after clearAuthFailure')
+  })
+
+  test('recordSuccessfulSync clears stall dedup so next gap fires fresh', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+
+    // Seed a stale sync so the stall triggers, fires, and writes a dedup key.
+    await recordSuccessfulSync(env, ALICE, FOUR_DAYS_AGO)
+    const firstCalls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), NOW_MS)
+    assert.equal(firstCalls.length, 1, 'first push fired')
+
+    // User syncs successfully — resets the timestamp and drops the dedup key.
+    await recordSuccessfulSync(env, ALICE, NOW_MS)
+
+    // Now simulate another stall: advance 4 days from NOW_MS.
+    const LATER = NOW_MS + 4 * 24 * 60 * 60 * 1000
+
+    globalThis.fetch = realFetch
+    realFetch = undefined
+    const secondCalls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(envWithStub(), LATER)
+    assert.equal(secondCalls.length, 1, 'push fires again after successful sync reset')
+  })
+
+  test('stall title includes correct day count', async () => {
+    await seedSubscription(ALICE, ENDPOINT)
+    const SEVEN_DAYS_AGO = NOW_MS - 7 * 24 * 60 * 60 * 1000
+    await recordSuccessfulSync(env, ALICE, SEVEN_DAYS_AGO)
+
+    const capturedMsgs = []
+    const captureEnv = {
+      ...envWithStub(),
+      __buildPushPayload: async (msg, sub, vapid) => {
+        capturedMsgs.push(msg)
+        return {
+          body: 'test-encrypted-payload',
+          headers: { 'content-type': 'application/octet-stream' },
+          method: 'POST',
+        }
+      },
+    }
+
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+    await sendSyncStalledReminders(captureEnv, NOW_MS)
+
+    assert.equal(calls.length, 1, 'push sent')
+    const sent = JSON.parse(capturedMsgs[0].data)
+    assert.ok(sent.title.includes('7 days'), `expected "7 days" in title, got: ${sent.title}`)
   })
 })
