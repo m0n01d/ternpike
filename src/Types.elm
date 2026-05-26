@@ -186,6 +186,7 @@ type alias AuthState =
     , pushSubscribed : Bool
     , route : Route
     , scanQueue : Dict String ScanItem
+    , showByoKeyInput : Bool
     , showDayIntensity : Bool
     , showInstallPrompt : Bool
     , showLedgerMap : Bool
@@ -347,6 +348,7 @@ type Msg
     | ScrolledToTop
     | SetColorScheme ColorScheme
     | SetStatsGranularity Granularity
+    | ShowByoKeyInput
     | SignOutClicked
     | SkipLocation
     | SubmitCode

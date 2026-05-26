@@ -113,6 +113,14 @@ viewAnthropicKeySection cfg maybeAuthState =
         keyIsSet =
             cfg.anthropicKey /= Nothing
 
+        showInput =
+            maybeAuthState
+                |> Maybe.map .showByoKeyInput
+                |> Maybe.withDefault False
+
+        toggleOn =
+            keyIsSet || showInput
+
         keyInput =
             [ UI.Layout.formField "Anthropic API key"
                 (Html.input
@@ -134,11 +142,16 @@ viewAnthropicKeySection cfg maybeAuthState =
                 viewToggleRow
                     { helper = "Leave off to use Ternpike's hosted key. Your key never reaches our servers when this is on."
                     , label = "Use my own Anthropic key"
-                    , msg = ApiKeyChanged ""
-                    , value = keyIsSet
+                    , msg =
+                        if toggleOn then
+                            ApiKeyChanged ""
+
+                        else
+                            ShowByoKeyInput
+                    , value = toggleOn
                     }
         in
-        if keyIsSet then
+        if toggleOn then
             toggleRow :: keyInput
 
         else
