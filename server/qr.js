@@ -212,15 +212,16 @@ export function registerQrRoutes(app) {
     const sizeParam = c.req.query('size')
     const size = PDF_SIZES.includes(sizeParam) ? sizeParam : DEFAULT_PDF_SIZE
     const dest = stickerUrl(slug)
-    // Stamp each sticker with the edge-geo of the print request — gives a
-    // "printed from here" record on the physical sticker. Cf precision is
-    // city-level (IP-based), good to ~3 decimals. Query-param overrides
-    // (`?lat=...&lon=...`) let local dev test without cf populated.
-    const loc = readLocation(c)
+    // Stamp each sticker with the user's device-GPS coords, passed in as
+    // `?lat=...&lon=...` by the ShareModal (which calls
+    // navigator.geolocation when the modal opens). Cloudflare's cf.latitude
+    // is intentionally NOT used as a fallback: on mobile carrier IP the cf
+    // location can be states away from the actual device, and a wrong
+    // coord on a "where I was" sticker is worse than no coord at all.
     const queryLat = parseFloat(c.req.query('lat'))
     const queryLon = parseFloat(c.req.query('lon'))
-    const lat = Number.isFinite(queryLat) ? queryLat : loc.lat
-    const lon = Number.isFinite(queryLon) ? queryLon : loc.lon
+    const lat = Number.isFinite(queryLat) ? queryLat : null
+    const lon = Number.isFinite(queryLon) ? queryLon : null
     const bytes = await renderStickerPdf({ dest, lat, lon, size, slug })
     return new Response(bytes, {
       headers: {

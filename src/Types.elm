@@ -45,6 +45,7 @@ import Data.DateField exposing (DateField)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
 import Data.Guest exposing (GuestSession)
+import Data.Location exposing (LocationState)
 import Data.Navigation exposing (Route)
 import Data.Notifications exposing (NotificationPrefs, NotificationToggle, Permission, StandaloneState)
 import Data.PaymentMethod exposing (PaymentMethod)
@@ -173,6 +174,7 @@ type alias AuthState =
     , currentUser : Data.UserId.UserId
     , duplicateWarning : Maybe Expense
     , error : Maybe String
+    , currentLocation : LocationState
     , expenses : Dict String (Dict String Expense)
     , shareModalOpen : Bool
     , sharedTripUi : SharedTripUiState

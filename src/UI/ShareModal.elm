@@ -12,6 +12,8 @@ The slug is derived inline from `as_.currentUser` via
 
 -}
 
+import Data.GeoPoint as GeoPoint
+import Data.Location exposing (LocationState(..))
 import Data.UserId as UserId
 import Html exposing (Html)
 import Html.Attributes
@@ -51,12 +53,31 @@ viewOpen as_ =
         -- Three sizes share the same 4x6 page; only the grid changes
         -- (1 large / 6 medium / 12 small), so the printer setup stays
         -- identical across choices.
+        --
+        -- `currentLocation` is the shared device-GPS broadcast on
+        -- AuthState, populated by `navigator.geolocation` (kicked off by
+        -- OpenShareModal AND by Add-page nav — single source). Append
+        -- lat/lon when we have a fix; otherwise omit. iOS / Cloudflare
+        -- never sees IP-derived coords for the print, so the sticker
+        -- either shows your real GPS or no coords at all.
+        coordsParam =
+            case as_.currentLocation of
+                LocationGot point _ ->
+                    "&lat="
+                        ++ String.fromFloat (GeoPoint.latDegrees point)
+                        ++ "&lon="
+                        ++ String.fromFloat (GeoPoint.lonDegrees point)
+
+                _ ->
+                    ""
+
         printUrl size =
             as_.config.backendUrl
                 ++ "/qr/"
                 ++ slug
                 ++ "/sticker.pdf?size="
                 ++ size
+                ++ coordsParam
     in
     Html.div
         [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
