@@ -184,21 +184,6 @@ import './elements/tp-amount.js'
 
   app.ports.clearAllStorage.subscribe(() => idbDel(...APP_KEYS))
 
-  if (app.ports.printShareQr) {
-    app.ports.printShareQr.subscribe(() => {
-      // body.printing-share-qr flips a print-only stylesheet (global.css)
-      // that hides everything except .print-share-qr. After the print
-      // dialog closes (whether confirmed or cancelled), strip the class.
-      document.body.classList.add('printing-share-qr')
-      const cleanup = () => {
-        document.body.classList.remove('printing-share-qr')
-        window.removeEventListener('afterprint', cleanup)
-      }
-      window.addEventListener('afterprint', cleanup)
-      window.print()
-    })
-  }
-
   app.ports.requestGeolocation.subscribe(() => {
     if (!('geolocation' in navigator)) {
       app.ports.gotGpsCoords.send({ lat: 0, lon: 0, denied: true })

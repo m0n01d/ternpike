@@ -214,9 +214,6 @@ port pushSubscribeResult : ({ error : String, ok : Bool } -> msg) -> Sub msg
 port downloadFile : { content : String, filename : String, mimeType : String } -> Cmd msg
 
 
-port printShareQr : () -> Cmd msg
-
-
 
 -- ROUTING
 -- See src/Routing.elm
@@ -1843,9 +1840,6 @@ update msg model =
         PaymentMethodChanged _ ->
             ( nextModel, cmd )
 
-        PrintShareQr ->
-            ( nextModel, cmd )
-
         PushSubscribeReceived _ ->
             ( nextModel, cmd )
 
@@ -2288,9 +2282,6 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         PaymentMethodChanged _ ->
-            ( GuestModel gs, Cmd.none )
-
-        PrintShareQr ->
             ( GuestModel gs, Cmd.none )
 
         PushSubscribeReceived _ ->
@@ -3097,9 +3088,6 @@ updateAuth msg as_ =
 
         CloseShareModal ->
             ( AuthModel { as_ | shareModalOpen = False }, Cmd.none )
-
-        PrintShareQr ->
-            ( AuthModel as_, printShareQr () )
 
         MoveEntry expense newTripId ->
             if newTripId == expense.tripId then
