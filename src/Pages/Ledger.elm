@@ -8,6 +8,7 @@ import Data.Ledger exposing (LedgerMode(..))
 import Data.Money as Money exposing (Money)
 import Data.SharedTrip
 import Data.SharedTrips
+import Data.Tier
 import Data.TripId as TripId
 import Data.Trips
 import Data.UserId as UserId exposing (UserId)
@@ -114,12 +115,34 @@ viewActions model =
                 , onClick = RefreshClicked
                 , title = "Refresh"
                 }
+
+        exportButton =
+            case Routing.routeTripId model.route of
+                Just tripId ->
+                    if Data.Tier.isPaid model.tier then
+                        UI.Button.iconButton
+                            { icon = UI.Icons.download "w-4 h-4"
+                            , onClick = ExportCsv tripId
+                            , title = "Export CSV"
+                            }
+
+                    else
+                        Html.a
+                            [ Html.Attributes.href "/settings#billing"
+                            , Html.Attributes.class "inline-flex items-center gap-1 px-2 py-1 text-xs font-mono text-moss hover:text-forest transition-colors"
+                            , Html.Attributes.title "CSV export requires Osprey"
+                            ]
+                            [ UI.Icons.download "w-4 h-4"
+                            ]
+
+                Nothing ->
+                    Html.text ""
     in
     if model.showLedgerMap then
         [ mapToggle, expandToggle, refresh ]
 
     else
-        [ mapToggle, refresh ]
+        [ exportButton, mapToggle, refresh ]
 
 
 viewHero : Money -> LedgerMode -> Html Msg
