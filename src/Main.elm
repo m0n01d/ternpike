@@ -256,6 +256,7 @@ toAuthState creds initialRoute gs =
     , pushSubscribed = False
     , route = initialRoute
     , scanQueue = Dict.empty
+    , showByoKeyInput = gs.session.config.anthropicKey /= Nothing
     , showDayIntensity = True
     , showInstallPrompt = False
     , showLedgerMap = False
@@ -1633,6 +1634,9 @@ update msg model =
         SetStatsGranularity _ ->
             ( nextModel, cmd )
 
+        ShowByoKeyInput ->
+            ( nextModel, cmd )
+
         SignOutClicked ->
             ( nextModel, cmd )
 
@@ -2051,6 +2055,9 @@ updateGuest msg gs =
             ( GuestModel gs, Cmd.none )
 
         SetStatsGranularity _ ->
+            ( GuestModel gs, Cmd.none )
+
+        ShowByoKeyInput ->
             ( GuestModel gs, Cmd.none )
 
         SignOutClicked ->
@@ -2871,8 +2878,16 @@ updateAuth msg as_ =
 
                 newKey =
                     AnthropicKey.fromInput s
+
+                newShowInput =
+                    case newKey of
+                        Just _ ->
+                            as_.showByoKeyInput
+
+                        Nothing ->
+                            False
             in
-            ( AuthModel { as_ | config = { cfg | anthropicKey = newKey } }
+            ( AuthModel { as_ | config = { cfg | anthropicKey = newKey }, showByoKeyInput = newShowInput }
             , saveStorage { key = "anthropic_key", value = newKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "" }
             )
 
@@ -2938,6 +2953,9 @@ updateAuth msg as_ =
 
         SetStatsGranularity g ->
             ( AuthModel { as_ | statsGranularity = Just g }, Cmd.none )
+
+        ShowByoKeyInput ->
+            ( AuthModel { as_ | showByoKeyInput = True }, Cmd.none )
 
         ToastExpired ->
             ( AuthModel { as_ | toast = Nothing }, Cmd.none )
