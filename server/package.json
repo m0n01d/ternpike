@@ -11,6 +11,7 @@
   "dependencies": {
     "@block65/webcrypto-web-push": "^1.0.2",
     "hono": "^4.6.0",
+    "pdf-lib": "^1.17.1",
     "qrcode-generator": "^1.5.2",
     "resend": "^4.0.0"
   },
