@@ -1,5 +1,6 @@
 module Types exposing
-    ( AuthState
+    ( AuthMsg_(..)
+    , AuthState
     , GuestMsg_(..)
     , GuestState
     , Model(..)
@@ -280,6 +281,52 @@ chip selector.
 
 -}
 type Msg
+    = AuthMsg AuthMsg_
+    | GuestMsg GuestMsg_
+    | SharedMsg SharedMsg_
+
+
+{-| Messages that fire in both guest and authenticated states.
+
+These are bucketed here so the compiler can verify that `updateShared`
+handles them without any per-state no-ops leaking into `updateGuest` or
+`updateAuth`.
+
+-}
+type SharedMsg_
+    = ApiKeyChanged String
+    | LinkClicked Browser.UrlRequest
+    | NetworkStatusChanged Bool
+    | ResetSettingsClicked
+    | ScrolledToTop
+    | SetColorScheme ColorScheme
+    | ShowByoKeyInput
+    | UrlChanged Url.Url
+
+
+{-| Messages that fire only in the guest (unauthenticated) state.
+
+These are bucketed here so the compiler can verify that `updateGuest`
+handles them without any per-state no-ops leaking into `updateAuth`.
+
+-}
+type GuestMsg_
+    = CodeInputChanged String
+    | EmailInputChanged String
+    | RequestCodeResult (Result Http.Error ())
+    | SubmitCode
+    | SubmitEmail
+    | ToggleGuestSettings
+    | VerifyCodeResult (Result Http.Error Creds)
+
+
+{-| Messages that fire only in the authenticated state.
+
+These are bucketed here so the compiler can verify that `updateAuth`
+handles them without any per-state no-ops leaking into `updateGuest`.
+
+-}
+type AuthMsg_
     = AddressChanged String
     | AmountChanged String
     | BackToQueue
@@ -316,7 +363,6 @@ type Msg
     | GotSubmitTime ParsedEntry Time.Posix
     | GotSyncTime Time.Posix
     | GotVoidTime Expense Time.Posix
-    | GuestMsg GuestMsg_
     | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
     | HoverDailyBars (List (CI.One DailyDay CI.Bar))
     | InviteEmailChanged String
@@ -351,7 +397,6 @@ type Msg
     | SaveTripForm
     | ScanProxyResult { body : String, itemId : String, ok : Bool, status : Int }
     | SetStatsGranularity Granularity
-    | SharedMsg SharedMsg_
     | SharedTripActivityNotified
     | SignOutClicked
     | SkipLocation
@@ -378,37 +423,3 @@ type Msg
     | TripInviteeRemoved Int
     | TripTargetSelected Data.Trip.CreateTarget
     | VoidEntry Expense
-
-
-{-| Messages that fire in both guest and authenticated states.
-
-These are bucketed here so the compiler can verify that `updateShared`
-handles them without any per-state no-ops leaking into `updateGuest` or
-`updateAuth`.
-
--}
-type SharedMsg_
-    = ApiKeyChanged String
-    | LinkClicked Browser.UrlRequest
-    | NetworkStatusChanged Bool
-    | ResetSettingsClicked
-    | ScrolledToTop
-    | SetColorScheme ColorScheme
-    | ShowByoKeyInput
-    | UrlChanged Url.Url
-
-
-{-| Messages that fire only in the guest (unauthenticated) state.
-
-These are bucketed here so the compiler can verify that `updateGuest`
-handles them without any per-state no-ops leaking into `updateAuth`.
-
--}
-type GuestMsg_
-    = CodeInputChanged String
-    | EmailInputChanged String
-    | RequestCodeResult (Result Http.Error ())
-    | SubmitCode
-    | SubmitEmail
-    | ToggleGuestSettings
-    | VerifyCodeResult (Result Http.Error Creds)

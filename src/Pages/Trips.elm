@@ -17,7 +17,7 @@ import Html.Events
 import Json.Decode
 import Routing
 import Set
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Avatar
 import UI.BudgetBar
 import UI.Button
@@ -49,13 +49,13 @@ viewActions as_ =
             in
             UI.Button.iconButton
                 { icon = UI.Icons.pencil "w-4 h-4"
-                , onClick = OpenEditTripForm activeTrip
+                , onClick = AuthMsg (OpenEditTripForm activeTrip)
                 , title = "Edit trip"
                 }
                 :: (if canDelete then
                         [ UI.Button.iconButton
                             { icon = UI.Icons.trash "w-4 h-4"
-                            , onClick = ConfirmDeleteTrip activeTrip
+                            , onClick = AuthMsg (ConfirmDeleteTrip activeTrip)
                             , title = "Delete trip"
                             }
                         ]
@@ -224,7 +224,7 @@ viewBody as_ =
 
                         else
                             Html.button
-                                [ Html.Events.onClick OpenNewTripForm
+                                [ Html.Events.onClick (AuthMsg OpenNewTripForm)
                                 , Html.Attributes.class "w-full bg-transparent border border-dashed border-tan rounded-xl py-3.5 text-muted text-[15px] cursor-pointer flex items-center justify-center gap-2 hover:border-moss hover:text-forest"
                                 ]
                                 [ UI.Icons.plus "w-4 h-4"
@@ -233,7 +233,7 @@ viewBody as_ =
 
                     _ ->
                         Html.button
-                            [ Html.Events.onClick OpenNewTripForm
+                            [ Html.Events.onClick (AuthMsg OpenNewTripForm)
                             , Html.Attributes.class "w-full bg-transparent border border-dashed border-tan rounded-xl py-3.5 text-muted text-[15px] cursor-pointer flex items-center justify-center gap-2 hover:border-moss hover:text-forest"
                             ]
                             [ UI.Icons.plus "w-4 h-4"
@@ -315,7 +315,7 @@ viewTripForm as_ form =
     in
     Html.form
         [ Html.Attributes.class "bg-cream border border-tan rounded-xl p-4"
-        , Html.Events.onSubmit SaveTripForm
+        , Html.Events.onSubmit (AuthMsg SaveTripForm)
         ]
         [ Html.p [ Html.Attributes.class "text-[15px] font-bold text-rust font-display mb-4" ]
             [ Html.text
@@ -339,7 +339,7 @@ viewTripForm as_ form =
             (Html.input
                 [ Html.Attributes.type_ "text"
                 , Html.Attributes.value form.name
-                , Html.Events.onInput (TripFieldChanged TripName)
+                , Html.Events.onInput (AuthMsg << TripFieldChanged TripName)
                 , Html.Attributes.placeholder "Alaska 2026"
                 , UI.Layout.textInputStyle
                 ]
@@ -354,7 +354,7 @@ viewTripForm as_ form =
             (Html.input
                 [ Html.Attributes.type_ "text"
                 , Html.Attributes.value form.description
-                , Html.Events.onInput (TripFieldChanged TripDescription)
+                , Html.Events.onInput (AuthMsg << TripFieldChanged TripDescription)
                 , Html.Attributes.placeholder "Optional"
                 , UI.Layout.textInputStyle
                 ]
@@ -364,7 +364,7 @@ viewTripForm as_ form =
             (Html.input
                 [ Html.Attributes.type_ "date"
                 , Html.Attributes.value form.startDate
-                , Html.Events.onInput (TripFieldChanged TripStartDate)
+                , Html.Events.onInput (AuthMsg << TripFieldChanged TripStartDate)
                 , UI.Layout.textInputStyle
                 ]
                 []
@@ -373,7 +373,7 @@ viewTripForm as_ form =
             (Html.input
                 [ Html.Attributes.type_ "date"
                 , Html.Attributes.value form.endDate
-                , Html.Events.onInput (TripFieldChanged TripEndDate)
+                , Html.Events.onInput (AuthMsg << TripFieldChanged TripEndDate)
                 , UI.Layout.textInputStyle
                 ]
                 []
@@ -382,7 +382,7 @@ viewTripForm as_ form =
             (Html.input
                 [ Html.Attributes.type_ "number"
                 , Html.Attributes.value form.budget
-                , Html.Events.onInput (TripFieldChanged TripBudget)
+                , Html.Events.onInput (AuthMsg << TripFieldChanged TripBudget)
                 , Html.Attributes.placeholder "0 = no budget"
                 , UI.Layout.textInputStyle
                 ]
@@ -392,7 +392,7 @@ viewTripForm as_ form =
             (Html.input
                 [ Html.Attributes.type_ "url"
                 , Html.Attributes.value form.coverPhotoUrl
-                , Html.Events.onInput (TripFieldChanged TripCoverPhoto)
+                , Html.Events.onInput (AuthMsg << TripFieldChanged TripCoverPhoto)
                 , Html.Attributes.placeholder "https://..."
                 , UI.Layout.textInputStyle
                 ]
@@ -420,7 +420,7 @@ viewTripForm as_ form =
                 ]
             , Html.button
                 [ Html.Attributes.type_ "button"
-                , Html.Events.onClick CloseTripForm
+                , Html.Events.onClick (AuthMsg CloseTripForm)
                 , Html.Attributes.class "flex-1 bg-transparent text-muted border border-tan rounded-lg py-3 text-[15px] cursor-pointer"
                 ]
                 [ Html.text "Cancel" ]
@@ -445,7 +445,7 @@ viewTargetPicker as_ form ownedFlocks =
                 { active = selected == Trip.ToPersonal
                 , label = "Just me"
                 , sub = "PERSONAL"
-                , onSelect = TripTargetSelected Trip.ToPersonal
+                , onSelect = AuthMsg (TripTargetSelected Trip.ToPersonal)
                 }
 
         flockTiles =
@@ -455,7 +455,7 @@ viewTargetPicker as_ form ownedFlocks =
                         { active = selected == Trip.ToExistingFlock flock.id
                         , label = flock.name
                         , sub = flockTileSub flock
-                        , onSelect = TripTargetSelected (Trip.ToExistingFlock flock.id)
+                        , onSelect = AuthMsg (TripTargetSelected (Trip.ToExistingFlock flock.id))
                         }
                 )
                 ownedFlocks
@@ -465,7 +465,7 @@ viewTargetPicker as_ form ownedFlocks =
                 { active = isToNewFlock selected
                 , label = "+ New shared trip"
                 , sub = "INVITE PEOPLE"
-                , onSelect = TripTargetSelected (Trip.ToNewFlock Trip.defaultNewFlockDraft)
+                , onSelect = AuthMsg (TripTargetSelected (Trip.ToNewFlock Trip.defaultNewFlockDraft))
                 }
     in
     UI.Layout.formField "WHO'S ON THIS TRIP?"
@@ -556,7 +556,7 @@ viewNewFlockFields form draft =
                 [ Html.input
                     [ Html.Attributes.type_ "text"
                     , Html.Attributes.value effectiveGroupName
-                    , Html.Events.onInput TripGroupNameChanged
+                    , Html.Events.onInput (AuthMsg << TripGroupNameChanged)
                     , Html.Attributes.placeholder "Defaults to trip name"
                     , UI.Layout.textInputStyle
                     ]
@@ -575,7 +575,7 @@ viewInviteeChips draft =
             ++ [ Html.input
                     [ Html.Attributes.type_ "email"
                     , Html.Attributes.value draft.inviteesDraft
-                    , Html.Events.onInput TripInviteeDraftChanged
+                    , Html.Events.onInput (AuthMsg << TripInviteeDraftChanged)
                     , Html.Events.preventDefaultOn "keydown" inviteeKeyDecoder
                     , Html.Attributes.placeholder
                         (if List.isEmpty draft.invitees then
@@ -599,7 +599,7 @@ viewInviteeChip index email =
         , Html.button
             [ Html.Attributes.type_ "button"
             , Html.Attributes.attribute "aria-label" ("Remove " ++ email)
-            , Html.Events.onClick (TripInviteeRemoved index)
+            , Html.Events.onClick (AuthMsg (TripInviteeRemoved index))
             , Html.Attributes.class "text-rust-deep/70 hover:text-rust-deep cursor-pointer"
             ]
             [ Html.text "×" ]
@@ -617,7 +617,7 @@ inviteeKeyDecoder =
         |> Json.Decode.andThen
             (\k ->
                 if k == "Enter" || k == "Tab" || k == "," then
-                    Json.Decode.succeed ( TripInviteeAdded, True )
+                    Json.Decode.succeed ( AuthMsg TripInviteeAdded, True )
 
                 else
                     Json.Decode.fail "ignored"

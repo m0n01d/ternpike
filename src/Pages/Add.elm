@@ -18,7 +18,7 @@ import Html.Attributes
 import Html.Events
 import Json.Decode
 import Routing
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Button
 import UI.Card
 import UI.DuplicateWarning
@@ -91,7 +91,7 @@ formPending form =
 viewNewActions : AuthState -> List (Html Msg)
 viewNewActions model =
     if model.activeScanItemId /= Nothing then
-        [ UI.Button.ghost { label = "← queue", onClick = BackToQueue } ]
+        [ UI.Button.ghost { label = "← queue", onClick = AuthMsg BackToQueue } ]
 
     else
         []
@@ -119,7 +119,7 @@ viewHero pending =
                 [ Html.Attributes.type_ "number"
                 , Html.Attributes.attribute "inputmode" "decimal"
                 , Html.Attributes.value pending.amount
-                , Html.Events.onInput AmountChanged
+                , Html.Events.onInput (AuthMsg << AmountChanged)
                 , Html.Attributes.placeholder "0.00"
                 , Html.Attributes.class "h-[3.5rem] -translate-y-1 w-full bg-transparent border-0 outline-none p-0 appearance-none font-display text-5xl font-black text-forest tabular-nums tracking-tight leading-none"
                 ]
@@ -156,7 +156,7 @@ viewBody model pending isEditing =
                 (Html.input
                     [ Html.Attributes.type_ "date"
                     , Html.Attributes.value pending.date
-                    , Html.Events.onInput DateChanged
+                    , Html.Events.onInput (AuthMsg << DateChanged)
                     , UI.Layout.textInputStyle
                     ]
                     []
@@ -170,7 +170,7 @@ viewBody model pending isEditing =
                 (Html.input
                     [ Html.Attributes.type_ "text"
                     , Html.Attributes.value pending.merchant
-                    , Html.Events.onInput MerchantChanged
+                    , Html.Events.onInput (AuthMsg << MerchantChanged)
                     , Html.Attributes.placeholder "optional"
                     , UI.Layout.textInputStyle
                     ]
@@ -180,7 +180,7 @@ viewBody model pending isEditing =
                 (Html.input
                     [ Html.Attributes.type_ "text"
                     , Html.Attributes.value pending.address
-                    , Html.Events.onInput AddressChanged
+                    , Html.Events.onInput (AuthMsg << AddressChanged)
                     , Html.Attributes.placeholder "optional — street, city, state"
                     , UI.Layout.textInputStyle
                     ]
@@ -194,7 +194,7 @@ viewBody model pending isEditing =
                 (Html.input
                     [ Html.Attributes.type_ "text"
                     , Html.Attributes.value pending.note
-                    , Html.Events.onInput NoteChanged
+                    , Html.Events.onInput (AuthMsg << NoteChanged)
                     , Html.Attributes.placeholder "brief (50 chars)"
                     , Html.Attributes.attribute "maxlength" "50"
                     , UI.Layout.textInputStyle
@@ -204,7 +204,7 @@ viewBody model pending isEditing =
             , UI.Layout.formField "DETAILS"
                 (Html.textarea
                     [ Html.Attributes.value pending.longNote
-                    , Html.Events.onInput LongNoteChanged
+                    , Html.Events.onInput (AuthMsg << LongNoteChanged)
                     , Html.Attributes.placeholder "optional — what happened, where, any context (280 chars)"
                     , Html.Attributes.attribute "maxlength" "280"
                     , Html.Attributes.attribute "rows" "3"
@@ -220,7 +220,7 @@ viewBody model pending isEditing =
             Nothing ->
                 Html.text ""
         , Html.button
-            [ Html.Events.onClick SubmitEntry
+            [ Html.Events.onClick (AuthMsg SubmitEntry)
             , Html.Attributes.disabled (model.submitting || readOnly)
             , Html.Attributes.title
                 (if readOnly then
@@ -408,7 +408,7 @@ viewCategoryBtn selected cat =
             selected == cat
     in
     Html.button
-        [ Html.Events.onClick (CategorySelected cat)
+        [ Html.Events.onClick (AuthMsg (CategorySelected cat))
         , Html.Attributes.class
             ("rounded-lg py-3 px-2 text-sm cursor-pointer flex flex-col items-center gap-1 min-h-[64px] text-ink "
                 ++ (if active then
@@ -463,11 +463,11 @@ viewLocationWidget model pending =
                             "-153.4937"
                     )
                 , Html.Events.on "confirm"
-                    (Json.Decode.map2 MapPickerConfirmed
+                    (Json.Decode.map2 (\lat lon -> AuthMsg (MapPickerConfirmed lat lon))
                         (Json.Decode.at [ "detail", "lat" ] Json.Decode.float)
                         (Json.Decode.at [ "detail", "lon" ] Json.Decode.float)
                     )
-                , Html.Events.on "dismiss" (Json.Decode.succeed DismissMapPicker)
+                , Html.Events.on "dismiss" (Json.Decode.succeed (AuthMsg DismissMapPicker))
                 ]
                 []
 
@@ -487,7 +487,7 @@ viewLocationStatus ls =
             Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
                 [ Html.span [ Html.Attributes.class "text-moss text-sm" ] [ Html.text "No GPS in photo" ]
                 , Html.button
-                    [ Html.Events.onClick OpenMapPicker
+                    [ Html.Events.onClick (AuthMsg OpenMapPicker)
                     , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
                     ]
                     [ Html.text "pin manually" ]
@@ -513,12 +513,12 @@ viewLocationStatus ls =
                 [ Html.span [ Html.Attributes.class "text-moss text-sm" ]
                     [ Html.text (sourceLabel ++ " — " ++ GeoPoint.format point) ]
                 , Html.button
-                    [ Html.Events.onClick OpenMapPicker
+                    [ Html.Events.onClick (AuthMsg OpenMapPicker)
                     , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
                     ]
                     [ Html.text "adjust" ]
                 , Html.button
-                    [ Html.Events.onClick SkipLocation
+                    [ Html.Events.onClick (AuthMsg SkipLocation)
                     , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
                     ]
                     [ Html.text "remove" ]
@@ -528,7 +528,7 @@ viewLocationStatus ls =
             Html.div [ Html.Attributes.class "flex items-center gap-3 py-2" ]
                 [ Html.span [ Html.Attributes.class "text-moss text-sm" ] [ Html.text "no location" ]
                 , Html.button
-                    [ Html.Events.onClick OpenMapPicker
+                    [ Html.Events.onClick (AuthMsg OpenMapPicker)
                     , Html.Attributes.class "bg-transparent border-none text-moss text-xs cursor-pointer p-0"
                     ]
                     [ Html.text "pin manually" ]
@@ -537,12 +537,12 @@ viewLocationStatus ls =
         LocationIdle ->
             Html.div [ Html.Attributes.class "flex gap-3 items-center" ]
                 [ Html.button
-                    [ Html.Events.onClick OpenMapPicker
+                    [ Html.Events.onClick (AuthMsg OpenMapPicker)
                     , Html.Attributes.class "flex-1 bg-cream border border-tan text-ink rounded-lg py-3 px-4 text-sm cursor-pointer"
                     ]
                     [ Html.text "📍 Pin manually" ]
                 , Html.button
-                    [ Html.Events.onClick SkipLocation
+                    [ Html.Events.onClick (AuthMsg SkipLocation)
                     , Html.Attributes.class "bg-transparent border-none text-moss text-sm cursor-pointer py-2"
                     ]
                     [ Html.text "Skip location" ]
@@ -569,7 +569,7 @@ viewPaymentMethodBtn selected pm =
                 Just pm
     in
     Html.button
-        [ Html.Events.onClick (PaymentMethodChanged nextValue)
+        [ Html.Events.onClick (AuthMsg (PaymentMethodChanged nextValue))
         , Html.Attributes.classList
             [ ( "rounded-lg py-2 px-4 text-sm cursor-pointer border", True )
             , ( "bg-forest text-parchment border-forest font-bold", active )

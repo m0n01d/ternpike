@@ -19,7 +19,7 @@ import Html.Attributes
 import Html.Events
 import Routing
 import Svg
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Button
 import UI.Icons
 import UI.Mascot
@@ -198,7 +198,7 @@ viewToast toast =
                 [ Html.Attributes.class "fixed bottom-[72px] left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel animate-fade-up bg-[image:var(--bg-grain)]" ]
                 [ Html.span [ Html.Attributes.class "flex-1 text-sm text-ink" ] [ Html.text message ]
                 , Html.button
-                    [ Html.Events.onClick ToastExpired
+                    [ Html.Events.onClick (AuthMsg ToastExpired)
                     , Html.Attributes.class "p-0 leading-none bg-transparent border-none cursor-pointer text-muted shrink-0"
                     ]
                     [ UI.Icons.close "w-4 h-4" ]
@@ -218,7 +218,7 @@ viewErrorBanner maybeErr =
                 , Html.div [ Html.Attributes.class "flex items-center justify-between flex-1 px-4 py-3 text-sm" ]
                     [ Html.text err
                     , Html.button
-                        [ Html.Events.onClick DismissError
+                        [ Html.Events.onClick (AuthMsg DismissError)
                         , Html.Attributes.class "p-0 pl-3 bg-transparent border-none cursor-pointer text-rust"
                         ]
                         [ UI.Icons.close "w-4 h-4" ]
@@ -237,8 +237,8 @@ viewDeleteConfirmModal trip =
             , Html.p [ Html.Attributes.class "mb-6 text-sm leading-relaxed text-muted" ]
                 [ Html.text "This will permanently delete the trip and all its expense data." ]
             , Html.div [ Html.Attributes.class "flex gap-3" ]
-                [ UI.Button.secondary { label = "Cancel", onClick = CancelDeleteTrip }
-                , UI.Button.danger { label = "Delete trip", onClick = DeleteTrip trip }
+                [ UI.Button.secondary { label = "Cancel", onClick = AuthMsg CancelDeleteTrip }
+                , UI.Button.danger { label = "Delete trip", onClick = AuthMsg (DeleteTrip trip) }
                 ]
             ]
         ]

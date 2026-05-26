@@ -21,7 +21,7 @@ import Routing
 import Set
 import Svg
 import Svg.Attributes
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.BudgetBar
 import UI.Card
 import UI.Mascot
@@ -605,8 +605,8 @@ viewDailyChart resolved hovered primEntries =
         , C.chart
             [ CA.height 160
             , CA.margin { top = 8, bottom = 8, left = 44, right = 8 }
-            , CE.onMouseMove HoverDailyBars (CE.getNearest CI.bars)
-            , CE.onMouseLeave (HoverDailyBars [])
+            , CE.onMouseMove (AuthMsg << HoverDailyBars) (CE.getNearest CI.bars)
+            , CE.onMouseLeave (AuthMsg (HoverDailyBars []))
             ]
             [ C.grid [ CA.color UI.Theme.colorTan, CA.dashed [ 2, 3 ] ]
             , C.yLabels
@@ -655,7 +655,7 @@ granularityChip resolved chip =
     Html.button
         [ Html.Attributes.class (baseClass ++ toneClass)
         , Html.Attributes.type_ "button"
-        , Html.Events.onClick (SetStatsGranularity chip)
+        , Html.Events.onClick (AuthMsg (SetStatsGranularity chip))
         ]
         [ Html.text (StatsGranularity.label chip) ]
 
@@ -721,8 +721,8 @@ viewCumulativeChart hovered entries =
         , C.chart
             [ CA.height 180
             , CA.margin { top = 16, bottom = 24, left = 44, right = 12 }
-            , CE.onMouseMove HoverCumulativePoints (CE.getNearest CI.dots)
-            , CE.onMouseLeave (HoverCumulativePoints [])
+            , CE.onMouseMove (AuthMsg << HoverCumulativePoints) (CE.getNearest CI.dots)
+            , CE.onMouseLeave (AuthMsg (HoverCumulativePoints []))
             ]
             [ C.yLabels
                 [ CA.amount 4

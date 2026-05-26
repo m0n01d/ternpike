@@ -129,7 +129,7 @@ import Routing
 import Set
 import Task
 import Time
-import Types exposing (AuthState, GuestMsg_(..), GuestState, Model(..), Msg(..), SharedMsg_(..))
+import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestState, Model(..), Msg(..), SharedMsg_(..))
 import UI.BillingBanner
 import UI.Layout
 import UI.ShareModal
@@ -451,7 +451,7 @@ notifySharedTripActivity creds target opts =
                 creds
                 sharedTripId
                 opts
-                (\_ -> SharedTripActivityNotified)
+                (\_ -> AuthMsg SharedTripActivityNotified)
 
 
 {-| Resolve the `TripTarget` to use for an outbound `Save*` / `Get*`
@@ -1054,7 +1054,7 @@ expenseToPending e =
 
 toastFor : Cmd Msg
 toastFor =
-    Task.perform (\_ -> ToastExpired) (Process.sleep 4000)
+    Task.perform (\_ -> AuthMsg ToastExpired) (Process.sleep 4000)
 
 
 setLocation : LocationState -> PendingEntry -> PendingEntry
@@ -1184,7 +1184,7 @@ geocodeDispatchOne creds id ( queue, cmds ) =
         Just rawAddress ->
             if String.trim rawAddress /= "" then
                 ( Dict.update id (Maybe.map (\item -> { item | geocode = GeocodeRequested })) queue
-                , Http.GeocodeApi.geocode creds { address = rawAddress } (GotGeocodeResult id) :: cmds
+                , Http.GeocodeApi.geocode creds { address = rawAddress } (AuthMsg << GotGeocodeResult id) :: cmds
                 )
 
             else
@@ -1259,7 +1259,7 @@ makeOcrCall itemId path config base64Data mimeType =
                     ]
                 , url = "https://api.anthropic.com/v1/messages"
                 , body = Http.jsonBody body
-                , expect = Http.expectStringResponse (GotOcrResult itemId) ocrResponseToResult
+                , expect = Http.expectStringResponse (AuthMsg << GotOcrResult itemId) ocrResponseToResult
                 , timeout = Nothing
                 , tracker = Nothing
                 }
@@ -1630,14 +1630,14 @@ update msg model =
         ( GuestMsg g, GuestModel gs ) ->
             updateGuest g gs
 
+        ( AuthMsg a, AuthModel as_ ) ->
+            updateAuth a as_
+
         ( GuestMsg _, AuthModel as_ ) ->
             ( AuthModel as_, Cmd.none )
 
-        ( _, GuestModel gs ) ->
+        ( AuthMsg _, GuestModel gs ) ->
             ( GuestModel gs, Cmd.none )
-
-        ( other, AuthModel as_ ) ->
-            updateAuth other as_
 
 
 updateShared : SharedMsg_ -> Model -> ( Model, Cmd Msg )
@@ -1858,7 +1858,7 @@ updateGuest msg gs =
                     ( GuestModel gs, Cmd.none )
 
 
-updateAuth : Msg -> AuthState -> ( Model, Cmd Msg )
+updateAuth : AuthMsg_ -> AuthState -> ( Model, Cmd Msg )
 updateAuth msg as_ =
     case msg of
         GotPouchMsg raw ->
@@ -1974,7 +1974,7 @@ updateAuth msg as_ =
 
                         capturedSyncedAt =
                             if state == Synced then
-                                Task.perform GotSyncTime Time.now
+                                Task.perform (AuthMsg << GotSyncTime) Time.now
 
                             else
                                 Cmd.none
@@ -2024,7 +2024,7 @@ updateAuth msg as_ =
                     List.foldl (\( id, _ ) d -> Dict.insert id (freshScanItem id) d) as_.scanQueue indexed
 
                 urlCmds =
-                    List.map (\( id, f ) -> Task.perform (GotFileUrl id) (File.toUrl f)) indexed
+                    List.map (\( id, f ) -> Task.perform (AuthMsg << GotFileUrl id) (File.toUrl f)) indexed
             in
             ( AuthModel { as_ | scanQueue = newQueue }, Cmd.batch urlCmds )
 
@@ -2176,7 +2176,7 @@ updateAuth msg as_ =
                         Just _ ->
                             -- User has seen the warning and clicked "Add anyway" — proceed
                             ( AuthModel { as_ | duplicateWarning = Nothing, submitting = True, error = Nothing }
-                            , Task.perform (GotSubmitTime parsed) Time.now
+                            , Task.perform (AuthMsg << GotSubmitTime parsed) Time.now
                             )
 
                         Nothing ->
@@ -2219,7 +2219,7 @@ updateAuth msg as_ =
 
                                 Nothing ->
                                     ( AuthModel { as_ | submitting = True, error = Nothing }
-                                    , Task.perform (GotSubmitTime parsed) Time.now
+                                    , Task.perform (AuthMsg << GotSubmitTime parsed) Time.now
                                     )
 
                 Err errs ->
@@ -2414,7 +2414,7 @@ updateAuth msg as_ =
 
         VoidEntry expense ->
             ( AuthModel { as_ | openLedgerMenu = Nothing }
-            , Task.perform (GotVoidTime expense) Time.now
+            , Task.perform (AuthMsg << GotVoidTime expense) Time.now
             )
 
         GotVoidTime expense posix ->
@@ -2468,7 +2468,7 @@ updateAuth msg as_ =
 
         DuplicateEntry expense ->
             ( AuthModel { as_ | openLedgerMenu = Nothing }
-            , Task.perform (GotDuplicateTime expense) Time.now
+            , Task.perform (AuthMsg << GotDuplicateTime expense) Time.now
             )
 
         GotDuplicateTime expense posix ->
@@ -2540,7 +2540,7 @@ updateAuth msg as_ =
 
             else
                 ( AuthModel { as_ | movePicker = Nothing }
-                , Task.perform (GotMoveTime expense newTripId) Time.now
+                , Task.perform (AuthMsg << GotMoveTime expense newTripId) Time.now
                 )
 
         GotMoveTime expense newTripId posix ->
@@ -3033,7 +3033,7 @@ updateAuth msg as_ =
                                         as_.creds
                                         response.sharedTripId
                                         { email = email }
-                                        (\_ -> TripInviteResult)
+                                        (\_ -> AuthMsg TripInviteResult)
                                 )
                                 invitees
 
@@ -3048,7 +3048,7 @@ updateAuth msg as_ =
                                 , dbName = "sharedtrip-" ++ Data.SharedTripId.toString response.sharedTripId
                                 }
                             )
-                         , Task.perform GotSaveTripTime Time.now
+                         , Task.perform (AuthMsg << GotSaveTripTime) Time.now
                          ]
                             ++ inviteCmds
                         )
@@ -3104,14 +3104,14 @@ updateAuth msg as_ =
                                                         String.trim form.name
                                             in
                                             ( AuthModel { as_ | tripForm = Just { form | submitting = True, errors = [] } }
-                                            , Http.SharedTripApi.createSharedTrip as_.creds { name = groupName } TripCreateSharedTripResult
+                                            , Http.SharedTripApi.createSharedTrip as_.creds { name = groupName } (AuthMsg << TripCreateSharedTripResult)
                                             )
 
                                         _ ->
                                             -- Personal / existing-flock: same path as before, get a
                                             -- timestamp then write the trip.
                                             ( AuthModel { as_ | tripForm = Just { form | submitting = True } }
-                                            , Task.perform GotSaveTripTime Time.now
+                                            , Task.perform (AuthMsg << GotSaveTripTime) Time.now
                                             )
 
         GotSaveTripTime posix ->
@@ -3198,7 +3198,7 @@ updateAuth msg as_ =
                             , trips = TripsLoaded trips
                         }
                     , Cmd.batch
-                        [ Task.perform (GotDeleteTripTime trip) Time.now
+                        [ Task.perform (AuthMsg << GotDeleteTripTime trip) Time.now
                         , Nav.pushUrl as_.key (Routing.tabToPath as_.basePath nextHead.id LedgerTab)
                         ]
                     )
@@ -3211,14 +3211,14 @@ updateAuth msg as_ =
                             , trips = NoTripsYet
                         }
                     , Cmd.batch
-                        [ Task.perform (GotDeleteTripTime trip) Time.now
+                        [ Task.perform (AuthMsg << GotDeleteTripTime trip) Time.now
                         , Nav.pushUrl as_.key (as_.basePath ++ "trips")
                         ]
                     )
 
                 other ->
                     ( AuthModel { as_ | confirmDeleteTrip = Nothing, trips = other }
-                    , Task.perform (GotDeleteTripTime trip) Time.now
+                    , Task.perform (AuthMsg << GotDeleteTripTime trip) Time.now
                     )
 
         GotDeleteTripTime trip posix ->
@@ -3265,7 +3265,7 @@ updateAuth msg as_ =
                 as_.creds
                 flockId
                 { newOwnerEmail = as_.creds.email }
-                TransferToSharedTripResult
+                (AuthMsg << TransferToSharedTripResult)
             )
 
         -- FLOCK MODAL MESSAGES
@@ -3322,7 +3322,7 @@ updateAuth msg as_ =
 
                     else
                         ( AuthModel (setFlockInFlight True as_)
-                        , Http.SharedTripApi.createSharedTrip as_.creds { name = trimmed } CreateSharedTripResult
+                        , Http.SharedTripApi.createSharedTrip as_.creds { name = trimmed } (AuthMsg << CreateSharedTripResult)
                         )
 
                 _ ->
@@ -3364,7 +3364,7 @@ updateAuth msg as_ =
             case as_.sharedTripUi.modal of
                 SharedTripUi.InviteModal flockId { email } ->
                     ( AuthModel (setFlockInFlight True as_)
-                    , Http.SharedTripApi.inviteToSharedTrip as_.creds flockId { email = email } InviteToSharedTripResult
+                    , Http.SharedTripApi.inviteToSharedTrip as_.creds flockId { email = email } (AuthMsg << InviteToSharedTripResult)
                     )
 
                 _ ->
@@ -3390,7 +3390,7 @@ updateAuth msg as_ =
 
         LeaveSharedTripConfirmed flockId ->
             ( AuthModel (setFlockInFlight True as_)
-            , Http.SharedTripApi.leaveSharedTrip as_.creds flockId LeaveSharedTripResult
+            , Http.SharedTripApi.leaveSharedTrip as_.creds flockId (AuthMsg << LeaveSharedTripResult)
             )
 
         LeaveSharedTripResult (Err err) ->
@@ -3424,7 +3424,7 @@ updateAuth msg as_ =
             case as_.sharedTripUi.modal of
                 SharedTripUi.TransferModal flockId { target } ->
                     ( AuthModel (setFlockInFlight True as_)
-                    , Http.SharedTripApi.transferOwnership as_.creds flockId { newOwnerEmail = target } TransferToSharedTripResult
+                    , Http.SharedTripApi.transferOwnership as_.creds flockId { newOwnerEmail = target } (AuthMsg << TransferToSharedTripResult)
                     )
 
                 _ ->
@@ -3440,7 +3440,7 @@ updateAuth msg as_ =
 
         JoinSharedTripAccepted token ->
             ( AuthModel as_
-            , Http.SharedTripApi.joinSharedTrip as_.creds { token = token } JoinSharedTripResult
+            , Http.SharedTripApi.joinSharedTrip as_.creds { token = token } (AuthMsg << JoinSharedTripResult)
             )
 
         JoinSharedTripDeclined ->
@@ -3661,16 +3661,6 @@ updateAuth msg as_ =
                     unsubscribePush ()
                 ]
             )
-
-        GuestMsg _ ->
-            -- GuestMsg is dispatched by `update` before reaching updateAuth.
-            -- This branch is unreachable at runtime but required for exhaustiveness.
-            ( AuthModel as_, Cmd.none )
-
-        SharedMsg _ ->
-            -- SharedMsg is dispatched by `update` before reaching updateAuth.
-            -- This branch is unreachable at runtime but required for exhaustiveness.
-            ( AuthModel as_, Cmd.none )
 
 
 
@@ -3906,29 +3896,29 @@ main =
         , subscriptions =
             \_ ->
                 Sub.batch
-                    [ pouchIn GotPouchMsg
+                    [ pouchIn (AuthMsg << GotPouchMsg)
                     , gotGpsCoords
                         (\r ->
                             if r.denied then
-                                GeolocationDenied
+                                AuthMsg GeolocationDenied
 
                             else
-                                GotGpsCoords r.lat r.lon
+                                AuthMsg (GotGpsCoords r.lat r.lon)
                         )
                     , gotExifResult
                         (\r ->
                             if r.hasGps then
-                                GotExifCoords r.id (Just r.lat) (Just r.lon) ""
+                                AuthMsg (GotExifCoords r.id (Just r.lat) (Just r.lon) "")
 
                             else
-                                GotExifCoords r.id Nothing Nothing r.debug
+                                AuthMsg (GotExifCoords r.id Nothing Nothing r.debug)
                         )
                     , networkStatus (SharedMsg << NetworkStatusChanged)
-                    , canInstall CanInstall
-                    , ocrImagePrepared OcrImagePrepared
-                    , notificationState NotificationStateChanged
-                    , pushSubscribeResult PushSubscribeReceived
-                    , scanProxyIn ScanProxyResult
+                    , canInstall (AuthMsg << CanInstall)
+                    , ocrImagePrepared (AuthMsg << OcrImagePrepared)
+                    , notificationState (AuthMsg << NotificationStateChanged)
+                    , pushSubscribeResult (AuthMsg << PushSubscribeReceived)
+                    , scanProxyIn (AuthMsg << ScanProxyResult)
                     ]
         , update = update
         , view = view

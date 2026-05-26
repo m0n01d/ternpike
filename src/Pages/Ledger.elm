@@ -20,7 +20,7 @@ import Html.Events
 import Html.Keyed as Keyed
 import Routing
 import Set
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Avatar
 import UI.BudgetBar
 import UI.Button
@@ -85,7 +85,7 @@ viewActions model =
         mapToggle =
             UI.Button.iconButton
                 { icon = UI.Icons.map "w-4 h-4"
-                , onClick = ToggleLedgerMap
+                , onClick = AuthMsg ToggleLedgerMap
                 , title =
                     if model.showLedgerMap then
                         "Hide map"
@@ -98,21 +98,21 @@ viewActions model =
             if model.ledgerMapExpanded then
                 UI.Button.iconButton
                     { icon = UI.Icons.collapse "w-4 h-4"
-                    , onClick = ToggleLedgerMapExpanded
+                    , onClick = AuthMsg ToggleLedgerMapExpanded
                     , title = "Shrink map"
                     }
 
             else
                 UI.Button.iconButton
                     { icon = UI.Icons.expand "w-4 h-4"
-                    , onClick = ToggleLedgerMapExpanded
+                    , onClick = AuthMsg ToggleLedgerMapExpanded
                     , title = "Expand map"
                     }
 
         refresh =
             UI.Button.iconButton
                 { icon = UI.Icons.chevronRight "w-4 h-4"
-                , onClick = RefreshClicked
+                , onClick = AuthMsg RefreshClicked
                 , title = "Refresh"
                 }
 
@@ -122,7 +122,7 @@ viewActions model =
                     if Data.Tier.isPaid model.tier then
                         UI.Button.iconButton
                             { icon = UI.Icons.download "w-4 h-4"
-                            , onClick = ExportCsv tripId
+                            , onClick = AuthMsg (ExportCsv tripId)
                             , title = "Export CSV"
                             }
 
@@ -542,7 +542,7 @@ viewRowMenuButton entry =
         [ Html.Attributes.type_ "button"
         , Html.Attributes.attribute "aria-label" "Row actions"
         , Html.Attributes.class "text-muted shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
-        , Html.Events.onClick (OpenLedgerMenu entry.id)
+        , Html.Events.onClick (AuthMsg (OpenLedgerMenu entry.id))
         ]
         [ UI.Icons.kebab "w-4 h-4" ]
 
@@ -560,7 +560,7 @@ viewRowMenu canMove readOnly entry =
                     , disabled = readOnly
                     , icon = UI.Icons.move "w-4 h-4"
                     , label = "Move to trip…"
-                    , onClick = OpenMovePicker expense
+                    , onClick = AuthMsg (OpenMovePicker expense)
                     }
                 ]
 
@@ -573,7 +573,7 @@ viewRowMenu canMove readOnly entry =
                 , disabled = readOnly
                 , icon = UI.Icons.copy "w-4 h-4"
                 , label = "Duplicate"
-                , onClick = DuplicateEntry expense
+                , onClick = AuthMsg (DuplicateEntry expense)
                 }
 
         delete =
@@ -582,7 +582,7 @@ viewRowMenu canMove readOnly entry =
                 , disabled = readOnly
                 , icon = UI.Icons.trash "w-4 h-4"
                 , label = "Delete"
-                , onClick = VoidEntry expense
+                , onClick = AuthMsg (VoidEntry expense)
                 }
     in
     Html.div []
@@ -590,7 +590,7 @@ viewRowMenu canMove readOnly entry =
             [ Html.Attributes.type_ "button"
             , Html.Attributes.attribute "aria-label" "Close menu"
             , Html.Attributes.class "fixed inset-0 z-10 bg-transparent cursor-default"
-            , Html.Events.onClick CloseLedgerMenu
+            , Html.Events.onClick (AuthMsg CloseLedgerMenu)
             ]
             []
         , Html.div

@@ -22,7 +22,7 @@ copy if any field is missing.
 import Html exposing (Html)
 import Html.Attributes
 import Json.Decode
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Button
 import UI.Card
 
@@ -100,11 +100,11 @@ viewAuthBody as_ token invite =
                   else
                     UI.Button.primary
                         { label = "Accept"
-                        , onClick = JoinSharedTripAccepted token
+                        , onClick = AuthMsg (JoinSharedTripAccepted token)
                         }
                 , UI.Button.ghost
                     { label = "Decline"
-                    , onClick = JoinSharedTripDeclined
+                    , onClick = AuthMsg JoinSharedTripDeclined
                     }
                 ]
             ]

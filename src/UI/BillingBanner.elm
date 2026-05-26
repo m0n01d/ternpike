@@ -33,7 +33,7 @@ import Data.UserId as UserId exposing (UserId)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Types exposing (Msg(..))
+import Types exposing (AuthMsg_(..), Msg(..))
 
 
 {-| Days the server keeps a lapsed flock in `Grace` before flipping it
@@ -281,7 +281,7 @@ viewCta cta =
         TransferToMe flock ->
             Html.button
                 [ Html.Attributes.type_ "button"
-                , Html.Events.onClick (TakeOverBilling flock.id)
+                , Html.Events.onClick (AuthMsg (TakeOverBilling flock.id))
                 , Html.Attributes.class "inline-block mt-2 text-xs font-mono uppercase tracking-widest text-rust-deep hover:text-rust bg-transparent border-0 underline cursor-pointer p-0"
                 ]
                 [ Html.text "Transfer billing to me" ]

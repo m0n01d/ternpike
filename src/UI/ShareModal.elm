@@ -16,7 +16,7 @@ import Data.UserId as UserId
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Types exposing (AuthState, Msg(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Button
 
 
@@ -62,7 +62,7 @@ viewOpen as_ =
             [ Html.button
                 [ Html.Attributes.class "absolute top-3 right-3 text-muted hover:text-ink text-2xl leading-none w-8 h-8 flex items-center justify-center"
                 , Html.Attributes.attribute "aria-label" "Close"
-                , Html.Events.onClick CloseShareModal
+                , Html.Events.onClick (AuthMsg CloseShareModal)
                 ]
                 [ Html.text "×" ]
             , Html.h2
@@ -89,7 +89,7 @@ viewOpen as_ =
                     }
                 , Html.button
                     [ Html.Attributes.class "text-sm text-muted hover:text-ink py-2"
-                    , Html.Events.onClick CloseShareModal
+                    , Html.Events.onClick (AuthMsg CloseShareModal)
                     ]
                     [ Html.text "Done" ]
                 ]
