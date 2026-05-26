@@ -1,0 +1,88 @@
+{% extends "_layout.njk" %}
+{% import "partials/legal-section.njk" as legal %}
+
+{% block title %}Terms of Service — Ternpike{% endblock %}
+{% block description %}The terms that govern your use of Ternpike — accounts, billing, refunds, acceptable use, and the disclaimers we have to write down.{% endblock %}
+
+{% block content %}
+<article class="bg-parchment pt-[120px] pb-[100px] px-6">
+  <div class="max-w-[720px] mx-auto">
+
+    <div class="font-mono text-[10px] tracking-[0.25em] uppercase text-rust mb-4">Legal</div>
+    <h1 class="font-display font-black text-[clamp(36px,6vw,56px)] tracking-[-0.02em] leading-[1.05] text-forest mb-4">Terms of Service</h1>
+    <p class="font-mono text-[11px] tracking-[0.18em] uppercase text-moss mb-12">Last updated: May 26, 2026</p>
+
+    {{ legal.section("Acceptance", "
+      <p>These terms govern your use of Ternpike. By creating an account or using the app, you agree to them.</p>
+    ") }}
+
+    {{ legal.section("What Ternpike is", "
+      <p>Ternpike is an expense-tracking app for road trips. You log expenses, optionally with GPS, optionally by scanning receipts. The app runs on your device and syncs to a per-user database we host.</p>
+    ") }}
+
+    {{ legal.section("Accounts", "
+      <p>You need an email address to sign in. You're responsible for the security of the device that holds your login credentials. Don't share accounts.</p>
+    ") }}
+
+    {{ legal.section("Acceptable use", "
+      <p>Don't use Ternpike to:</p>
+      <ul>
+        <li>store content that violates someone else's rights (copyrighted images that aren't yours, doxxing material);</li>
+        <li>harass, threaten, or impersonate anyone;</li>
+        <li>attempt to break into our systems, scrape data you don't own, or reverse-engineer paid features;</li>
+        <li>commit fraud, launder money, or carry out any activity illegal in your jurisdiction.</li>
+      </ul>
+      <p>We reserve the right to suspend or close accounts that we determine, in good faith, are violating these rules.</p>
+    ") }}
+
+    {{ legal.section("Tiers and billing", "
+      <p>Ternpike offers three tiers:</p>
+      <ul>
+        <li><strong>Tern</strong> — free, always. No card required. You bring your own AI provider key if you want receipt scanning.</li>
+        <li><strong>Osprey</strong> — paid subscription. Monthly ($2.99) or annual ($24, saves $12). Billed via Stripe. Cancel anytime; access continues until the end of the current billing period.</li>
+        <li><strong>Trailblazer</strong> — one-time $79, limited to the first 500 buyers. Permanent, non-recurring. Includes all 1.x updates and a loyalty discount on any future major version.</li>
+      </ul>
+      <p><strong>Refunds.</strong> If you are unhappy within 14 days of your first paid charge (monthly, annual, or Trailblazer), email us for a full refund.</p>
+      <p><strong>Price changes.</strong> We may change subscription prices for new sign-ups at any time. Existing subscribers keep their current price for the duration of the current billing period; we will give at least 30 days' notice before any price change applies to renewals.</p>
+      <p><strong>Trailblazer is permanent.</strong> A Trailblazer purchase is not converted, downgraded, or canceled for non-payment (there is no recurring payment to fail). It includes every 1.x release. A future version 2, if and when it exists, will be a separate purchase with a loyalty discount.</p>
+    ") }}
+
+    {{ legal.section("Your data", '
+      <p>You own the trip data you log. We claim no rights to it. You can export it to CSV at any time. If you delete your account, we delete the data within 30 days (see the <a href="/privacy">Privacy Policy</a>).</p>
+    ') }}
+
+    {{ legal.section("Bring-your-own API keys", "
+      <p>If you connect your own AI provider key (Anthropic, OpenAI, Gemini), you are responsible for your usage and any charges that provider bills you. Bring-your-own requests go from your device directly to the provider; we don't proxy or rate-limit them. The provider's terms apply to those requests.</p>
+    ") }}
+
+    {{ legal.section("Service availability", "
+      <p>We try to keep Ternpike running. We don't promise uptime. The app is offline-first — most features work without our servers — but sync, receipt-proxy OCR, and account-related actions depend on us being up. Outages happen; we will make a reasonable effort to fix them quickly.</p>
+    ") }}
+
+    {{ legal.section("No warranty", "
+      <p>Ternpike is provided <strong>&lsquo;as is&rsquo;</strong> and <strong>&lsquo;as available.&rsquo;</strong> We make no warranties, express or implied, including (but not limited to) merchantability, fitness for a particular purpose, or non-infringement.</p>
+    ") }}
+
+    {{ legal.section("Limitation of liability", "
+      <p>To the maximum extent permitted by law, Ternpike's total liability for any claim arising out of or related to these terms or the service is limited to the amount you paid us in the 12 months before the claim, or $100, whichever is greater. We are not liable for indirect, incidental, consequential, or punitive damages.</p>
+    ") }}
+
+    {{ legal.section("Termination", "
+      <p>You can close your account anytime by emailing us. We can suspend or close accounts that violate these terms, with notice when reasonable.</p>
+    ") }}
+
+    {{ legal.section("Changes", "
+      <p>If we change these terms, we will update the &lsquo;Last updated&rsquo; date and notify active subscribers by email of material changes. Continued use after notice means you accept the changes.</p>
+    ") }}
+
+    {{ legal.section("Governing law", "
+      <p>These terms are governed by the laws of the <strong>State of Florida, United States</strong>, without regard to conflict-of-laws principles. Disputes will be resolved in the state or federal courts located in Florida.</p>
+    ") }}
+
+    {{ legal.section("Contact", '
+      <p>Email <a href="mailto:hello@ternpike.com">hello@ternpike.com</a>.</p>
+    ') }}
+
+  </div>
+</article>
+{% endblock %}
