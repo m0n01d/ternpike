@@ -11,7 +11,6 @@ picker only renders. Each candidate trip is a `<button>` that dispatches
 
 import Data.DateField as DateField
 import Data.Expense exposing (Expense)
-import Data.Money as Money
 import Data.SharedTrip
 import Data.SharedTrips exposing (SharedTrips)
 import Data.Trip exposing (Trip)
@@ -20,7 +19,9 @@ import Html.Attributes
 import Html.Events
 import Types exposing (Msg(..))
 import UI.Avatar
+import UI.DateView
 import UI.Icons
+import UI.MoneyView
 import UI.SharedTripBadge
 
 
@@ -43,7 +44,7 @@ viewMove { expense, flocks, trips } =
                 [ Html.p [ Html.Attributes.class "mb-1 text-lg font-bold text-ink font-display" ]
                     [ Html.text "Move to trip" ]
                 , Html.p [ Html.Attributes.class "text-sm leading-relaxed text-muted" ]
-                    [ Html.text (rowLabel expense) ]
+                    (rowLabel expense)
                 ]
             , Html.div [ Html.Attributes.class "max-h-72 overflow-y-auto border-t border-tan/60" ]
                 (List.map (viewCandidate expense flocks) candidates)
@@ -82,7 +83,7 @@ viewCandidate expense flocks trip =
                 [ Html.text trip.name ]
             , Html.div [ Html.Attributes.class "flex items-center gap-2 mt-1" ]
                 [ Html.span [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-wider text-moss" ]
-                    [ Html.text (dateRange trip) ]
+                    (dateRange trip)
                 , case maybeFlock of
                     Just flock ->
                         UI.Avatar.viewStack (Data.SharedTrip.members flock)
@@ -96,7 +97,7 @@ viewCandidate expense flocks trip =
         ]
 
 
-rowLabel : Expense -> String
+rowLabel : Expense -> List (Html Msg)
 rowLabel expense =
     let
         head =
@@ -109,10 +110,12 @@ rowLabel expense =
             else
                 "this expense"
     in
-    head ++ " · " ++ Money.format expense.amount
+    [ Html.text (head ++ " · ")
+    , UI.MoneyView.amount expense.amount
+    ]
 
 
-dateRange : Trip -> String
+dateRange : Trip -> List (Html Msg)
 dateRange trip =
     let
         hasStart =
@@ -122,16 +125,19 @@ dateRange trip =
             not (isEpochDate trip.endDate)
     in
     if hasStart && hasEnd then
-        DateField.formatDisplay trip.startDate ++ " → " ++ DateField.formatDisplay trip.endDate
+        [ UI.DateView.short trip.startDate
+        , Html.text " → "
+        , UI.DateView.short trip.endDate
+        ]
 
     else if hasStart then
-        DateField.formatDisplay trip.startDate
+        [ UI.DateView.short trip.startDate ]
 
     else if hasEnd then
-        DateField.formatDisplay trip.endDate
+        [ UI.DateView.short trip.endDate ]
 
     else
-        ""
+        []
 
 
 {-| True when a `DateField` is the epoch sentinel (`1970-01-01`).
