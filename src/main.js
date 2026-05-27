@@ -100,9 +100,20 @@ import './elements/tp-amount.js'
   // skips IndexedDB reads, skips PouchDB attach, and seeds movie road trips
   // into memory via attachDemo. The URL is rewritten to /trips so the Elm
   // router lands on RouteTrips without any Elm-side change.
-  const isDemo = window.location.pathname.startsWith('/demo')
+  //
+  // sessionStorage is what makes demo mode survive a refresh. The URL
+  // rewrite above means subsequent loads see /trips (or any deeper
+  // route after the user clicks around), so pathname alone can't be
+  // trusted on refresh. The flag is tab-scoped — close the tab, lose
+  // the demo — which is the right TTL.
+  const isDemo =
+    window.location.pathname.startsWith('/demo') ||
+    sessionStorage.getItem('demo') === '1'
   if (isDemo) {
-    window.history.replaceState(null, '', '/trips')
+    sessionStorage.setItem('demo', '1')
+    if (window.location.pathname.startsWith('/demo')) {
+      window.history.replaceState(null, '', '/trips')
+    }
   }
 
   // ── Load all persisted settings before starting Elm ───────────────────
