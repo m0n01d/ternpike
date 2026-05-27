@@ -1,7 +1,8 @@
 {# Mirrors the real Ledger page. If this falls out of sync with the app, update in lockstep with src/Pages/Ledger.elm. #}
 <section id="preview" class="max-w-[880px] mx-auto px-6 py-[100px] max-[560px]:px-4 max-[560px]:py-[72px]">
   <div class="font-mono text-[10px] tracking-[0.25em] uppercase text-rust mb-3">{{ ledgerPreview.sectionLabel }}</div>
-  <h2 class="font-display font-black text-[clamp(36px,6vw,60px)] tracking-[-0.02em] leading-[1.05] text-forest mb-12 whitespace-pre-line">{{ ledgerPreview.headline }}</h2>
+  <h2 class="font-display font-black text-[clamp(36px,6vw,60px)] tracking-[-0.02em] leading-[1.05] text-forest">{{ ledgerPreview.seoHeadline }}</h2>
+  <p class="section-subhead mb-12 whitespace-pre-line">{{ ledgerPreview.headline }}</p>
 
   <div class="topo relative bg-parchment border border-tan rounded-panel overflow-hidden shadow-panel">
     <header class="relative px-7 pt-8 pb-6 border-b border-dashed border-tan/70 max-[560px]:px-5 max-[560px]:pt-6 max-[560px]:pb-5">
@@ -25,7 +26,7 @@
           <div class="ledger-meta">
             <span class="ledger-chip">{{ entry.category }}</span>
             {% if entry.hasGps %}
-            <span class="ledger-pin" aria-label="Has GPS coordinates" title="Has GPS coordinates">
+            <span class="ledger-pin" role="img" aria-label="Has GPS coordinates" title="Has GPS coordinates">
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 22s-7-7.58-7-13a7 7 0 1 1 14 0c0 5.42-7 13-7 13z" />
                 <circle cx="12" cy="9" r="2.5" />

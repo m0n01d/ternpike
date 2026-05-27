@@ -26,9 +26,8 @@ const pages = [
   {
     slug: 'index',
     url: '/',
-    title: 'Ternpike — Track Every Turn of the Road',
-    description:
-      'Snap a receipt at camp. Ternpike reads it, logs your GPS, and shows exactly what the trip is costing you day by day, dollar by dollar.',
+    title: content.meta.title,
+    description: content.meta.description,
   },
   {
     slug: 'privacy',

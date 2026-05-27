@@ -1,7 +1,8 @@
 <section class="topo topo-pricing relative overflow-hidden py-24 px-6 bg-parchment" id="pricing">
   <div class="relative z-10 mx-auto max-w-[1100px]">
     <div class="mb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-rust">{{ pricing.sectionLabel }}</div>
-    <h2 class="mb-14 font-display text-[clamp(36px,6vw,60px)] font-black leading-[1.05] tracking-[-0.02em] text-forest">{{ pricing.headline | replace("\n", "<br>") | safe }}</h2>
+    <h2 class="font-display text-[clamp(36px,6vw,60px)] font-black leading-[1.05] tracking-[-0.02em] text-forest">{{ pricing.seoHeadline }}</h2>
+    <p class="section-subhead mb-14">{{ pricing.headline | replace("\n", "<br>") | safe }}</p>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
       {% for tier in pricing.tiers %}

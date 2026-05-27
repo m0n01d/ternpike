@@ -18,11 +18,9 @@
       </svg>
     </div>
 
-    <h1 class="font-display font-black text-[clamp(40px,7vw,76px)] tracking-[-0.025em] leading-[1.02] text-forest max-w-[880px] animate-fade-up [animation-delay:150ms]">
-      {% for line in hero.headline.lines %}
-      <span class="block{% if not loop.first %} text-rust{% endif %}">{{ line }}</span>
-      {% endfor %}
-    </h1>
+    <h1 class="font-display font-black text-[clamp(36px,6.4vw,68px)] tracking-[-0.025em] leading-[1.04] text-forest max-w-[880px] animate-fade-up [animation-delay:150ms]">{{ hero.headline }}</h1>
+
+    <p class="hero-subhead animate-fade-up [animation-delay:200ms]">{{ hero.subheadline }}</p>
 
     <div class="mt-6 max-w-[620px] animate-fade-up [animation-delay:250ms]">
       {% for paragraph in hero.sub %}
