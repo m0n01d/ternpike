@@ -8,7 +8,6 @@ import Data.Ledger exposing (LedgerMode(..))
 import Data.Money as Money exposing (Money)
 import Data.SharedTrip
 import Data.SharedTrips
-import Data.Tier
 import Data.TripId as TripId
 import Data.Trips
 import Data.UserId as UserId exposing (UserId)
@@ -27,6 +26,7 @@ import UI.Button
 import UI.DateView
 import UI.Icons
 import UI.Mascot
+import UI.Gate
 import UI.MoneyView
 
 
@@ -119,7 +119,7 @@ viewActions model =
         exportButton =
             case Routing.routeTripId model.route of
                 Just tripId ->
-                    if Data.Tier.isPaid model.tier then
+                    if UI.Gate.requiresPaid model.tier then
                         UI.Button.iconButton
                             { icon = UI.Icons.download "w-4 h-4"
                             , onClick = AuthMsg (ExportCsv tripId)
