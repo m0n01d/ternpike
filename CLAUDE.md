@@ -503,6 +503,22 @@ See `docs/architecture.md` for the full breakdown. Short rules:
 
 Never cache `tier` in PouchDB — it'd sync stale state across devices when a user upgrades. The `/me` call on startup (#19) is the refresh path.
 
+### User records (server-authoritative)
+
+The server's view of "who is this email" lives in `TIERS_KV` under the `user:<lowercased-email>` key as a JSON `UserRecord`. Schema (alphabetized — see `server/users.js`):
+
+```
+{
+  createdAt, email, stripeCustomerId, subscriptionId, subscriptionStatus,
+  tier, trailblazerNumber, trailblazerPurchasedAt, updatedAt
+}
+```
+
+- **Write path:** `upsertUser(env, record)` validates `tier` ∈ {tern, osprey, trailblazer} and `subscriptionStatus` ∈ {active, canceled, past_due, trialing, null}, preserves `createdAt`, stamps `updatedAt`, and **refuses to downgrade a Trailblazer** (throws). The first-login hook in `/auth/verify-code` materializes a fresh `tern` record on a never-seen email.
+- **Read path:** `getTier` (server/auth.js) reads `user:<email>` first, then falls back to the legacy raw-string `<email>` key written by `setTier` (server/sharedTrips.js) for any user who hasn't been re-upserted yet. `getUser(env, email)` returns the full record or `null`.
+- **Migration:** `migrateLegacy(env, email)` materializes a `UserRecord` from an existing raw-string tier the first time anything writes through `upsertUser`. The legacy key is left in place for any code path still reading it directly.
+- **Trailblazer slot counter** lives in a single Durable Object (`server/trailblazerSlots.js`, binding `TRAILBLAZER_SLOTS`) so the 500-cap is atomic against concurrent checkouts without a transactional KV layer. `/reserve` hands out a number (30-minute TTL); `/confirm` permanently claims it. Confirmed slots never release — that's the product invariant.
+
 ## Architecture doc
 
 `docs/architecture.md` explains the app for a new developer: PouchDB wiring, port protocol, Dict-based data modeling, document ID conventions, startup/sync sequence, lazy loading, amendments, and soft deletes.

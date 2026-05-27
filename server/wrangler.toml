@@ -51,6 +51,18 @@ id = "679c582bcded4fef8fdb3cebcb8940cc"
 binding = "QR_KV"
 id = "5842530248344e7a996993bc38e99822"
 
+# Trailblazer slot counter (1..500) — see server/trailblazerSlots.js. A DO
+# (rather than KV) because the 500-cap must be atomic against concurrent
+# checkout webhooks; DOs are single-threaded so the cap is free. Single
+# global instance addressed via env.TRAILBLAZER_SLOTS.idFromName('global').
+[[durable_objects.bindings]]
+name = "TRAILBLAZER_SLOTS"
+class_name = "TrailblazerSlots"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["TrailblazerSlots"]
+
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
 # Resend audience ID for the marketing waitlist. Required path
