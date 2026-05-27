@@ -16,6 +16,7 @@ L.Icon.Default.mergeOptions({
 })
 import * as exifr from 'exifr'
 import { attachPouch } from './pouch.js'
+import { attachDemo } from './demo.js'
 import './global.css'
 import './elements/map-picker.js'
 import './elements/waypoint-map.js'
@@ -93,15 +94,35 @@ import './elements/tp-amount.js'
   // ── App keys for wipe ─────────────────────────────────────────────────
   const APP_KEYS = ['auth_creds', 'anthropic_key']
 
+  // ── Demo mode detection ───────────────────────────────────────────────
+  //
+  // /demo serves the same SPA bundle (root wrangler.jsonc is SPA mode) but
+  // skips IndexedDB reads, skips PouchDB attach, and seeds movie road trips
+  // into memory via attachDemo. The URL is rewritten to /trips so the Elm
+  // router lands on RouteTrips without any Elm-side change.
+  const isDemo = window.location.pathname.startsWith('/demo')
+  if (isDemo) {
+    window.history.replaceState(null, '', '/trips')
+  }
+
   // ── Load all persisted settings before starting Elm ───────────────────
 
-  const [authCredsRaw, anthropicKey] = await Promise.all([
-    idbGet('auth_creds'),
-    idbGet('anthropic_key'),
-  ])
+  const [authCredsRaw, anthropicKey] = isDemo
+    ? [null, null]
+    : await Promise.all([
+        idbGet('auth_creds'),
+        idbGet('anthropic_key'),
+      ])
 
   let authCreds = null
-  if (authCredsRaw) {
+  if (isDemo) {
+    authCreds = {
+      dbName: 'demo',
+      email: 'demo@ternpike.com',
+      password: 'demo',
+      tier: 'osprey',
+    }
+  } else if (authCredsRaw) {
     try {
       authCreds = JSON.parse(authCredsRaw)
     } catch (_) {
@@ -115,6 +136,7 @@ import './elements/tp-amount.js'
     backendUrl:     'https://api.ternpike.com',
     basePath:       import.meta.env.BASE_URL,
     colorScheme:    localStorage.getItem('color_scheme') || 'auto',
+    demoMode:       isDemo,
     today:          new Date().toISOString().slice(0, 10),
     vapidPublicKey: import.meta.env.VITE_VAPID_PUBLIC_KEY || '',
     version:        __BUILD_SHA__,
@@ -136,7 +158,11 @@ import './elements/tp-amount.js'
     /* eslint-enable no-underscore-dangle */
   }
 
-  attachPouch(app, { creds: authCreds })
+  if (isDemo) {
+    attachDemo(app)
+  } else {
+    attachPouch(app, { creds: authCreds })
+  }
 
   // ── Port handlers ──────────────────────────────────────────────────────
 

@@ -152,6 +152,13 @@ port (see below) which forwards `navigator.onLine` plus `online`/`offline`
 window events. The value is inverted so the field reads naturally
 (`if as_.networkOffline then ...`).
 
+`demoMode : Bool` is also on both states. Set to `True` by the
+`demoMode` flag when the app boots at `/demo` (see `src/main.js` and
+`src/demo.js`) — turns on the top "DEMO MODE" banner and is the only
+piece of UI that branches on it. The flag flows `flags → init → gs →
+toAuthState` and back via `toGuestState` so it survives any
+hypothetical session-expired roundtrip without re-detection.
+
 Transient view state (`statsHover : Data.StatsHover.Hover`,
 `statsGranularity : Maybe Data.StatsGranularity.Granularity`,
 `showDayIntensity : Bool`, `showInstallPrompt : Bool`, `scanQueue`,
