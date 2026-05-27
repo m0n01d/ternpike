@@ -76,6 +76,7 @@
   --animate-stagger-row: stagger-row 0.5s ease backwards;
   --animate-pulse-soft:  pulse-soft 1.4s ease-in-out infinite;
   --animate-scroll-pulse: scroll-pulse 1.6s ease-in-out infinite;
+  --animate-scan-sweep:   scan-sweep 1.6s ease-in-out infinite;
 
   @keyframes stagger-row {
     from { opacity: 0; transform: translateY(8px); }
@@ -90,6 +91,11 @@
   @keyframes scroll-pulse {
     0%, 100% { transform: translateY(0); opacity: 1; }
     50%      { transform: translateY(4px); opacity: 0.4; }
+  }
+
+  @keyframes scan-sweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
   }
 }
 

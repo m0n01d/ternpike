@@ -495,7 +495,13 @@ viewCategoryPill maybeCat =
 viewProgressBar : String -> Html Msg
 viewProgressBar widthClass =
     Html.div [ Html.Attributes.class "h-1 bg-cream-deep rounded-full overflow-hidden" ]
-        [ Html.div [ Html.Attributes.class ("h-full bg-rust animate-pulse-soft " ++ widthClass) ] [] ]
+        [ Html.div
+            [ Html.Attributes.class ("relative h-full bg-rust overflow-hidden transition-all duration-700 ease-out " ++ widthClass) ]
+            [ Html.div
+                [ Html.Attributes.class "absolute inset-0 bg-linear-to-r from-transparent via-parchment/60 to-transparent animate-scan-sweep" ]
+                []
+            ]
+        ]
 
 
 fileListDecoder : Json.Decode.Decoder (List File)
