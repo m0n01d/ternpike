@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 import { registerAdminRoutes } from './admin.js'
 import { getTier } from './auth.js'
 import { registerGeocodeRoutes } from './geocode.js'
+import { freshUser, getUser, migrateLegacy, upsertUser } from './users.js'
 import {
   registerNotificationRoutes,
   sendSyncStalledReminders,
@@ -13,6 +14,10 @@ import {
 import { registerQrRoutes } from './qr.js'
 import { registerScanRoutes } from './scan.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
+
+// Re-export the Durable Object class so wrangler can find it via the
+// `TRAILBLAZER_SLOTS` binding (see wrangler.toml `[[migrations]]`).
+export { TrailblazerSlots } from './trailblazerSlots.js'
 
 const CODE_TTL_SECONDS = 600
 const CODE_LENGTH = 6
@@ -215,6 +220,24 @@ app.post('/auth/verify-code', async (c) => {
   try {
     await ensureUser(env, email, password)
     await ensureDb(env, dbName, email)
+    // First-login hook: materialize the server-authoritative user record
+    // so downstream billing endpoints (#17/#18) have something to point at.
+    // If a legacy raw-string tier exists, migrate it; otherwise create a
+    // fresh `tern` record. The legacy-fallback inside `getTier` keeps
+    // existing callers green during the migration window.
+    if (env.TIERS_KV) {
+      try {
+        const existing = await getUser(env, email)
+        if (!existing) {
+          const migrated = await migrateLegacy(env, email)
+          if (!migrated) {
+            await upsertUser(env, freshUser(email))
+          }
+        }
+      } catch (err) {
+        console.error('verify-code user upsert:', err)
+      }
+    }
     const tier = await getTier(env, email)
     return c.json({ ok: true, dbName, email, password, tier })
   } catch (err) {
