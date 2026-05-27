@@ -133,6 +133,7 @@ import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestState, Model
 import UI.BillingBanner
 import UI.Layout
 import UI.ShareModal
+import UI.TripFormModal
 import UI.TripPicker
 import Url
 import Validate
@@ -3916,6 +3917,7 @@ viewAuth as_ =
                 Html.text ""
         , Pages.Settings.SharedTrips.viewModal as_
         , UI.ShareModal.view as_
+        , UI.TripFormModal.view as_
         , UI.Layout.viewToast as_.toast
         ]
 
