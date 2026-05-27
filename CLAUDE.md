@@ -489,6 +489,8 @@ Tier is server-authoritative — populated from the session at login + refreshed
 4. Server endpoints back paid features must re-check tier on every request. Client-side gating is UX, not security.
 5. **Trailblazer is permanent.** Webhook code never downgrades a Trailblazer. If you're writing logic that flips Trailblazer → Tern, that's a bug.
 
+**Feature gating helpers (`UI.Gate`).** Use `UI.Gate.paidOnly` (or `UI.Gate.requiresPaid`) for any "is this paid?" capability check. They collapse `Osprey + Trailblazer` to a single boolean. Branch on the full `Tier` type only when rendering tier-specific UI (badges, plan name on the billing screen) — the compiler then forces all three to be handled. Never write code that downgrades a `Trailblazer`; it is permanent.
+
 Tracking issues: #13 (BYO-key infrastructure, foundation for Tern), #14 (paid-only proxy + batch scanning), #4 (Cloudflare Worker rewrite, required for #14). Subscription infrastructure breakdown: #16–#22.
 
 > **Vocabulary note:** User-facing copy avoids the word "flock" — use "shared trip" in any new prose. Internal Elm identifiers (modules, types, Msg constructors) use `SharedTrip*` per the rebrand track in #124–#132.

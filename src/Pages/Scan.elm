@@ -8,7 +8,6 @@ import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..), needsReview)
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip exposing (SharedTrip)
 import Data.SharedTrips
-import Data.Tier
 import Data.Trip as Trip exposing (Trip)
 import Data.Trips
 import Dict
@@ -21,6 +20,7 @@ import Routing
 import Types exposing (AuthMsg_(..), AuthState, Msg(..), SharedMsg_(..))
 import UI.Button
 import UI.DateView
+import UI.Gate
 import UI.Icons
 import UI.MoneyView
 import UI.SharedTripBadge
@@ -73,16 +73,16 @@ viewTierLabel trip as_ =
                 [ Html.p
                     [ Html.Attributes.class "text-center text-[11px] font-mono uppercase tracking-widest text-moss" ]
                     [ Html.text ("Using your key ···" ++ AnthropicKey.lastFour key) ]
-                , if Data.Tier.isPaid as_.tier then
-                    Html.button
-                        [ Html.Attributes.type_ "button"
-                        , Html.Events.onClick (SharedMsg (ApiKeyChanged ""))
-                        , Html.Attributes.class "text-[11px] font-mono uppercase tracking-widest text-muted underline underline-offset-2 cursor-pointer"
-                        ]
-                        [ Html.text "Switch to hosted key" ]
-
-                  else
-                    Html.text ""
+                , UI.Gate.paidOnly as_.tier
+                    { paidView =
+                        Html.button
+                            [ Html.Attributes.type_ "button"
+                            , Html.Events.onClick (SharedMsg (ApiKeyChanged ""))
+                            , Html.Attributes.class "text-[11px] font-mono uppercase tracking-widest text-muted underline underline-offset-2 cursor-pointer"
+                            ]
+                            [ Html.text "Switch to hosted key" ]
+                    , upgradePrompt = Html.text ""
+                    }
                 ]
 
         HostedPath ->
@@ -107,7 +107,7 @@ viewTierLabel trip as_ =
 
 paidOcrLabel : Trip -> AuthState -> String
 paidOcrLabel trip as_ =
-    if Data.Tier.isPaid (Trip.effectiveTier trip as_) && Trip.canBatchScan trip as_ then
+    if UI.Gate.requiresPaid (Trip.effectiveTier trip as_) && Trip.canBatchScan trip as_ then
         "Hosted OCR · parallel"
 
     else
