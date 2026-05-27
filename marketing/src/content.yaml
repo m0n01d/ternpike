@@ -33,6 +33,10 @@ hero:
       arrow: true
       href: "#signup"
     - kind: "ghost"
+      label: "Try the live demo"
+      arrow: true
+      href: "https://app.ternpike.com/demo"
+    - kind: "ghost"
       label: "See how it works"
       href: "#how"
   proof: "Built on the Alaska Highway. Used in the real world."

@@ -248,6 +248,7 @@ toAuthState creds initialRoute gs =
     , creds = creds
     , currentLocation = LocationIdle
     , currentUser = UserId.fromString creds.email
+    , demoMode = gs.demoMode
     , duplicateWarning = Nothing
     , error = Nothing
     , expenses = Dict.empty
@@ -295,6 +296,7 @@ toGuestState reason as_ =
     { authError = Nothing
     , basePath = as_.basePath
     , codeInput = ""
+    , demoMode = as_.demoMode
     , emailInput = ""
     , key = as_.key
     , networkOffline = as_.networkOffline
@@ -1581,6 +1583,10 @@ init flagsJson url key =
             D.decodeValue (D.field "authCreds" (D.nullable credsDecoder)) flagsJson
                 |> Result.withDefault Nothing
 
+        demoMode =
+            D.decodeValue (D.field "demoMode" D.bool) flagsJson
+                |> Result.withDefault False
+
         initialColorScheme =
             D.decodeValue (D.field "colorScheme" D.string) flagsJson
                 |> Result.toMaybe
@@ -1609,6 +1615,7 @@ init flagsJson url key =
             { authError = Nothing
             , basePath = basePath
             , codeInput = ""
+            , demoMode = demoMode
             , emailInput = ""
             , key = key
             , networkOffline = False
@@ -1734,6 +1741,7 @@ updateShared msg model =
                         { authError = Nothing
                         , basePath = as_.basePath
                         , codeInput = ""
+                        , demoMode = as_.demoMode
                         , emailInput = ""
                         , key = as_.key
                         , networkOffline = as_.networkOffline
@@ -3835,9 +3843,19 @@ joinErrorMessage err =
 
 view : Model -> Browser.Document Msg
 view model =
+    let
+        demoMode =
+            case model of
+                GuestModel gs ->
+                    gs.demoMode
+
+                AuthModel as_ ->
+                    as_.demoMode
+    in
     { title = "Ternpike"
     , body =
-        [ Html.div
+        [ viewDemoBanner demoMode
+        , Html.div
             [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-dvh font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
             [ case model of
                 GuestModel gs ->
@@ -3848,6 +3866,23 @@ view model =
             ]
         ]
     }
+
+
+viewDemoBanner : Bool -> Html Msg
+viewDemoBanner demoMode =
+    if demoMode then
+        Html.div
+            [ Html.Attributes.class "bg-rust text-parchment text-xs font-display tracking-wide px-3 py-2 text-center" ]
+            [ Html.text "DEMO MODE — fictional movie road trips. "
+            , Html.a
+                [ Html.Attributes.href "https://ternpike.com"
+                , Html.Attributes.class "underline font-bold"
+                ]
+                [ Html.text "Sign up to track your own →" ]
+            ]
+
+    else
+        Html.text ""
 
 
 viewAuth : AuthState -> Html Msg

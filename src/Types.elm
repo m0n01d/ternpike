@@ -102,6 +102,7 @@ type alias GuestState =
     { authError : Maybe String
     , basePath : String
     , codeInput : String
+    , demoMode : Bool
     , emailInput : String
     , key : Nav.Key
     , networkOffline : Bool
@@ -172,6 +173,7 @@ type alias AuthState =
     , confirmDeleteTrip : Maybe Trip
     , creds : Creds
     , currentUser : Data.UserId.UserId
+    , demoMode : Bool
     , duplicateWarning : Maybe Expense
     , error : Maybe String
     , currentLocation : LocationState
