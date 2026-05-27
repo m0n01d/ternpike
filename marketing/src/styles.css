@@ -48,6 +48,21 @@
   .email-btn.is-success { background: var(--color-forest); }
   .email-input.is-error { border-color: var(--color-rust); }
 
+  /* Voice-led subheads sitting under keyword-led H2s on the homepage. The
+     same multi-utility chain repeats across 5 sections (how-it-works,
+     features, ledger-preview, pricing, comparison) — qualifies for the
+     @apply escape hatch per CLAUDE.md styling rules. Uses forest-mid (not
+     moss) to keep WCAG AA contrast against cream / cream-deep / parchment. */
+  .section-subhead {
+    @apply mt-3 font-body italic text-[clamp(17px,2.2vw,20px)] text-forest-mid leading-[1.5];
+  }
+
+  /* Hero subhead — the demoted "Orlando to Juneau" tagline under the new H1.
+     Display font in italic + rust accent, sized between H1 and lead body. */
+  .hero-subhead {
+    @apply mt-3 font-display italic text-rust text-[clamp(20px,3vw,28px)] leading-[1.25] tracking-[-0.01em];
+  }
+
   /* Ledger row component family — the canonical @apply escape hatch.
      The row repeats 5-8 times in marketing/src/partials/ledger-preview.njk,
      and inlining 8+ utilities per row across a loop hurts legibility. Keep

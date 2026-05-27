@@ -1,7 +1,8 @@
 <section class="relative overflow-hidden py-[100px] px-6 bg-cream" id="compare">
   <div class="max-w-[1000px] mx-auto relative z-10">
     <div class="font-mono text-[10px] tracking-[0.25em] uppercase text-rust mb-3">{{ comparison.eyebrow }}</div>
-    <h2 class="font-display font-black text-[clamp(36px,6vw,60px)] tracking-[-0.02em] leading-[1.05] text-forest mb-[60px]">{{ comparison.headline }}</h2>
+    <h2 class="font-display font-black text-[clamp(36px,6vw,60px)] tracking-[-0.02em] leading-[1.05] text-forest">{{ comparison.seoHeadline }}</h2>
+    <p class="section-subhead mb-[60px]">{{ comparison.headline }}</p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-12">
       {% for col in comparison.columns %}

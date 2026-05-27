@@ -1,6 +1,6 @@
 meta:
-  title: "Ternpike — Track Every Turn of the Road"
-  description: "Snap a receipt at camp. Ternpike reads it, logs your GPS, and shows exactly what the trip is costing you day by day, dollar by dollar."
+  title: "Ternpike — Expense Tracker for Road Trips, Van Life & RVs"
+  description: "Built for road trippers, van lifers, and overlanders. Scan receipts, log GPS, share a ledger with your crew. Works offline. Free, with a lifetime tier."
   lang: "en"
 
 brand:
@@ -20,13 +20,10 @@ nav:
     href: "/#signup"
 
 hero:
-  headline:
-    lines:
-      - "Orlando to Juneau."
-      - "Every dollar accounted for."
+  headline: "Expense tracking for road trips, van life, and the long way home."
+  subheadline: "Orlando to Juneau. Every dollar accounted for."
   sub:
-    - "Ternpike is a trip expense tracker built for life on the road."
-    - "Snap a receipt at camp, log your location, and see exactly what the trip is costing you. Day by day, dollar by dollar."
+    - "Ternpike is the offline-first trip expense tracker built for life on the road. Snap a receipt, log your location, see exactly what each day costs. Built on the Alaska Highway, used in the real world."
   actions:
     - kind: "primary"
       label: "Start for free"
@@ -43,46 +40,58 @@ hero:
 
 howItWorks:
   eyebrow: "How it works"
+  seoHeadline: "How Ternpike tracks road trip expenses"
   headlineHtml: "Three steps.<br>Then get some sleep."
   steps:
     - number: "01"
       icon: "📸"
+      iconName: "camera"
       title: "Snap your receipts"
       body: "Photograph one receipt or a stack at the end of the day. Ternpike reads them and pulls out the amount, merchant, category, and a note. No signal? Just type it in. Nothing gets lost."
     - number: "02"
       icon: "📍"
+      iconName: "map-pin"
       title: "Log your location"
       body: "Every expense gets a GPS pin. Your route builds itself as you go."
     - number: "03"
       icon: "✅"
+      iconName: "check"
       title: "See the full picture"
       body: "Open the ledger. See what you've spent by day and by category. Know your daily average before you decide whether to splurge on a cabin or sleep in the truck."
 
 features:
   eyebrow: "Features"
+  seoHeadline: "Built for offline travel expense tracking"
   headlineHtml: "Built for the realities<br>of remote travel."
   items:
     - icon: "📶"
+      iconName: "wifi-off"
       title: "Works without signal"
       body: "Log expenses anywhere. Everything syncs when you're back online."
     - icon: "🧾"
+      iconName: "receipt"
       title: "Receipt scanning"
       body: "Point your camera at a receipt and Ternpike fills in the details. Review and confirm. Move on."
     - icon: "🗺️"
+      iconName: "map"
       title: "GPS trail"
       body: "Every expense with a location plots on a live map. A record of everywhere you stopped and everything you spent."
     - icon: "📄"
+      iconName: "file-export"
       title: "Your data"
       body: "Your expenses live in your account. Export to CSV anytime."
     - icon: "👥"
+      iconName: "users"
       title: "Nest. Shared ledger."
       body: "Add your partner, family, or travel crew. Everyone logs to the same trip. One budget, multiple contributors."
     - icon: "📊"
+      iconName: "chart-bar"
       title: "Stats that matter"
       body: "Daily average. Top category. Projected total. The things you actually want to know when you're deciding where to camp tonight."
 
 ledgerPreview:
   sectionLabel: "The ledger"
+  seoHeadline: "The road trip ledger"
   headline: "Looks like a journal.\nWorks like a spreadsheet."
   caption: "Every expense logged, categorized, and mapped. Grouped by day so the story of your trip reads like a trip, not an accounting report."
   totalLabel: "Running total"
@@ -129,6 +138,7 @@ ledgerPreview:
 
 pricing:
   sectionLabel: "Pricing"
+  seoHeadline: "Pricing for every kind of road tripper"
   headline: "Simple.\nNo surprises."
   finePrint: "Tern is genuinely free, forever. No trials that flip to paid."
   tiers:
@@ -199,6 +209,7 @@ origin:
 
 comparison:
   eyebrow: "Why Ternpike"
+  seoHeadline: "Why choose Ternpike over other travel expense apps"
   headline: "The only app that does all four."
   columns:
     - kind: "them"
