@@ -24,6 +24,20 @@ for (const page of pages) {
   await writeFile(join(dist, `${page}.html`), html)
 }
 
+const siteUrl = 'https://ternpike.com'
+const buildDate = new Date().toISOString().slice(0, 10)
+const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${pages
+  .map((page) => {
+    const path = page === 'index' ? '/' : `/${page}`
+    return `  <url>\n    <loc>${siteUrl}${path}</loc>\n    <lastmod>${buildDate}</lastmod>\n  </url>`
+  })
+  .join('\n')}
+</urlset>
+`
+await writeFile(join(dist, 'sitemap.xml'), sitemap)
+
 const cssRaw = await readFile(join(src, 'styles.css'), 'utf8')
 const result = await postcss([tailwindcss()]).process(cssRaw, {
   from: join(src, 'styles.css'),
