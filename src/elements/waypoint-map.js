@@ -127,14 +127,17 @@ class WaypointMap extends HTMLElement {
     // each child's tpData.date / dayLabel to build a date-range
     // label, which (a) fixes the date-marker / count-badge overlap
     // when same-day stops cluster, and (b) bins days into ranges at
-    // low zoom levels. maxClusterRadius scales with zoom: aggressive
-    // (80 px) when zoomed way out, tight (40 px) at street level.
+    // low zoom levels. maxClusterRadius tightens with zoom so
+    // clicking a cluster zooms into real geographic positions
+    // instead of a radial spiderfy; disableClusteringAtZoom forces
+    // individual markers at street zoom.
     this._clusters = L.markerClusterGroup({
-      showCoverageOnHover: false,
-      maxClusterRadius: zoom =>
-        zoom < 8 ? 80 : zoom < 12 ? 60 : 40,
-      spiderfyOnMaxZoom: true,
+      disableClusteringAtZoom: 14,
       iconCreateFunction: rangeClusterIcon,
+      maxClusterRadius: zoom =>
+        zoom < 8 ? 60 : zoom < 12 ? 30 : 15,
+      showCoverageOnHover: false,
+      spiderfyOnMaxZoom: false,
     })
     pts.forEach(p => {
       const icon = p.isDayBoundary ? dayPillIcon(p.dayLabel) : stopDotIcon()
