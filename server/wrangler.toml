@@ -61,7 +61,7 @@ class_name = "TrailblazerSlots"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["TrailblazerSlots"]
+new_sqlite_classes = ["TrailblazerSlots"]
 
 [vars]
 COUCH_URL = "https://couch.ternpike.com"
