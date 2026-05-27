@@ -3837,7 +3837,7 @@ view model =
     { title = "Ternpike"
     , body =
         [ Html.div
-            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-screen font-body max-w-[480px] mx-auto relative" ]
+            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-dvh font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
             [ case model of
                 GuestModel gs ->
                     viewGuest gs
