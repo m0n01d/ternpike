@@ -3,13 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{% block title %}{{ meta.title }}{% endblock %}</title>
-<meta name="description" content="{% block description %}{{ meta.description }}{% endblock %}">
+<title>{{ page.title }}</title>
+<meta name="description" content="{{ page.description }}">
+<link rel="canonical" href="{{ siteUrl }}{{ page.url }}">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#6b7c58">
+
+<meta property="og:title" content="{{ page.title }}">
+<meta property="og:description" content="{{ page.description }}">
+<meta property="og:image" content="{{ siteUrl }}{{ page.ogImage or '/img/og-default.png' }}">
+<meta property="og:url" content="{{ siteUrl }}{{ page.url }}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ page.title }}">
+<meta name="twitter:description" content="{{ page.description }}">
+<meta name="twitter:image" content="{{ siteUrl }}{{ page.ogImage or '/img/og-default.png' }}">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Ternpike",
+  "url": "{{ siteUrl }}",
+  "logo": "{{ siteUrl }}/apple-touch-icon.png",
+  "sameAs": ["https://github.com/m0n01d/ternpike"]
+}
+</script>
+
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,500;1,700&family=DM+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
+{% block extraHead %}{% endblock %}
 </head>
 <body>
 

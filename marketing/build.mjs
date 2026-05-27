@@ -17,22 +17,48 @@ await mkdir(dist, { recursive: true })
 const contentRaw = await readFile(join(src, 'content.yaml'), 'utf8')
 const content = yaml.load(contentRaw)
 
+const siteUrl = 'https://ternpike.com'
 const env = nunjucks.configure(src, { autoescape: true, noCache: true })
-const pages = ['index', 'privacy', 'terms']
+
+// Per-page metadata. `url` is the canonical path; the file is written to
+// `<slug>.html` and Cloudflare Pages serves it at `url` (stripping .html).
+const pages = [
+  {
+    slug: 'index',
+    url: '/',
+    title: 'Ternpike — Track Every Turn of the Road',
+    description:
+      'Snap a receipt at camp. Ternpike reads it, logs your GPS, and shows exactly what the trip is costing you day by day, dollar by dollar.',
+  },
+  {
+    slug: 'privacy',
+    url: '/privacy',
+    title: 'Privacy Policy — Ternpike',
+    description:
+      'How Ternpike collects, stores, and shares your data. Short version: as little as possible, on infrastructure we operate, never sold.',
+  },
+  {
+    slug: 'terms',
+    url: '/terms',
+    title: 'Terms of Service — Ternpike',
+    description:
+      'The terms that govern your use of Ternpike — accounts, billing, refunds, acceptable use, and the disclaimers we have to write down.',
+  },
+]
+
 for (const page of pages) {
-  const html = env.render(`${page}.njk`, content)
-  await writeFile(join(dist, `${page}.html`), html)
+  const html = env.render(`${page.slug}.njk`, { ...content, page, siteUrl })
+  await writeFile(join(dist, `${page.slug}.html`), html)
 }
 
-const siteUrl = 'https://ternpike.com'
 const buildDate = new Date().toISOString().slice(0, 10)
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${pages
-  .map((page) => {
-    const path = page === 'index' ? '/' : `/${page}`
-    return `  <url>\n    <loc>${siteUrl}${path}</loc>\n    <lastmod>${buildDate}</lastmod>\n  </url>`
-  })
+  .map(
+    (page) =>
+      `  <url>\n    <loc>${siteUrl}${page.url}</loc>\n    <lastmod>${buildDate}</lastmod>\n  </url>`,
+  )
   .join('\n')}
 </urlset>
 `

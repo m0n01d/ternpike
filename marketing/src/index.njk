@@ -1,19 +1,26 @@
-<!DOCTYPE html>
-<html lang="{{ meta.lang }}">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ meta.title }}</title>
-<meta name="description" content="{{ meta.description }}">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="theme-color" content="#6b7c58">
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,500;1,700&family=DM+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400;1,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css">
-</head>
-<body>
+{% extends "_layout.njk" %}
 
-{% include "partials/nav.njk" %}
+{% block extraHead %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Ternpike",
+  "applicationCategory": "TravelApplication",
+  "operatingSystem": "iOS, Android, Web",
+  "description": "Offline-first expense tracker for road trips, van life, and overland travel. Scan receipts, log GPS, share a ledger with your crew.",
+  "url": "{{ siteUrl }}",
+  "offers": [
+    {"@type": "Offer", "name": "Tern", "price": "0", "priceCurrency": "USD", "description": "Free forever tier"},
+    {"@type": "Offer", "name": "Osprey", "price": "2.99", "priceCurrency": "USD", "description": "Monthly subscription"},
+    {"@type": "Offer", "name": "Trailblazer", "price": "79", "priceCurrency": "USD", "description": "One-time, lifetime access, limited to first 500"}
+  ],
+  "creator": {"@type": "Organization", "name": "Ternpike", "url": "{{ siteUrl }}"}
+}
+</script>
+{% endblock %}
+
+{% block content %}
 {% include "partials/hero.njk" %}
 {% include "partials/how-it-works.njk" %}
 {% include "partials/features.njk" %}
@@ -22,11 +29,4 @@
 {% include "partials/origin.njk" %}
 {% include "partials/comparison.njk" %}
 {% include "partials/email-capture.njk" %}
-{% include "partials/footer.njk" %}
-
-<script src="/main.js"></script>
-
-<script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "{{ analytics.cloudflareBeaconToken }}"}'></script>
-
-</body>
-</html>
+{% endblock %}
