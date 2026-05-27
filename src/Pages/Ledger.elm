@@ -439,7 +439,7 @@ viewLedgerMap model entries =
         in
         Html.node "waypoint-map"
             [ Html.Attributes.attribute "points" (encodeWaypoints entries)
-            , Html.Attributes.class ("block w-full rounded-xl overflow-hidden " ++ sizing)
+            , Html.Attributes.class ("block isolate w-full rounded-xl overflow-hidden " ++ sizing)
             ]
             []
 
