@@ -426,6 +426,7 @@ type AuthMsg_
     | OpenMovePicker Expense
     | OpenNewTripForm
     | OpenShareModal
+    | OpenShareTripModal Trip
     | OpenTransferModal SharedTripId
     | PaymentMethodChanged (Maybe PaymentMethod)
     | PushSubscribeReceived { error : String, ok : Bool }
@@ -436,6 +437,12 @@ type AuthMsg_
     | ScanProxyResult { body : String, itemId : String, ok : Bool, status : Int }
     | SetStatsGranularity Granularity
     | ShareResultReceived { ok : Bool, reason : String }
+    | ShareTripAdoptResult (Result Http.Error ())
+    | ShareTripCreatedResult (Result Http.Error Http.SharedTripApi.CreateSharedTripResponse)
+    | ShareTripGroupNameChanged String
+    | ShareTripInviteeAdded
+    | ShareTripInviteeDraftChanged String
+    | ShareTripInviteeRemoved Int
     | ShareViaNative ShareMode
     | SharedTripActivityNotified
     | SignOutClicked
@@ -443,6 +450,7 @@ type AuthMsg_
     | SubmitCreateSharedTrip
     | SubmitEntry
     | SubmitInvite
+    | SubmitShareTrip
     | SubmitTransfer
     | TakeOverBilling SharedTripId
     | ToastExpired

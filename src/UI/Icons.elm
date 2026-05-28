@@ -15,6 +15,7 @@ module UI.Icons exposing
     , pin
     , plus
     , settings
+    , share
     , trash
     )
 
@@ -193,6 +194,17 @@ pencil classes =
         [ Svg.path [ Svg.Attributes.d "M4 20 L8 19 L20 7 L17 4 L5 16 Z" ] []
         , Svg.path [ Svg.Attributes.d "M14 7 L17 10" ] []
         , Svg.path [ Svg.Attributes.d "M5 16 L8 19" ] []
+        ]
+
+
+share : String -> Svg.Svg msg
+share classes =
+    Svg.svg (common classes)
+        [ Svg.circle [ Svg.Attributes.cx "18", Svg.Attributes.cy "5", Svg.Attributes.r "3" ] []
+        , Svg.circle [ Svg.Attributes.cx "6", Svg.Attributes.cy "12", Svg.Attributes.r "3" ] []
+        , Svg.circle [ Svg.Attributes.cx "18", Svg.Attributes.cy "19", Svg.Attributes.r "3" ] []
+        , Svg.path [ Svg.Attributes.d "M8.6 13.5 L15.4 17.5" ] []
+        , Svg.path [ Svg.Attributes.d "M15.4 6.5 L8.6 10.5" ] []
         ]
 
 

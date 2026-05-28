@@ -3746,6 +3746,188 @@ updateAuth msg as_ =
                     , Cmd.none
                     )
 
+        OpenShareTripModal trip ->
+            ( AuthModel { as_ | sharedTripUi = SharedTripUi.openShareTrip trip.id trip.name as_.sharedTripUi }
+            , Cmd.none
+            )
+
+        ShareTripGroupNameChanged value ->
+            ( AuthModel { as_ | sharedTripUi = SharedTripUi.mapShareDraft (\d -> { d | groupName = value }) as_.sharedTripUi }
+            , Cmd.none
+            )
+
+        ShareTripInviteeDraftChanged value ->
+            ( AuthModel { as_ | sharedTripUi = SharedTripUi.mapShareDraft (\d -> { d | inviteesDraft = value }) as_.sharedTripUi }
+            , Cmd.none
+            )
+
+        ShareTripInviteeAdded ->
+            ( AuthModel
+                { as_
+                    | sharedTripUi =
+                        SharedTripUi.mapShareDraft
+                            (\d ->
+                                let
+                                    trimmed =
+                                        String.trim d.inviteesDraft
+                                in
+                                if trimmed == "" || List.member trimmed d.invitees then
+                                    { d | inviteesDraft = "" }
+
+                                else
+                                    { d | invitees = d.invitees ++ [ trimmed ], inviteesDraft = "" }
+                            )
+                            as_.sharedTripUi
+                }
+            , Cmd.none
+            )
+
+        ShareTripInviteeRemoved index ->
+            ( AuthModel
+                { as_
+                    | sharedTripUi =
+                        SharedTripUi.mapShareDraft
+                            (\d ->
+                                { d
+                                    | invitees =
+                                        List.indexedMap Tuple.pair d.invitees
+                                            |> List.filter (\( i, _ ) -> i /= index)
+                                            |> List.map Tuple.second
+                                }
+                            )
+                            as_.sharedTripUi
+                }
+            , Cmd.none
+            )
+
+        SubmitShareTrip ->
+            case as_.sharedTripUi.modal of
+                SharedTripUi.ShareTripModal _ { draft } ->
+                    if not (Tier.isPaid as_.tier) then
+                        -- Tern: the modal shows an upgrade prompt; submit is inert.
+                        ( AuthModel as_, Cmd.none )
+
+                    else if String.trim draft.groupName == "" then
+                        ( AuthModel
+                            (updateModalRequest
+                                (\m ->
+                                    case m of
+                                        SharedTripUi.ShareTripModal tid data ->
+                                            Just (SharedTripUi.ShareTripModal tid { data | request = RemoteData.Failure (Http.BadBody "Name is required.") })
+
+                                        _ ->
+                                            Nothing
+                                )
+                                as_
+                            )
+                        , Cmd.none
+                        )
+
+                    else
+                        ( AuthModel
+                            (updateModalRequest
+                                (\m ->
+                                    case m of
+                                        SharedTripUi.ShareTripModal tid data ->
+                                            Just (SharedTripUi.ShareTripModal tid { data | request = RemoteData.Loading })
+
+                                        _ ->
+                                            Nothing
+                                )
+                                as_
+                            )
+                        , Http.SharedTripApi.createSharedTrip as_.creds { name = String.trim draft.groupName } (AuthMsg << ShareTripCreatedResult)
+                        )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        ShareTripCreatedResult result ->
+            case as_.sharedTripUi.modal of
+                SharedTripUi.ShareTripModal tripId { draft } ->
+                    case RemoteData.fromResult result of
+                        RemoteData.Success response ->
+                            -- Shared trip created. Open its handle, move the existing
+                            -- trip's docs into it (adopt), and fan out invites. The
+                            -- modal stays in Loading until ShareTripAdoptResult lands.
+                            let
+                                inviteCmds =
+                                    List.map
+                                        (\email ->
+                                            Http.SharedTripApi.inviteToSharedTrip
+                                                as_.creds
+                                                response.sharedTripId
+                                                { email = email }
+                                                (\_ -> AuthMsg TripInviteResult)
+                                        )
+                                        draft.invitees
+                            in
+                            ( AuthModel as_
+                            , Cmd.batch
+                                ([ sendPouch
+                                    (OpenSharedTrip
+                                        { flockId = response.sharedTripId
+                                        , dbName = "sharedtrip-" ++ Data.SharedTripId.toString response.sharedTripId
+                                        }
+                                    )
+                                 , Http.SharedTripApi.adoptTrip
+                                    as_.creds
+                                    response.sharedTripId
+                                    { tripId = TripId.toString tripId }
+                                    (AuthMsg << ShareTripAdoptResult)
+                                 ]
+                                    ++ inviteCmds
+                                )
+                            )
+
+                        remote ->
+                            ( AuthModel
+                                (updateModalRequest
+                                    (\m ->
+                                        case m of
+                                            SharedTripUi.ShareTripModal tid data ->
+                                                Just (SharedTripUi.ShareTripModal tid { data | request = RemoteData.map (\_ -> ()) remote })
+
+                                            _ ->
+                                                Nothing
+                                    )
+                                    as_
+                                )
+                            , Cmd.none
+                            )
+
+                _ ->
+                    ( AuthModel as_, Cmd.none )
+
+        ShareTripAdoptResult result ->
+            case result of
+                Ok () ->
+                    -- Don't optimistically touch the trip: the personal handle's
+                    -- DbDeleted (server hard-deleted the originals) and the shared
+                    -- handle's DbChange (re-adds tagged with the flockId) settle it.
+                    ( AuthModel
+                        (setSharedTripModal SharedTripUi.NoModal
+                            { as_ | toast = Just "Trip shared. Syncing to everyone…" }
+                        )
+                    , toastFor
+                    )
+
+                Err err ->
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.ShareTripModal tid data ->
+                                        Just (SharedTripUi.ShareTripModal tid { data | request = RemoteData.Failure err })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
+                    , Cmd.none
+                    )
+
         BillingCheckoutClicked plan ->
             ( AuthModel { as_ | billingCheckout = RemoteData.Loading }
             , Http.Billing.checkout as_.config as_.creds { plan = plan } (AuthMsg << BillingCheckoutResult)

@@ -19,6 +19,10 @@ export type SeedTrip = {
   description?: string
   endDate: string
   flockId?: string
+  // Pin an explicit `_id` instead of the generated one. Needed when a server
+  // CouchDB row must reference the same trip id the client holds (e.g. the
+  // adopt-trip flow, where the server reads the trip out of CouchDB by id).
+  id?: string
   name: string
   startDate: string
 }
@@ -83,7 +87,7 @@ const buildDocs = (data: SeedData): Record<string, unknown>[] => {
   const tripIds: string[] = []
 
   for (const trip of data.trips || []) {
-    const id = makeId('trip', trip.startDate, seq++)
+    const id = trip.id ?? makeId('trip', trip.startDate, seq++)
     tripIds.push(id)
     const tripDoc: Record<string, unknown> = {
       _id: id,

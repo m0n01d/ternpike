@@ -21,12 +21,14 @@ import Data.SharedTrip as SharedTrip exposing (SharedTrip)
 import Data.SharedTripUi as SharedTripUi
 import Data.SharedTrips as SharedTrips
 import Data.Tier as Tier
+import Data.Trip
 import Data.UserId as UserId exposing (UserId)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Html.Extra
 import Http
+import Json.Decode
 import RemoteData exposing (RemoteData)
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Avatar
@@ -263,6 +265,41 @@ viewModal as_ =
                     }
                 ]
 
+        SharedTripUi.ShareTripModal _ { draft, request } ->
+            modalShell "Share this trip"
+                (if Tier.isPaid as_.tier then
+                    [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
+                        [ Html.text "Invite people to co-track this trip. We'll email them a one-click link to join — and the trip's existing entries come with it." ]
+                    , formField "INVITE EMAILS" (viewShareInviteeChips draft)
+                    , Html.details [ Html.Attributes.class "mb-3" ]
+                        [ Html.summary [ Html.Attributes.class "text-[11px] font-mono uppercase tracking-widest text-moss cursor-pointer" ]
+                            [ Html.text "Advanced — group name" ]
+                        , Html.input
+                            [ Html.Attributes.type_ "text"
+                            , Html.Attributes.value draft.groupName
+                            , Html.Events.onInput (AuthMsg << ShareTripGroupNameChanged)
+                            , Html.Attributes.placeholder "Group name"
+                            , textInputStyle
+                            , Html.Attributes.class "mt-2"
+                            ]
+                            []
+                        ]
+                    , viewModalActions
+                        { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
+                        , confirmLabel = "Share"
+                        , confirmMsg = AuthMsg SubmitShareTrip
+                        , request = request
+                        }
+                    ]
+
+                 else
+                    [ Html.p [ Html.Attributes.class "text-sm text-ink mb-3" ]
+                        [ Html.text "Sharing a trip with travel companions is an Osprey feature. Upgrade from Settings → Plan to invite people to co-track this trip." ]
+                    , Html.div [ Html.Attributes.class "flex gap-2 mt-4" ]
+                        [ UI.Button.ghost { label = "Close", onClick = AuthMsg CloseSharedTripModal } ]
+                    ]
+                )
+
         SharedTripUi.TransferModal sharedTripId { request, target } ->
             let
                 memberOptions =
@@ -390,6 +427,63 @@ viewErrorChip : String -> Html msg
 viewErrorChip message =
     Html.div [ Html.Attributes.class "bg-rust-tint border border-rust rounded-lg p-2.5 mb-3" ]
         [ Html.p [ Html.Attributes.class "text-sm text-rust" ] [ Html.text message ] ]
+
+
+{-| The invitee chip input for the "Share this trip" modal — mirrors the
+New-Trip dialog's chip input but drives the `ShareTrip*` messages.
+-}
+viewShareInviteeChips : Data.Trip.NewFlockDraft -> Html Msg
+viewShareInviteeChips draft =
+    Html.div [ Html.Attributes.class "flex flex-wrap items-center gap-1.5" ]
+        (List.indexedMap viewShareInviteeChip draft.invitees
+            ++ [ Html.input
+                    [ Html.Attributes.type_ "email"
+                    , Html.Attributes.value draft.inviteesDraft
+                    , Html.Events.onInput (AuthMsg << ShareTripInviteeDraftChanged)
+                    , Html.Events.preventDefaultOn "keydown" shareInviteeKeyDecoder
+                    , Html.Attributes.placeholder
+                        (if List.isEmpty draft.invitees then
+                            "name@example.com"
+
+                         else
+                            "add another…"
+                        )
+                    , Html.Attributes.class "flex-1 min-w-[140px] bg-parchment dark:bg-cream border border-tan rounded-lg px-2 py-1.5 text-[13px] focus:outline-none focus:border-moss"
+                    ]
+                    []
+               ]
+        )
+
+
+viewShareInviteeChip : Int -> String -> Html Msg
+viewShareInviteeChip index email =
+    Html.span
+        [ Html.Attributes.class "inline-flex items-center gap-1 rounded-full bg-rust-tint border border-rust/30 px-2 py-0.5 text-[12px] text-rust-deep" ]
+        [ Html.text email
+        , Html.button
+            [ Html.Attributes.type_ "button"
+            , Html.Attributes.attribute "aria-label" ("Remove " ++ email)
+            , Html.Events.onClick (AuthMsg (ShareTripInviteeRemoved index))
+            , Html.Attributes.class "text-rust-deep/70 hover:text-rust-deep cursor-pointer"
+            ]
+            [ Html.text "×" ]
+        ]
+
+
+{-| Commit the in-progress invitee on Enter, Tab, or comma. Returns
+`(Msg, preventDefault)` so Enter adds a chip without submitting a form.
+-}
+shareInviteeKeyDecoder : Json.Decode.Decoder ( Msg, Bool )
+shareInviteeKeyDecoder =
+    Json.Decode.field "key" Json.Decode.string
+        |> Json.Decode.andThen
+            (\k ->
+                if k == "Enter" || k == "Tab" || k == "," then
+                    Json.Decode.succeed ( AuthMsg ShareTripInviteeAdded, True )
+
+                else
+                    Json.Decode.fail "ignored"
+            )
 
 
 formField : String -> Html msg -> Html msg

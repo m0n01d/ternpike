@@ -1,6 +1,7 @@
 module Http.SharedTripApi exposing
     ( CreateSharedTripResponse
     , JoinSharedTripResponse
+    , adoptTrip
     , authHeader
     , createSharedTrip
     , inviteToSharedTrip
@@ -168,6 +169,35 @@ createSharedTrip creds { name } toMsg =
                     [ ( "name", Json.Encode.string name ) ]
                 )
         , expect = Http.expectJson toMsg createSharedTripResponseDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| `POST /sharedtrips/:id/adopt-trip` — promote an existing personal trip
+into this shared trip. The server moves the trip + its expenses, amendments,
+and voids out of the caller's personal CouchDB into the shared-trip DB and
+hard-deletes the originals. Owner-only, paid-tier, idempotent. We only need
+to know success/failure here — the moved docs arrive via the live changes
+feed once the shared-trip handle syncs.
+-}
+adoptTrip :
+    Creds
+    -> SharedTripId
+    -> { tripId : String }
+    -> (Result Http.Error () -> msg)
+    -> Cmd msg
+adoptTrip creds sharedTripId { tripId } toMsg =
+    Http.request
+        { method = "POST"
+        , headers = [ authHeader creds ]
+        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/adopt-trip"
+        , body =
+            Http.jsonBody
+                (Json.Encode.object
+                    [ ( "tripId", Json.Encode.string tripId ) ]
+                )
+        , expect = Http.expectWhatever toMsg
         , timeout = Nothing
         , tracker = Nothing
         }
