@@ -80,9 +80,12 @@ const setServerTier = async (
 /** Seed Alice's server-side personal DB with the trip + expenses + amendment. */
 const seedCouchTrip = async (email: string): Promise<void> => {
   const db = personalDbName(email)
+  // Recreate the personal DB fresh so the pinned doc ids never conflict across
+  // runs/retries (the docs use fixed _ids, and a prior run leaves tombstones).
+  await adminFetch(`/${db}`, { method: 'DELETE' })
   const create = await adminFetch(`/${db}`, { method: 'PUT' })
-  if (!create.ok && create.status !== 412) {
-    throw new Error(`personal db PUT ${create.status}`)
+  if (!create.ok) {
+    throw new Error(`personal db PUT ${create.status} ${await create.text()}`)
   }
   const docs = [
     {
@@ -213,10 +216,12 @@ test('Alice shares a personal trip: data moves to the shared DB and Bob is invit
   const adopted = capturePost(page, (u) => u.endsWith('/adopt-trip'))
 
   await page.goto('/trips')
-  await expect(page.getByText('Road Trip')).toBeVisible({ timeout: 30_000 })
 
-  // Open the Share modal from the Trips header (icon button title "Share trip").
-  await page.getByRole('button', { name: 'Share trip' }).click()
+  // The Share affordance renders only once the personal trip is loaded and
+  // selected, so waiting for it doubles as the "trips page is ready" signal.
+  const shareButton = page.getByRole('button', { name: 'Share trip' })
+  await expect(shareButton).toBeVisible({ timeout: 30_000 })
+  await shareButton.click()
   await expect(page.getByText('Share this trip')).toBeVisible()
 
   // Invite Bob (Enter commits the chip), then Share.
