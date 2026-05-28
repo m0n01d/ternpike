@@ -46,6 +46,7 @@ import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
 import Data.Guest exposing (GuestSession)
 import Data.Location exposing (LocationState)
+import Data.Me
 import Data.Navigation exposing (Route)
 import Data.Notifications exposing (NotificationPrefs, NotificationToggle, Permission, StandaloneState)
 import Data.PaymentMethod exposing (PaymentMethod)
@@ -57,6 +58,7 @@ import Data.SharedTripUi exposing (SharedTripUiState)
 import Data.SharedTrips
 import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
+import Data.SubscriptionStatus exposing (SubscriptionStatus)
 import Data.Sync exposing (SyncState)
 import Data.Tier exposing (Tier)
 import Data.Trip exposing (Trip, TripField, TripForm)
@@ -205,10 +207,12 @@ type alias AuthState =
     , statsGranularity : Maybe Granularity
     , statsHover : Hover
     , submitting : Bool
+    , subscriptionStatus : Maybe SubscriptionStatus
     , syncState : SyncState
     , tier : Tier
     , toast : Maybe String
     , today : DateField
+    , trailblazerNumber : Maybe Int
     , tripForm : Maybe TripForm
     , tripLoaded : Set String
     , trips : TripsState
@@ -378,6 +382,7 @@ type AuthMsg_
     | LeaveSharedTripResult (Result Http.Error ())
     | LongNoteChanged String
     | MapPickerConfirmed Float Float
+    | MeFetched (Result Http.Error Data.Me.MeResponse)
     | MerchantChanged String
     | MoveEntry Expense TripId
     | NoteChanged String

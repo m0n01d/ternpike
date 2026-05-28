@@ -98,6 +98,7 @@ import Data.SharedTripId
 import Data.SharedTripUi as SharedTripUi
 import Data.SharedTrips as SharedTrips
 import Data.StatsHover as StatsHover
+import Data.SubscriptionStatus as SubscriptionStatus exposing (SubscriptionStatus)
 import Data.Sync exposing (SyncState(..))
 import Data.Tier as Tier exposing (Tier)
 import Data.Trip as Trip exposing (Trip, TripField(..))
@@ -112,6 +113,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Http
 import Http.GeocodeApi
+import Http.Me
 import Http.SharedTripApi
 import Json.Decode as D
 import Json.Encode as E
@@ -279,10 +281,12 @@ toAuthState creds initialRoute gs =
     , statsGranularity = Nothing
     , statsHover = StatsHover.empty
     , submitting = False
+    , subscriptionStatus = creds.subscriptionStatus
     , syncState = NotEnabled
     , tier = creds.tier
     , toast = Nothing
     , today = gs.today
+    , trailblazerNumber = creds.trailblazerNumber
     , tripForm = Nothing
     , tripLoaded = Set.empty
     , trips = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
@@ -333,11 +337,13 @@ joinTokenFromRoute route =
 
 credsDecoder : D.Decoder Creds
 credsDecoder =
-    D.map4 Creds
+    D.map6 Creds
         (D.field "dbName" D.string)
         (D.field "email" D.string)
         (D.field "password" D.string)
+        subscriptionStatusField
         tierField
+        trailblazerNumberField
 
 
 {-| Decode tier from either the auth server's verify-code response or
@@ -355,14 +361,64 @@ tierField =
         ]
 
 
+{-| Decode `subscriptionStatus` from the verify-code response or the
+IndexedDB blob. Absent / null / unrecognised → `Nothing` so legacy
+`auth_creds` blobs persisted before this field was wired still
+deserialise.
+-}
+subscriptionStatusField : D.Decoder (Maybe SubscriptionStatus)
+subscriptionStatusField =
+    D.oneOf
+        [ D.field "subscriptionStatus" (D.nullable SubscriptionStatus.decoder)
+        , D.succeed Nothing
+        ]
+
+
+{-| Decode `trailblazerNumber` from the verify-code response or the
+IndexedDB blob. Absent / null → `Nothing`.
+-}
+trailblazerNumberField : D.Decoder (Maybe Int)
+trailblazerNumberField =
+    D.oneOf
+        [ D.field "trailblazerNumber" (D.nullable D.int)
+        , D.succeed Nothing
+        ]
+
+
 encodeCreds : Creds -> D.Value
 encodeCreds c =
     E.object
         [ ( "dbName", E.string c.dbName )
         , ( "email", E.string c.email )
         , ( "password", E.string c.password )
+        , ( "subscriptionStatus"
+          , c.subscriptionStatus
+                |> Maybe.map SubscriptionStatus.encoder
+                |> Maybe.withDefault E.null
+          )
         , ( "tier", E.string (Tier.toString c.tier) )
+        , ( "trailblazerNumber"
+          , c.trailblazerNumber
+                |> Maybe.map E.int
+                |> Maybe.withDefault E.null
+          )
         ]
+
+
+{-| `GET /me` refresh. Fired once per session immediately after the
+auth model is constructed (whether from cached `auth_creds` on cold
+boot or from a fresh `/auth/verify-code` response) so any tier change
+the Stripe webhook applied between sessions is picked up. The Settings
+billing UI (#21) will reuse this on `?checkout=success` return.
+
+Errors are intentionally swallowed at the handler — `/me` is a
+refresh path, not a hard requirement; the cached `Creds` tier is
+already good enough to render until the next call retries.
+
+-}
+fetchMe : AuthState -> Cmd Msg
+fetchMe as_ =
+    Http.Me.fetch as_.config as_.creds (AuthMsg << MeFetched)
 
 
 
@@ -1643,7 +1699,12 @@ init flagsJson url key =
             -- return empty/stale. Wait for SyncStateMsg Synced, which
             -- triggers GetAllTrips; handleTripsFetched then runs
             -- fetchesForRoute once trip data is in hand.
-            ( AuthModel as_, Cmd.none )
+            --
+            -- `/me` IS fired here — it's the server-authoritative
+            -- refresh path for tier + billing state, runs independently
+            -- of PouchDB, and a stale tier from cached `Creds` would
+            -- silently mis-gate paid features until the next login.
+            ( AuthModel as_, fetchMe as_ )
 
 
 
@@ -1872,6 +1933,7 @@ updateGuest msg gs =
                         [ saveStorage { key = "auth_creds", value = E.encode 0 (encodeCreds creds) }
                         , startSync (encodeCreds creds)
                         , Nav.replaceUrl gs.key landingUrl
+                        , fetchMe as_
                         ]
                     )
 
@@ -3416,6 +3478,35 @@ updateAuth msg as_ =
                 )
             , toastFor
             )
+
+        MeFetched (Ok me) ->
+            let
+                oldCreds =
+                    as_.creds
+
+                refreshedCreds =
+                    { oldCreds
+                        | subscriptionStatus = me.subscriptionStatus
+                        , tier = me.tier
+                        , trailblazerNumber = me.trailblazerNumber
+                    }
+            in
+            ( AuthModel
+                { as_
+                    | creds = refreshedCreds
+                    , subscriptionStatus = me.subscriptionStatus
+                    , tier = me.tier
+                    , trailblazerNumber = me.trailblazerNumber
+                }
+            , saveStorage { key = "auth_creds", value = E.encode 0 (encodeCreds refreshedCreds) }
+            )
+
+        MeFetched (Err _) ->
+            -- Silent failure — /me is a refresh path, not a hard
+            -- requirement. The next call (next startup, next post-
+            -- checkout return) will retry. The cached `Creds` tier is
+            -- already good enough to keep rendering until then.
+            ( AuthModel as_, Cmd.none )
 
         OpenInviteModal flockId ->
             ( AuthModel (setSharedTripModal (SharedTripUi.InviteModal flockId { email = "", error = Nothing }) as_)
