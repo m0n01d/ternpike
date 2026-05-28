@@ -1,0 +1,60 @@
+# Wrangler reads this file as `[vars]` overrides during `wrangler dev`,
+# AND its values are injected as secrets so the same env var names work
+# in deployed code paths. Copy to `server/.dev.vars` (gitignored) and
+# fill in real values; production secrets are set via
+# `wrangler secret put NAME`.
+#
+# Also sourced by scripts/nuke-user.sh for COUCH_ADMIN_USER / PASS.
+
+# --- CouchDB (per-user sync target) ---
+COUCH_URL=https://couch.ternpike.com
+COUCH_ADMIN_USER=admin
+COUCH_ADMIN_PASS=
+
+# --- App ---
+# 32+ random chars; HMAC-derives per-user CouchDB passwords. Rotating
+# invalidates every user's stored creds. Generate: openssl rand -hex 32
+SERVER_SECRET=
+# Bearer token for /admin/* endpoints. Generate: openssl rand -hex 32
+ADMIN_SECRET=
+# Bearer token for /tier-webhook (legacy tier-flip path; pre-Stripe).
+TIER_WEBHOOK_SECRET=
+
+# --- Email (Resend) ---
+RESEND_API_KEY=
+# Separate scoped key used only for /marketing/waitlist contact writes.
+RESEND_WAITLIST_API_KEY=
+
+# --- OCR (Anthropic) ---
+ANTHROPIC_API_KEY=
+# Optional override; defaults to https://api.anthropic.com if unset.
+ANTHROPIC_BASE_URL=
+
+# --- Geocoding (Google) ---
+GOOGLE_GEOCODING_API_KEY=
+# Optional override; defaults to Google's production endpoint if unset.
+GOOGLE_GEOCODING_BASE_URL=
+
+# --- Web Push (VAPID) ---
+# Generate: npx web-push generate-vapid-keys
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+# mailto: address Push services use to contact you about delivery issues.
+VAPID_SUBJECT=mailto:you@example.com
+
+# --- Stripe (billing #16-#22) ---
+# sk_test_... while developing; sk_live_... in production.
+STRIPE_SECRET_KEY=sk_test_REPLACE_ME
+# whsec_... from Stripe Dashboard -> Developers -> Webhooks -> your endpoint.
+STRIPE_WEBHOOK_SECRET=whsec_REPLACE_ME
+# Price IDs (price_..., NOT product IDs prod_...). Create in
+# Stripe Dashboard -> Products. See CLAUDE.md "Subscription tiers".
+STRIPE_PRICE_OSPREY_MONTHLY=price_REPLACE_ME_MONTHLY
+STRIPE_PRICE_OSPREY_YEARLY=price_REPLACE_ME_YEARLY
+STRIPE_PRICE_TRAILBLAZER=price_REPLACE_ME_TRAILBLAZER
+# Optional: Stripe coupon ID emailed to /scan-demo visitors as a single-use
+# signup discount. Leave blank to skip the promo-code line in demo emails.
+STRIPE_RECEIPT_COUPON_ID=
+# Optional override; defaults to https://api.stripe.com if unset.
+# Used by e2e tests to point at a mock Stripe.
+STRIPE_BASE_URL=
