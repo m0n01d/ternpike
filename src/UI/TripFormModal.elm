@@ -22,6 +22,7 @@ import Data.Trip as Trip exposing (TripField(..), TripForm)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Json.Decode
 import RemoteData
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
@@ -30,12 +31,7 @@ import UI.Layout
 
 view : AuthState -> Html Msg
 view as_ =
-    case as_.tripForm of
-        Nothing ->
-            Html.text ""
-
-        Just form ->
-            viewOpen as_ form
+    Html.Extra.viewMaybe (viewOpen as_) as_.tripForm
 
 
 viewOpen : AuthState -> TripForm -> Html Msg
@@ -87,15 +83,13 @@ viewForm as_ form title =
         [ Html.p [ Html.Attributes.class "text-[15px] font-bold text-rust font-display mb-4 pr-8" ]
             [ Html.text title ]
         , viewSharedTripRequestErrors form
-        , if not (List.isEmpty form.errors) then
-            Html.div [ Html.Attributes.class "bg-rust-tint border border-rust rounded-lg p-2.5 mb-3" ]
+        , Html.Extra.viewIf (not (List.isEmpty form.errors))
+            (Html.div [ Html.Attributes.class "bg-rust-tint border border-rust rounded-lg p-2.5 mb-3" ]
                 (List.map
                     (\e -> Html.p [ Html.Attributes.class "text-sm text-rust" ] [ Html.text e ])
                     form.errors
                 )
-
-          else
-            Html.text ""
+            )
         , UI.Layout.formField "TRIP NAME"
             (Html.input
                 [ Html.Attributes.type_ "text"
@@ -106,11 +100,7 @@ viewForm as_ form title =
                 ]
                 []
             )
-        , if isNew then
-            viewTargetPicker as_ form ownedFlocks
-
-          else
-            Html.text ""
+        , Html.Extra.viewIf isNew (viewTargetPicker as_ form ownedFlocks)
         , UI.Layout.formField "DESCRIPTION"
             (Html.input
                 [ Html.Attributes.type_ "text"
@@ -274,7 +264,7 @@ viewNewFlockInline as_ form =
                 viewFledglingUpgradePrompt
 
         _ ->
-            Html.text ""
+            Html.Extra.nothing
 
 
 viewFledglingUpgradePrompt : Html Msg
@@ -408,10 +398,10 @@ viewSharedTripRequestErrors : TripForm -> Html Msg
 viewSharedTripRequestErrors form =
     case form.sharedTripRequest of
         RemoteData.NotAsked ->
-            Html.text ""
+            Html.Extra.nothing
 
         RemoteData.Loading ->
-            Html.text ""
+            Html.Extra.nothing
 
         RemoteData.Failure err ->
             Html.div [ Html.Attributes.class "bg-rust-tint border border-rust rounded-lg p-2.5 mb-3" ]
@@ -420,7 +410,7 @@ viewSharedTripRequestErrors form =
                 ]
 
         RemoteData.Success _ ->
-            Html.text ""
+            Html.Extra.nothing
 
 
 {-| The submit button label. One exhaustive `case` on `sharedTripRequest`

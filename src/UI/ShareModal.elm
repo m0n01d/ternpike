@@ -22,6 +22,7 @@ import Data.UserId as UserId
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Svg
 import Svg.Attributes
 import Types exposing (AuthMsg_(..), AuthState, Msg(..), ShareMode(..))
@@ -31,11 +32,7 @@ import Url
 
 view : AuthState -> Html Msg
 view as_ =
-    if as_.shareModalOpen then
-        viewOpen as_
-
-    else
-        Html.text ""
+    Html.Extra.viewIf as_.shareModalOpen (viewOpen as_)
 
 
 shareText : String

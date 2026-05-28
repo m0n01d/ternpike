@@ -33,6 +33,7 @@ import Data.UserId as UserId exposing (UserId)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Types exposing (AuthMsg_(..), Msg(..))
 
 
@@ -61,7 +62,7 @@ view opts =
     in
     case opts.flock.billingStatus of
         Active ->
-            Html.text ""
+            Html.Extra.nothing
 
         Grace ->
             viewBanner
@@ -90,7 +91,7 @@ viewInline opts =
     in
     case opts.flock.billingStatus of
         Active ->
-            Html.text ""
+            Html.Extra.nothing
 
         Grace ->
             viewInlineBanner
@@ -269,7 +270,7 @@ viewCta : Cta -> Html Msg
 viewCta cta =
     case cta of
         NoCta ->
-            Html.text ""
+            Html.Extra.nothing
 
         Renew ->
             Html.a
