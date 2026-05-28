@@ -33,27 +33,29 @@ function makeTrailblazerStub() {
     }
     return { status: 404, body: { error: 'not_stubbed' } }
   }
-  const stub = {
-    idFromName: () => ({
-      fetch: async (input, init = {}) => {
-        const url = typeof input === 'string' ? input : input.url
-        const path = new URL(url).pathname
-        let body = null
-        if (init.body) {
-          try {
-            body = JSON.parse(init.body)
-          } catch {
-            body = init.body
-          }
+  const objectStub = {
+    fetch: async (input, init = {}) => {
+      const url = typeof input === 'string' ? input : input.url
+      const path = new URL(url).pathname
+      let body = null
+      if (init.body) {
+        try {
+          body = JSON.parse(init.body)
+        } catch {
+          body = init.body
         }
-        calls.push({ body, method: init.method || 'GET', path })
-        const out = responder(path, body)
-        return new Response(JSON.stringify(out.body), {
-          headers: { 'Content-Type': 'application/json' },
-          status: out.status,
-        })
-      },
-    }),
+      }
+      calls.push({ body, method: init.method || 'GET', path })
+      const out = responder(path, body)
+      return new Response(JSON.stringify(out.body), {
+        headers: { 'Content-Type': 'application/json' },
+        status: out.status,
+      })
+    },
+  }
+  const stub = {
+    idFromName: (name) => ({ name }),
+    get: () => objectStub,
   }
   return {
     calls,

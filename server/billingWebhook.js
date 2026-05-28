@@ -182,7 +182,8 @@ function persistableSubscriptionStatus(status) {
 //   { ok: false }          other failure (network, malformed response, etc.)
 async function confirmTrailblazerSlot(env, email, reservationToken) {
   if (!env.TRAILBLAZER_SLOTS) return { ok: false }
-  const stub = env.TRAILBLAZER_SLOTS.idFromName('global')
+  const id = env.TRAILBLAZER_SLOTS.idFromName('global')
+  const stub = env.TRAILBLAZER_SLOTS.get(id)
   const res = await stub.fetch('https://do.local/confirm', {
     body: JSON.stringify({ email, reservationToken }),
     headers: { 'Content-Type': 'application/json' },
