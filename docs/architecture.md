@@ -1069,6 +1069,88 @@ opening the shared trip's trip.
 
 ---
 
+## Billing
+
+The user-facing entry point to upgrade / manage subscription is the
+**Plan** section at the top of `/settings`. It's rendered by
+`Pages.Settings.viewPlanSection` (a small `PlanProps` projection of
+`AuthState`) and switches on `AuthState.tier`:
+
+  - **Tern** — three upgrade CTAs: "Osprey — $2.99 / mo",
+    "Osprey yearly — $24 / yr (save $12)", and a Trailblazer button
+    with a live "N of 500 left" countdown driven by
+    `AuthState.trailblazerAvailable`. Buttons fire
+    `BillingCheckoutClicked plan` where `plan` is the wire-form name
+    (`"osprey_monthly" | "osprey_yearly" | "trailblazer"`).
+  - **Osprey** — only "Manage billing", which fires
+    `BillingPortalClicked`. If `subscriptionStatus` is anything other
+    than `Active`, a chip surfaces it (e.g. "Past due" for `PastDue`).
+  - **Trailblazer** — badge with `trailblazerNumber` ("Trailblazer
+    #17 (of 500)"), lifetime-access copy, and a "View receipts /
+    update card" portal button.
+
+### Server wiring
+
+All Stripe state is server-authoritative. The three endpoints (in
+`server/billing.js`):
+
+  - `POST /billing/checkout { plan }` — creates a Stripe Checkout
+    session and returns `{ url }` for the client to
+    `Browser.Navigation.load`. Trailblazer additionally reserves a
+    slot in the `TRAILBLAZER_SLOTS` Durable Object (#16) before
+    creating the Checkout, so the 500-cap is atomic against concurrent
+    purchases. Two non-200 outcomes are special-cased on the client:
+    `409 {ok: false, remaining: 0}` → `CheckoutSoldOut`,
+    `403 {reason: "already_trailblazer"}` → `CheckoutAlreadyTrailblazer`.
+    Existing Osprey re-requesting Osprey gets bounced to the Portal so
+    Stripe handles the plan-swap rather than a duplicate subscription.
+  - `POST /billing/portal` — opens the Stripe Customer Portal.
+    Returns `{ url }`; same `load` redirect pattern.
+  - `GET /billing/trailblazer-status` — public, cached 30s. Used by
+    the Tern upgrade button's "N of 500 left" countdown. Fetched
+    lazily on navigation to `/settings` in `fetchesForRoute` and
+    cached on `AuthState.trailblazerAvailable` so tab-flicking doesn't
+    re-fetch.
+
+### Wire-format-fidelity rules
+
+  - **Stripe redirects use `Browser.Navigation.load url`, not
+    `pushUrl`** — `load` is a full-page navigation so the Stripe-hosted
+    Checkout page takes over the tab cleanly.
+  - **Tier names** in code are `Tern` / `Osprey` / `Trailblazer`. Wire
+    form is the lowercase `"tern" / "osprey" / "trailblazer"`. Plan
+    names for `/billing/checkout` are `osprey_monthly`,
+    `osprey_yearly`, `trailblazer`.
+  - **Trailblazer is permanent.** Webhook + server code never downgrade
+    a Trailblazer. If you find yourself writing `Trailblazer → Tern`
+    flow, that's a bug.
+  - **No Stripe SDK in the Worker.** `workerd` doesn't populate
+    `process.env`, so the Stripe Node SDK can't read its `baseUrl` at
+    module load time (same trap as the Resend SDK; see "Resend +
+    workerd" in CLAUDE.md). Outbound calls go through raw `fetch` to
+    `STRIPE_BASE_URL || 'https://api.stripe.com'`. Bodies are
+    `application/x-www-form-urlencoded` per Stripe's REST conventions.
+  - **Ternpike's Stripe secret never ships to the browser.** The
+    client only sees Stripe-hosted URLs returned from the Worker; the
+    actual key lives in a Worker secret.
+
+### `?checkout=success` return
+
+After Stripe redirects back to `/settings?checkout=success`, both
+`init` (cold boot) and the `UrlChanged` handler:
+
+  1. Show a "Welcome aboard! Your plan is active." toast.
+  2. Fire `fetchMe` to refresh `AuthState.tier` /
+     `subscriptionStatus` / `trailblazerNumber` from the server (the
+     webhook has already mutated `TIERS_KV` by this point).
+  3. `Nav.replaceUrl` to strip the query so a page refresh doesn't
+     re-toast.
+
+The `?checkout=canceled` variant just strips the query — no toast (the
+user deliberately cancelled).
+
+---
+
 ## Encoders and decoders
 
 Every `Data/*.elm` module exports an `encode` function and a `decoder`:

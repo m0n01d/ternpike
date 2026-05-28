@@ -1,10 +1,11 @@
-module Pages.Settings exposing (viewPanel, viewTab)
+module Pages.Settings exposing (PlanProps, viewPanel, viewPlanSection, viewTab)
 
 import Data.AnthropicKey as AnthropicKey
 import Data.Auth exposing (AppConfig)
 import Data.ColorScheme exposing (ColorScheme(..))
 import Data.Notifications as Notifications
-import Data.Tier as Tier
+import Data.SubscriptionStatus as SubscriptionStatus
+import Data.Tier as Tier exposing (Tier(..))
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -63,7 +64,13 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt =
             maybeDayIntensity /= Nothing
     in
     Html.div []
-        [ case maybeDayIntensity of
+        [ case maybeAuthState of
+            Just as_ ->
+                viewPlanSection (planPropsFromAuth as_)
+
+            Nothing ->
+                Html.text ""
+        , case maybeDayIntensity of
             Just dayIntensity ->
                 viewDisplaySection dayIntensity
 
@@ -347,6 +354,258 @@ viewNotificationsBody as_ =
             [ Html.text "Weekly Friday reminder to scan receipts. You can turn it off anytime." ]
         , UI.Button.primary { label = "Enable notifications", onClick = AuthMsg RequestPushPermission }
         ]
+
+
+{-| Minimal record `viewPlanSection` actually reads from `AuthState`.
+
+Extracted so the Plan section is testable without forging a complete
+`AuthState` (which requires a `Browser.Navigation.Key`, unobtainable in
+unit tests). Tests build a `PlanProps` literal directly; the production
+caller uses `planPropsFromAuth as_` to project from the real model.
+
+-}
+type alias PlanProps =
+    { billingError : Maybe String
+    , billingInFlight : Bool
+    , subscriptionStatus : Maybe SubscriptionStatus.SubscriptionStatus
+    , tier : Tier
+    , trailblazerAvailable : Maybe Int
+    , trailblazerNumber : Maybe Int
+    }
+
+
+{-| Project the Plan section's inputs out of the full `AuthState`. Used
+at the production call site.
+-}
+planPropsFromAuth : AuthState -> PlanProps
+planPropsFromAuth as_ =
+    { billingError = as_.billingError
+    , billingInFlight = as_.billingInFlight
+    , subscriptionStatus = as_.subscriptionStatus
+    , tier = as_.tier
+    , trailblazerAvailable = as_.trailblazerAvailable
+    , trailblazerNumber = as_.trailblazerNumber
+    }
+
+
+viewPlanSection : PlanProps -> Html Msg
+viewPlanSection props =
+    Html.div []
+        [ UI.Rule.kicker "PLAN"
+        , UI.Card.subCard (viewPlanBody props)
+        ]
+
+
+viewPlanBody : PlanProps -> List (Html Msg)
+viewPlanBody props =
+    let
+        errorChip =
+            case props.billingError of
+                Just message ->
+                    [ Html.p
+                        [ Html.Attributes.class "text-xs text-rust mt-3" ]
+                        [ Html.text message ]
+                    ]
+
+                Nothing ->
+                    []
+    in
+    case props.tier of
+        Tern ->
+            viewPlanTern props ++ errorChip
+
+        Osprey ->
+            viewPlanOsprey props ++ errorChip
+
+        Trailblazer ->
+            viewPlanTrailblazer props ++ errorChip
+
+
+viewPlanTern : PlanProps -> List (Html Msg)
+viewPlanTern props =
+    [ Html.div [ Html.Attributes.class "text-sm text-ink font-medium mb-1" ]
+        [ Html.text "Tern — Free" ]
+    , Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
+        [ Html.text "Upgrade unlocks:" ]
+    , Html.ul [ Html.Attributes.class "list-disc list-inside text-xs text-muted mb-4 space-y-1" ]
+        [ Html.li [] [ Html.text "Hosted Anthropic OCR (no key setup)" ]
+        , Html.li [] [ Html.text "Batch scanning" ]
+        , Html.li [] [ Html.text "CSV export" ]
+        ]
+    , Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
+        [ viewCheckoutButton
+            { busy = props.billingInFlight
+            , disabled = props.billingInFlight
+            , label = "Osprey — $2.99 / mo"
+            , plan = "osprey_monthly"
+            , style = StylePrimary
+            }
+        , viewCheckoutButton
+            { busy = props.billingInFlight
+            , disabled = props.billingInFlight
+            , label = "Osprey yearly — $24 / yr (save $12)"
+            , plan = "osprey_yearly"
+            , style = StyleSecondary
+            }
+        , viewTrailblazerButton props
+        ]
+    ]
+
+
+viewPlanOsprey : PlanProps -> List (Html Msg)
+viewPlanOsprey props =
+    [ Html.div [ Html.Attributes.class "flex items-center gap-2 mb-3" ]
+        [ Html.span [ Html.Attributes.class "text-sm text-ink font-medium" ]
+            [ Html.text "Osprey" ]
+        , viewSubscriptionChip props.subscriptionStatus
+        ]
+    , Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
+        [ viewPortalButton
+            { busy = props.billingInFlight
+            , disabled = props.billingInFlight
+            , label = "Manage billing"
+            }
+        ]
+    ]
+
+
+viewPlanTrailblazer : PlanProps -> List (Html Msg)
+viewPlanTrailblazer props =
+    let
+        heading =
+            case props.trailblazerNumber of
+                Just n ->
+                    "Trailblazer #" ++ String.fromInt n ++ " (of 500)"
+
+                Nothing ->
+                    "Trailblazer (of 500)"
+    in
+    [ Html.div [ Html.Attributes.class "text-sm text-ink font-medium mb-1" ]
+        [ Html.text heading ]
+    , Html.p [ Html.Attributes.class "text-xs text-muted mb-4" ]
+        [ Html.text "Lifetime access. All 1.x updates included. Loyalty discount on v2." ]
+    , Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
+        [ viewPortalButton
+            { busy = props.billingInFlight
+            , disabled = props.billingInFlight
+            , label = "View receipts / update card"
+            }
+        ]
+    ]
+
+
+type ButtonStyle
+    = StylePrimary
+    | StyleSecondary
+
+
+viewCheckoutButton :
+    { busy : Bool
+    , disabled : Bool
+    , label : String
+    , plan : String
+    , style : ButtonStyle
+    }
+    -> Html Msg
+viewCheckoutButton { busy, disabled, label, plan, style } =
+    if busy then
+        UI.Button.primaryBusy { label = label }
+
+    else if disabled then
+        Html.button
+            [ Html.Attributes.type_ "button"
+            , Html.Attributes.disabled True
+            , Html.Attributes.class "bg-cream-deep text-muted border border-tan font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-not-allowed"
+            ]
+            [ Html.text label ]
+
+    else
+        case style of
+            StylePrimary ->
+                UI.Button.primary
+                    { label = label
+                    , onClick = AuthMsg (BillingCheckoutClicked plan)
+                    }
+
+            StyleSecondary ->
+                UI.Button.secondary
+                    { label = label
+                    , onClick = AuthMsg (BillingCheckoutClicked plan)
+                    }
+
+
+viewPortalButton : { busy : Bool, disabled : Bool, label : String } -> Html Msg
+viewPortalButton { busy, disabled, label } =
+    if busy then
+        Html.button
+            [ Html.Attributes.type_ "button"
+            , Html.Attributes.disabled True
+            , Html.Attributes.class "bg-cream-deep text-muted border border-tan font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-not-allowed"
+            ]
+            [ Html.text "Opening…" ]
+
+    else if disabled then
+        Html.button
+            [ Html.Attributes.type_ "button"
+            , Html.Attributes.disabled True
+            , Html.Attributes.class "bg-cream-deep text-muted border border-tan font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-not-allowed"
+            ]
+            [ Html.text label ]
+
+    else
+        UI.Button.secondary
+            { label = label
+            , onClick = AuthMsg BillingPortalClicked
+            }
+
+
+viewTrailblazerButton : PlanProps -> Html Msg
+viewTrailblazerButton props =
+    case props.trailblazerAvailable of
+        Nothing ->
+            Html.button
+                [ Html.Attributes.type_ "button"
+                , Html.Attributes.disabled True
+                , Html.Attributes.class "bg-cream-deep text-muted border border-tan font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-not-allowed"
+                ]
+                [ Html.text "Loading…" ]
+
+        Just 0 ->
+            Html.button
+                [ Html.Attributes.type_ "button"
+                , Html.Attributes.disabled True
+                , Html.Attributes.class "bg-cream-deep text-muted border border-tan font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-not-allowed"
+                ]
+                [ Html.text "Trailblazer — Sold out" ]
+
+        Just n ->
+            viewCheckoutButton
+                { busy = props.billingInFlight
+                , disabled = props.billingInFlight
+                , label = "Become a Trailblazer — $79 (" ++ String.fromInt n ++ " of 500 left)"
+                , plan = "trailblazer"
+                , style = StyleSecondary
+                }
+
+
+viewSubscriptionChip : Maybe SubscriptionStatus.SubscriptionStatus -> Html Msg
+viewSubscriptionChip maybeStatus =
+    case maybeStatus of
+        Just SubscriptionStatus.Active ->
+            Html.text ""
+
+        Just status ->
+            Html.span
+                [ Html.Attributes.classList
+                    [ ( "text-xs font-mono uppercase tracking-widest px-2 py-0.5 rounded-full border", True )
+                    , ( "bg-rust/10 text-rust border-rust/30", status == SubscriptionStatus.PastDue )
+                    , ( "bg-cream-deep text-muted border-tan", status /= SubscriptionStatus.PastDue )
+                    ]
+                ]
+                [ Html.text (SubscriptionStatus.label status) ]
+
+        Nothing ->
+            Html.text ""
 
 
 viewToggleRow : { helper : String, label : String, msg : Msg, value : Bool } -> Html Msg

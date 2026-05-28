@@ -112,6 +112,7 @@ import Helpers
 import Html exposing (Html)
 import Html.Attributes
 import Http
+import Http.Billing
 import Http.GeocodeApi
 import Http.Me
 import Http.SharedTripApi
@@ -244,6 +245,8 @@ toAuthState creds initialRoute gs =
     { activeScanItemId = Nothing
     , amendments = Dict.empty
     , basePath = gs.basePath
+    , billingError = Nothing
+    , billingInFlight = False
     , colorScheme = ColorScheme.Auto
     , config = gs.session.config
     , confirmDeleteTrip = Nothing
@@ -286,6 +289,7 @@ toAuthState creds initialRoute gs =
     , tier = creds.tier
     , toast = Nothing
     , today = gs.today
+    , trailblazerAvailable = Nothing
     , trailblazerNumber = creds.trailblazerNumber
     , tripForm = Nothing
     , tripLoaded = Set.empty
@@ -333,6 +337,47 @@ joinTokenFromRoute route =
 
         _ ->
             Nothing
+
+
+{-| Outcome of parsing the URL's query string for the Stripe Checkout
+return signals.
+
+  - `CheckoutReturnSuccess` — `?checkout=success`; user just paid and
+    is back on `/settings`. Fire `/me` to absorb the tier change and
+    show a toast.
+  - `CheckoutReturnCanceled` — `?checkout=canceled`; user clicked back
+    on the Stripe page. No toast (the user deliberately cancelled), but
+    strip the query so a refresh doesn't preserve it.
+  - `CheckoutReturnNone` — neither marker present; ordinary navigation.
+
+-}
+type CheckoutReturn
+    = CheckoutReturnCanceled
+    | CheckoutReturnNone
+    | CheckoutReturnSuccess
+
+
+{-| Cheap substring scan for `checkout=success` / `checkout=canceled`
+in the URL's query string. Bypasses the full `Url.Parser.Query` setup
+because the rest of the routing layer already chose its `Route` from
+the path + tripId/expenseId query params — this is purely the "did we
+just come back from Stripe" sentinel.
+-}
+checkoutReturnFromUrl : Url.Url -> CheckoutReturn
+checkoutReturnFromUrl url =
+    case url.query of
+        Just q ->
+            if String.contains "checkout=success" q then
+                CheckoutReturnSuccess
+
+            else if String.contains "checkout=canceled" q then
+                CheckoutReturnCanceled
+
+            else
+                CheckoutReturnNone
+
+        Nothing ->
+            CheckoutReturnNone
 
 
 credsDecoder : D.Decoder Creds
@@ -868,8 +913,21 @@ fetchesForRoute as_ =
 
             else
                 Cmd.none
+
+        billingCmd =
+            -- On Tern, the Plan section renders a Trailblazer button
+            -- whose label needs the live "N of 500 left" countdown.
+            -- Fetched lazily on navigation to Settings; cached on
+            -- `as_.trailblazerAvailable` so a tab-flick doesn't re-fetch.
+            -- Paid users don't see the Trailblazer CTA at all so we skip
+            -- the call for them.
+            if as2.route == RouteSettings && as2.tier == Tier.Tern && as2.trailblazerAvailable == Nothing then
+                Http.Billing.trailblazerStatus as2.config (AuthMsg << TrailblazerStatusFetched)
+
+            else
+                Cmd.none
     in
-    ( hydrateFormForRoute as2, Cmd.batch [ tripCmd, expenseCmd, geoCmd ] )
+    ( hydrateFormForRoute as2, Cmd.batch [ tripCmd, expenseCmd, geoCmd, billingCmd ] )
 
 
 {-| Insert a single document from PouchDB's live-changes feed into the
@@ -1693,6 +1751,31 @@ init flagsJson url key =
 
                 booted =
                     toAuthState creds initialRoute gs
+
+                ( bootedFinal, checkoutCmd ) =
+                    -- Cold boot landing on `/settings?checkout=success`:
+                    -- the user just paid and Stripe redirected here.
+                    -- `fetchMe` is already firing below (it's the
+                    -- server-authoritative refresh), so we only need to
+                    -- (a) show the toast and (b) strip the query string
+                    -- so a refresh doesn't re-toast. Same for the
+                    -- `canceled` variant minus the toast.
+                    case checkoutReturnFromUrl url of
+                        CheckoutReturnSuccess ->
+                            ( { as_ | toast = Just "Welcome aboard! Your plan is active." }
+                            , Cmd.batch
+                                [ Nav.replaceUrl key (basePath ++ "settings")
+                                , toastFor
+                                ]
+                            )
+
+                        CheckoutReturnCanceled ->
+                            ( as_
+                            , Nav.replaceUrl key (basePath ++ "settings")
+                            )
+
+                        CheckoutReturnNone ->
+                            ( as_, Cmd.none )
             in
             -- Don't fire route-driven fetches here. Sync hasn't settled
             -- yet, so PouchDB queries would race with replication and
@@ -1704,7 +1787,7 @@ init flagsJson url key =
             -- refresh path for tier + billing state, runs independently
             -- of PouchDB, and a stale tier from cached `Creds` would
             -- silently mis-gate paid features until the next login.
-            ( AuthModel as_, fetchMe as_ )
+            ( AuthModel bootedFinal, Cmd.batch [ fetchMe bootedFinal, checkoutCmd ] )
 
 
 
@@ -1846,10 +1929,39 @@ updateShared msg model =
                         newRoute =
                             Routing.routeFromUrl as_.basePath url
 
+                        checkoutReturn =
+                            checkoutReturnFromUrl url
+
                         ( as1, cmd ) =
                             fetchesForRoute { as_ | route = newRoute, tripForm = Nothing }
+
+                        ( as2, extraCmd ) =
+                            case checkoutReturn of
+                                CheckoutReturnSuccess ->
+                                    -- /me is the server-authoritative tier refresh
+                                    -- — fire it so Stripe-just-set the tier change
+                                    -- shows up on this page render. Strip the
+                                    -- query string so a refresh doesn't re-toast.
+                                    ( { as1 | toast = Just "Welcome aboard! Your plan is active." }
+                                    , Cmd.batch
+                                        [ fetchMe as1
+                                        , Nav.replaceUrl as1.key (as1.basePath ++ "settings")
+                                        , toastFor
+                                        ]
+                                    )
+
+                                CheckoutReturnCanceled ->
+                                    -- User clicked back from Stripe. Strip the
+                                    -- query string so a refresh doesn't keep
+                                    -- the ?checkout=canceled marker around.
+                                    ( as1
+                                    , Nav.replaceUrl as1.key (as1.basePath ++ "settings")
+                                    )
+
+                                CheckoutReturnNone ->
+                                    ( as1, Cmd.none )
                     in
-                    ( AuthModel as1, Cmd.batch [ cmd, scrollToTop ] )
+                    ( AuthModel as2, Cmd.batch [ cmd, extraCmd, scrollToTop ] )
 
 
 scrollToTop : Cmd Msg
@@ -3478,6 +3590,77 @@ updateAuth msg as_ =
                 )
             , toastFor
             )
+
+        BillingCheckoutClicked plan ->
+            ( AuthModel { as_ | billingError = Nothing, billingInFlight = True }
+            , Http.Billing.checkout as_.config as_.creds { plan = plan } (AuthMsg << BillingCheckoutResult)
+            )
+
+        BillingCheckoutResult (Http.Billing.CheckoutOk { url }) ->
+            ( AuthModel { as_ | billingInFlight = False }
+            , Nav.load url
+            )
+
+        BillingCheckoutResult Http.Billing.CheckoutSoldOut ->
+            ( AuthModel
+                { as_
+                    | billingError = Just "Sorry, the last Trailblazer slot just sold out."
+                    , billingInFlight = False
+                    , trailblazerAvailable = Just 0
+                }
+            , Cmd.none
+            )
+
+        BillingCheckoutResult Http.Billing.CheckoutAlreadyTrailblazer ->
+            ( AuthModel
+                { as_
+                    | billingError = Just "You're already a Trailblazer."
+                    , billingInFlight = False
+                }
+            , Cmd.none
+            )
+
+        BillingCheckoutResult (Http.Billing.CheckoutError detail) ->
+            -- `detail` is a short HTTP-status / network blurb from the
+            -- HTTP layer (e.g. "Checkout failed (HTTP 502)"). We render
+            -- the friendly preamble and append the technical detail so
+            -- a stuck user has something to copy-paste into a support
+            -- email without needing devtools.
+            ( AuthModel
+                { as_
+                    | billingError = Just ("Something went wrong starting checkout. Please try again. (" ++ detail ++ ")")
+                    , billingInFlight = False
+                }
+            , Cmd.none
+            )
+
+        BillingPortalClicked ->
+            ( AuthModel { as_ | billingError = Nothing, billingInFlight = True }
+            , Http.Billing.portal as_.config as_.creds (AuthMsg << BillingPortalResult)
+            )
+
+        BillingPortalResult (Ok { url }) ->
+            ( AuthModel { as_ | billingInFlight = False }
+            , Nav.load url
+            )
+
+        BillingPortalResult (Err _) ->
+            ( AuthModel
+                { as_
+                    | billingError = Just "Couldn't open the billing portal. Please try again."
+                    , billingInFlight = False
+                }
+            , Cmd.none
+            )
+
+        TrailblazerStatusFetched (Ok status) ->
+            ( AuthModel { as_ | trailblazerAvailable = Just status.available }, Cmd.none )
+
+        TrailblazerStatusFetched (Err _) ->
+            -- Silent — Tern users just won't see the "N of 500 left"
+            -- countdown. The button still works; checkout will surface
+            -- the sold-out state at the moment of click if needed.
+            ( AuthModel as_, Cmd.none )
 
         MeFetched (Ok me) ->
             let
