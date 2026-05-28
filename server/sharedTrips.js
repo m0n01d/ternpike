@@ -319,6 +319,39 @@ async function listOwnedSharedTripsFor(env, email) {
   return owned
 }
 
+// Read every doc in a DB (admin lens). Returns [] when the DB itself is
+// missing (404) — a brand-new user who has never synced has no personal DB,
+// which the adopt path treats the same as "trip not found".
+async function readAllDocs(env, dbName) {
+  const r = await couchAdmin(env, `/${dbName}/_all_docs?include_docs=true`)
+  if (r.status === 404) return []
+  if (!r.ok) {
+    const err = new Error(`_all_docs ${r.status}`)
+    err.status = r.status
+    throw err
+  }
+  const body = await r.json()
+  return body.rows.map((row) => row.doc).filter(Boolean)
+}
+
+// The subset of `ids` that are live (non-deleted) docs in `dbName`. Used to
+// make the copy idempotent (skip docs already in the shared DB) and to verify
+// the copy landed before any destructive delete.
+async function existingIds(env, dbName, ids) {
+  if (!ids.length) return new Set()
+  const r = await couchAdmin(env, `/${dbName}/_all_docs`, {
+    method: 'POST',
+    body: JSON.stringify({ keys: ids }),
+  })
+  if (!r.ok) throw new Error(`_all_docs keys ${r.status}`)
+  const body = await r.json()
+  const present = new Set()
+  for (const row of body.rows) {
+    if (row.id && row.value && !row.value.deleted) present.add(row.id)
+  }
+  return present
+}
+
 export function registerSharedTripRoutes(app) {
   app.post('/sharedtrips', async (c) => {
     const env = c.env
@@ -377,6 +410,147 @@ export function registerSharedTripRoutes(app) {
     } catch (err) {
       console.error('sharedtrips/create:', err)
       return c.json({ ok: false, error: 'provision_failed' }, 500)
+    }
+  })
+
+  // Promote an existing PERSONAL trip into this shared trip: move the trip
+  // doc + its expenses + amendments + voids from the caller's personal DB into
+  // the shared-trip DB, preserving _ids and full edit history, then hard-delete
+  // the originals from the personal DB. Owner-only, paid-tier. Idempotent:
+  // safe to re-run after a partial failure (resumes) or a full success (no-op).
+  app.post('/sharedtrips/:id/adopt-trip', async (c) => {
+    const env = c.env
+    const caller = await authenticateCaller(c)
+    if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
+
+    const sharedTripId = c.req.param('id')
+    const dbName = sharedTripDbName(sharedTripId)
+
+    let meta
+    try {
+      meta = await readSharedTripMeta(env, dbName)
+    } catch (err) {
+      if (err.status === 404) {
+        return c.json({ ok: false, error: 'not_found' }, 404)
+      }
+      console.error('sharedtrips/adopt read meta:', err)
+      return c.json({ ok: false, error: 'read_failed' }, 500)
+    }
+    if (!meta.members.includes(caller.email)) {
+      // 404 (not 403) — don't confirm existence to non-members. See #68.
+      return c.json({ ok: false, error: 'not_found' }, 404)
+    }
+    if (meta.billingOwner !== caller.email) {
+      return c.json({ ok: false, error: 'not_owner' }, 403)
+    }
+    const tier = await getTier(env, caller.email)
+    if (!isPaidTier(tier)) {
+      return c.json({ ok: false, error: 'paid_tier_required' }, 403)
+    }
+
+    let body
+    try {
+      body = await c.req.json()
+    } catch {
+      body = {}
+    }
+    const tripId = typeof body.tripId === 'string' ? body.tripId : ''
+    if (!tripId.startsWith('trip::')) {
+      return c.json({ ok: false, error: 'invalid_trip_id' }, 400)
+    }
+
+    try {
+      const personalDb = personalDbName(caller.email)
+
+      // 1. Gather the trip's docs from the personal DB.
+      const personalDocs = await readAllDocs(env, personalDb)
+      const gathered = collectTripDocs(personalDocs, tripId)
+      const all = [
+        gathered.trip,
+        ...gathered.expenses,
+        ...gathered.amendments,
+        ...gathered.voids,
+      ].filter(Boolean)
+
+      // 2. Trip absent from personal DB → either already adopted (clean re-run
+      //    or resume after the delete already finished) or it never existed.
+      if (!gathered.trip) {
+        const inShared = await couchAdmin(
+          env,
+          `/${dbName}/${encodeURIComponent(tripId)}`,
+        )
+        if (inShared.status === 200) {
+          return c.json({
+            ok: true,
+            alreadyAdopted: true,
+            moved: { trips: 0, expenses: 0, amendments: 0, voids: 0 },
+          })
+        }
+        return c.json({ ok: false, error: 'trip_not_found' }, 404)
+      }
+
+      // 3. Copy into the shared DB. Skip docs already present so a resumed run
+      //    doesn't conflict; strip the personal `_rev` so they write fresh.
+      const presentBefore = await existingIds(
+        env,
+        dbName,
+        all.map((d) => d._id),
+      )
+      const toCopy = all
+        .filter((d) => !presentBefore.has(d._id))
+        .map(({ _rev, ...doc }) => doc)
+      if (toCopy.length) {
+        const copyRes = await couchAdmin(env, `/${dbName}/_bulk_docs`, {
+          method: 'POST',
+          body: JSON.stringify({ docs: toCopy }),
+        })
+        if (!copyRes.ok) throw new Error(`copy _bulk_docs ${copyRes.status}`)
+        const rows = await copyRes.json()
+        const failed = rows.filter((r) => !r.ok)
+        if (failed.length) {
+          throw new Error(`copy failures: ${JSON.stringify(failed)}`)
+        }
+      }
+
+      // 4. Verify EVERY gathered doc now lives in the shared DB before deleting
+      //    anything from the personal DB. This gates the one destructive step.
+      const verified = await existingIds(
+        env,
+        dbName,
+        all.map((d) => d._id),
+      )
+      const missing = all.filter((d) => !verified.has(d._id))
+      if (missing.length) {
+        throw new Error(`post-copy verify: ${missing.length} doc(s) missing`)
+      }
+
+      // 5. Hard-delete the originals from the personal DB. The only destructive
+      //    step, and only reached once the copy is proven complete. A per-doc
+      //    409 (doc edited concurrently mid-adopt) leaves a remnant that a
+      //    re-run resumes — copy is a no-op by then, delete retries.
+      const deletions = all.map((d) => ({
+        _id: d._id,
+        _rev: d._rev,
+        _deleted: true,
+      }))
+      const delRes = await couchAdmin(env, `/${personalDb}/_bulk_docs`, {
+        method: 'POST',
+        body: JSON.stringify({ docs: deletions }),
+      })
+      if (!delRes.ok) throw new Error(`delete _bulk_docs ${delRes.status}`)
+
+      return c.json({
+        ok: true,
+        moved: {
+          trips: 1,
+          expenses: gathered.expenses.length,
+          amendments: gathered.amendments.length,
+          voids: gathered.voids.length,
+        },
+      })
+    } catch (err) {
+      console.error('sharedtrips/adopt:', err)
+      return c.json({ ok: false, error: 'adopt_failed' }, 500)
     }
   })
 
