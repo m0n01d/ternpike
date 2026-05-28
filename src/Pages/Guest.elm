@@ -159,35 +159,39 @@ viewCodeForm email code resendStatus { busy, label } =
 viewResendRow : RemoteData e () -> Bool -> Html Msg
 viewResendRow resendStatus verifyBusy =
     let
-        resendLabel =
-            case resendStatus of
-                RemoteData.Loading ->
-                    "Sending…"
+        disabledButton label =
+            Html.button
+                [ Html.Attributes.type_ "button"
+                , Html.Attributes.disabled True
+                , Html.Attributes.class "bg-transparent border border-tan/60 text-moss/60 font-mono uppercase tracking-widest text-xs px-4 py-2 rounded-lg cursor-not-allowed"
+                ]
+                [ Html.text label ]
 
-                _ ->
-                    "Resend code"
-
-        button =
-            if verifyBusy || resendStatus == RemoteData.Loading then
-                Html.button
-                    [ Html.Attributes.type_ "button"
-                    , Html.Attributes.disabled True
-                    , Html.Attributes.class "bg-transparent border border-tan/60 text-moss/60 font-mono uppercase tracking-widest text-xs px-4 py-2 rounded-lg cursor-not-allowed"
-                    ]
-                    [ Html.text resendLabel ]
+        idleButton =
+            if verifyBusy then
+                disabledButton "Resend code"
 
             else
-                UI.Button.ghost { label = resendLabel, onClick = GuestMsg ResendCode }
+                UI.Button.ghost { label = "Resend code", onClick = GuestMsg ResendCode }
 
-        notice =
+        successNotice =
+            Html.p
+                [ Html.Attributes.class "text-moss text-xs font-mono uppercase tracking-wide mt-3" ]
+                [ Html.text "New code sent — check your email." ]
+
+        ( button, notice ) =
             case resendStatus of
-                RemoteData.Success () ->
-                    Html.p
-                        [ Html.Attributes.class "text-moss text-xs font-mono uppercase tracking-wide mt-3" ]
-                        [ Html.text "New code sent — check your email." ]
+                RemoteData.NotAsked ->
+                    ( idleButton, Html.text "" )
 
-                _ ->
-                    Html.text ""
+                RemoteData.Loading ->
+                    ( disabledButton "Sending…", Html.text "" )
+
+                RemoteData.Failure _ ->
+                    ( idleButton, Html.text "" )
+
+                RemoteData.Success _ ->
+                    ( idleButton, successNotice )
     in
     Html.div [ Html.Attributes.class "mt-4 flex flex-col items-start" ]
         [ button, notice ]
