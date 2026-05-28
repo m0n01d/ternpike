@@ -4,6 +4,8 @@ module Data.SharedTripUi exposing
     , empty
     , errorMessage
     , isExpanded
+    , mapShareDraft
+    , openShareTrip
     , setModalRequest
     , toggleExpanded
     )
@@ -29,6 +31,8 @@ shared `inFlight : Bool` that used to live at the parent level is gone.
 -}
 
 import Data.SharedTripId exposing (SharedTripId)
+import Data.Trip exposing (NewFlockDraft)
+import Data.TripId exposing (TripId)
 import Http
 import Http.SharedTripApi
 import RemoteData exposing (RemoteData)
@@ -76,6 +80,11 @@ type SharedTripModal
         { request : RemoteData Http.Error ()
         }
     | NoModal
+    | ShareTripModal
+        TripId
+        { draft : NewFlockDraft
+        , request : RemoteData Http.Error ()
+        }
     | TransferModal
         SharedTripId
         { request : RemoteData Http.Error ()
@@ -88,6 +97,41 @@ empty =
     { expanded = Set.empty
     , modal = NoModal
     }
+
+
+{-| Open the "Share this trip" modal for a personal trip, seeding the
+group-name draft from the trip's name (the user can override it under
+"Advanced"). Replaces any currently-open modal.
+-}
+openShareTrip : TripId -> String -> SharedTripUiState -> SharedTripUiState
+openShareTrip tripId tripName state =
+    { state
+        | modal =
+            ShareTripModal tripId
+                { draft =
+                    { groupName = tripName
+                    , invitees = []
+                    , inviteesDraft = ""
+                    }
+                , request = RemoteData.NotAsked
+                }
+    }
+
+
+{-| Map the draft of the open `ShareTripModal` (group name + invitee chips).
+No-op when a different modal — or none — is open.
+-}
+mapShareDraft :
+    (NewFlockDraft -> NewFlockDraft)
+    -> SharedTripUiState
+    -> SharedTripUiState
+mapShareDraft f state =
+    case state.modal of
+        ShareTripModal tripId data ->
+            { state | modal = ShareTripModal tripId { data | draft = f data.draft } }
+
+        _ ->
+            state
 
 
 {-| True when the given shared trip's "View members" accordion is open.
@@ -136,7 +180,7 @@ errorMessage err =
             "Not allowed. Refresh and try again."
 
         Http.BadStatus 404 ->
-            "That flock wasn't found."
+            "That shared trip wasn't found."
 
         Http.BadStatus 409 ->
             "Already a member."

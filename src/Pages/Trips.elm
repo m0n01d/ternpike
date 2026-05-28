@@ -46,22 +46,36 @@ viewActions as_ =
                 canDelete =
                     not (List.isEmpty (Trips.otherTrips trips))
             in
-            UI.Button.iconButton
-                { icon = UI.Icons.pencil "w-4 h-4"
-                , onClick = AuthMsg (OpenEditTripForm activeTrip)
-                , title = "Edit trip"
-                }
-                :: (if canDelete then
-                        [ UI.Button.iconButton
-                            { icon = UI.Icons.trash "w-4 h-4"
-                            , onClick = AuthMsg (ConfirmDeleteTrip activeTrip)
-                            , title = "Delete trip"
-                            }
-                        ]
+            List.concat
+                [ [ UI.Button.iconButton
+                        { icon = UI.Icons.pencil "w-4 h-4"
+                        , onClick = AuthMsg (OpenEditTripForm activeTrip)
+                        , title = "Edit trip"
+                        }
+                  ]
+                , -- Share is offered only for personal trips; already-shared
+                  -- trips are managed from Settings.
+                  if activeTrip.flockId == Nothing then
+                    [ UI.Button.iconButton
+                        { icon = UI.Icons.share "w-4 h-4"
+                        , onClick = AuthMsg (OpenShareTripModal activeTrip)
+                        , title = "Share trip"
+                        }
+                    ]
 
-                    else
-                        []
-                   )
+                  else
+                    []
+                , if canDelete then
+                    [ UI.Button.iconButton
+                        { icon = UI.Icons.trash "w-4 h-4"
+                        , onClick = AuthMsg (ConfirmDeleteTrip activeTrip)
+                        , title = "Delete trip"
+                        }
+                    ]
+
+                  else
+                    []
+                ]
 
         _ ->
             []
