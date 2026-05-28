@@ -79,10 +79,26 @@ echo
 run_kv_delete() {
   local key="$1"
   echo "  TIERS_KV   ${key}"
-  (cd "${repo_root}/server" && wrangler kv key delete --binding=TIERS_KV --remote "${key}") \
-    >/dev/null 2>&1 \
-    && echo "    deleted" \
-    || echo "    (not found or already gone)"
+  # `--remote` only exists on wrangler 3.60+; older versions default to
+  # remote and reject the flag. Try with first, fall back without.
+  local out status
+  out=$(cd "${repo_root}/server" && \
+    wrangler kv key delete --binding=TIERS_KV --remote "${key}" 2>&1) \
+    && status=0 || status=$?
+  if [ "$status" -ne 0 ] && printf '%s' "$out" | grep -q -i "unknown argument: remote"; then
+    out=$(cd "${repo_root}/server" && \
+      wrangler kv key delete --binding=TIERS_KV "${key}" 2>&1) \
+      && status=0 || status=$?
+  fi
+  if [ "$status" -eq 0 ]; then
+    echo "    deleted"
+  elif printf '%s' "$out" | grep -q -i -E "not found|404"; then
+    echo "    (not found or already gone)"
+  else
+    echo "    FAILED — wrangler output:"
+    printf '%s\n' "$out" | sed 's/^/      /'
+    exit 1
+  fi
 }
 
 echo "Wiping TIERS_KV entries..."
