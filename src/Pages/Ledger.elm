@@ -24,9 +24,9 @@ import UI.Avatar
 import UI.BudgetBar
 import UI.Button
 import UI.DateView
+import UI.Gate
 import UI.Icons
 import UI.Mascot
-import UI.Gate
 import UI.MoneyView
 
 

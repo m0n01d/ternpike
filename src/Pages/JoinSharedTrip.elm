@@ -21,7 +21,9 @@ copy if any field is missing.
 
 import Html exposing (Html)
 import Html.Attributes
+import Http
 import Json.Decode
+import RemoteData
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Button
 import UI.Card
@@ -63,6 +65,69 @@ viewAuthBody as_ token invite =
 
         wrongRecipient =
             String.toLower intendedEmail /= String.toLower as_.creds.email
+
+        ( acceptButton, declineButton, errorChip ) =
+            case as_.joinSharedTripRequest of
+                RemoteData.NotAsked ->
+                    ( if wrongRecipient then
+                        Html.text ""
+
+                      else
+                        UI.Button.primary
+                            { label = "Accept"
+                            , onClick = AuthMsg (JoinSharedTripAccepted token)
+                            }
+                    , UI.Button.ghost
+                        { label = "Decline"
+                        , onClick = AuthMsg JoinSharedTripDeclined
+                        }
+                    , Html.text ""
+                    )
+
+                RemoteData.Loading ->
+                    ( UI.Button.primaryBusy { label = "Joining…" }
+                    , Html.button
+                        [ Html.Attributes.type_ "button"
+                        , Html.Attributes.disabled True
+                        , Html.Attributes.class "bg-transparent border border-tan/60 text-moss/60 font-mono uppercase tracking-widest text-xs px-4 py-2 rounded-lg cursor-not-allowed"
+                        ]
+                        [ Html.text "Decline" ]
+                    , Html.text ""
+                    )
+
+                RemoteData.Failure err ->
+                    ( if wrongRecipient then
+                        Html.text ""
+
+                      else
+                        UI.Button.primary
+                            { label = "Accept"
+                            , onClick = AuthMsg (JoinSharedTripAccepted token)
+                            }
+                    , UI.Button.ghost
+                        { label = "Decline"
+                        , onClick = AuthMsg JoinSharedTripDeclined
+                        }
+                    , Html.p [ Html.Attributes.class "text-sm text-rust" ]
+                        [ Html.text (joinErrorMessage err) ]
+                    )
+
+                RemoteData.Success _ ->
+                    -- Navigation fires in the same tick; render idle while in flight.
+                    ( if wrongRecipient then
+                        Html.text ""
+
+                      else
+                        UI.Button.primary
+                            { label = "Accept"
+                            , onClick = AuthMsg (JoinSharedTripAccepted token)
+                            }
+                    , UI.Button.ghost
+                        { label = "Decline"
+                        , onClick = AuthMsg JoinSharedTripDeclined
+                        }
+                    , Html.text ""
+                    )
     in
     UI.Card.subCard
         [ Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
@@ -93,22 +158,35 @@ viewAuthBody as_ token invite =
 
               else
                 Html.text ""
+            , errorChip
             , Html.div [ Html.Attributes.class "flex gap-2 mt-2" ]
-                [ if wrongRecipient then
-                    Html.text ""
-
-                  else
-                    UI.Button.primary
-                        { label = "Accept"
-                        , onClick = AuthMsg (JoinSharedTripAccepted token)
-                        }
-                , UI.Button.ghost
-                    { label = "Decline"
-                    , onClick = AuthMsg JoinSharedTripDeclined
-                    }
+                [ acceptButton
+                , declineButton
                 ]
             ]
         ]
+
+
+joinErrorMessage : Http.Error -> String
+joinErrorMessage err =
+    case err of
+        Http.BadStatus 401 ->
+            "This invite is no longer valid. Ask the inviter for a fresh link."
+
+        Http.BadStatus 403 ->
+            "This invite is for someone else."
+
+        Http.BadStatus 404 ->
+            "Invite expired or already used."
+
+        Http.BadStatus 409 ->
+            "You're already a member of that shared trip."
+
+        Http.BadStatus 410 ->
+            "This invite has expired. Ask the inviter for a fresh link."
+
+        _ ->
+            "Couldn't join — something went wrong. Try again."
 
 
 

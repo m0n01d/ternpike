@@ -206,6 +206,7 @@ type alias AuthState =
     , sharedTrips : Data.SharedTrips.SharedTrips
     , form : PendingForm
     , geoBlocked : Bool
+    , joinSharedTripRequest : RemoteData Http.Error Http.SharedTripApi.JoinSharedTripResponse
     , key : Nav.Key
     , lastSyncedAt : Maybe Time.Posix
     , ledgerMapExpanded : Bool
