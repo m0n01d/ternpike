@@ -252,8 +252,8 @@ toAuthState creds initialRoute gs =
     { activeScanItemId = Nothing
     , amendments = Dict.empty
     , basePath = gs.basePath
-    , billingError = Nothing
-    , billingInFlight = False
+    , billingCheckout = RemoteData.NotAsked
+    , billingPortal = RemoteData.NotAsked
     , colorScheme = ColorScheme.Auto
     , config = gs.session.config
     , confirmDeleteTrip = Nothing
@@ -3700,65 +3700,56 @@ updateAuth msg as_ =
             )
 
         BillingCheckoutClicked plan ->
-            ( AuthModel { as_ | billingError = Nothing, billingInFlight = True }
+            ( AuthModel { as_ | billingCheckout = RemoteData.Loading }
             , Http.Billing.checkout as_.config as_.creds { plan = plan } (AuthMsg << BillingCheckoutResult)
             )
 
-        BillingCheckoutResult (Http.Billing.CheckoutOk { url }) ->
-            ( AuthModel { as_ | billingInFlight = False }
-            , Nav.load url
-            )
+        BillingCheckoutResult result ->
+            let
+                ( newCheckout, newTrailblazerAvailable, cmd ) =
+                    case result of
+                        Ok { url } ->
+                            ( RemoteData.NotAsked, as_.trailblazerAvailable, Nav.load url )
 
-        BillingCheckoutResult Http.Billing.CheckoutSoldOut ->
+                        Err Http.Billing.CheckoutSoldOut ->
+                            ( RemoteData.Failure Http.Billing.CheckoutSoldOut, Just 0, Cmd.none )
+
+                        Err Http.Billing.CheckoutAlreadyTrailblazer ->
+                            ( RemoteData.Failure Http.Billing.CheckoutAlreadyTrailblazer, as_.trailblazerAvailable, Cmd.none )
+
+                        Err (Http.Billing.CheckoutError detail) ->
+                            -- `detail` is a short HTTP-status / network blurb from the
+                            -- HTTP layer (e.g. "Checkout failed (HTTP 502)"). We render
+                            -- the friendly preamble and append the technical detail so
+                            -- a stuck user has something to copy-paste into a support
+                            -- email without needing devtools.
+                            ( RemoteData.Failure (Http.Billing.CheckoutError detail), as_.trailblazerAvailable, Cmd.none )
+            in
             ( AuthModel
                 { as_
-                    | billingError = Just "Sorry, the last Trailblazer slot just sold out."
-                    , billingInFlight = False
-                    , trailblazerAvailable = Just 0
+                    | billingCheckout = newCheckout
+                    , trailblazerAvailable = newTrailblazerAvailable
                 }
-            , Cmd.none
-            )
-
-        BillingCheckoutResult Http.Billing.CheckoutAlreadyTrailblazer ->
-            ( AuthModel
-                { as_
-                    | billingError = Just "You're already a Trailblazer."
-                    , billingInFlight = False
-                }
-            , Cmd.none
-            )
-
-        BillingCheckoutResult (Http.Billing.CheckoutError detail) ->
-            -- `detail` is a short HTTP-status / network blurb from the
-            -- HTTP layer (e.g. "Checkout failed (HTTP 502)"). We render
-            -- the friendly preamble and append the technical detail so
-            -- a stuck user has something to copy-paste into a support
-            -- email without needing devtools.
-            ( AuthModel
-                { as_
-                    | billingError = Just ("Something went wrong starting checkout. Please try again. (" ++ detail ++ ")")
-                    , billingInFlight = False
-                }
-            , Cmd.none
+            , cmd
             )
 
         BillingPortalClicked ->
-            ( AuthModel { as_ | billingError = Nothing, billingInFlight = True }
+            ( AuthModel { as_ | billingPortal = RemoteData.Loading }
             , Http.Billing.portal as_.config as_.creds (AuthMsg << BillingPortalResult)
             )
 
-        BillingPortalResult (Ok { url }) ->
-            ( AuthModel { as_ | billingInFlight = False }
-            , Nav.load url
-            )
+        BillingPortalResult result ->
+            let
+                ( newPortal, cmd ) =
+                    case result of
+                        Ok { url } ->
+                            ( RemoteData.NotAsked, Nav.load url )
 
-        BillingPortalResult (Err _) ->
-            ( AuthModel
-                { as_
-                    | billingError = Just "Couldn't open the billing portal. Please try again."
-                    , billingInFlight = False
-                }
-            , Cmd.none
+                        Err err ->
+                            ( RemoteData.Failure err, Cmd.none )
+            in
+            ( AuthModel { as_ | billingPortal = newPortal }
+            , cmd
             )
 
         TrailblazerStatusFetched (Ok status) ->

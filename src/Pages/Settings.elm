@@ -9,7 +9,10 @@ import Data.Tier as Tier exposing (Tier(..))
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Http
+import Http.Billing
 import Pages.Settings.SharedTrips
+import RemoteData exposing (RemoteData)
 import Types exposing (AuthMsg_(..), AuthState, Msg(..), SharedMsg_(..))
 import UI.Button
 import UI.Card
@@ -365,8 +368,8 @@ caller uses `planPropsFromAuth as_` to project from the real model.
 
 -}
 type alias PlanProps =
-    { billingError : Maybe String
-    , billingInFlight : Bool
+    { billingCheckout : RemoteData Http.Billing.CheckoutFailure Http.Billing.CheckoutOk
+    , billingPortal : RemoteData Http.Error ()
     , subscriptionStatus : Maybe SubscriptionStatus.SubscriptionStatus
     , tier : Tier
     , trailblazerAvailable : Maybe Int
@@ -379,8 +382,8 @@ at the production call site.
 -}
 planPropsFromAuth : AuthState -> PlanProps
 planPropsFromAuth as_ =
-    { billingError = as_.billingError
-    , billingInFlight = as_.billingInFlight
+    { billingCheckout = as_.billingCheckout
+    , billingPortal = as_.billingPortal
     , subscriptionStatus = as_.subscriptionStatus
     , tier = as_.tier
     , trailblazerAvailable = as_.trailblazerAvailable
@@ -399,30 +402,69 @@ viewPlanSection props =
 viewPlanBody : PlanProps -> List (Html Msg)
 viewPlanBody props =
     let
-        errorChip =
-            case props.billingError of
-                Just message ->
+        checkoutErrorChip =
+            case props.billingCheckout of
+                RemoteData.Failure Http.Billing.CheckoutSoldOut ->
                     [ Html.p
                         [ Html.Attributes.class "text-xs text-rust mt-3" ]
-                        [ Html.text message ]
+                        [ Html.text "Sorry, the last Trailblazer slot just sold out." ]
                     ]
 
-                Nothing ->
+                RemoteData.Failure Http.Billing.CheckoutAlreadyTrailblazer ->
+                    [ Html.p
+                        [ Html.Attributes.class "text-xs text-rust mt-3" ]
+                        [ Html.text "You're already a Trailblazer." ]
+                    ]
+
+                RemoteData.Failure (Http.Billing.CheckoutError detail) ->
+                    [ Html.p
+                        [ Html.Attributes.class "text-xs text-rust mt-3" ]
+                        [ Html.text ("Something went wrong starting checkout. Please try again. (" ++ detail ++ ")") ]
+                    ]
+
+                RemoteData.NotAsked ->
+                    []
+
+                RemoteData.Loading ->
+                    []
+
+                RemoteData.Success _ ->
+                    []
+
+        portalErrorChip =
+            case props.billingPortal of
+                RemoteData.Failure _ ->
+                    [ Html.p
+                        [ Html.Attributes.class "text-xs text-rust mt-3" ]
+                        [ Html.text "Couldn't open the billing portal. Please try again." ]
+                    ]
+
+                RemoteData.NotAsked ->
+                    []
+
+                RemoteData.Loading ->
+                    []
+
+                RemoteData.Success _ ->
                     []
     in
     case props.tier of
         Tern ->
-            viewPlanTern props ++ errorChip
+            viewPlanTern props ++ checkoutErrorChip
 
         Osprey ->
-            viewPlanOsprey props ++ errorChip
+            viewPlanOsprey props ++ portalErrorChip
 
         Trailblazer ->
-            viewPlanTrailblazer props ++ errorChip
+            viewPlanTrailblazer props ++ portalErrorChip
 
 
 viewPlanTern : PlanProps -> List (Html Msg)
 viewPlanTern props =
+    let
+        checkoutBusy =
+            props.billingCheckout == RemoteData.Loading
+    in
     [ Html.div [ Html.Attributes.class "text-sm text-ink font-medium mb-1" ]
         [ Html.text "Tern — Free" ]
     , Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
@@ -434,15 +476,15 @@ viewPlanTern props =
         ]
     , Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
         [ viewCheckoutButton
-            { busy = props.billingInFlight
-            , disabled = props.billingInFlight
+            { busy = checkoutBusy
+            , disabled = checkoutBusy
             , label = "Osprey — $2.99 / mo"
             , plan = "osprey_monthly"
             , style = StylePrimary
             }
         , viewCheckoutButton
-            { busy = props.billingInFlight
-            , disabled = props.billingInFlight
+            { busy = checkoutBusy
+            , disabled = checkoutBusy
             , label = "Osprey yearly — $24 / yr (save $12)"
             , plan = "osprey_yearly"
             , style = StyleSecondary
@@ -454,6 +496,10 @@ viewPlanTern props =
 
 viewPlanOsprey : PlanProps -> List (Html Msg)
 viewPlanOsprey props =
+    let
+        portalBusy =
+            props.billingPortal == RemoteData.Loading
+    in
     [ Html.div [ Html.Attributes.class "flex items-center gap-2 mb-3" ]
         [ Html.span [ Html.Attributes.class "text-sm text-ink font-medium" ]
             [ Html.text "Osprey" ]
@@ -461,8 +507,8 @@ viewPlanOsprey props =
         ]
     , Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
         [ viewPortalButton
-            { busy = props.billingInFlight
-            , disabled = props.billingInFlight
+            { busy = portalBusy
+            , disabled = portalBusy
             , label = "Manage billing"
             }
         ]
@@ -479,6 +525,9 @@ viewPlanTrailblazer props =
 
                 Nothing ->
                     "Trailblazer (of 500)"
+
+        portalBusy =
+            props.billingPortal == RemoteData.Loading
     in
     [ Html.div [ Html.Attributes.class "text-sm text-ink font-medium mb-1" ]
         [ Html.text heading ]
@@ -486,8 +535,8 @@ viewPlanTrailblazer props =
         [ Html.text "Lifetime access. All 1.x updates included. Loyalty discount on v2." ]
     , Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
         [ viewPortalButton
-            { busy = props.billingInFlight
-            , disabled = props.billingInFlight
+            { busy = portalBusy
+            , disabled = portalBusy
             , label = "View receipts / update card"
             }
         ]
@@ -561,6 +610,10 @@ viewPortalButton { busy, disabled, label } =
 
 viewTrailblazerButton : PlanProps -> Html Msg
 viewTrailblazerButton props =
+    let
+        checkoutBusy =
+            props.billingCheckout == RemoteData.Loading
+    in
     case props.trailblazerAvailable of
         Nothing ->
             Html.button
@@ -580,8 +633,8 @@ viewTrailblazerButton props =
 
         Just n ->
             viewCheckoutButton
-                { busy = props.billingInFlight
-                , disabled = props.billingInFlight
+                { busy = checkoutBusy
+                , disabled = checkoutBusy
                 , label = "Become a Trailblazer — $79 (" ++ String.fromInt n ++ " of 500 left)"
                 , plan = "trailblazer"
                 , style = StyleSecondary

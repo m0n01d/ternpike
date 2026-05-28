@@ -1,5 +1,6 @@
 module Http.Billing exposing
-    ( CheckoutResult(..)
+    ( CheckoutFailure(..)
+    , CheckoutOk
     , PortalResponse
     , TrailblazerStatus
     , checkout
@@ -43,26 +44,33 @@ import Json.Decode.Pipeline as Pipeline
 import Json.Encode
 
 
-{-| Outcome of a `POST /billing/checkout` call.
+{-| Failure outcomes of a `POST /billing/checkout` call.
 
-  - `CheckoutOk` — Stripe handed us a hosted Checkout URL; redirect there.
-    `number` is `Just n` for Trailblazer reservations (so the caller can
-    show "you're #N" pre-payment if it wants) and `Nothing` for Osprey.
-  - `CheckoutSoldOut` — Trailblazer-only. The 500-slot Durable Object
-    declined the reservation (`409 {ok: false, remaining: 0}`).
   - `CheckoutAlreadyTrailblazer` — server saw the caller is already a
     Trailblazer and refused to start a second checkout
     (`403 {reason: "already_trailblazer"}`). UI surfaces a friendly
     "you're already a Trailblazer" chip rather than the generic error.
   - `CheckoutError` — network failure, 4xx that isn't one of the above,
     5xx, or a malformed response. Wraps a short user-facing message.
+  - `CheckoutSoldOut` — Trailblazer-only. The 500-slot Durable Object
+    declined the reservation (`409 {ok: false, remaining: 0}`).
 
 -}
-type CheckoutResult
+type CheckoutFailure
     = CheckoutAlreadyTrailblazer
     | CheckoutError String
-    | CheckoutOk { number : Maybe Int, url : String }
     | CheckoutSoldOut
+
+
+{-| Success payload of a `POST /billing/checkout` call.
+
+Stripe handed us a hosted Checkout URL; redirect there.
+`number` is `Just n` for Trailblazer reservations (so the caller can
+show "you're #N" pre-payment if it wants) and `Nothing` for Osprey.
+
+-}
+type alias CheckoutOk =
+    { number : Maybe Int, url : String }
 
 
 {-| `POST /billing/portal` success body — Stripe-hosted Customer Portal URL.
@@ -92,7 +100,7 @@ checkout :
     AppConfig
     -> Creds
     -> { plan : String }
-    -> (CheckoutResult -> msg)
+    -> (Result CheckoutFailure CheckoutOk -> msg)
     -> Cmd msg
 checkout config creds { plan } toMsg =
     Http.request
@@ -105,30 +113,10 @@ checkout config creds { plan } toMsg =
                     [ ( "plan", Json.Encode.string plan ) ]
                 )
         , expect =
-            Http.expectStringResponse (toMsg << unwrapCheckoutResult)
-                (Ok << checkoutResponseToResult)
+            Http.expectStringResponse toMsg checkoutResponseToResult
         , timeout = Nothing
         , tracker = Nothing
         }
-
-
-{-| `expectStringResponse` requires its decoder to return
-`Result x a` and its handler to take `Result x a -> msg`. Our
-`checkoutResponseToResult` already produces every relevant outcome as a
-single `CheckoutResult` value (including network / 5xx errors as
-`CheckoutError`), so we wrap it in `Ok` for the type signature and then
-unwrap right back to the caller. The `Err` branch is structurally
-unreachable — anything `Http` itself could have flagged as an error has
-already been mapped through `checkoutResponseToResult`.
--}
-unwrapCheckoutResult : Result Never CheckoutResult -> CheckoutResult
-unwrapCheckoutResult r =
-    case r of
-        Ok v ->
-            v
-
-        Err n ->
-            never n
 
 
 {-| Fire `POST {backendUrl}/billing/portal`.
@@ -178,44 +166,44 @@ trailblazerStatus config toMsg =
         }
 
 
-checkoutResponseToResult : Http.Response String -> CheckoutResult
+checkoutResponseToResult : Http.Response String -> Result CheckoutFailure CheckoutOk
 checkoutResponseToResult response =
     case response of
         Http.BadUrl_ url ->
-            CheckoutError ("Bad URL: " ++ url)
+            Err (CheckoutError ("Bad URL: " ++ url))
 
         Http.Timeout_ ->
-            CheckoutError "Checkout request timed out — try again"
+            Err (CheckoutError "Checkout request timed out — try again")
 
         Http.NetworkError_ ->
-            CheckoutError "Network error — check your connection and try again"
+            Err (CheckoutError "Network error — check your connection and try again")
 
         Http.BadStatus_ meta body ->
             case meta.statusCode of
                 403 ->
                     case Json.Decode.decodeString (Json.Decode.field "reason" Json.Decode.string) body of
                         Ok "already_trailblazer" ->
-                            CheckoutAlreadyTrailblazer
+                            Err CheckoutAlreadyTrailblazer
 
                         _ ->
-                            CheckoutError ("Checkout refused (HTTP " ++ String.fromInt meta.statusCode ++ ")")
+                            Err (CheckoutError ("Checkout refused (HTTP " ++ String.fromInt meta.statusCode ++ ")"))
 
                 409 ->
-                    CheckoutSoldOut
+                    Err CheckoutSoldOut
 
                 status ->
-                    CheckoutError ("Checkout failed (HTTP " ++ String.fromInt status ++ ")")
+                    Err (CheckoutError ("Checkout failed (HTTP " ++ String.fromInt status ++ ")"))
 
         Http.GoodStatus_ _ body ->
             case Json.Decode.decodeString checkoutOkDecoder body of
                 Ok payload ->
-                    CheckoutOk payload
+                    Ok payload
 
                 Err _ ->
-                    CheckoutError "Couldn't read the checkout response"
+                    Err (CheckoutError "Couldn't read the checkout response")
 
 
-checkoutOkDecoder : Json.Decode.Decoder { number : Maybe Int, url : String }
+checkoutOkDecoder : Json.Decode.Decoder CheckoutOk
 checkoutOkDecoder =
     Json.Decode.succeed (\number url -> { number = number, url = url })
         |> Pipeline.optional "number" (Json.Decode.nullable Json.Decode.int) Nothing
