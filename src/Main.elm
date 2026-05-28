@@ -128,6 +128,7 @@ import Pages.Settings.SharedTrips
 import Pages.Stats
 import Pages.Trips
 import Process
+import RemoteData
 import Routing
 import Set
 import Task
@@ -316,6 +317,7 @@ toGuestState reason as_ =
     , networkOffline = as_.networkOffline
     , pendingJoinToken = joinTokenFromRoute as_.route
     , pendingRef = Nothing
+    , resendStatus = RemoteData.NotAsked
     , session = { config = as_.config, reason = reason }
     , showSettings = reason == SessionExpired
     , today = as_.today
@@ -1061,6 +1063,7 @@ verifyCode email gs =
         ( GuestModel
             { gs
                 | authError = Nothing
+                , resendStatus = RemoteData.NotAsked
                 , session = { config = gs.session.config, reason = VerifyingCode email code }
             }
         , Http.post
@@ -1757,6 +1760,7 @@ init flagsJson url key =
             , networkOffline = False
             , pendingJoinToken = joinTokenFromRoute initialRoute
             , pendingRef = pendingRef
+            , resendStatus = RemoteData.NotAsked
             , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
             , today = initialToday
@@ -1914,6 +1918,7 @@ updateShared msg model =
                         , networkOffline = as_.networkOffline
                         , pendingJoinToken = Nothing
                         , pendingRef = Nothing
+                        , resendStatus = RemoteData.NotAsked
                         , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
                         , showSettings = False
                         , today = as_.today
@@ -2024,6 +2029,33 @@ updateGuest msg gs =
 
                 _ ->
                     ( GuestModel gs, Cmd.none )
+
+        ResendCode ->
+            case ( gs.session.reason, gs.resendStatus ) of
+                ( AwaitingCode _, RemoteData.Loading ) ->
+                    ( GuestModel gs, Cmd.none )
+
+                ( AwaitingCode email, _ ) ->
+                    ( GuestModel
+                        { gs
+                            | authError = Nothing
+                            , codeInput = ""
+                            , resendStatus = RemoteData.Loading
+                        }
+                    , Http.post
+                        { url = gs.session.config.backendUrl ++ "/auth/request-code"
+                        , body = Http.jsonBody (E.object [ ( "email", E.string email ) ])
+                        , expect = Http.expectWhatever (GuestMsg << ResendCodeResult)
+                        }
+                    )
+
+                _ ->
+                    ( GuestModel gs, Cmd.none )
+
+        ResendCodeResult result ->
+            ( GuestModel { gs | resendStatus = RemoteData.fromResult result }
+            , Cmd.none
+            )
 
         SubmitCode ->
             case gs.session.reason of

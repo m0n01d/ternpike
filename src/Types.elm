@@ -74,6 +74,7 @@ import Http.Billing
 import Http.GeocodeApi
 import Http.SharedTripApi
 import Json.Decode
+import RemoteData exposing (RemoteData)
 import Set exposing (Set)
 import Time
 import Url
@@ -112,6 +113,7 @@ type alias GuestState =
     , networkOffline : Bool
     , pendingJoinToken : Maybe String
     , pendingRef : Maybe String
+    , resendStatus : RemoteData Http.Error ()
     , session : GuestSession
     , showSettings : Bool
     , today : DateField
@@ -342,6 +344,8 @@ type GuestMsg_
     = CodeInputChanged String
     | EmailInputChanged String
     | RequestCodeResult (Result Http.Error ())
+    | ResendCode
+    | ResendCodeResult (Result Http.Error ())
     | SubmitCode
     | SubmitEmail
     | ToggleGuestSettings
