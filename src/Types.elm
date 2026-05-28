@@ -189,7 +189,7 @@ type alias AuthState =
     { activeScanItemId : Maybe ScanItemId
     , amendments : Dict String Amendment
     , basePath : String
-    , billingCheckout : RemoteData Http.Billing.CheckoutResult ()
+    , billingCheckout : RemoteData Http.Billing.CheckoutFailure Http.Billing.CheckoutOk
     , billingPortal : RemoteData Http.Error ()
     , colorScheme : ColorScheme
     , config : AppConfig
@@ -363,7 +363,7 @@ type AuthMsg_
     | AmountChanged String
     | BackToQueue
     | BillingCheckoutClicked String
-    | BillingCheckoutResult Http.Billing.CheckoutResult
+    | BillingCheckoutResult (Result Http.Billing.CheckoutFailure Http.Billing.CheckoutOk)
     | BillingPortalClicked
     | BillingPortalResult (Result Http.Error Http.Billing.PortalResponse)
     | CanInstall Bool

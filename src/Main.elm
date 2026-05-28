@@ -3696,16 +3696,16 @@ updateAuth msg as_ =
             let
                 ( newCheckout, newTrailblazerAvailable, cmd ) =
                     case result of
-                        Http.Billing.CheckoutOk { url } ->
+                        Ok { url } ->
                             ( RemoteData.NotAsked, as_.trailblazerAvailable, Nav.load url )
 
-                        Http.Billing.CheckoutSoldOut ->
+                        Err Http.Billing.CheckoutSoldOut ->
                             ( RemoteData.Failure Http.Billing.CheckoutSoldOut, Just 0, Cmd.none )
 
-                        Http.Billing.CheckoutAlreadyTrailblazer ->
+                        Err Http.Billing.CheckoutAlreadyTrailblazer ->
                             ( RemoteData.Failure Http.Billing.CheckoutAlreadyTrailblazer, as_.trailblazerAvailable, Cmd.none )
 
-                        Http.Billing.CheckoutError detail ->
+                        Err (Http.Billing.CheckoutError detail) ->
                             -- `detail` is a short HTTP-status / network blurb from the
                             -- HTTP layer (e.g. "Checkout failed (HTTP 502)"). We render
                             -- the friendly preamble and append the technical detail so

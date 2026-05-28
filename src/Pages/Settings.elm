@@ -368,7 +368,7 @@ caller uses `planPropsFromAuth as_` to project from the real model.
 
 -}
 type alias PlanProps =
-    { billingCheckout : RemoteData Http.Billing.CheckoutResult ()
+    { billingCheckout : RemoteData Http.Billing.CheckoutFailure Http.Billing.CheckoutOk
     , billingPortal : RemoteData Http.Error ()
     , subscriptionStatus : Maybe SubscriptionStatus.SubscriptionStatus
     , tier : Tier
@@ -421,11 +421,6 @@ viewPlanBody props =
                         [ Html.Attributes.class "text-xs text-rust mt-3" ]
                         [ Html.text ("Something went wrong starting checkout. Please try again. (" ++ detail ++ ")") ]
                     ]
-
-                RemoteData.Failure (Http.Billing.CheckoutOk _) ->
-                    -- Structurally unreachable: we only set Failure with
-                    -- error variants (SoldOut / AlreadyTrailblazer / CheckoutError).
-                    []
 
                 RemoteData.NotAsked ->
                     []
