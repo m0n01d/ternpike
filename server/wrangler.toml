@@ -98,6 +98,11 @@ crons = ["0 * * * *", "0 17 * * 5"]
 #   RESEND_API_KEY
 #   RESEND_WAITLIST_API_KEY  (separate Resend token scoped to the waitlist audience)
 #   SERVER_SECRET
+#   STRIPE_PRICE_OSPREY_MONTHLY   (Stripe Price ID for $2.99/mo Osprey subscription)
+#   STRIPE_PRICE_OSPREY_YEARLY    (Stripe Price ID for $24/yr Osprey subscription)
+#   STRIPE_PRICE_TRAILBLAZER      (Stripe Price ID for $79 one-time Trailblazer)
+#   STRIPE_SECRET_KEY             (Stripe API secret key — sk_live_... or sk_test_...)
+#   STRIPE_WEBHOOK_SECRET         (set in #18 — listed here for the full surface)
 #   TIER_WEBHOOK_SECRET   (shared with the future Stripe webhook + test hook)
 #   VAPID_PRIVATE_KEY     (base64url; PERMANENT — re-keying invalidates all push subscriptions)
 #   VAPID_PUBLIC_KEY      (base64url; also shipped to client as VITE_VAPID_PUBLIC_KEY at build time)

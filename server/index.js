@@ -4,6 +4,7 @@ import { Resend } from 'resend'
 
 import { registerAdminRoutes } from './admin.js'
 import { authenticateCaller, getTier } from './auth.js'
+import { registerBillingRoutes } from './billing.js'
 import { registerGeocodeRoutes } from './geocode.js'
 import { freshUser, getUser, migrateLegacy, upsertUser } from './users.js'
 import {
@@ -155,13 +156,17 @@ const corsConfig = cors({
 })
 
 app.use('/auth/*', corsConfig)
+app.use('/billing/*', corsConfig)
 app.use('/geocode', corsConfig)
 app.use('/marketing/*', corsConfig)
+app.use('/me', corsConfig)
 app.use('/notifications/*', corsConfig)
 app.use('/scan', corsConfig)
-app.use('/me', corsConfig)
 app.use('/sharedtrips/*', corsConfig)
 app.use('/sharedtrips', corsConfig)
+
+// --- billing routes (#17) ---
+registerBillingRoutes(app)
 
 app.post('/auth/request-code', async (c) => {
   const env = c.env
