@@ -1,6 +1,7 @@
 {% extends "_layout.njk" %}
 
 {% block extraHead %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -23,6 +24,7 @@
 {% block content %}
 {% include "partials/hero.njk" %}
 {% include "partials/how-it-works.njk" %}
+{% include "partials/ocr-demo.njk" %}
 {% include "partials/features.njk" %}
 {% include "partials/ledger-preview.njk" %}
 {% include "partials/pricing.njk" %}

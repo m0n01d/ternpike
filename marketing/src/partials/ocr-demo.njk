@@ -1,0 +1,57 @@
+<section class="bg-cream-deep px-6 py-25" id="try-it">
+  <div class="mx-auto max-w-[1100px]">
+    <div class="mb-3 font-mono text-[10px] uppercase tracking-[0.22em] text-rust [font-variant-caps:all-small-caps]">{{ ocrDemo.eyebrow }}</div>
+    <h2 class="font-display text-[clamp(36px,6vw,60px)] font-black leading-[1.05] tracking-[-0.02em] text-forest">{{ ocrDemo.seoHeadline }}</h2>
+    <p class="section-subhead mb-14">{{ ocrDemo.headlineHtml | safe }}</p>
+
+    <div
+      class="ocr-demo grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8"
+      data-endpoint="https://api.ternpike.com/scan-demo"
+      data-sitekey="{{ ocrDemo.turnstileSiteKey }}"
+      data-busy-label="{{ ocrDemo.busy }}"
+      data-retry-label="{{ ocrDemo.retry }}"
+      data-error-rate-limit="{{ ocrDemo.errors.rateLimit }}"
+      data-error-no-receipt="{{ ocrDemo.errors.noReceipt }}"
+      data-error-too-large="{{ ocrDemo.errors.tooLarge }}"
+      data-error-turnstile="{{ ocrDemo.errors.turnstile }}"
+      data-error-generic="{{ ocrDemo.errors.generic }}"
+    >
+      <div class="rounded-card bg-parchment p-8 shadow-card">
+        <p class="mb-6 font-body text-[17px] leading-[1.6] text-forest-mid">{{ ocrDemo.body }}</p>
+
+        <label class="ocr-drop relative flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-card border-2 border-dashed border-tan bg-cream px-6 py-8 text-center transition-colors hover:border-rust hover:bg-cream-deep">
+          <input type="file" accept="image/*" class="ocr-file absolute inset-0 cursor-pointer opacity-0" />
+          <img class="ocr-preview hidden max-h-[160px] max-w-full rounded-md object-contain" alt="" />
+          <div class="ocr-drop-label flex flex-col items-center gap-2">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="text-forest" aria-hidden="true">
+              <path d="M3 7h4l2-3h6l2 3h4v13H3z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            <div class="font-display text-[18px] font-bold text-forest">{{ ocrDemo.dropPrompt }}</div>
+            <div class="font-mono text-[11px] uppercase tracking-[0.18em] text-moss">{{ ocrDemo.dropHint }}</div>
+          </div>
+        </label>
+
+        <div class="ocr-turnstile mt-5 flex min-h-[65px] justify-center"></div>
+
+        <button type="button" class="ocr-retry mt-4 hidden font-mono text-[12px] uppercase tracking-[0.2em] text-rust underline">{{ ocrDemo.retry }}</button>
+      </div>
+
+      <div class="ocr-output flex flex-col rounded-card bg-parchment p-8 shadow-card">
+        <div class="mb-3 font-mono text-[11px] uppercase tracking-[0.22em] text-rust">{{ ocrDemo.idle }}</div>
+
+        <dl class="ocr-result">
+          {% for key, label in ocrDemo.fields %}
+          <div class="flex items-baseline justify-between gap-4 border-b border-dashed border-tan/70 py-3 last:border-b-0">
+            <dt class="font-mono text-[11px] uppercase tracking-[0.2em] text-moss">{{ label }}</dt>
+            <dd class="ocr-field font-display text-[17px] font-semibold text-forest tabular-nums text-right" data-field="{{ key }}">—</dd>
+          </div>
+          {% endfor %}
+        </dl>
+
+        <div class="ocr-status mt-4 min-h-[1.4em] font-body italic text-forest-mid">&nbsp;</div>
+        <div class="ocr-error mt-2 hidden font-body text-rust"></div>
+      </div>
+    </div>
+  </div>
+</section>

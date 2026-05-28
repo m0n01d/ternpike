@@ -15,6 +15,7 @@ import {
 } from './notifications.js'
 import { registerQrRoutes } from './qr.js'
 import { registerScanRoutes } from './scan.js'
+import { registerScanDemoRoutes } from './scanDemo.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
 
 // Re-export the Durable Object class so wrangler can find it via the
@@ -163,6 +164,7 @@ app.use('/marketing/*', corsConfig)
 app.use('/me', corsConfig)
 app.use('/notifications/*', corsConfig)
 app.use('/scan', corsConfig)
+app.use('/scan-demo', corsConfig)
 app.use('/sharedtrips/*', corsConfig)
 app.use('/sharedtrips', corsConfig)
 
@@ -338,6 +340,7 @@ registerGeocodeRoutes(app)
 registerNotificationRoutes(app)
 registerQrRoutes(app)
 registerScanRoutes(app)
+registerScanDemoRoutes(app)
 registerSharedTripRoutes(app)
 registerAdminRoutes(app)
 

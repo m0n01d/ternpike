@@ -104,6 +104,7 @@ crons = ["0 * * * *", "0 17 * * 5"]
 #   STRIPE_SECRET_KEY             (Stripe API secret key — sk_live_... or sk_test_...)
 #   STRIPE_WEBHOOK_SECRET         (set in #18 — listed here for the full surface)
 #   TIER_WEBHOOK_SECRET   (shared with the future Stripe webhook + test hook)
+#   TURNSTILE_SECRET_KEY  (Cloudflare Turnstile secret — gates POST /scan-demo on the marketing home page)
 #   VAPID_PRIVATE_KEY     (base64url; PERMANENT — re-keying invalidates all push subscriptions)
 #   VAPID_PUBLIC_KEY      (base64url; also shipped to client as VITE_VAPID_PUBLIC_KEY at build time)
 #   VAPID_SUBJECT         (mailto: URL, e.g. mailto:ops@ternpike.com)
