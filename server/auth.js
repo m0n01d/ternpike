@@ -24,7 +24,7 @@ const bytesToHex = (bytes) => {
   return s
 }
 
-const constantTimeEqual = (a, b) => {
+export const constantTimeEqual = (a, b) => {
   let acc = 0
   const len = Math.min(a.length, b.length)
   for (let i = 0; i < len; i++) acc |= a.charCodeAt(i) ^ b.charCodeAt(i)
