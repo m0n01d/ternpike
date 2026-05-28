@@ -15,7 +15,9 @@ import File exposing (File)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Json.Decode
+import List.Extra
 import Routing
 import Types exposing (AuthMsg_(..), AuthState, Msg(..), SharedMsg_(..))
 import UI.Button
@@ -58,10 +60,10 @@ viewTierAffordances as_ =
                     viewTierLabel trip as_
 
                 Nothing ->
-                    Html.text ""
+                    Html.Extra.nothing
 
         _ ->
-            Html.text ""
+            Html.Extra.nothing
 
 
 viewTierLabel : Trip -> AuthState -> Html Msg
@@ -81,7 +83,7 @@ viewTierLabel trip as_ =
                             , Html.Attributes.class "text-[11px] font-mono uppercase tracking-widest text-muted underline underline-offset-2 cursor-pointer"
                             ]
                             [ Html.text "Switch to hosted key" ]
-                    , upgradePrompt = Html.text ""
+                    , upgradePrompt = Html.Extra.nothing
                     }
                 ]
 
@@ -140,8 +142,8 @@ without flock chrome.
 -}
 viewFlockContextStrip : Maybe ( Trip, SharedTrip ) -> Html Msg
 viewFlockContextStrip ctx =
-    case ctx of
-        Just ( trip, flock ) ->
+    Html.Extra.viewMaybe
+        (\( trip, flock ) ->
             Html.div
                 [ Html.Attributes.class "mb-4 flex items-center gap-3 bg-cream-deep border border-tan rounded-card px-4 py-3" ]
                 [ UI.SharedTripBadge.view flock
@@ -154,9 +156,8 @@ viewFlockContextStrip ctx =
                         [ Html.text trip.name ]
                     ]
                 ]
-
-        Nothing ->
-            Html.text ""
+        )
+        ctx
 
 
 viewHero : AuthState -> Html Msg
@@ -256,7 +257,7 @@ viewBody model =
                 i.status == ScanReady && Maybe.map needsReview i.ocrData == Just True
 
             sortedItems =
-                List.filter needsReviewItem items ++ List.filter (not << needsReviewItem) items
+                List.filter needsReviewItem items ++ List.Extra.removeWhen needsReviewItem items
 
             hasSubmitted =
                 List.any (\i -> i.status == ScanSubmitted) items
@@ -267,16 +268,10 @@ viewBody model =
         Html.div []
             [ Html.div [ Html.Attributes.class "flex flex-col gap-3 mb-4" ]
                 (List.map viewScanCard sortedItems)
-            , if hasSubmitted then
+            , Html.Extra.viewIf hasSubmitted <|
                 Html.div [ Html.Attributes.class "mb-4 flex justify-center" ]
                     [ UI.Button.ghost { label = "Clear submitted", onClick = AuthMsg ClearDoneItems } ]
-
-              else
-                Html.text ""
-            , if List.isEmpty debugItems then
-                Html.text ""
-
-              else
+            , Html.Extra.viewIf (not (List.isEmpty debugItems)) <|
                 Html.details
                     [ Html.Attributes.class "mt-6 text-xs font-mono text-muted" ]
                     (Html.summary
@@ -343,11 +338,7 @@ viewScanCardBody item =
             case item.ocrData of
                 Just ocr ->
                     Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
-                        [ if needsReview ocr then
-                            viewNeedsReviewBadge
-
-                          else
-                            Html.text ""
+                        [ Html.Extra.viewIf (needsReview ocr) viewNeedsReviewBadge
                         , viewOcrSummary ocr
                         , viewReviewButton item.id
                         ]
@@ -361,16 +352,15 @@ viewScanCardBody item =
         ScanSubmitted ->
             Html.div [ Html.Attributes.class "flex items-center h-full text-moss text-xs" ]
                 [ Html.text "✓ Submitted"
-                , case Maybe.andThen .date item.ocrData of
-                    Just date ->
+                , Html.Extra.viewMaybe
+                    (\date ->
                         Html.span
                             [ Html.Attributes.class "ml-2 text-muted" ]
                             [ Html.text "· "
                             , UI.DateView.monthDay date
                             ]
-
-                    Nothing ->
-                        Html.text ""
+                    )
+                    (Maybe.andThen .date item.ocrData)
                 ]
 
 
@@ -454,13 +444,12 @@ viewOcrSummary ocr =
 
         addressRow : Html Msg
         addressRow =
-            case ocr.address of
-                Just addr ->
+            Html.Extra.viewMaybe
+                (\addr ->
                     Html.div [ Html.Attributes.class "text-xs text-muted truncate" ]
                         [ Html.text ("📍 " ++ addr) ]
-
-                Nothing ->
-                    Html.text ""
+                )
+                ocr.address
     in
     Html.div [ Html.Attributes.class "flex flex-col gap-1" ]
         [ Html.div [ Html.Attributes.class "flex items-baseline gap-2" ]
@@ -482,14 +471,13 @@ viewOcrSummary ocr =
 
 viewCategoryPill : Maybe Category.Category -> Html Msg
 viewCategoryPill maybeCat =
-    case maybeCat of
-        Just cat ->
+    Html.Extra.viewMaybe
+        (\cat ->
             Html.span
                 [ Html.Attributes.class "px-2 py-0.5 rounded-full bg-tan/40 text-[10px] uppercase tracking-wider text-forest font-mono" ]
                 [ Html.text (Category.label cat) ]
-
-        Nothing ->
-            Html.text ""
+        )
+        maybeCat
 
 
 viewProgressBar : String -> Html Msg
