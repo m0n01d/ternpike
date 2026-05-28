@@ -25,6 +25,7 @@ import Data.UserId as UserId exposing (UserId)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Http
 import RemoteData exposing (RemoteData)
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
@@ -152,11 +153,7 @@ viewSharedTripCard as_ currentUser sharedTrip =
                     "View members"
                 )
             ]
-        , if membersExpanded then
-            viewMembersList sharedTrip
-
-          else
-            Html.text ""
+        , Html.Extra.viewIf membersExpanded (viewMembersList sharedTrip)
         ]
 
 
@@ -180,12 +177,10 @@ viewMembersList sharedTrip =
                         [ UI.Avatar.viewInitial u
                         , Html.span [ Html.Attributes.class "text-sm text-ink" ]
                             [ Html.text (UserId.handleIn u members) ]
-                        , if SharedTrip.isOwner u sharedTrip then
-                            Html.span [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-rust-deep" ]
+                        , Html.Extra.viewIf (SharedTrip.isOwner u sharedTrip)
+                            (Html.span [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-rust-deep" ]
                                 [ Html.text "Owner" ]
-
-                          else
-                            Html.text ""
+                            )
                         ]
                 )
         )
@@ -199,7 +194,7 @@ viewModal : AuthState -> Html Msg
 viewModal as_ =
     case as_.sharedTripUi.modal of
         SharedTripUi.NoModal ->
-            Html.text ""
+            Html.Extra.nothing
 
         SharedTripUi.CreateModal { name, request } ->
             modalShell "New shared trip"
@@ -363,12 +358,12 @@ viewModalActions { cancel, confirmLabel, confirmMsg, request } =
         ( chip, confirmButton ) =
             case request of
                 RemoteData.NotAsked ->
-                    ( Html.text ""
+                    ( Html.Extra.nothing
                     , UI.Button.primary { label = confirmLabel, onClick = confirmMsg }
                     )
 
                 RemoteData.Loading ->
-                    ( Html.text ""
+                    ( Html.Extra.nothing
                     , UI.Button.primaryBusy { label = confirmLabel }
                     )
 
@@ -378,7 +373,7 @@ viewModalActions { cancel, confirmLabel, confirmMsg, request } =
                     )
 
                 RemoteData.Success _ ->
-                    ( Html.text ""
+                    ( Html.Extra.nothing
                     , UI.Button.primary { label = confirmLabel, onClick = confirmMsg }
                     )
     in
