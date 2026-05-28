@@ -94,6 +94,38 @@ export const personalDbName = (email) =>
 
 const nowIso = () => new Date().toISOString()
 
+// Gather every document that belongs to a single trip from a flat array of
+// docs (the `.doc` of each row from `_all_docs?include_docs=true`). The
+// adopt-trip endpoint uses this to move a personal trip into a shared-trip DB.
+//
+// Positive type allowlist: only `trip` / `expense` / `amend` / `void` docs are
+// ever returned, so `user:sharedtrips`, `_design/*`, and anything else can
+// never leak into the destination DB. The expense-id set is built FIRST
+// because amendments and voids associate by `targetId` (an ExpenseId or, for a
+// trip-level tombstone, a TripId) — they carry no `tripId` field of their own.
+//
+// The `void::trip::<id>` tombstone (if any) is included for symmetry; it is
+// inert on the client (trip lists are never filtered by voids) but leaving it
+// behind would orphan it once the trip doc is deleted from the source DB.
+export const collectTripDocs = (docs, tripId) => {
+  const trip =
+    docs.find((d) => d && d._id === tripId && d.type === 'trip') || null
+  const expenses = docs.filter(
+    (d) => d && d.type === 'expense' && d.tripId === tripId,
+  )
+  const expenseIds = new Set(expenses.map((e) => e._id))
+  const amendments = docs.filter(
+    (d) => d && d.type === 'amend' && expenseIds.has(d.targetId),
+  )
+  const voids = docs.filter(
+    (d) =>
+      d &&
+      d.type === 'void' &&
+      (d.targetId === tripId || expenseIds.has(d.targetId)),
+  )
+  return { amendments, expenses, trip, voids }
+}
+
 export const couchAdmin = (env, path, init = {}) => {
   const adminAuth =
     'Basic ' + btoa(`${env.COUCH_ADMIN_USER}:${env.COUCH_ADMIN_PASS}`)
