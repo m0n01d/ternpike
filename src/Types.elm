@@ -69,6 +69,7 @@ import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import File exposing (File)
 import Http
+import Http.Billing
 import Http.GeocodeApi
 import Http.SharedTripApi
 import Json.Decode
@@ -170,6 +171,8 @@ type alias AuthState =
     { activeScanItemId : Maybe ScanItemId
     , amendments : Dict String Amendment
     , basePath : String
+    , billingError : Maybe String
+    , billingInFlight : Bool
     , colorScheme : ColorScheme
     , config : AppConfig
     , confirmDeleteTrip : Maybe Trip
@@ -212,6 +215,7 @@ type alias AuthState =
     , tier : Tier
     , toast : Maybe String
     , today : DateField
+    , trailblazerAvailable : Maybe Int
     , trailblazerNumber : Maybe Int
     , tripForm : Maybe TripForm
     , tripLoaded : Set String
@@ -338,6 +342,10 @@ type AuthMsg_
     = AddressChanged String
     | AmountChanged String
     | BackToQueue
+    | BillingCheckoutClicked String
+    | BillingCheckoutResult Http.Billing.CheckoutResult
+    | BillingPortalClicked
+    | BillingPortalResult (Result Http.Error Http.Billing.PortalResponse)
     | CanInstall Bool
     | CancelDeleteTrip
     | CategorySelected Category
@@ -420,6 +428,7 @@ type AuthMsg_
     | ToggleLedgerMapExpanded
     | ToggleNotificationPref NotificationToggle
     | ToggleSharedTripMembers SharedTripId
+    | TrailblazerStatusFetched (Result Http.Error Http.Billing.TrailblazerStatus)
     | TransferTargetChanged String
     | TransferToSharedTripResult (Result Http.Error ())
     | TriggerInstallPrompt

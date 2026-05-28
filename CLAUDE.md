@@ -466,11 +466,13 @@ type Tier
     | Trailblazer   -- $79 one-time, capped at 500
 ```
 
-> **Status:** `Data.Tier` exists as a minimal stub (`Tier(..)`, `isPaid`,
-> `fromString`, `toString`) and `AuthState.tier : Tier` is wired up — see
-> #61. JSON codecs, `subscriptionStatus`, `trailblazerNumber`, and the
-> `/me` refresh path are wired up (#16, #19, #20). Server endpoints +
-> Settings UI continue with #18 (webhook) and #21 (billing UI).
+> **Status: complete.** The full subscription-tier track (#16, #17,
+> #18, #19, #20, #21, #22) is shipped. `Data.Tier`,
+> `Data.SubscriptionStatus`, `UI.Gate`,
+> `AuthState.tier`/`subscriptionStatus`/`trailblazerNumber`, server
+> `UserRecord` + `TrailblazerSlots` DO, `/me`, `/billing/*`, and
+> `/stripe/webhook` are all live. Settings → Plan is the user-facing
+> entry point.
 
 Tier is server-authoritative — populated from the session at login + refreshed via `/me`, never trusted from the client. BYO keys (Anthropic / OpenAI / Gemini) are available on **all** tiers — paid does not take that away. Paid is purely additive.
 
