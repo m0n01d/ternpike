@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check index.js && node --check qr.js && node --check qrPdf.js && node --check qrSvg.js && node --check sharedTrips.js && node --check scan.js && node --check notifications.js && node --check geocode.js && node --check admin.js && node --check auth.js && node --check billing.js && node --check jwt.js && node --check users.js && node --check trailblazerSlots.js",
+    "build": "node --check index.js && node --check qr.js && node --check qrPdf.js && node --check qrSvg.js && node --check sharedTrips.js && node --check scan.js && node --check notifications.js && node --check geocode.js && node --check admin.js && node --check auth.js && node --check billing.js && node --check billingWebhook.js && node --check jwt.js && node --check users.js && node --check trailblazerSlots.js",
     "dev": "wrangler dev --port 4000",
     "deploy": "wrangler deploy",
     "test": "node --test --test-concurrency=1 'test/**/*.spec.js'",

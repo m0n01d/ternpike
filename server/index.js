@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 import { registerAdminRoutes } from './admin.js'
 import { authenticateCaller, getTier } from './auth.js'
 import { registerBillingRoutes } from './billing.js'
+import { registerBillingWebhookRoute } from './billingWebhook.js'
 import { registerGeocodeRoutes } from './geocode.js'
 import { freshUser, getUser, migrateLegacy, upsertUser } from './users.js'
 import {
@@ -167,6 +168,12 @@ app.use('/sharedtrips', corsConfig)
 
 // --- billing routes (#17) ---
 registerBillingRoutes(app)
+
+// --- billing webhook (#18) ---
+// No corsConfig — Stripe is server-to-server; we also need c.req.raw.text()
+// to be the exact bytes Stripe signed, so we don't mount any middleware that
+// might parse the body first.
+registerBillingWebhookRoute(app)
 
 app.post('/auth/request-code', async (c) => {
   const env = c.env
