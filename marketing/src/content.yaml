@@ -59,6 +59,34 @@ howItWorks:
       title: "See the full picture"
       body: "Open the ledger. See what you've spent by day and by category. Know your daily average before you decide whether to splurge on a cabin or sleep in the truck."
 
+ocrDemo:
+  eyebrow: "Try it"
+  seoHeadline: "Try receipt scanning right here"
+  headlineHtml: "Drop a receipt.<br>See what we read."
+  body: "Two free scans, no sign-up. Same OCR as the app."
+  # Cloudflare Turnstile site key. Public — safe to ship in HTML.
+  # `1x00000000000000000000AA` is the always-passes test key; swap for
+  # the production site key once provisioned in the Cloudflare dash.
+  turnstileSiteKey: "1x00000000000000000000AA"
+  dropPrompt: "Choose a receipt"
+  dropHint: "JPEG / PNG / HEIC, up to ~8 MB"
+  idle: "Your scan will land here."
+  busy: "Reading the receipt…"
+  retry: "Scan another"
+  errors:
+    rateLimit: "You've used today's free scans. Sign up to keep scanning."
+    noReceipt: "Couldn't read a receipt from that image. Try a clearer photo."
+    tooLarge: "That image is too large. Try a smaller photo."
+    turnstile: "Couldn't verify you weren't a bot. Refresh and try again."
+    generic: "Something went wrong — try again?"
+  fields:
+    amount: "Amount"
+    merchant: "Merchant"
+    date: "Date"
+    category: "Category"
+    payment: "Payment"
+    note: "Note"
+
 features:
   eyebrow: "Features"
   seoHeadline: "Built for offline travel expense tracking"
