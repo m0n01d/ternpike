@@ -136,7 +136,8 @@ async function createOspreyCheckout(env, { customerId, email, originUrl, priceId
 }
 
 async function reserveTrailblazerSlot(env, email) {
-  const stub = env.TRAILBLAZER_SLOTS.idFromName('global')
+  const id = env.TRAILBLAZER_SLOTS.idFromName('global')
+  const stub = env.TRAILBLAZER_SLOTS.get(id)
   const res = await stub.fetch('https://do.local/reserve', {
     body: JSON.stringify({ email }),
     headers: { 'Content-Type': 'application/json' },
@@ -303,7 +304,8 @@ export function registerBillingRoutes(app) {
       return c.json({ ok: false, error: 'not_configured' }, 500)
     }
     try {
-      const stub = env.TRAILBLAZER_SLOTS.idFromName('global')
+      const id = env.TRAILBLAZER_SLOTS.idFromName('global')
+      const stub = env.TRAILBLAZER_SLOTS.get(id)
       const res = await stub.fetch('https://do.local/status', {
         method: 'GET',
       })

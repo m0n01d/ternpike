@@ -86,9 +86,13 @@ async function startMockStripe() {
   }
 }
 
-// Stub `env.TRAILBLAZER_SLOTS` — only `idFromName(...).fetch(req)` is
-// used. Each test sets `nextResponse` to control what `/reserve` or
-// `/status` returns; calls are captured for assertions.
+// Stub `env.TRAILBLAZER_SLOTS` — production callers do
+// `env.NAMESPACE.get(env.NAMESPACE.idFromName('global')).fetch(...)`,
+// so the mock exposes both `idFromName` (returning an opaque id) and
+// `get(id)` (returning a fetchable stub). Earlier versions of this mock
+// fused them into one object and let `idFromName().fetch()` work
+// directly — that hid a real bug in server/billing.js that 502'd at
+// runtime because DurableObjectId has no `.fetch`. See PR fixing this.
 function makeTrailblazerStub() {
   const calls = []
   let responder = (path) => {
@@ -103,27 +107,29 @@ function makeTrailblazerStub() {
     }
     return { status: 404, body: { error: 'not_stubbed' } }
   }
-  const stub = {
-    idFromName: () => ({
-      fetch: async (input, init = {}) => {
-        const url = typeof input === 'string' ? input : input.url
-        const path = new URL(url).pathname
-        let body = null
-        if (init.body) {
-          try {
-            body = JSON.parse(init.body)
-          } catch {
-            body = init.body
-          }
+  const objectStub = {
+    fetch: async (input, init = {}) => {
+      const url = typeof input === 'string' ? input : input.url
+      const path = new URL(url).pathname
+      let body = null
+      if (init.body) {
+        try {
+          body = JSON.parse(init.body)
+        } catch {
+          body = init.body
         }
-        calls.push({ body, method: init.method || 'GET', path })
-        const out = responder(path, body)
-        return new Response(JSON.stringify(out.body), {
-          headers: { 'Content-Type': 'application/json' },
-          status: out.status,
-        })
-      },
-    }),
+      }
+      calls.push({ body, method: init.method || 'GET', path })
+      const out = responder(path, body)
+      return new Response(JSON.stringify(out.body), {
+        headers: { 'Content-Type': 'application/json' },
+        status: out.status,
+      })
+    },
+  }
+  const stub = {
+    idFromName: (name) => ({ name }),
+    get: () => objectStub,
   }
   return {
     calls,
