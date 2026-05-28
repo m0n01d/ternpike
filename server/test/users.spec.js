@@ -9,8 +9,11 @@ import assert from 'node:assert/strict'
 import { getTier } from '../auth.js'
 import {
   freshUser,
+  getEmailBySlug,
   getUser,
   migrateLegacy,
+  shortHash,
+  slugFor,
   upsertUser,
 } from '../users.js'
 import { memoryKv } from './fixtures/env.js'
@@ -173,6 +176,111 @@ describe('migrateLegacy', () => {
     await migrateLegacy(env, ALICE)
     const legacy = await env.TIERS_KV.get(ALICE.toLowerCase())
     assert.equal(legacy, 'osprey')
+  })
+})
+
+describe('shortHash + slugFor', () => {
+  test('produces 4-char lowercase hex matching the Elm side', () => {
+    // These pin values are also asserted in tests/UserIdTests.elm. Both
+    // sides MUST stay aligned because the slug→email index is written
+    // server-side but the slug is generated client-side by Elm. Drift
+    // breaks referral attribution silently.
+    assert.equal(shortHash('alice@test.ternpike.com'), 'de3b')
+    assert.equal(shortHash('bob@test.ternpike.com'), '5513')
+    assert.equal(shortHash('carol@test.ternpike.com'), 'de47')
+    assert.equal(shortHash('dwight.j.doane@gmail.com'), 'ec1d')
+    assert.equal(shortHash('alice@example.com'), 'c281')
+  })
+
+  test('slugFor returns the user-<hash> form ShareModal uses', () => {
+    assert.equal(slugFor('alice@test.ternpike.com'), 'user-de3b')
+    assert.equal(slugFor('ALICE@test.ternpike.com'), 'user-de3b')
+  })
+})
+
+describe('referral attribution', () => {
+  test('freshUser preserves referredBy when passed', () => {
+    const u = freshUser(BOB, { referredBy: ALICE })
+    assert.equal(u.referredBy, ALICE.toLowerCase())
+  })
+
+  test('freshUser defaults referredBy to null', () => {
+    const u = freshUser(BOB)
+    assert.equal(u.referredBy, null)
+  })
+
+  test('freshUser rejects garbage referredBy values', () => {
+    assert.equal(freshUser(BOB, { referredBy: '' }).referredBy, null)
+    assert.equal(freshUser(BOB, { referredBy: 'no-at-sign' }).referredBy, null)
+    assert.equal(freshUser(BOB, { referredBy: 42 }).referredBy, null)
+  })
+
+  test('upsertUser writes a slug→email index', async () => {
+    await upsertUser(env, freshUser(ALICE))
+    const indexed = await env.TIERS_KV.get('slug:' + slugFor(ALICE))
+    assert.equal(indexed, ALICE.toLowerCase())
+  })
+
+  test('getEmailBySlug round-trips through upsertUser', async () => {
+    await upsertUser(env, freshUser(ALICE))
+    const slug = slugFor(ALICE)
+    assert.equal(await getEmailBySlug(env, slug), ALICE.toLowerCase())
+  })
+
+  test('getEmailBySlug returns null for an unknown slug', async () => {
+    assert.equal(await getEmailBySlug(env, 'user-0000'), null)
+  })
+
+  test('getEmailBySlug returns null when TIERS_KV is unbound', async () => {
+    assert.equal(await getEmailBySlug({}, 'user-de3b'), null)
+  })
+
+  test('upsertUser persists referredBy on first insert', async () => {
+    await upsertUser(env, freshUser(BOB, { referredBy: ALICE }))
+    const read = await getUser(env, BOB)
+    assert.equal(read.referredBy, ALICE.toLowerCase())
+  })
+
+  test('referredBy is write-once — never overwritten on subsequent upserts', async () => {
+    await upsertUser(env, freshUser(BOB, { referredBy: ALICE }))
+    // A later upsert (e.g., billing webhook) tries to clear or change it.
+    await upsertUser(env, { ...freshUser(BOB), referredBy: null, tier: 'osprey' })
+    const read = await getUser(env, BOB)
+    assert.equal(read.referredBy, ALICE.toLowerCase())
+    assert.equal(read.tier, 'osprey')
+  })
+
+  test('referredBy stays null when no referrer is provided on first insert', async () => {
+    await upsertUser(env, freshUser(BOB))
+    const read = await getUser(env, BOB)
+    assert.equal(read.referredBy, null)
+  })
+
+  test('slug index backfills on upsert for existing users predating this feature', async () => {
+    // Simulate a user record that exists without a slug index entry.
+    await env.TIERS_KV.put(
+      'user:' + ALICE.toLowerCase(),
+      JSON.stringify({
+        createdAt: '2025-01-01T00:00:00.000Z',
+        email: ALICE.toLowerCase(),
+        stripeCustomerId: null,
+        subscriptionId: null,
+        subscriptionStatus: null,
+        tier: 'tern',
+        trailblazerNumber: null,
+        trailblazerPurchasedAt: null,
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      }),
+    )
+    // Confirm no slug index yet.
+    assert.equal(await env.TIERS_KV.get('slug:' + slugFor(ALICE)), null)
+    // Any subsequent upsert (e.g., /me refresh) writes the index.
+    const existing = await getUser(env, ALICE)
+    await upsertUser(env, existing)
+    assert.equal(
+      await env.TIERS_KV.get('slug:' + slugFor(ALICE)),
+      ALICE.toLowerCase(),
+    )
   })
 })
 

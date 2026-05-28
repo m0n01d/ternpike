@@ -2,10 +2,14 @@ module UI.ShareModal exposing (view)
 
 {-| In-app share modal.
 
-Shows a big QR pointing at `ternpike.com/qr/user-<shortHash>` so a
-friend can scan it directly off the user's phone screen. The on-screen
-QR _is_ the share — there's no OS share-sheet handoff. Print is the
-only secondary action (sends the QR to AirPrint at sticker size).
+Two share surfaces, one modal:
+
+  - **Social share** (primary CTA + SMS/Email/Copy row) — drives the
+    word-of-mouth growth loop. The share URL embeds `?via=share` so
+    QR\_KV analytics can separate scans from social-share clicks.
+  - **QR code** (visual + 4×6 PDF sticker links) — the original
+    in-person handoff. Friend scans the QR with their camera; the
+    sticker PDFs feed AirPrint at the right physical size.
 
 The slug is derived inline from `as_.currentUser` via
 `Data.UserId.shortHash` — no async fetch, no loading state.
@@ -18,8 +22,11 @@ import Data.UserId as UserId
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Types exposing (AuthMsg_(..), AuthState, Msg(..))
+import Svg
+import Svg.Attributes
+import Types exposing (AuthMsg_(..), AuthState, Msg(..), ShareMode(..))
 import UI.Button
+import Url
 
 
 view : AuthState -> Html Msg
@@ -29,6 +36,11 @@ view as_ =
 
     else
         Html.text ""
+
+
+shareText : String
+shareText =
+    "I'm using Ternpike to track expenses on the road — it pays for itself. Check it out:"
 
 
 viewOpen : AuthState -> Html Msg
@@ -42,6 +54,15 @@ viewOpen as_ =
                 ++ "/qr/"
                 ++ slug
                 ++ "/sticker.svg?template=share"
+
+        shareUrl =
+            as_.config.backendUrl ++ "/qr/" ++ slug ++ "?via=share"
+
+        smsBody =
+            Url.percentEncode (shareText ++ " " ++ shareUrl)
+
+        mailBody =
+            Url.percentEncode (shareText ++ "\n\n" ++ shareUrl)
 
         -- Direct link to the server-rendered 4x6 PDF. The browser print
         -- stack is unreliable here — iOS Safari "Save to PDF" ignores
@@ -82,7 +103,7 @@ viewOpen as_ =
     Html.div
         [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
         [ Html.div
-            [ Html.Attributes.class "w-full max-w-sm p-6 bg-parchment dark:bg-cream border border-tan rounded-2xl shadow-panel relative"
+            [ Html.Attributes.class "w-full max-w-sm p-6 bg-parchment dark:bg-cream border border-tan rounded-2xl shadow-panel relative max-h-[90vh] overflow-y-auto"
             , Html.Attributes.attribute "role" "dialog"
             ]
             [ Html.button
@@ -96,16 +117,9 @@ viewOpen as_ =
                 [ Html.text "Share Ternpike" ]
             , Html.p
                 [ Html.Attributes.class "text-sm text-muted text-center mb-5" ]
-                [ Html.text "Have a friend scan this with their phone camera." ]
-            , Html.div
-                [ Html.Attributes.class "rounded-card overflow-hidden shadow-card mb-5" ]
-                [ Html.img
-                    [ Html.Attributes.src qrUrl
-                    , Html.Attributes.alt "Personal Ternpike QR code"
-                    , Html.Attributes.class "block w-full"
-                    ]
-                    []
-                ]
+                [ Html.text "Send a friend a link, or have them scan the QR below." ]
+            , viewSocialShare smsBody mailBody
+            , viewQr qrUrl
             , Html.p
                 [ Html.Attributes.class "text-[10px] uppercase tracking-widest text-muted text-center mb-2 font-mono" ]
                 [ Html.text "Print on a 4×6 label" ]
@@ -134,3 +148,106 @@ viewOpen as_ =
                 ]
             ]
         ]
+
+
+viewSocialShare : String -> String -> Html Msg
+viewSocialShare smsBody mailBody =
+    Html.div
+        [ Html.Attributes.class "mb-5" ]
+        [ Html.div
+            [ Html.Attributes.class "flex justify-center mb-3" ]
+            [ UI.Button.primary
+                { label = "Share with a friend"
+                , onClick = AuthMsg (ShareViaNative AutoShare)
+                }
+            ]
+        , Html.div
+            [ Html.Attributes.class "flex items-center justify-center gap-3" ]
+            [ shareLink ("sms:?body=" ++ smsBody) "Share via SMS" iconChat
+            , shareLink ("mailto:?subject=Ternpike&body=" ++ mailBody) "Share via email" iconMail
+            , copyButton
+            ]
+        ]
+
+
+viewQr : String -> Html Msg
+viewQr qrUrl =
+    Html.div
+        [ Html.Attributes.class "rounded-card overflow-hidden shadow-card mb-5" ]
+        [ Html.img
+            [ Html.Attributes.src qrUrl
+            , Html.Attributes.alt "Personal Ternpike QR code"
+            , Html.Attributes.class "block w-full"
+            ]
+            []
+        ]
+
+
+shareLink : String -> String -> Html Msg -> Html Msg
+shareLink href title icon =
+    Html.a
+        [ Html.Attributes.href href
+        , Html.Attributes.title title
+        , Html.Attributes.attribute "aria-label" title
+        , Html.Attributes.class "w-10 h-10 flex items-center justify-center rounded-full bg-cream-deep border border-tan text-moss hover:text-rust hover:border-rust no-underline"
+        ]
+        [ icon ]
+
+
+copyButton : Html Msg
+copyButton =
+    Html.button
+        [ Html.Attributes.type_ "button"
+        , Html.Attributes.title "Copy link"
+        , Html.Attributes.attribute "aria-label" "Copy link"
+        , Html.Events.onClick (AuthMsg (ShareViaNative ForceCopy))
+        , Html.Attributes.class "w-10 h-10 flex items-center justify-center rounded-full bg-cream-deep border border-tan text-moss hover:text-rust hover:border-rust cursor-pointer"
+        ]
+        [ iconLink ]
+
+
+iconChat : Html msg
+iconChat =
+    iconFrame
+        [ Svg.path
+            [ Svg.Attributes.d "M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" ]
+            []
+        ]
+
+
+iconMail : Html msg
+iconMail =
+    iconFrame
+        [ Svg.rect
+            [ Svg.Attributes.x "3"
+            , Svg.Attributes.y "5"
+            , Svg.Attributes.width "18"
+            , Svg.Attributes.height "14"
+            , Svg.Attributes.rx "2"
+            ]
+            []
+        , Svg.path [ Svg.Attributes.d "M3 7l9 6 9-6" ] []
+        ]
+
+
+iconLink : Html msg
+iconLink =
+    iconFrame
+        [ Svg.path [ Svg.Attributes.d "M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" ] []
+        , Svg.path [ Svg.Attributes.d "M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" ] []
+        ]
+
+
+iconFrame : List (Svg.Svg msg) -> Html msg
+iconFrame children =
+    Svg.svg
+        [ Svg.Attributes.viewBox "0 0 24 24"
+        , Svg.Attributes.fill "none"
+        , Svg.Attributes.stroke "currentColor"
+        , Svg.Attributes.strokeWidth "2"
+        , Svg.Attributes.strokeLinecap "round"
+        , Svg.Attributes.strokeLinejoin "round"
+        , Svg.Attributes.class "w-5 h-5"
+        , Html.Attributes.attribute "aria-hidden" "true"
+        ]
+        children

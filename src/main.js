@@ -92,7 +92,24 @@ import './elements/tp-amount.js'
   }
 
   // ── App keys for wipe ─────────────────────────────────────────────────
-  const APP_KEYS = ['auth_creds', 'anthropic_key']
+  const APP_KEYS = ['auth_creds', 'anthropic_key', 'pending_ref']
+
+  // ── Referral attribution: read the `tp_ref` cookie set by the marketing
+  // site (.ternpike.com scope), persist into IDB so it survives even if the
+  // cookie expires before the user verifies their email. Cleared on signup
+  // success by the server-side `referredBy` write; the client clears it
+  // here on first read since once it's in IDB the cookie is redundant.
+  const REF_RE = /^qr-user-[a-z0-9]{4}$/
+  function readRefCookie() {
+    const m = document.cookie.match(/(?:^|;\s*)tp_ref=([^;]+)/)
+    if (!m) return null
+    try {
+      const v = decodeURIComponent(m[1])
+      return REF_RE.test(v) ? v : null
+    } catch {
+      return null
+    }
+  }
 
   // ── Demo mode detection ───────────────────────────────────────────────
   //
@@ -118,12 +135,29 @@ import './elements/tp-amount.js'
 
   // ── Load all persisted settings before starting Elm ───────────────────
 
-  const [authCredsRaw, anthropicKey] = isDemo
-    ? [null, null]
+  const [authCredsRaw, anthropicKey, pendingRefStored] = isDemo
+    ? [null, null, null]
     : await Promise.all([
         idbGet('auth_creds'),
         idbGet('anthropic_key'),
+        idbGet('pending_ref'),
       ])
+
+  // Cookie → IDB promotion. The marketing site sets `tp_ref` on
+  // `.ternpike.com`; we hoist it into IDB so it survives cookie expiry
+  // and Safari ITP. IDB value wins if both are present.
+  let pendingRef = pendingRefStored || null
+  if (!isDemo) {
+    const fromCookie = readRefCookie()
+    if (fromCookie && !pendingRef) {
+      pendingRef = fromCookie
+      try {
+        await idbSet('pending_ref', pendingRef)
+      } catch (err) {
+        console.warn('[ref] idb persist failed:', err)
+      }
+    }
+  }
 
   let authCreds = null
   if (isDemo) {
@@ -148,6 +182,7 @@ import './elements/tp-amount.js'
     basePath:       import.meta.env.BASE_URL,
     colorScheme:    localStorage.getItem('color_scheme') || 'auto',
     demoMode:       isDemo,
+    pendingRef:     pendingRef,
     today:          new Date().toISOString().slice(0, 10),
     vapidPublicKey: import.meta.env.VITE_VAPID_PUBLIC_KEY || '',
     version:        __BUILD_SHA__,
@@ -640,6 +675,36 @@ import './elements/tp-amount.js'
       await emitNotificationState()
     })
   }
+
+  app.ports.nativeShare.subscribe(async ({ mode, title, text, url }) => {
+    const send = (payload) => {
+      if (app.ports.nativeShareResult) {
+        app.ports.nativeShareResult.send(payload)
+      }
+    }
+    const reportClipboard = async () => {
+      try {
+        await navigator.clipboard.writeText(url)
+        send({ ok: true, reason: 'clipboard' })
+      } catch {
+        send({ ok: false, reason: 'unsupported' })
+      }
+    }
+    if (mode === 'copy' || !navigator.share) {
+      await reportClipboard()
+      return
+    }
+    try {
+      await navigator.share({ title, text, url })
+      send({ ok: true, reason: 'native' })
+    } catch (err) {
+      if (err && err.name === 'AbortError') {
+        send({ ok: false, reason: 'cancelled' })
+      } else {
+        await reportClipboard()
+      }
+    }
+  })
 
   app.ports.downloadFile.subscribe(({ filename, content, mimeType }) => {
     const blob = new Blob([content], { type: mimeType })

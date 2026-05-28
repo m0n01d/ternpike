@@ -132,7 +132,7 @@ import Routing
 import Set
 import Task
 import Time
-import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestState, Model(..), Msg(..), SharedMsg_(..))
+import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestState, Model(..), Msg(..), ShareMode(..), SharedMsg_(..))
 import UI.BillingBanner
 import UI.Layout
 import UI.ShareModal
@@ -216,6 +216,12 @@ port pushSubscribeResult : ({ error : String, ok : Bool } -> msg) -> Sub msg
 
 
 port downloadFile : { content : String, filename : String, mimeType : String } -> Cmd msg
+
+
+port nativeShare : { mode : String, text : String, title : String, url : String } -> Cmd msg
+
+
+port nativeShareResult : ({ ok : Bool, reason : String } -> msg) -> Sub msg
 
 
 
@@ -309,6 +315,7 @@ toGuestState reason as_ =
     , key = as_.key
     , networkOffline = as_.networkOffline
     , pendingJoinToken = joinTokenFromRoute as_.route
+    , pendingRef = Nothing
     , session = { config = as_.config, reason = reason }
     , showSettings = reason == SessionExpired
     , today = as_.today
@@ -1035,6 +1042,17 @@ verifyCode email gs =
     let
         code =
             String.trim gs.codeInput
+
+        baseFields =
+            [ ( "email", E.string email ), ( "code", E.string code ) ]
+
+        bodyFields =
+            case gs.pendingRef of
+                Just ref ->
+                    baseFields ++ [ ( "ref", E.string ref ) ]
+
+                Nothing ->
+                    baseFields
     in
     if code == "" then
         ( GuestModel { gs | authError = Just "Enter the code from your email." }, Cmd.none )
@@ -1047,7 +1065,7 @@ verifyCode email gs =
             }
         , Http.post
             { url = gs.session.config.backendUrl ++ "/auth/verify-code"
-            , body = Http.jsonBody (E.object [ ( "email", E.string email ), ( "code", E.string code ) ])
+            , body = Http.jsonBody (E.object bodyFields)
             , expect = Http.expectJson (GuestMsg << VerifyCodeResult) credsDecoder
             }
         )
@@ -1725,6 +1743,10 @@ init flagsJson url key =
         initialRoute =
             Routing.routeFromUrl basePath url
 
+        pendingRef =
+            D.decodeValue (D.field "pendingRef" (D.nullable D.string)) flagsJson
+                |> Result.withDefault Nothing
+
         gs =
             { authError = Nothing
             , basePath = basePath
@@ -1734,6 +1756,7 @@ init flagsJson url key =
             , key = key
             , networkOffline = False
             , pendingJoinToken = joinTokenFromRoute initialRoute
+            , pendingRef = pendingRef
             , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
             , today = initialToday
@@ -1890,6 +1913,7 @@ updateShared msg model =
                         , key = as_.key
                         , networkOffline = as_.networkOffline
                         , pendingJoinToken = Nothing
+                        , pendingRef = Nothing
                         , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
                         , showSettings = False
                         , today = as_.today
@@ -2771,6 +2795,46 @@ updateAuth msg as_ =
 
         CloseShareModal ->
             ( AuthModel { as_ | shareModalOpen = False }, Cmd.none )
+
+        ShareViaNative mode ->
+            let
+                slug =
+                    "user-" ++ UserId.shortHash as_.currentUser
+
+                shareUrl =
+                    as_.config.backendUrl ++ "/qr/" ++ slug ++ "?via=share"
+
+                modeStr =
+                    case mode of
+                        AutoShare ->
+                            "auto"
+
+                        ForceCopy ->
+                            "copy"
+            in
+            ( AuthModel as_
+            , nativeShare
+                { mode = modeStr
+                , title = "Ternpike"
+                , text = "I'm using Ternpike to track expenses on the road — it pays for itself. Check it out:"
+                , url = shareUrl
+                }
+            )
+
+        ShareResultReceived { reason } ->
+            case reason of
+                "native" ->
+                    -- OS share sheet was its own feedback; no toast.
+                    ( AuthModel as_, Cmd.none )
+
+                "clipboard" ->
+                    ( AuthModel { as_ | toast = Just "Link copied" }, toastFor )
+
+                "cancelled" ->
+                    ( AuthModel as_, Cmd.none )
+
+                _ ->
+                    ( AuthModel { as_ | toast = Just "Couldn't share — try the QR" }, toastFor )
 
         MoveEntry expense newTripId ->
             if newTripId == expense.tripId then
@@ -4297,6 +4361,7 @@ main =
                     , notificationState (AuthMsg << NotificationStateChanged)
                     , pushSubscribeResult (AuthMsg << PushSubscribeReceived)
                     , scanProxyIn (AuthMsg << ScanProxyResult)
+                    , nativeShareResult (AuthMsg << ShareResultReceived)
                     ]
         , update = update
         , view = view

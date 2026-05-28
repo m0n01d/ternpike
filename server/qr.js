@@ -76,13 +76,22 @@ const pickSize = (raw, template) => {
   return SIZE_FOR_TEMPLATE[template] || SIZE_FOR_TEMPLATE.trailhead
 }
 
-const bumpCounter = async (kv, slug, loc) => {
+const VALID_VIA = new Set(['qr', 'share'])
+
+const normalizeVia = (raw) => {
+  if (typeof raw !== 'string') return 'qr'
+  const v = raw.toLowerCase().trim()
+  return VALID_VIA.has(v) ? v : 'qr'
+}
+
+const bumpCounter = async (kv, slug, loc, via) => {
   const raw = await kv.get(slug)
   const prev = raw ? safeParse(raw) : null
   const now = nowIso()
   const byCountry = { ...(prev?.byCountry || {}) }
   const byRegion = { ...(prev?.byRegion || {}) }
   const byCity = { ...(prev?.byCity || {}) }
+  const byVia = { qr: 0, share: 0, ...(prev?.byVia || {}) }
   if (loc.country) {
     byCountry[loc.country] = (byCountry[loc.country] || 0) + 1
   }
@@ -93,6 +102,7 @@ const bumpCounter = async (kv, slug, loc) => {
   if (loc.city) {
     byCity[loc.city] = (byCity[loc.city] || 0) + 1
   }
+  byVia[via] = (byVia[via] || 0) + 1
   const next = {
     count: (prev?.count ?? 0) + 1,
     firstAt: prev?.firstAt ?? now,
@@ -100,6 +110,7 @@ const bumpCounter = async (kv, slug, loc) => {
     byCountry,
     byRegion,
     byCity,
+    byVia,
   }
   await kv.put(slug, JSON.stringify(next))
 }
@@ -238,12 +249,17 @@ export function registerQrRoutes(app) {
 
   app.get('/qr/:slug', (c) => {
     const slug = normalizeSlug(c.req.param('slug'))
-    const target = slug
-      ? `${DEFAULT_DEST}?ref=qr-${slug}`
-      : DEFAULT_DEST
+    const via = normalizeVia(c.req.query('via'))
+    let target
+    if (slug) {
+      target = `${DEFAULT_DEST}?ref=qr-${slug}`
+      if (via === 'share') target += `&via=share`
+    } else {
+      target = DEFAULT_DEST
+    }
     if (slug && c.env.QR_KV) {
       const loc = readLocation(c)
-      c.executionCtx.waitUntil(bumpCounter(c.env.QR_KV, slug, loc))
+      c.executionCtx.waitUntil(bumpCounter(c.env.QR_KV, slug, loc, via))
     }
     return c.redirect(target, 302)
   })
