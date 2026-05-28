@@ -35,20 +35,23 @@ ternSvg className =
             , Svg.Attributes.fill UI.Theme.colorForest
             ]
             []
-        , Svg.path
-            [ Svg.Attributes.d "M44 47 L28 62"
-            , Svg.Attributes.stroke UI.Theme.colorForest
-            , Svg.Attributes.strokeWidth "2.5"
-            , Svg.Attributes.strokeLinecap "round"
+        , Svg.g
+            [ Svg.Attributes.transform "rotate(-12 42 43)" ]
+            [ Svg.path
+                [ Svg.Attributes.d "M42 43 L18 38"
+                , Svg.Attributes.stroke UI.Theme.colorForest
+                , Svg.Attributes.strokeWidth "2.5"
+                , Svg.Attributes.strokeLinecap "round"
+                ]
+                []
+            , Svg.path
+                [ Svg.Attributes.d "M42 43 L18 48"
+                , Svg.Attributes.stroke UI.Theme.colorForest
+                , Svg.Attributes.strokeWidth "2"
+                , Svg.Attributes.strokeLinecap "round"
+                ]
+                []
             ]
-            []
-        , Svg.path
-            [ Svg.Attributes.d "M44 47 L34 65"
-            , Svg.Attributes.stroke UI.Theme.colorForest
-            , Svg.Attributes.strokeWidth "2"
-            , Svg.Attributes.strokeLinecap "round"
-            ]
-            []
         , Svg.ellipse
             [ Svg.Attributes.cx "76"
             , Svg.Attributes.cy "40"
