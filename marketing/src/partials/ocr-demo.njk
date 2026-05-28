@@ -4,17 +4,17 @@
     <h2 class="font-display text-[clamp(36px,6vw,60px)] font-black leading-[1.05] tracking-[-0.02em] text-forest">{{ ocrDemo.seoHeadline }}</h2>
     <p class="section-subhead mb-14">{{ ocrDemo.headlineHtml | safe }}</p>
 
-    <div
+    <form
       class="ocr-demo grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8"
       data-endpoint="https://api.ternpike.com/scan-demo"
-      data-sitekey="{{ ocrDemo.turnstileSiteKey }}"
       data-busy-label="{{ ocrDemo.busy }}"
-      data-retry-label="{{ ocrDemo.retry }}"
+      data-error-invalid-email="{{ ocrDemo.errors.invalidEmail }}"
       data-error-rate-limit="{{ ocrDemo.errors.rateLimit }}"
       data-error-no-receipt="{{ ocrDemo.errors.noReceipt }}"
       data-error-too-large="{{ ocrDemo.errors.tooLarge }}"
-      data-error-turnstile="{{ ocrDemo.errors.turnstile }}"
+      data-error-email="{{ ocrDemo.errors.emailDelivery }}"
       data-error-generic="{{ ocrDemo.errors.generic }}"
+      onsubmit="return false"
     >
       <div class="rounded-card bg-parchment p-8 shadow-card">
         <p class="mb-6 font-body text-[17px] leading-[1.6] text-forest-mid">{{ ocrDemo.body }}</p>
@@ -32,26 +32,49 @@
           </div>
         </label>
 
-        <div class="ocr-turnstile mt-5 flex min-h-[65px] justify-center"></div>
+        <div class="mt-5">
+          <label class="block font-mono text-[11px] uppercase tracking-[0.2em] text-moss mb-2" for="ocr-email">{{ ocrDemo.emailLabel }}</label>
+          <input
+            type="email"
+            id="ocr-email"
+            class="ocr-email w-full rounded-md border border-tan bg-cream px-4 py-3 font-body text-[16px] text-forest placeholder:text-moss focus:border-rust focus:outline-none focus:ring-2 focus:ring-rust/30"
+            placeholder="{{ ocrDemo.emailPlaceholder }}"
+            autocomplete="email"
+            inputmode="email"
+          />
+        </div>
 
-        <button type="button" class="ocr-retry mt-4 hidden font-mono text-[12px] uppercase tracking-[0.2em] text-rust underline">{{ ocrDemo.retry }}</button>
+        <button type="submit" class="ocr-submit mt-5 w-full rounded-full bg-forest px-6 py-3 font-display text-[16px] font-bold text-parchment transition-colors hover:bg-forest-mid disabled:opacity-50 disabled:cursor-not-allowed">
+          {{ ocrDemo.cta }}
+        </button>
       </div>
 
       <div class="ocr-output flex flex-col rounded-card bg-parchment p-8 shadow-card">
-        <div class="mb-3 font-mono text-[11px] uppercase tracking-[0.22em] text-rust">{{ ocrDemo.idle }}</div>
+        <div class="ocr-idle">
+          <div class="mb-4 font-mono text-[11px] uppercase tracking-[0.22em] text-rust">{{ ocrDemo.idle }}</div>
+          <ol class="space-y-3 font-body text-[16px] text-forest-mid">
+            {% for step in ocrDemo.steps %}
+            <li class="flex gap-3">
+              <span class="font-display font-bold text-rust">{{ loop.index }}.</span>
+              <span>{{ step }}</span>
+            </li>
+            {% endfor %}
+          </ol>
+        </div>
 
-        <dl class="ocr-result">
-          {% for key, label in ocrDemo.fields %}
-          <div class="flex items-baseline justify-between gap-4 border-b border-dashed border-tan/70 py-3 last:border-b-0">
-            <dt class="font-mono text-[11px] uppercase tracking-[0.2em] text-moss">{{ label }}</dt>
-            <dd class="ocr-field font-display text-[17px] font-semibold text-forest tabular-nums text-right" data-field="{{ key }}">—</dd>
+        <div class="ocr-sent hidden text-center">
+          <div class="mb-4 text-5xl">📬</div>
+          <div class="mb-2 font-display text-[22px] font-bold text-forest">{{ ocrDemo.sentTitle }}</div>
+          <div class="font-body text-[16px] text-forest-mid">
+            {{ ocrDemo.sentBody }}
+            <span class="ocr-sent-email font-mono text-forest"></span>
           </div>
-          {% endfor %}
-        </dl>
+          <button type="button" class="ocr-retry mt-6 font-mono text-[12px] uppercase tracking-[0.2em] text-rust underline">{{ ocrDemo.retry }}</button>
+        </div>
 
         <div class="ocr-status mt-4 min-h-[1.4em] font-body italic text-forest-mid">&nbsp;</div>
         <div class="ocr-error mt-2 hidden font-body text-rust"></div>
       </div>
-    </div>
+    </form>
   </div>
 </section>
