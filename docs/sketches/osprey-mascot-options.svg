@@ -58,10 +58,18 @@
       <path class="tile" d="M38 42 L14 36 L10 44 L14 52 L38 48 Z"/>
       <!-- Head (dark, slightly larger than tern's) -->
       <ellipse cx="80" cy="40" rx="11" ry="8" class="ink"/>
-      <!-- Beak -->
-      <path class="ink" d="M89 39 L106 38 L100 44 L89 44 Z"/>
-      <!-- Beak hook -->
-      <path class="ink" d="M103 43 L108 48 L100 46 Z"/>
+      <!-- Hooked eagle beak: angular wedge with sharp hook tip below mouth line -->
+      <path class="ink" d="
+        M 88 35
+        L 103 36
+        Q 111 38 111 43
+        L 109 49
+        L 105 53
+        L 101 51
+        L 102 47
+        Q 100 45 96 44
+        L 88 44
+        Z"/>
       <!-- Light face mask (bald eagle cue — white head) -->
       <path class="tile" d="M72 36 Q80 32 88 36 L86 40 Q80 38 74 40 Z"/>
       <circle cx="84" cy="38" r="1.7" class="ink"/>
