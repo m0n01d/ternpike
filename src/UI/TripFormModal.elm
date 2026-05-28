@@ -15,6 +15,7 @@ of an inline panel that scrolled into view below the trip list.
 -}
 
 import Data.SharedTrip exposing (SharedTrip)
+import Data.SharedTripUi
 import Data.SharedTrips
 import Data.Tier as Tier
 import Data.Trip as Trip exposing (TripField(..), TripForm)
@@ -22,6 +23,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Json.Decode
+import RemoteData
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Layout
 
@@ -84,6 +86,7 @@ viewForm as_ form title =
         ]
         [ Html.p [ Html.Attributes.class "text-[15px] font-bold text-rust font-display mb-4 pr-8" ]
             [ Html.text title ]
+        , viewSharedTripRequestErrors form
         , if not (List.isEmpty form.errors) then
             Html.div [ Html.Attributes.class "bg-rust-tint border border-rust rounded-lg p-2.5 mb-3" ]
                 (List.map
@@ -165,17 +168,7 @@ viewForm as_ form title =
                     , ( "opacity-50 cursor-not-allowed", saveBlocked as_ form )
                     ]
                 ]
-                [ Html.text
-                    (if form.submitting then
-                        "Saving…"
-
-                     else if isNew then
-                        "Create trip"
-
-                     else
-                        "Save"
-                    )
-                ]
+                [ Html.text (submitLabel isNew form) ]
             , Html.button
                 [ Html.Attributes.type_ "button"
                 , Html.Events.onClick (AuthMsg CloseTripForm)
@@ -243,7 +236,12 @@ is shown instead).
 -}
 saveBlocked : AuthState -> TripForm -> Bool
 saveBlocked as_ form =
+    let
+        sharedTripInFlight =
+            form.sharedTripRequest == RemoteData.Loading
+    in
     form.submitting
+        || sharedTripInFlight
         || (isToNewFlock form.target && not (Tier.isPaid as_.tier))
 
 
@@ -400,6 +398,59 @@ viewTargetTile opts =
         , Html.div [ Html.Attributes.class "mt-1 text-[10px] font-mono uppercase tracking-widest text-moss" ]
             [ Html.text opts.sub ]
         ]
+
+
+{-| Render an error chip when the shared-trip creation HTTP call fails.
+One exhaustive `case` so the compiler forces us to handle every
+`RemoteData` state; no layered checks or wildcards.
+-}
+viewSharedTripRequestErrors : TripForm -> Html Msg
+viewSharedTripRequestErrors form =
+    case form.sharedTripRequest of
+        RemoteData.NotAsked ->
+            Html.text ""
+
+        RemoteData.Loading ->
+            Html.text ""
+
+        RemoteData.Failure err ->
+            Html.div [ Html.Attributes.class "bg-rust-tint border border-rust rounded-lg p-2.5 mb-3" ]
+                [ Html.p [ Html.Attributes.class "text-sm text-rust" ]
+                    [ Html.text (Data.SharedTripUi.errorMessage err) ]
+                ]
+
+        RemoteData.Success _ ->
+            Html.text ""
+
+
+{-| The submit button label. One exhaustive `case` on `sharedTripRequest`
+so the compiler tells us when `RemoteData` grows a new arm.
+-}
+submitLabel : Bool -> TripForm -> String
+submitLabel isNew form =
+    case form.sharedTripRequest of
+        RemoteData.NotAsked ->
+            if form.submitting then
+                "Saving…"
+
+            else if isNew then
+                "Create trip"
+
+            else
+                "Save"
+
+        RemoteData.Loading ->
+            "Creating shared trip…"
+
+        RemoteData.Failure _ ->
+            if isNew then
+                "Create trip"
+
+            else
+                "Save"
+
+        RemoteData.Success _ ->
+            "Saving…"
 
 
 {-| The sub-label under a flock tile: "Owner + N more" reads cleaner

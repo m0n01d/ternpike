@@ -3184,6 +3184,7 @@ updateAuth msg as_ =
                             , errors = []
                             , groupNameOverridden = False
                             , name = ""
+                            , sharedTripRequest = RemoteData.NotAsked
                             , startDate = DateField.toIso as_.today
                             , submitting = False
                             , target = Trip.ToPersonal
@@ -3210,6 +3211,7 @@ updateAuth msg as_ =
                             , errors = []
                             , groupNameOverridden = False
                             , name = trip.name
+                            , sharedTripRequest = RemoteData.NotAsked
                             , startDate = DateField.toIso trip.startDate
                             , submitting = False
                             , target =
@@ -3357,60 +3359,71 @@ updateAuth msg as_ =
             )
 
         TripCreateSharedTripResult result ->
-            case ( as_.tripForm, result ) of
-                ( Nothing, _ ) ->
+            case as_.tripForm of
+                Nothing ->
                     ( AuthModel as_, Cmd.none )
 
-                ( Just form, Err err ) ->
-                    ( AuthModel
-                        { as_
-                            | tripForm =
-                                Just
-                                    { form
-                                        | submitting = False
-                                        , errors = [ SharedTripUi.errorMessage err ]
-                                    }
-                        }
-                    , Cmd.none
-                    )
+                Just form ->
+                    case RemoteData.fromResult result of
+                        RemoteData.NotAsked ->
+                            ( AuthModel as_, Cmd.none )
 
-                ( Just form, Ok response ) ->
-                    let
-                        invitees =
-                            case form.target of
-                                Trip.ToNewFlock draft ->
-                                    draft.invitees
+                        RemoteData.Loading ->
+                            ( AuthModel as_, Cmd.none )
 
-                                _ ->
-                                    []
-
-                        inviteCmds =
-                            List.map
-                                (\email ->
-                                    Http.SharedTripApi.inviteToSharedTrip
-                                        as_.creds
-                                        response.sharedTripId
-                                        { email = email }
-                                        (\_ -> AuthMsg TripInviteResult)
-                                )
-                                invitees
-
-                        updatedForm =
-                            { form | target = Trip.ToExistingFlock response.sharedTripId }
-                    in
-                    ( AuthModel { as_ | tripForm = Just updatedForm }
-                    , Cmd.batch
-                        ([ sendPouch
-                            (OpenSharedTrip
-                                { flockId = response.sharedTripId
-                                , dbName = "sharedtrip-" ++ Data.SharedTripId.toString response.sharedTripId
+                        RemoteData.Failure err ->
+                            ( AuthModel
+                                { as_
+                                    | tripForm =
+                                        Just
+                                            { form
+                                                | sharedTripRequest = RemoteData.Failure err
+                                                , submitting = False
+                                            }
                                 }
+                            , Cmd.none
                             )
-                         , Task.perform (AuthMsg << GotSaveTripTime) Time.now
-                         ]
-                            ++ inviteCmds
-                        )
-                    )
+
+                        RemoteData.Success response ->
+                            let
+                                invitees =
+                                    case form.target of
+                                        Trip.ToNewFlock draft ->
+                                            draft.invitees
+
+                                        _ ->
+                                            []
+
+                                inviteCmds =
+                                    List.map
+                                        (\email ->
+                                            Http.SharedTripApi.inviteToSharedTrip
+                                                as_.creds
+                                                response.sharedTripId
+                                                { email = email }
+                                                (\_ -> AuthMsg TripInviteResult)
+                                        )
+                                        invitees
+
+                                updatedForm =
+                                    { form
+                                        | sharedTripRequest = RemoteData.Success response
+                                        , target = Trip.ToExistingFlock response.sharedTripId
+                                    }
+                            in
+                            ( AuthModel { as_ | tripForm = Just updatedForm }
+                            , Cmd.batch
+                                ([ sendPouch
+                                    (OpenSharedTrip
+                                        { flockId = response.sharedTripId
+                                        , dbName = "sharedtrip-" ++ Data.SharedTripId.toString response.sharedTripId
+                                        }
+                                    )
+                                 , Task.perform (AuthMsg << GotSaveTripTime) Time.now
+                                 ]
+                                    ++ inviteCmds
+                                )
+                            )
 
         TripInviteResult ->
             -- Fire-and-forget. Invites can't block trip creation — partial
@@ -3461,7 +3474,7 @@ updateAuth msg as_ =
                                                     else
                                                         String.trim form.name
                                             in
-                                            ( AuthModel { as_ | tripForm = Just { form | submitting = True, errors = [] } }
+                                            ( AuthModel { as_ | tripForm = Just { form | errors = [], sharedTripRequest = RemoteData.Loading, submitting = True } }
                                             , Http.SharedTripApi.createSharedTrip as_.creds { name = groupName } (AuthMsg << TripCreateSharedTripResult)
                                             )
 

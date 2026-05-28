@@ -27,7 +27,9 @@ Four types live here:
     Strings rather than typed fields so the user can type freely; the
     `validator` is what gates submission. The submit handler in
     `Main.elm` parses the strings into typed `DateField` / `Money`
-    values when constructing the `Trip` record.
+    values when constructing the `Trip` record. The
+    `sharedTripRequest` field tracks the async create-shared-trip HTTP
+    call when the "New shared trip" target is selected.
   - `TripField` — the tag passed to `TripFieldChanged` so one `Msg`
     handler can route updates to the right field on `TripForm`.
   - `TripTarget` — the routing tag carried on every outbound `Save*`
@@ -93,9 +95,12 @@ import Data.SharedTrips exposing (SharedTrips)
 import Data.Tier exposing (Tier)
 import Data.TripId as TripId exposing (TripId)
 import Data.UserId exposing (UserId)
+import Http
+import Http.SharedTripApi
 import Json.Decode as D
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode as E
+import RemoteData exposing (RemoteData)
 import Validate
 
 
@@ -120,6 +125,7 @@ type alias TripForm =
     , errors : List String
     , groupNameOverridden : Bool
     , name : String
+    , sharedTripRequest : RemoteData Http.Error Http.SharedTripApi.CreateSharedTripResponse
     , startDate : String
     , submitting : Bool
     , target : CreateTarget
