@@ -14,6 +14,7 @@ import Dict
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Routing
 import Set
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
@@ -148,23 +149,15 @@ viewTripHero maybeFlock activeTrip entries =
         [ Html.div [ Html.Attributes.class "mb-1 flex items-center gap-2" ]
             [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
                 [ Html.text "ACTIVE TRIP" ]
-            , case maybeFlock of
-                Just flock ->
-                    UI.SharedTripBadge.view flock
-
-                Nothing ->
-                    Html.text ""
+            , Html.Extra.viewMaybe UI.SharedTripBadge.view maybeFlock
             ]
         , Html.div [ Html.Attributes.class "font-display text-4xl font-black text-forest tracking-tight leading-tight" ]
             [ Html.text activeTrip.name ]
-        , if activeTrip.description /= "" then
+        , Html.Extra.viewIf (activeTrip.description /= "") <|
             Html.p [ Html.Attributes.class "mt-2 text-sm text-muted" ]
                 [ Html.text activeTrip.description ]
-
-          else
-            Html.text ""
         , Html.div [ Html.Attributes.class "mt-2 flex items-center gap-3 text-xs font-mono tracking-wide text-muted" ]
-            [ if not (List.isEmpty dateLineNodes) then
+            [ Html.Extra.viewIf (not (List.isEmpty dateLineNodes)) <|
                 Html.span [ Html.Attributes.class "flex items-center gap-2" ]
                     (dateLineNodes
                         ++ (if totalDays > 0 then
@@ -174,24 +167,15 @@ viewTripHero maybeFlock activeTrip entries =
                                 []
                            )
                     )
-
-              else
-                Html.text ""
-            , case maybeFlock of
-                Just flock ->
-                    UI.Avatar.viewStack (Data.SharedTrip.members flock)
-
-                Nothing ->
-                    Html.text ""
+            , Html.Extra.viewMaybe
+                (\flock -> UI.Avatar.viewStack (Data.SharedTrip.members flock))
+                maybeFlock
             ]
-        , if not (Money.isZero activeTrip.budget) then
+        , Html.Extra.viewIf (not (Money.isZero activeTrip.budget)) <|
             UI.BudgetBar.view
                 { budget = activeTrip.budget
                 , spent = totalSpent
                 }
-
-          else
-            Html.text ""
         ]
 
 
@@ -215,12 +199,9 @@ viewBody as_ =
                     False
     in
     Html.div []
-        [ if not (List.isEmpty others) then
+        [ Html.Extra.viewIf (not (List.isEmpty others)) <|
             Html.div [ Html.Attributes.class "mb-5" ]
                 (List.map (viewOtherTripRow as_) others)
-
-          else
-            Html.text ""
         , if atLimit then
             viewTripLimitUpgradePrompt
 
@@ -270,28 +251,21 @@ viewOtherTripRow as_ trip =
         , Html.Attributes.class "w-full bg-cream border border-tan rounded-xl px-4 py-3.5 mb-2 flex justify-between items-center cursor-pointer text-ink hover:shadow-card-hover transition-shadow"
         ]
         [ Html.div [ Html.Attributes.class "text-left min-w-0 flex-1" ]
-            [ case maybeFlock of
-                Just flock ->
+            [ Html.Extra.viewMaybe
+                (\flock ->
                     Html.div [ Html.Attributes.class "mb-1" ]
                         [ UI.SharedTripBadge.view flock ]
-
-                Nothing ->
-                    Html.text ""
+                )
+                maybeFlock
             , Html.p [ Html.Attributes.class "text-[15px] font-semibold mb-0.5 truncate" ]
                 [ Html.text trip.name ]
             , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
-                [ if not (isEpochDate trip.startDate) then
+                [ Html.Extra.viewIf (not (isEpochDate trip.startDate)) <|
                     Html.p [ Html.Attributes.class "text-[11px] text-moss font-mono" ]
                         [ UI.DateView.short trip.startDate ]
-
-                  else
-                    Html.text ""
-                , case maybeFlock of
-                    Just flock ->
-                        UI.Avatar.viewStack (Data.SharedTrip.members flock)
-
-                    Nothing ->
-                        Html.text ""
+                , Html.Extra.viewMaybe
+                    (\flock -> UI.Avatar.viewStack (Data.SharedTrip.members flock))
+                    maybeFlock
                 ]
             ]
         , Html.span [ Html.Attributes.class "text-muted shrink-0 ml-2" ]

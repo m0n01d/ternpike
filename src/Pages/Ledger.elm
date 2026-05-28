@@ -16,6 +16,7 @@ import Helpers exposing (effectiveEntryToExpense, encodeWaypoints)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Html.Keyed as Keyed
 import Routing
 import Set
@@ -117,8 +118,8 @@ viewActions model =
                 }
 
         exportButton =
-            case Routing.routeTripId model.route of
-                Just tripId ->
+            Html.Extra.viewMaybe
+                (\tripId ->
                     if UI.Gate.requiresPaid model.tier then
                         UI.Button.iconButton
                             { icon = UI.Icons.download "w-4 h-4"
@@ -134,9 +135,8 @@ viewActions model =
                             ]
                             [ UI.Icons.download "w-4 h-4"
                             ]
-
-                Nothing ->
-                    Html.text ""
+                )
+                (Routing.routeTripId model.route)
     in
     if model.showLedgerMap then
         [ mapToggle, expandToggle, refresh ]
@@ -193,11 +193,8 @@ viewLedgerHero budget entries =
         , Html.div
             [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
             [ Html.text kickerText ]
-        , if not (Money.isZero budget) then
+        , Html.Extra.viewIf (not (Money.isZero budget)) <|
             UI.BudgetBar.viewSubtle { budget = budget, spent = total }
-
-          else
-            Html.text ""
         ]
 
 
@@ -364,11 +361,8 @@ viewEntries opts entries =
                         (\e -> ( ExpenseId.toString e.id, viewEntryRow opts e ))
                         dayEntries
                     )
-                , if List.length dayEntries > 1 then
+                , Html.Extra.viewIf (List.length dayEntries > 1) <|
                     viewDayTotal (Dict.get dateIso totals |> Maybe.withDefault Money.zero)
-
-                  else
-                    Html.text ""
                 ]
             )
     in
@@ -428,7 +422,7 @@ bandColor band =
 
 viewLedgerMap : AuthState -> List Entry.EffectiveEntry -> Html Msg
 viewLedgerMap model entries =
-    if model.showLedgerMap then
+    Html.Extra.viewIf model.showLedgerMap <|
         let
             sizing =
                 if model.ledgerMapExpanded then
@@ -442,9 +436,6 @@ viewLedgerMap model entries =
             , Html.Attributes.class ("block isolate w-full rounded-xl overflow-hidden " ++ sizing)
             ]
             []
-
-    else
-        Html.text ""
 
 
 viewEntryRow :
@@ -490,16 +481,15 @@ viewEntryRow opts entry =
                         , Html.Attributes.attribute "aria-hidden" "true"
                         ]
                         [ Html.text (Category.icon entry.category) ]
-                    , case entry.geoPoint of
-                        Just _ ->
+                    , Html.Extra.viewMaybe
+                        (\_ ->
                             Html.span
                                 [ Html.Attributes.class "text-moss"
                                 , Html.Attributes.title "Has GPS coordinates"
                                 ]
                                 [ UI.Icons.pin "w-3 h-3" ]
-
-                        Nothing ->
-                            Html.text ""
+                        )
+                        entry.geoPoint
                     , viewAuthorChip opts.members entry.createdBy
                     ]
                 ]
@@ -508,11 +498,8 @@ viewEntryRow opts entry =
                 [ UI.MoneyView.amount entry.amount ]
             ]
         , viewRowMenuButton entry
-        , if isOpen then
+        , Html.Extra.viewIf isOpen <|
             viewRowMenu opts.canMove opts.readOnly entry
-
-          else
-            Html.text ""
         ]
 
 
@@ -524,16 +511,15 @@ member whose entry survives them).
 -}
 viewAuthorChip : Dict String FlockMember -> UserId -> Html Msg
 viewAuthorChip members userId =
-    case Dict.get (UserId.toString userId) members of
-        Just member ->
+    Html.Extra.viewMaybe
+        (\member ->
             Html.span
                 [ Html.Attributes.class "inline-flex items-center gap-1 text-xs text-moss italic" ]
                 [ UI.Avatar.viewInitial member.userId
                 , Html.text member.displayName
                 ]
-
-        Nothing ->
-            Html.text ""
+        )
+        (Dict.get (UserId.toString userId) members)
 
 
 viewRowMenuButton : Entry.EffectiveEntry -> Html Msg
