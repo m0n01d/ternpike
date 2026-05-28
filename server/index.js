@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { Resend } from 'resend'
 
 import { registerAdminRoutes } from './admin.js'
-import { getTier } from './auth.js'
+import { authenticateCaller, getTier } from './auth.js'
 import { registerGeocodeRoutes } from './geocode.js'
 import { freshUser, getUser, migrateLegacy, upsertUser } from './users.js'
 import {
@@ -159,6 +159,7 @@ app.use('/geocode', corsConfig)
 app.use('/marketing/*', corsConfig)
 app.use('/notifications/*', corsConfig)
 app.use('/scan', corsConfig)
+app.use('/me', corsConfig)
 app.use('/sharedtrips/*', corsConfig)
 app.use('/sharedtrips', corsConfig)
 
@@ -238,12 +239,51 @@ app.post('/auth/verify-code', async (c) => {
         console.error('verify-code user upsert:', err)
       }
     }
-    const tier = await getTier(env, email)
-    return c.json({ ok: true, dbName, email, password, tier })
+    // Load the full record so the client can render subscription status on
+    // the post-login UI without an extra /me round-trip.
+    const record = await getUser(env, email)
+    const tier = record?.tier || await getTier(env, email)
+    const subscriptionStatus = record?.subscriptionStatus ?? null
+    const trailblazerNumber = record?.trailblazerNumber ?? null
+    return c.json({
+      dbName,
+      email,
+      ok: true,
+      password,
+      subscriptionStatus,
+      tier,
+      trailblazerNumber,
+    })
   } catch (err) {
     console.error('provision:', err)
     return c.json({ ok: false }, 500)
   }
+})
+
+// --- /me (#19) ---
+app.get('/me', async (c) => {
+  const env = c.env
+  const caller = await authenticateCaller(c)
+  if (!caller) return c.json({ ok: false }, 401)
+  // Materialize on demand for users predating #16 who haven't logged in
+  // since. getUser returns null in that case; migrateLegacy folds in the
+  // legacy raw-string tier if present, else upsertUser writes a fresh
+  // tern record. Either way the next read sees a UserRecord.
+  let record = await getUser(env, caller.email)
+  if (!record) {
+    record = await migrateLegacy(env, caller.email)
+  }
+  if (!record) {
+    record = await upsertUser(env, freshUser(caller.email))
+  }
+  return c.json({
+    email: record.email,
+    stripeCustomerId: record.stripeCustomerId,
+    subscriptionId: record.subscriptionId,
+    subscriptionStatus: record.subscriptionStatus,
+    tier: record.tier,
+    trailblazerNumber: record.trailblazerNumber,
+  })
 })
 
 app.post('/marketing/waitlist', async (c) => {
