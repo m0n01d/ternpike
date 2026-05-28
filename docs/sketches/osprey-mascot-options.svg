@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 620" font-family="ui-sans-serif, system-ui, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" font-family="ui-sans-serif, system-ui, sans-serif">
   <defs>
     <style>
       .bg     { fill: #faf7f0; }
@@ -11,7 +11,7 @@
       .note   { fill: #6b7c58; font-size: 12px; }
     </style>
 
-    <!-- ====== Reusable tern (exact copy of public/favicon.svg, normalized to 120x60) ====== -->
+    <!-- ====== TERN — exact copy of public/favicon.svg ====== -->
     <symbol id="tern" viewBox="0 0 120 60">
       <path d="M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z" class="tile"/>
       <path d="M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z" class="tile"/>
@@ -25,169 +25,83 @@
       <circle cx="79" cy="38.5" r="1.6" class="tile"/>
     </symbol>
 
-    <!-- ====== Osprey — same vocabulary, crooked M wings + fish ====== -->
-    <symbol id="osprey" viewBox="0 0 120 80">
-      <!-- Left wing: bent M with a crook -->
-      <path class="tile" d="
-        M60 38
-        C50 22, 40 20, 32 28
-        C28 24, 18 22, 8 30
-        C20 30, 32 34, 44 36
-        C52 37, 56 40, 60 44 Z"/>
-      <!-- Right wing -->
-      <path class="tile" d="
-        M60 38
-        C70 22, 80 20, 88 28
-        C92 24, 102 22, 112 30
-        C100 30, 88 34, 76 36
-        C68 37, 64 40, 60 44 Z"/>
-      <!-- Body -->
-      <ellipse class="tile" cx="60" cy="44" rx="14" ry="6"/>
-      <!-- Tail (short fan) -->
-      <path class="tile" d="M46 44 L36 41 L36 47 L46 47 Z"/>
-      <!-- Head (dark) -->
-      <ellipse class="ink" cx="74" cy="42" rx="7" ry="5.5"/>
-      <path class="ink" d="M81 42 L91 40.5 L81 43.5 Z"/>
-      <!-- White brow mask -->
-      <path class="tile" d="M68 38 Q74 35 80 38 L78 41 Q74 39 70 41 Z"/>
-      <circle class="tile" cx="76" cy="40.5" r="1.4"/>
-      <!-- Talons -->
-      <path class="tile" d="M56 49 L55 56 L60 56 L60 49 Z"/>
-      <path class="tile" d="M62 49 L62 56 L67 56 L66 49 Z"/>
-      <!-- Fish dangling -->
-      <ellipse class="tile" cx="60" cy="63" rx="14" ry="3.5"/>
-      <path class="tile" d="M46 63 L40 60 L40 66 Z"/>
-      <circle class="ink" cx="70" cy="62.5" r="0.9"/>
+    <!-- ====== OSPREY — Tern + fish in talons ====== -->
+    <symbol id="osprey" viewBox="0 0 120 70">
+      <!-- Tern vocabulary, unchanged -->
+      <path d="M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z" class="tile"/>
+      <path d="M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z" class="tile"/>
+      <ellipse cx="60" cy="43" rx="20" ry="7" class="tile"/>
+      <g transform="rotate(-12 42 43)">
+        <path d="M42 43 L18 38" stroke="#f2ede3" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M42 43 L18 48" stroke="#f2ede3" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </g>
+      <ellipse cx="76" cy="40" rx="9" ry="7" class="ink"/>
+      <path d="M84 40 L96 38.5 L84 42Z" class="ink"/>
+      <circle cx="79" cy="38.5" r="1.6" class="tile"/>
+      <!-- Legs dangling -->
+      <path d="M56 49 L55 55" stroke="#f2ede3" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <path d="M64 49 L63 55" stroke="#f2ede3" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <!-- Fish (held head-forward along body axis, head pointing same way as tern's head — right) -->
+      <ellipse class="tile" cx="62" cy="58" rx="14" ry="3"/>
+      <path class="tile" d="M48 58 L42 55 L42 61 Z"/>
+      <circle class="ink" cx="70" cy="57.5" r="0.9"/>
     </symbol>
 
-    <!-- ====== Peregrine — scimitar swept-back wings, horizontal stoop ====== -->
-    <symbol id="peregrine" viewBox="0 0 120 60">
-      <!-- Upper wing swept back -->
-      <path class="tile" d="
-        M62 38
-        C50 26, 30 18, 6 22
-        C22 24, 42 32, 56 40 Z"/>
-      <!-- Lower wing swept back -->
-      <path class="tile" d="
-        M62 42
-        C50 50, 32 54, 10 52
-        C24 50, 42 46, 56 42 Z"/>
-      <!-- Body (slim, horizontal) -->
-      <ellipse class="tile" cx="60" cy="40" rx="22" ry="5"/>
-      <!-- Tail (short pointed) -->
-      <path class="tile" d="M40 40 L26 38 L26 42 Z"/>
-      <!-- Head dark "helmet" -->
-      <ellipse class="ink" cx="80" cy="39" rx="8" ry="6"/>
-      <path class="ink" d="M88 39 L100 37 L88 41 Z"/>
-      <!-- Light cheek -->
-      <path class="tile" d="M76 41 Q80 44 84 41 L82 43 Q80 44 78 43 Z"/>
-      <circle class="tile" cx="82" cy="37.5" r="1.4"/>
-    </symbol>
-
-    <!-- ====== Albatross — very long, narrow, nearly flat wings ====== -->
-    <symbol id="albatross" viewBox="0 0 120 60">
-      <!-- Left wing: long and shallow -->
-      <path class="tile" d="
-        M60 38
-        C40 32, 16 32, 2 36
-        C18 36, 38 38, 56 42 Z"/>
-      <!-- Right wing -->
-      <path class="tile" d="
-        M60 38
-        C80 32, 104 32, 118 36
-        C102 36, 82 38, 64 42 Z"/>
-      <!-- Body (small, narrow) -->
-      <ellipse class="tile" cx="60" cy="42" rx="8" ry="4"/>
-      <!-- Tail -->
-      <path class="tile" d="M52 42 L44 41 L44 43 L52 43 Z"/>
-      <!-- Head (dark, smaller — albatross has dark cap + light face in some species) -->
-      <ellipse class="ink" cx="70" cy="41" rx="5" ry="4"/>
-      <path class="ink" d="M75 41 L86 40 L75 42 Z"/>
-      <circle class="tile" cx="72" cy="40" r="1.2"/>
-    </symbol>
-
-    <!-- ====== Eagle — broad spread wings + fanned tail ====== -->
-    <symbol id="eagle" viewBox="0 0 120 80">
-      <!-- Left wing -->
-      <path class="tile" d="
-        M60 40
-        C50 22, 30 14, 10 22
-        C20 28, 34 36, 50 42
-        C54 43, 58 43, 60 44 Z"/>
-      <!-- Right wing -->
-      <path class="tile" d="
-        M60 40
-        C70 22, 90 14, 110 22
-        C100 28, 86 36, 70 42
-        C66 43, 62 43, 60 44 Z"/>
-      <!-- Body -->
-      <ellipse class="tile" cx="60" cy="46" rx="9" ry="10"/>
-      <!-- Fanned tail -->
-      <path class="tile" d="M52 54 L44 64 L60 60 L76 64 L68 54 Z"/>
-      <!-- Head (white, slightly bigger) -->
-      <ellipse class="tile" cx="60" cy="36" rx="7" ry="6"/>
+    <!-- ====== EAGLE — Tern vocabulary, bigger wings + fanned tail + flatter soar ====== -->
+    <symbol id="eagle" viewBox="-10 0 140 70">
+      <!-- Wings: same M language but broader sweep, less peak, held more horizontal -->
+      <path class="tile" d="M60 40 C40 22, 0 16, -10 30 C8 30, 36 36, 60 44 Z"/>
+      <path class="tile" d="M60 40 C80 22, 120 16, 130 30 C112 30, 84 36, 60 44 Z"/>
+      <!-- Larger body -->
+      <ellipse class="tile" cx="60" cy="44" rx="26" ry="8"/>
+      <!-- Fanned wedge tail (replaces forked tern tail) -->
+      <path class="tile" d="M38 42 L14 36 L10 44 L14 52 L38 48 Z"/>
+      <!-- Head (dark, slightly larger than tern's) -->
+      <ellipse cx="80" cy="40" rx="11" ry="8" class="ink"/>
       <!-- Beak -->
-      <path class="ink" d="M60 38 L66 38 L60 44 Z"/>
-      <!-- Eye -->
-      <circle class="ink" cx="58" cy="35" r="1.3"/>
+      <path class="ink" d="M89 39 L106 38 L100 44 L89 44 Z"/>
+      <!-- Beak hook -->
+      <path class="ink" d="M103 43 L108 48 L100 46 Z"/>
+      <!-- Light face mask (bald eagle cue — white head) -->
+      <path class="tile" d="M72 36 Q80 32 88 36 L86 40 Q80 38 74 40 Z"/>
+      <circle cx="84" cy="38" r="1.7" class="ink"/>
     </symbol>
   </defs>
 
-  <rect class="bg" width="1300" height="620"/>
+  <rect class="bg" width="900" height="600"/>
 
-  <text class="title" x="40" y="40">Osprey mascot — Tern locked, Osprey + Trailblazer to match</text>
-  <text class="note"  x="40" y="62">Existing Tern silhouette reused as-is. Same side-profile cream-on-rust vocabulary applied to the other birds. Pick a Trailblazer.</text>
+  <text class="title" x="40" y="40">Final mascot set — three birds, one drawing vocabulary</text>
+  <text class="note"  x="40" y="62">Same Tern silhouette is the basis for all three. Osprey adds a fish; Eagle keeps the side profile but with broader wings, a fanned tail, and a larger head.</text>
 
-  <!-- Helper macro: render panel + bird + label -->
   <!-- ============ TERN ============ -->
   <g transform="translate(60,110)">
-    <rect class="panel" x="0" y="0" width="200" height="200" rx="16"/>
-    <use href="#tern"     x="20" y="55" width="160" height="80"/>
-    <text class="label" x="100" y="232">Tern</text>
-    <text class="sub"   x="100" y="252">Free · existing</text>
+    <rect class="panel" x="0" y="0" width="240" height="240" rx="16"/>
+    <use href="#tern" x="20" y="80" width="200" height="100"/>
+    <text class="label" x="120" y="272">Tern</text>
+    <text class="sub"   x="120" y="292">Free · existing</text>
   </g>
 
   <!-- ============ OSPREY ============ -->
-  <g transform="translate(290,110)">
-    <rect class="panel" x="0" y="0" width="200" height="200" rx="16"/>
-    <use href="#osprey"   x="20" y="40" width="160" height="120"/>
-    <text class="label" x="100" y="232">Osprey</text>
-    <text class="sub"   x="100" y="252">Paid · $2.99/mo</text>
-  </g>
-
-  <!-- ============ PEREGRINE ============ -->
-  <g transform="translate(520,110)">
-    <rect class="panel" x="0" y="0" width="200" height="200" rx="16"/>
-    <use href="#peregrine" x="20" y="55" width="160" height="80"/>
-    <text class="label" x="100" y="232">Peregrine</text>
-    <text class="sub"   x="100" y="252">Trailblazer · option A</text>
-  </g>
-
-  <!-- ============ ALBATROSS ============ -->
-  <g transform="translate(750,110)">
-    <rect class="panel" x="0" y="0" width="200" height="200" rx="16"/>
-    <use href="#albatross" x="20" y="55" width="160" height="80"/>
-    <text class="label" x="100" y="232">Albatross</text>
-    <text class="sub"   x="100" y="252">Trailblazer · option B</text>
+  <g transform="translate(330,110)">
+    <rect class="panel" x="0" y="0" width="240" height="240" rx="16"/>
+    <use href="#osprey" x="20" y="60" width="200" height="120"/>
+    <text class="label" x="120" y="272">Osprey</text>
+    <text class="sub"   x="120" y="292">Paid · tern with a fish</text>
   </g>
 
   <!-- ============ EAGLE ============ -->
-  <g transform="translate(980,110)">
-    <rect class="panel" x="0" y="0" width="200" height="200" rx="16"/>
-    <use href="#eagle"    x="20" y="40" width="160" height="120"/>
-    <text class="label" x="100" y="232">Eagle</text>
-    <text class="sub"   x="100" y="252">Trailblazer · option C</text>
+  <g transform="translate(600,110)">
+    <rect class="panel" x="0" y="0" width="240" height="240" rx="16"/>
+    <use href="#eagle" x="0" y="70" width="240" height="120"/>
+    <text class="label" x="120" y="272">Eagle</text>
+    <text class="sub"   x="120" y="292">Trailblazer · broader, fanned tail</text>
   </g>
 
   <!-- Footer -->
-  <g transform="translate(60,420)">
-    <text class="title" x="0" y="0">Notes</text>
-    <text class="note" x="0" y="24">Tern is unchanged — pulled directly from <tspan font-weight="700">public/favicon.svg</tspan>. The other four use the same drawing vocabulary (side-profile, cream silhouette on rust, dark head + beak, light eye) so the set reads as a family.</text>
-    <text class="note" x="0" y="46">Distinguishing detail per bird:</text>
-    <text class="note" x="0" y="64">  · <tspan font-weight="700" fill="#2d3a22">Osprey</tspan> — crooked M wings (anatomical), fish in talons (the brand "carrying value" cue).</text>
-    <text class="note" x="0" y="82">  · <tspan font-weight="700" fill="#2d3a22">Peregrine</tspan> — scimitar wings swept back, horizontal fast-flight pose, dark "helmet" face.</text>
-    <text class="note" x="0" y="100">  · <tspan font-weight="700" fill="#2d3a22">Albatross</tspan> — extreme aspect-ratio wings, small body, gliding pose.</text>
-    <text class="note" x="0" y="118">  · <tspan font-weight="700" fill="#2d3a22">Eagle</tspan> — broad spread wings, fanned tail, white head with dark beak (bald-eagle cue).</text>
-    <text class="note" x="0" y="148" font-style="italic">Pick a Trailblazer and I'll file the foundation issue to drop these onto the plan-selection cards.</text>
+  <g transform="translate(60,470)">
+    <text class="title" x="0" y="0">What changed</text>
+    <text class="note" x="0" y="24"><tspan font-weight="700" fill="#2d3a22">Osprey</tspan> = Tern silhouette + fish held in talons + two short leg lines connecting body to fish. Everything else identical to the existing favicon.</text>
+    <text class="note" x="0" y="44"><tspan font-weight="700" fill="#2d3a22">Eagle</tspan> = same M-wing language but wider sweep + flatter curve (soaring, not flapping). Body bigger. Forked tern tail replaced by a fanned wedge. Head bigger with hooked beak + bald-eagle white face mask.</text>
+    <text class="note" x="0" y="74" font-style="italic">If this lands, the foundation issue is: ship these three as flat SVGs and use them as the hero on each plan card on the billing screen.</text>
   </g>
 </svg>
