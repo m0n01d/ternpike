@@ -65,9 +65,7 @@ ocrDemo:
   headlineHtml: "Drop a receipt.<br>See what we read."
   body: "Two free scans, no sign-up. Same OCR as the app."
   # Cloudflare Turnstile site key. Public — safe to ship in HTML.
-  # `1x00000000000000000000AA` is the always-passes test key; swap for
-  # the production site key once provisioned in the Cloudflare dash.
-  turnstileSiteKey: "1x00000000000000000000AA"
+  turnstileSiteKey: "0x4AAAAAADXlPoQvuMXYvnAZ"
   dropPrompt: "Choose a receipt"
   dropHint: "JPEG / PNG / HEIC, up to ~8 MB"
   idle: "Your scan will land here."
