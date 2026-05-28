@@ -38,6 +38,7 @@ import Data.GeoPoint exposing (GeoPoint)
 import Data.Location exposing (LocationState(..))
 import Data.Money as Money exposing (Money)
 import Data.PaymentMethod exposing (PaymentMethod)
+import Maybe.Extra
 
 
 {-| Raw user input for one in-progress expense.
@@ -157,7 +158,7 @@ parseEntry pe =
 
         errs : List String
         errs =
-            List.filterMap identity
+            Maybe.Extra.values
                 [ errorOf amountResult
                 , errorOf dateResult
                 ]

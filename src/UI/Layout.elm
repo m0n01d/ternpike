@@ -17,6 +17,7 @@ import Data.Trips as Trips exposing (TripsState(..))
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Routing
 import Svg
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
@@ -85,7 +86,7 @@ viewTripKicker state =
             kicker (Trips.selectedTrip trips).name
 
         TripsLoading _ _ ->
-            Html.text ""
+            Html.Extra.nothing
 
 
 viewSyncBadge : { networkOffline : Bool, syncState : SyncState } -> Html Msg
@@ -100,10 +101,10 @@ viewSyncBadge { networkOffline, syncState } =
     else
         case syncState of
             AuthExpired ->
-                Html.text ""
+                Html.Extra.nothing
 
             NotEnabled ->
-                Html.text ""
+                Html.Extra.nothing
 
             SyncError ->
                 Html.span
@@ -129,13 +130,10 @@ viewSyncBadge { networkOffline, syncState } =
 
 viewOfflineBanner : Bool -> Html Msg
 viewOfflineBanner networkOffline =
-    if networkOffline then
+    Html.Extra.viewIf networkOffline <|
         Html.div
             [ Html.Attributes.class "sticky top-[calc(env(safe-area-inset-top)+3.5rem)] z-10 px-5 py-1.5 text-xs text-center font-mono tracking-wide bg-tan/50 text-forest border-b border-moss/25" ]
             [ Html.text "You're offline · changes will sync when you reconnect" ]
-
-    else
-        Html.text ""
 
 
 viewBottomNav : AuthState -> Html Msg
@@ -189,11 +187,8 @@ viewNavTab as_ ( tab, iconFn, label_ ) =
 
 viewToast : Maybe String -> Html Msg
 viewToast toast =
-    case toast of
-        Nothing ->
-            Html.text ""
-
-        Just message ->
+    Html.Extra.viewMaybe
+        (\message ->
             Html.div
                 [ Html.Attributes.class "fixed bottom-[72px] left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel animate-fade-up bg-[image:var(--bg-grain)]" ]
                 [ Html.span [ Html.Attributes.class "flex-1 text-sm text-ink" ] [ Html.text message ]
@@ -203,15 +198,14 @@ viewToast toast =
                     ]
                     [ UI.Icons.close "w-4 h-4" ]
                 ]
+        )
+        toast
 
 
 viewErrorBanner : Maybe String -> Html Msg
 viewErrorBanner maybeErr =
-    case maybeErr of
-        Nothing ->
-            Html.text ""
-
-        Just err ->
+    Html.Extra.viewMaybe
+        (\err ->
             Html.div
                 [ Html.Attributes.class "flex items-stretch mx-5 mb-4 overflow-hidden rounded-r-lg bg-rust-tint text-rust" ]
                 [ Html.span [ Html.Attributes.class "block w-1.5 self-stretch bg-rust rounded-r" ] []
@@ -224,6 +218,8 @@ viewErrorBanner maybeErr =
                         [ UI.Icons.close "w-4 h-4" ]
                     ]
                 ]
+        )
+        maybeErr
 
 
 viewDeleteConfirmModal : Trip -> Html Msg

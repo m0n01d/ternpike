@@ -18,6 +18,7 @@ malformed legacy dates.
 
 -}
 
+import List.Extra
 import Time
 
 
@@ -140,7 +141,7 @@ daysBeforeMonth y mo =
             else
                 [ 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 ]
     in
-    List.drop (mo - 1) offsets |> List.head |> Maybe.withDefault 0
+    List.Extra.getAt (mo - 1) offsets |> Maybe.withDefault 0
 
 
 isLeapYear : Int -> Bool
