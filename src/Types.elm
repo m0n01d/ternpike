@@ -234,8 +234,8 @@ type alias AuthState =
     , tier : Tier
     , toast : Maybe String
     , today : DateField
-    , trailblazerAvailable : Maybe Int
     , trailblazerNumber : Maybe Int
+    , trailblazerStatus : RemoteData Http.Error Http.Billing.TrailblazerStatus
     , tripForm : Maybe TripForm
     , tripLoaded : Set String
     , trips : TripsState

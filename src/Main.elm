@@ -297,8 +297,8 @@ toAuthState creds initialRoute gs =
     , tier = creds.tier
     , toast = Nothing
     , today = gs.today
-    , trailblazerAvailable = Nothing
     , trailblazerNumber = creds.trailblazerNumber
+    , trailblazerStatus = RemoteData.NotAsked
     , tripForm = Nothing
     , tripLoaded = Set.empty
     , trips = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
@@ -928,14 +928,15 @@ fetchesForRoute as_ =
             -- On Tern, the Plan section renders a Trailblazer button
             -- whose label needs the live "N of 500 left" countdown.
             -- Fetched lazily on navigation to Settings; cached on
-            -- `as_.trailblazerAvailable` so a tab-flick doesn't re-fetch.
+            -- `as_.trailblazerStatus` so a tab-flick doesn't re-fetch.
             -- Paid users don't see the Trailblazer CTA at all so we skip
             -- the call for them.
-            if as2.route == RouteSettings && as2.tier == Tier.Tern && as2.trailblazerAvailable == Nothing then
-                Http.Billing.trailblazerStatus as2.config (AuthMsg << TrailblazerStatusFetched)
+            case ( as2.route, as2.tier, as2.trailblazerStatus ) of
+                ( RouteSettings, Tier.Tern, RemoteData.NotAsked ) ->
+                    Http.Billing.trailblazerStatus as2.config (AuthMsg << TrailblazerStatusFetched)
 
-            else
-                Cmd.none
+                _ ->
+                    Cmd.none
 
         as3 =
             -- Reset the join-request RemoteData so the Accept button
@@ -3749,16 +3750,27 @@ updateAuth msg as_ =
 
         BillingCheckoutResult result ->
             let
-                ( newCheckout, newTrailblazerAvailable, cmd ) =
+                existingTotal =
+                    case as_.trailblazerStatus of
+                        RemoteData.Success s ->
+                            s.total
+
+                        _ ->
+                            500
+
+                ( newCheckout, newTrailblazerStatus, cmd ) =
                     case result of
                         Ok { url } ->
-                            ( RemoteData.NotAsked, as_.trailblazerAvailable, Nav.load url )
+                            ( RemoteData.NotAsked, as_.trailblazerStatus, Nav.load url )
 
                         Err Http.Billing.CheckoutSoldOut ->
-                            ( RemoteData.Failure Http.Billing.CheckoutSoldOut, Just 0, Cmd.none )
+                            ( RemoteData.Failure Http.Billing.CheckoutSoldOut
+                            , RemoteData.Success { available = 0, total = existingTotal }
+                            , Cmd.none
+                            )
 
                         Err Http.Billing.CheckoutAlreadyTrailblazer ->
-                            ( RemoteData.Failure Http.Billing.CheckoutAlreadyTrailblazer, as_.trailblazerAvailable, Cmd.none )
+                            ( RemoteData.Failure Http.Billing.CheckoutAlreadyTrailblazer, as_.trailblazerStatus, Cmd.none )
 
                         Err (Http.Billing.CheckoutError detail) ->
                             -- `detail` is a short HTTP-status / network blurb from the
@@ -3766,12 +3778,12 @@ updateAuth msg as_ =
                             -- the friendly preamble and append the technical detail so
                             -- a stuck user has something to copy-paste into a support
                             -- email without needing devtools.
-                            ( RemoteData.Failure (Http.Billing.CheckoutError detail), as_.trailblazerAvailable, Cmd.none )
+                            ( RemoteData.Failure (Http.Billing.CheckoutError detail), as_.trailblazerStatus, Cmd.none )
             in
             ( AuthModel
                 { as_
                     | billingCheckout = newCheckout
-                    , trailblazerAvailable = newTrailblazerAvailable
+                    , trailblazerStatus = newTrailblazerStatus
                 }
             , cmd
             )
@@ -3795,14 +3807,8 @@ updateAuth msg as_ =
             , cmd
             )
 
-        TrailblazerStatusFetched (Ok status) ->
-            ( AuthModel { as_ | trailblazerAvailable = Just status.available }, Cmd.none )
-
-        TrailblazerStatusFetched (Err _) ->
-            -- Silent — Tern users just won't see the "N of 500 left"
-            -- countdown. The button still works; checkout will surface
-            -- the sold-out state at the moment of click if needed.
-            ( AuthModel as_, Cmd.none )
+        TrailblazerStatusFetched result ->
+            ( AuthModel { as_ | trailblazerStatus = RemoteData.fromResult result }, Cmd.none )
 
         MeFetched (Ok me) ->
             let
