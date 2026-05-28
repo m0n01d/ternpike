@@ -18,6 +18,7 @@ Neither type ships across PouchDB sync — both are device-local.
 -}
 
 import Data.AnthropicKey exposing (AnthropicKey)
+import Data.SubscriptionStatus exposing (SubscriptionStatus)
 import Data.Tier exposing (Tier)
 
 
@@ -28,17 +29,26 @@ import Data.Tier exposing (Tier)
   - `password` — the database password (a server-issued long token,
     not the user's typed password — the user authenticates with an
     email code, never a password).
+  - `subscriptionStatus` — server-authoritative Stripe status at login
+    time. `Nothing` for free users. Persisted alongside the rest of
+    `Creds` so a returning visit boots with the right billing chrome
+    without waiting on `/me`; refreshed via `/me` on startup.
   - `tier` — server-authoritative subscription tier at login time.
     Refreshed on every `/auth/verify-code` round-trip; persisted to
     IndexedDB alongside the rest of `Creds` so a returning visit
     boots with the right tier without waiting on `/me`.
+  - `trailblazerNumber` — `Just n` (1..500) for confirmed Trailblazer
+    purchases, `Nothing` for everyone else. Persisted alongside the
+    rest of `Creds`; refreshed via `/me`.
 
 -}
 type alias Creds =
     { dbName : String
     , email : String
     , password : String
+    , subscriptionStatus : Maybe SubscriptionStatus
     , tier : Tier
+    , trailblazerNumber : Maybe Int
     }
 
 

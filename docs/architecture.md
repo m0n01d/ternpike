@@ -138,13 +138,27 @@ type alias AuthState =
     , networkOffline : Bool
     , page          : Page
     , route         : Route
+    , subscriptionStatus : Maybe SubscriptionStatus
     , syncState     : SyncState
+    , tier          : Tier
+    , trailblazerNumber : Maybe Int
     , tripLoaded    : Set String
     , trips         : TripsState
     , voids         : Dict String Void
     -- ... form fields, UI state, etc.
     }
 ```
+
+`tier`, `subscriptionStatus`, and `trailblazerNumber` are server-authoritative
+billing fields. They're seeded from the `/auth/verify-code` response (or the
+cached `auth_creds` blob on cold boot) and refreshed via `GET /me` once per
+session — see the startup sequence below. The `subscriptionStatus` value is
+`Maybe` because non-subscribers (most Tern users, and Trailblazers, who have
+no Stripe subscription) have no status to report; the server returns `null`
+and the wire decoder maps that to `Nothing`. `trailblazerNumber` is `Just n`
+(1..500) only for confirmed Trailblazer purchases. None of these three fields
+go through PouchDB — a tier change made on Device A must not wait for sync to
+propagate.
 
 `networkOffline` is also tracked on `GuestState` so the disconnected-banner
 UI works before sign-in. Both fields are kept in sync via the `networkStatus`
@@ -409,11 +423,14 @@ Example:
 ```
 Browser loads
   └─ main.js reads IndexedDB
-       ├─ auth_creds  (email, password, dbName)
+       ├─ auth_creds  (email, password, dbName, tier, subscriptionStatus, trailblazerNumber)
        └─ anthropic_key
   └─ Elm.Main.init receives flags
        ├─ If no creds → GuestModel FreshGuest
        └─ If creds found → AuthModel (initial AuthState, no data fetched yet)
+            ├─ fetchMe (GET /me) fires immediately
+            │    └─ refreshes tier + subscriptionStatus + trailblazerNumber
+            │       from the server, re-persists Creds to IndexedDB
             └─ startSync port called immediately
                  └─ pouch.js begins db.sync(remote, { live, retry })
                       └─ On first "synced" event → Elm receives SyncStateMsg Synced
@@ -426,6 +443,14 @@ Browser loads
 Data is **not** fetched on login — it waits for the first sync to settle.
 This prevents a race where Elm reads stale local data before the sync pulls
 down remote changes.
+
+The `/me` refresh is the one exception that fires immediately on `AuthModel`
+construction: it's HTTP, not PouchDB, so there's no race with replication; the
+response refreshes `tier`, `subscriptionStatus`, and `trailblazerNumber` on
+both `AuthState` and the persisted `Creds` blob. Errors are swallowed —
+`/me` is a refresh path, not a hard requirement; the cached `Creds` is
+already good enough to render until the next call retries (next cold boot,
+or the Settings billing UI's `?checkout=success` return).
 
 ---
 

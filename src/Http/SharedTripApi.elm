@@ -1,6 +1,7 @@
 module Http.SharedTripApi exposing
     ( CreateSharedTripResponse
     , JoinSharedTripResponse
+    , authHeader
     , createSharedTrip
     , inviteToSharedTrip
     , joinSharedTrip
