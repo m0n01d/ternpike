@@ -269,6 +269,7 @@ toAuthState creds initialRoute gs =
     , sharedTrips = SharedTrips.empty
     , form = FreshForm (defaultPendingEntry gs.today)
     , geoBlocked = False
+    , joinSharedTripRequest = RemoteData.NotAsked
     , key = gs.key
     , lastSyncedAt = Nothing
     , ledgerMapExpanded = False
@@ -935,8 +936,19 @@ fetchesForRoute as_ =
 
             else
                 Cmd.none
+
+        as3 =
+            -- Reset the join-request RemoteData so the Accept button
+            -- starts idle every time the user navigates to this page,
+            -- whether arriving fresh or returning after a Decline.
+            case as2.route of
+                RouteJoinSharedTrip _ ->
+                    { as2 | joinSharedTripRequest = RemoteData.NotAsked }
+
+                _ ->
+                    as2
     in
-    ( hydrateFormForRoute as2, Cmd.batch [ tripCmd, expenseCmd, geoCmd, billingCmd ] )
+    ( hydrateFormForRoute as3, Cmd.batch [ tripCmd, expenseCmd, geoCmd, billingCmd ] )
 
 
 {-| Insert a single document from PouchDB's live-changes feed into the
@@ -3885,7 +3897,7 @@ updateAuth msg as_ =
             )
 
         JoinSharedTripAccepted token ->
-            ( AuthModel as_
+            ( AuthModel { as_ | joinSharedTripRequest = RemoteData.Loading }
             , Http.SharedTripApi.joinSharedTrip as_.creds { token = token } (AuthMsg << JoinSharedTripResult)
             )
 
@@ -3894,20 +3906,33 @@ updateAuth msg as_ =
             , Nav.pushUrl as_.key (as_.basePath ++ "trips")
             )
 
-        JoinSharedTripResult (Ok response) ->
-            ( AuthModel
-                { as_
-                    | route = RouteSettings
-                    , toast = Just ("Joined " ++ response.name ++ ".")
-                }
-            , Cmd.batch
-                [ Nav.pushUrl as_.key (as_.basePath ++ "settings")
-                , toastFor
-                ]
-            )
+        JoinSharedTripResult result ->
+            let
+                rd =
+                    RemoteData.fromResult result
+            in
+            case rd of
+                RemoteData.Success response ->
+                    ( AuthModel
+                        { as_
+                            | joinSharedTripRequest = rd
+                            , route = RouteSettings
+                            , toast = Just ("Joined " ++ response.name ++ ".")
+                        }
+                    , Cmd.batch
+                        [ Nav.pushUrl as_.key (as_.basePath ++ "settings")
+                        , toastFor
+                        ]
+                    )
 
-        JoinSharedTripResult (Err err) ->
-            ( AuthModel { as_ | error = Just (joinErrorMessage err) }, Cmd.none )
+                RemoteData.Failure _ ->
+                    ( AuthModel { as_ | joinSharedTripRequest = rd }, Cmd.none )
+
+                RemoteData.NotAsked ->
+                    ( AuthModel as_, Cmd.none )
+
+                RemoteData.Loading ->
+                    ( AuthModel as_, Cmd.none )
 
         -- PWA notifications (foundation #175): the `notificationState`
         -- port reports the browser's permission state, the subscribe
@@ -4183,28 +4208,6 @@ flockErrorMessage err =
 
         _ ->
             "Something went wrong. Try again."
-
-
-joinErrorMessage : Http.Error -> String
-joinErrorMessage err =
-    case err of
-        Http.BadStatus 401 ->
-            "This invite is no longer valid. Ask the inviter for a fresh link."
-
-        Http.BadStatus 403 ->
-            "This invite is for someone else."
-
-        Http.BadStatus 404 ->
-            "Invite expired or already used."
-
-        Http.BadStatus 409 ->
-            "You're already a member of that flock."
-
-        Http.BadStatus 410 ->
-            "This invite has expired. Ask the inviter for a fresh link."
-
-        _ ->
-            flockErrorMessage err
 
 
 

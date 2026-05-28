@@ -24,6 +24,8 @@ what paid unlocks.
 
     -- intentionally no `-->` example: returns Html, not pure data.
 
+
+
 -}
 paidOnly : Tier -> { paidView : Html msg, upgradePrompt : Html msg } -> Html msg
 paidOnly tier views =
