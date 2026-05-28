@@ -15,7 +15,9 @@ the DOM."
 import Data.SubscriptionStatus as SubscriptionStatus
 import Data.Tier exposing (Tier(..))
 import Expect
+import Http.Billing
 import Pages.Settings
+import RemoteData
 import Test exposing (Test, describe, test)
 import Test.Html.Event
 import Test.Html.Query
@@ -90,14 +92,14 @@ suite =
                         |> Test.Html.Query.first
                         |> Test.Html.Event.simulate Test.Html.Event.click
                         |> Test.Html.Event.expect (AuthMsg (BillingCheckoutClicked "trailblazer"))
-            , test "billingError message renders when set" <|
+            , test "billingCheckout SoldOut failure renders the error chip" <|
                 \() ->
                     let
                         props =
                             propsFor { tier = Tern, trailblazerAvailable = Just 0 }
                     in
                     { props
-                        | billingError = Just "Sorry, the last Trailblazer slot just sold out."
+                        | billingCheckout = RemoteData.Failure Http.Billing.CheckoutSoldOut
                     }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
@@ -184,14 +186,14 @@ suite =
                         |> Test.Html.Event.simulate Test.Html.Event.click
                         |> Test.Html.Event.expect (AuthMsg BillingPortalClicked)
             ]
-        , describe "billingInFlight"
-            [ test "Tern upgrade buttons render as disabled while a checkout is pending" <|
+        , describe "billingCheckout Loading"
+            [ test "Tern upgrade buttons render as disabled while a checkout is in flight" <|
                 \() ->
                     let
                         props =
                             propsFor { tier = Tern, trailblazerAvailable = Just 412 }
                     in
-                    { props | billingInFlight = True }
+                    { props | billingCheckout = RemoteData.Loading }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.findAll
@@ -213,8 +215,8 @@ suite =
 
 propsFor : { tier : Tier, trailblazerAvailable : Maybe Int } -> Pages.Settings.PlanProps
 propsFor { tier, trailblazerAvailable } =
-    { billingError = Nothing
-    , billingInFlight = False
+    { billingCheckout = RemoteData.NotAsked
+    , billingPortal = RemoteData.NotAsked
     , subscriptionStatus = Nothing
     , tier = tier
     , trailblazerAvailable = trailblazerAvailable

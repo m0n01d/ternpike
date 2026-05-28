@@ -189,8 +189,8 @@ type alias AuthState =
     { activeScanItemId : Maybe ScanItemId
     , amendments : Dict String Amendment
     , basePath : String
-    , billingError : Maybe String
-    , billingInFlight : Bool
+    , billingCheckout : RemoteData Http.Billing.CheckoutResult ()
+    , billingPortal : RemoteData Http.Error ()
     , colorScheme : ColorScheme
     , config : AppConfig
     , confirmDeleteTrip : Maybe Trip
