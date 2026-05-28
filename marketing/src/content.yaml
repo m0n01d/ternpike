@@ -62,28 +62,29 @@ howItWorks:
 ocrDemo:
   eyebrow: "Try it"
   seoHeadline: "Try receipt scanning right here"
-  headlineHtml: "Drop a receipt.<br>See what we read."
-  body: "Two free scans, no sign-up. Same OCR as the app."
-  # Cloudflare Turnstile site key. Public — safe to ship in HTML.
-  turnstileSiteKey: "0x4AAAAAADXlPoQvuMXYvnAZ"
+  headlineHtml: "Drop a receipt.<br>We'll mail it back, read."
+  body: "Drop a photo, leave your email, and we'll send you back exactly what Ternpike extracted from it. Three on us, no sign-up."
   dropPrompt: "Choose a receipt"
   dropHint: "JPEG / PNG / HEIC, up to ~8 MB"
-  idle: "Your scan will land here."
+  emailLabel: "Where do we send it?"
+  emailPlaceholder: "your@email.com"
+  cta: "Send me the result"
   busy: "Reading the receipt…"
   retry: "Scan another"
+  idle: "What you'll get"
+  steps:
+    - "We read the receipt with the same OCR that runs in the app."
+    - "You get an email with amount, merchant, date, category, payment, and a short note."
+    - "Plus a one-time discount code if you want to keep going."
+  sentTitle: "Receipt's on its way."
+  sentBody: "Look for it at"
   errors:
+    invalidEmail: "That email doesn't look right — give it another shot?"
     rateLimit: "You've used today's free scans. Sign up to keep scanning."
     noReceipt: "Couldn't read a receipt from that image. Try a clearer photo."
     tooLarge: "That image is too large. Try a smaller photo."
-    turnstile: "Couldn't verify you weren't a bot. Refresh and try again."
+    emailDelivery: "We read the receipt but couldn't send the email. Try again?"
     generic: "Something went wrong — try again?"
-  fields:
-    amount: "Amount"
-    merchant: "Merchant"
-    date: "Date"
-    category: "Category"
-    payment: "Payment"
-    note: "Note"
 
 features:
   eyebrow: "Features"

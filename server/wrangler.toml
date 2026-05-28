@@ -69,6 +69,12 @@ COUCH_URL = "https://couch.ternpike.com"
 # parameter for POST /audiences/{id}/contacts — the scoped
 # RESEND_WAITLIST_API_KEY does not imply an audience on its own.
 RESEND_AUDIENCE_ID = "206e97c4-13b7-4a6a-a85b-01414c35449b"
+# Stripe coupon id that backs the per-email promotion codes minted by
+# POST /scan-demo. Provision the coupon once in the Stripe dash
+# (e.g., "25% off first month, applies to Osprey monthly price"),
+# paste its id here, and `wrangler deploy`. Leaving this unset is
+# fine — the email still ships, just without the promo block.
+STRIPE_RECEIPT_COUPON_ID = ""
 
 
 [[routes]]
@@ -104,7 +110,7 @@ crons = ["0 * * * *", "0 17 * * 5"]
 #   STRIPE_SECRET_KEY             (Stripe API secret key — sk_live_... or sk_test_...)
 #   STRIPE_WEBHOOK_SECRET         (set in #18 — listed here for the full surface)
 #   TIER_WEBHOOK_SECRET   (shared with the future Stripe webhook + test hook)
-#   TURNSTILE_SECRET_KEY  (Cloudflare Turnstile secret — gates POST /scan-demo on the marketing home page)
+#   TURNSTILE_SECRET_KEY  (DEPRECATED — kept in case the demo pivots back; not read by current code)
 #   VAPID_PRIVATE_KEY     (base64url; PERMANENT — re-keying invalidates all push subscriptions)
 #   VAPID_PUBLIC_KEY      (base64url; also shipped to client as VITE_VAPID_PUBLIC_KEY at build time)
 #   VAPID_SUBJECT         (mailto: URL, e.g. mailto:ops@ternpike.com)

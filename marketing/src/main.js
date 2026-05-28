@@ -1,117 +1,77 @@
-// Home-page OCR demo. Two scans per IP per UTC day, gated by Cloudflare
-// Turnstile + a server-side KV counter (see server/scanDemo.js). The
-// client downscales the image to keep the base64 well under the Worker's
-// 4 MiB cap, then POSTs { turnstileToken, base64, mimeType } and renders
-// the parsed fields.
+// Home-page OCR demo. Visitor uploads a receipt + email; the server runs
+// OCR and emails the parsed fields back along with a single-use promo
+// code (see server/scanDemo.js). No third-party widget; per-email rate
+// limit lives server-side in KV.
 (() => {
   const root = document.querySelector('.ocr-demo');
   if (!root) return;
-  const turnstileContainer = root.querySelector('.ocr-turnstile');
-  if (!turnstileContainer) return;
 
   const fileInput = root.querySelector('.ocr-file');
+  const emailInput = root.querySelector('.ocr-email');
   const preview = root.querySelector('.ocr-preview');
   const dropLabel = root.querySelector('.ocr-drop-label');
+  const submitBtn = root.querySelector('.ocr-submit');
   const retryBtn = root.querySelector('.ocr-retry');
   const statusEl = root.querySelector('.ocr-status');
-  const resultEl = root.querySelector('.ocr-result');
   const errorEl = root.querySelector('.ocr-error');
-  const fields = root.querySelectorAll('.ocr-field');
+  const idleBlock = root.querySelector('.ocr-idle');
+  const sentBlock = root.querySelector('.ocr-sent');
+  const sentEmailEl = root.querySelector('.ocr-sent-email');
 
   const endpoint = root.dataset.endpoint;
-  const siteKey = root.dataset.sitekey;
   const errors = {
+    invalid_email: root.dataset.errorInvalidEmail,
     rate_limited: root.dataset.errorRateLimit,
     no_receipt: root.dataset.errorNoReceipt,
     too_large: root.dataset.errorTooLarge,
-    turnstile: root.dataset.errorTurnstile,
+    email: root.dataset.errorEmail,
     generic: root.dataset.errorGeneric,
   };
+  // Mirror server EMAIL_RE.
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-  let turnstileToken = null;
-  let widgetId = null;
-  let pendingFile = null;
-
-  // Render the Turnstile widget once the script has loaded. With
-  // `render=explicit` the global appears asynchronously, so poll briefly.
-  const renderTurnstile = () => {
-    if (widgetId !== null) return;
-    if (!window.turnstile) {
-      setTimeout(renderTurnstile, 100);
-      return;
-    }
-    widgetId = window.turnstile.render(turnstileContainer, {
-      sitekey: siteKey,
-      callback: (token) => {
-        turnstileToken = token;
-        if (pendingFile) {
-          const f = pendingFile;
-          pendingFile = null;
-          submit(f);
-        }
-      },
-      'error-callback': () => {
-        turnstileToken = null;
-      },
-      'expired-callback': () => {
-        turnstileToken = null;
-      },
-    });
-  };
-  renderTurnstile();
-
-  const resetTurnstile = () => {
-    turnstileToken = null;
-    if (widgetId !== null && window.turnstile) {
-      window.turnstile.reset(widgetId);
-    }
-  };
+  let selectedFile = null;
 
   const setStatus = (text) => {
-    statusEl.textContent = text || ' ';
-  };
-
-  const resetFields = () => {
-    fields.forEach((el) => {
-      el.textContent = '—';
-    });
+    statusEl.textContent = text || ' ';
   };
 
   const showError = (key) => {
     errorEl.textContent = errors[key] || errors.generic;
     errorEl.classList.remove('hidden');
     setStatus('');
-    retryBtn.classList.remove('hidden');
+    submitBtn.disabled = false;
   };
 
-  const clearOutput = () => {
+  const clearError = () => {
     errorEl.classList.add('hidden');
-    retryBtn.classList.add('hidden');
-    resetFields();
   };
 
-  const formatField = (field, value) => {
-    if (value == null || value === '') return '—';
-    if (field === 'amount') {
-      const n = Number(value);
-      return Number.isFinite(n) ? '$' + n.toFixed(2) : String(value);
-    }
-    return String(value);
-  };
-
-  const renderResult = (ocr) => {
-    fields.forEach((el) => {
-      el.textContent = formatField(el.dataset.field, ocr[el.dataset.field]);
-    });
-    errorEl.classList.add('hidden');
+  const showSent = (email) => {
+    idleBlock.classList.add('hidden');
+    sentBlock.classList.remove('hidden');
+    sentEmailEl.textContent = email;
+    clearError();
     setStatus('');
-    retryBtn.classList.remove('hidden');
   };
 
-  // Downscale + recompress before sending to the server. Mirrors the
-  // ladder in src/main.js (Elm-app port handler): initial resize to 1568px
-  // on the long edge, then a quality ladder, then dimension shrinking
-  // until the base64 string fits the budget. The server enforces 4 MiB.
+  const resetToIdle = () => {
+    fileInput.value = '';
+    selectedFile = null;
+    preview.classList.add('hidden');
+    preview.src = '';
+    dropLabel.classList.remove('hidden');
+    emailInput.value = '';
+    sentBlock.classList.add('hidden');
+    idleBlock.classList.remove('hidden');
+    clearError();
+    setStatus('');
+    submitBtn.disabled = false;
+  };
+
+  // Downscale + recompress before sending. Mirrors the ladder in
+  // src/main.js (Elm-app port handler): 1568px on the long edge, then
+  // quality ladder 0.85→0.45, then dimension shrink. Server caps 4 MiB.
   const MAX_BASE64_BYTES = 4 * 1024 * 1024;
   const base64Bytes = (dataUrl) => {
     const comma = dataUrl.indexOf(',');
@@ -170,20 +130,35 @@
     };
   };
 
-  const submit = async (file) => {
+  const submit = async () => {
+    clearError();
+    const email = (emailInput.value || '').trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      showError('invalid_email');
+      emailInput.focus();
+      return;
+    }
+    if (!selectedFile) {
+      // No file picked — flash the drop zone.
+      const drop = root.querySelector('.ocr-drop');
+      if (drop) {
+        drop.classList.add('border-rust');
+        setTimeout(() => drop.classList.remove('border-rust'), 800);
+      }
+      return;
+    }
+
+    submitBtn.disabled = true;
     setStatus(root.dataset.busyLabel);
-    clearOutput();
+
     let down;
     try {
-      down = await downscale(file);
+      down = await downscale(selectedFile);
     } catch (err) {
       console.error(err);
       showError(err && err.message === 'too-large' ? 'too_large' : 'generic');
       return;
     }
-    preview.src = down.dataUrl;
-    preview.classList.remove('hidden');
-    dropLabel.classList.add('hidden');
 
     let res;
     try {
@@ -192,14 +167,13 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           base64: down.base64,
+          email,
           mimeType: 'image/jpeg',
-          turnstileToken,
         }),
       });
     } catch (err) {
       console.error(err);
       showError('generic');
-      resetTurnstile();
       return;
     }
 
@@ -207,60 +181,54 @@
     try {
       body = await res.json();
     } catch {
-      // fall through with empty body
+      // body stays empty
     }
 
-    if (res.status === 200 && body.ok && body.ocr) {
-      renderResult(body.ocr);
-      resetTurnstile();
+    if (res.status === 200 && body.ok) {
+      showSent(email);
       return;
     }
     if (res.status === 200 && body.error === 'no_receipt') {
       showError('no_receipt');
-      resetTurnstile();
+      return;
+    }
+    if (res.status === 400 && body.error === 'invalid_email') {
+      showError('invalid_email');
       return;
     }
     if (res.status === 429) {
       showError('rate_limited');
-      resetTurnstile();
       return;
     }
     if (res.status === 413) {
       showError('too_large');
-      resetTurnstile();
       return;
     }
-    if (res.status === 401) {
-      showError('turnstile');
-      resetTurnstile();
+    if (res.status === 502 && body.error === 'email') {
+      showError('email');
       return;
     }
     showError('generic');
-    resetTurnstile();
   };
 
   fileInput.addEventListener('change', () => {
     const file = fileInput.files && fileInput.files[0];
     if (!file) return;
-    if (turnstileToken) {
-      submit(file);
-    } else {
-      // Widget hasn't returned a token yet — stash the file and submit
-      // from the Turnstile callback once it arrives.
-      pendingFile = file;
-      setStatus(root.dataset.busyLabel);
-    }
+    selectedFile = file;
+    clearError();
+    // Show a small preview in the drop zone.
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      preview.src = e.target.result;
+      preview.classList.remove('hidden');
+      dropLabel.classList.add('hidden');
+    };
+    reader.readAsDataURL(file);
   });
 
-  retryBtn.addEventListener('click', () => {
-    fileInput.value = '';
-    preview.classList.add('hidden');
-    preview.src = '';
-    dropLabel.classList.remove('hidden');
-    clearOutput();
-    setStatus('');
-    resetTurnstile();
-  });
+  submitBtn.addEventListener('click', submit);
+
+  retryBtn.addEventListener('click', resetToIdle);
 })();
 
 // Smooth scroll for anchor links.
