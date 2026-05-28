@@ -26,6 +26,28 @@ export const stubAuthCreds = async (
   context: BrowserContext,
   creds: AuthCreds,
 ): Promise<void> => {
+  // Intercept GET /me so the fetchMe call fired on AuthModel construction
+  // (src/Main.elm) sees a coherent tier matching what we seeded into
+  // IndexedDB, rather than the server's empty-TIERS_KV default of 'tern'
+  // overwriting it mid-test.
+  await context.route('**/me', async (route) => {
+    if (route.request().method() !== 'GET') {
+      return route.fallback()
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        email: creds.email.toLowerCase(),
+        stripeCustomerId: null,
+        subscriptionId: null,
+        subscriptionStatus: null,
+        tier: (creds.tier || 'tern').toLowerCase(),
+        trailblazerNumber: null,
+      }),
+    })
+  })
+
   const payload = JSON.stringify(creds)
   const page = await context.newPage()
   // seed.html is a real file in `public/` and boots PouchDB but does not
