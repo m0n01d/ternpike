@@ -52,4 +52,19 @@ if [ ! -d "$PLUGIN_DIR/.git" ]; then
   fi
 fi
 
+# Ensure the `elmq` CLI is on PATH. The cloud container starts without
+# node_modules, and even a local `npm install` only drops the binary in
+# `node_modules/.bin/` — which is NOT on the shell PATH the Bash tool uses.
+# So bare `elmq` (which CLAUDE.md instructs the agent to reach for on every
+# Elm read/edit) silently fails with "command not found". A global install
+# puts the binary in npm's global bin (already on PATH), independent of the
+# repo's node_modules. Version is read from devDependencies so it can't
+# drift. Best-effort: never block the session if the network call fails.
+if ! command -v elmq >/dev/null 2>&1; then
+  ELMQ_VERSION="$(node -p "(require('./package.json').devDependencies['@caseywebb/elmq']||'').replace(/[\^~]/,'')" 2>/dev/null)"
+  if ! npm install -g "@caseywebb/elmq@${ELMQ_VERSION:-0.8.0}" --no-audit --no-fund >&2 2>/dev/null; then
+    echo "[session-start] could not install elmq CLI" >&2
+  fi
+fi
+
 exit 0
