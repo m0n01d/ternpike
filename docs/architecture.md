@@ -338,6 +338,35 @@ namespace is needed in the `_id`):
 - `email`, `googleSub` — already in `AuthState` from the auth flow, no need
   to duplicate.
 
+### Server-side user record (`UserRecord` in `server/users.js`)
+
+Lives in `TIERS_KV` under `user:<lowercased-email>`. Alphabetized fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `createdAt` | ISO string | Preserved across upserts. |
+| `email` | string (lowercased) | Primary key. |
+| `referredBy` | string \| null | Lowercased email of the referrer, set on first signup when `?ref=qr-user-XXXX` was carried through. Write-once — `upsertUser` preserves the existing value on every subsequent write. Phase 1 is data-only; bonus issuance is a follow-on track. |
+| `stripeCustomerId` | string \| null | Set by `/billing/checkout`. |
+| `subscriptionId` | string \| null | Set by Stripe webhook. |
+| `subscriptionStatus` | enum \| null | `active`/`canceled`/`past_due`/`trialing`. |
+| `tier` | enum | `tern`/`osprey`/`trailblazer`. |
+| `trailblazerNumber` | int \| null | 1..500, set when `/trailblazer/confirm` succeeds. |
+| `trailblazerPurchasedAt` | ISO string \| null | Companion to `trailblazerNumber`. |
+| `updatedAt` | ISO string | Stamped on every write. |
+
+### Slug → email reverse index
+
+`upsertUser` also writes a paired `slug:<slug>` entry pointing at the user's lowercased email, where `slug = 'user-' + shortHash(email)`. `shortHash` is FNV-1a 32-bit hex sliced to 4 chars, implemented byte-for-byte in both `src/Data/UserId.elm` and `server/users.js` (the values are pinned by tests on both sides; drift breaks attribution silently).
+
+The index is the lookup for `/auth/verify-code` to resolve a `ref=qr-user-XXXX` to the referrer's email. Writes are idempotent (the mapping is deterministic from the email), so existing users predating the index get backfilled the next time any code path touches their record (billing webhook, `/me` refresh, `/auth/verify-code`).
+
+### Referral attribution flow
+
+The QR/share URL is `https://api.ternpike.com/qr/user-XXXX?via=share`. The `/qr/:slug` redirect (`server/qr.js`) appends `&via=share` to the marketing redirect when set; `bumpCounter` rolls up a `byVia: { qr, share }` count so analytics can split QR scans from social-share clicks.
+
+The marketing page (`marketing/src/main.js`) captures `?ref=qr-user-XXXX` on landing into a `.ternpike.com` root-domain cookie (`tp_ref`, 30-day max-age). When the recipient lands on `app.ternpike.com`, `src/main.js` promotes the cookie value into IDB under `pending_ref` (so it survives cookie expiry and Safari ITP), passes it to Elm via flags as `pendingRef`, threaded through `GuestState.pendingRef`, and included in the body of the POST to `/auth/verify-code` as `ref`. The server's `resolveReferrer` calls `getEmailBySlug` to look up the referrer's email and stamps `referredBy` on the new `UserRecord` — guarded against self-referral and unknown slugs.
+
 ---
 
 ## PouchDB: what it is and how it plugs in

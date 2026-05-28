@@ -5,6 +5,7 @@ module Types exposing
     , GuestState
     , Model(..)
     , Msg(..)
+    , ShareMode(..)
     , SharedMsg_(..)
     )
 
@@ -110,11 +111,26 @@ type alias GuestState =
     , key : Nav.Key
     , networkOffline : Bool
     , pendingJoinToken : Maybe String
+    , pendingRef : Maybe String
     , session : GuestSession
     , showSettings : Bool
     , today : DateField
     , version : String
     }
+
+
+{-| Where a `ShareViaNative` Msg should route on the JS side.
+
+  - `AutoShare` — try `navigator.share` first; fall back to clipboard if
+    unavailable or rejected. Used by the primary "Share with a friend"
+    CTA.
+  - `ForceCopy` — skip the share sheet and write to clipboard directly.
+    Used by the explicit "Copy link" button.
+
+-}
+type ShareMode
+    = AutoShare
+    | ForceCopy
 
 
 {-| Signed-in state — the cache for every PouchDB-backed document plus
@@ -414,6 +430,8 @@ type AuthMsg_
     | SaveTripForm
     | ScanProxyResult { body : String, itemId : String, ok : Bool, status : Int }
     | SetStatsGranularity Granularity
+    | ShareResultReceived { ok : Bool, reason : String }
+    | ShareViaNative ShareMode
     | SharedTripActivityNotified
     | SignOutClicked
     | SkipLocation

@@ -513,8 +513,9 @@ The server's view of "who is this email" lives in `TIERS_KV` under the `user:<lo
 
 ```
 {
-  createdAt, email, stripeCustomerId, subscriptionId, subscriptionStatus,
-  tier, trailblazerNumber, trailblazerPurchasedAt, updatedAt
+  createdAt, email, referredBy, stripeCustomerId, subscriptionId,
+  subscriptionStatus, tier, trailblazerNumber, trailblazerPurchasedAt,
+  updatedAt
 }
 ```
 
@@ -522,6 +523,7 @@ The server's view of "who is this email" lives in `TIERS_KV` under the `user:<lo
 - **Read path:** `getTier` (server/auth.js) reads `user:<email>` first, then falls back to the legacy raw-string `<email>` key written by `setTier` (server/sharedTrips.js) for any user who hasn't been re-upserted yet. `getUser(env, email)` returns the full record or `null`.
 - **Migration:** `migrateLegacy(env, email)` materializes a `UserRecord` from an existing raw-string tier the first time anything writes through `upsertUser`. The legacy key is left in place for any code path still reading it directly.
 - **Trailblazer slot counter** lives in a single Durable Object (`server/trailblazerSlots.js`, binding `TRAILBLAZER_SLOTS`) so the 500-cap is atomic against concurrent checkouts without a transactional KV layer. `/reserve` hands out a number (30-minute TTL); `/confirm` permanently claims it. Confirmed slots never release — that's the product invariant.
+- **Referral attribution (Phase 1, data-only):** `referredBy` is set on first signup when `/auth/verify-code` receives a `ref=qr-user-XXXX` body field — resolved to the referrer's lowercased email via a `slug:<slug>` reverse index that `upsertUser` writes on every call (backfills existing users). `referredBy` is **write-once** — `upsertUser` preserves the existing value even if a caller passes `null`. **No bonuses are granted yet**; Stripe coupon / banked-months mechanics ship in a follow-on track. The slug derives from FNV-1a 32-bit `shortHash`, ported byte-for-byte between `src/Data/UserId.elm` and `server/users.js` and test-pinned on both sides — never change one without the other.
 
 ## Architecture doc
 

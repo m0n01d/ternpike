@@ -1,3 +1,24 @@
+// Referral attribution. When a visitor arrives via a personal QR/share
+// link (`?ref=qr-user-XXXX`), persist the ref into a root-domain cookie
+// so `app.ternpike.com` can pick it up when the recipient signs up. The
+// app side promotes it to IDB on first boot — see src/main.js.
+(() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref && /^qr-user-[a-z0-9]{4}$/.test(ref)) {
+      const isSecure = window.location.protocol === 'https:';
+      document.cookie =
+        'tp_ref=' + encodeURIComponent(ref) +
+        '; domain=.ternpike.com; path=/; max-age=2592000; samesite=lax' +
+        (isSecure ? '; secure' : '');
+    }
+  } catch (_) {
+    // Older browsers without URLSearchParams or with cookies disabled —
+    // attribution is best-effort; do not block the page.
+  }
+})();
+
 // Home-page OCR demo. Visitor uploads a receipt + email; the server runs
 // OCR and emails the parsed fields back along with a single-use promo
 // code (see server/scanDemo.js). No third-party widget; per-email rate

@@ -7,7 +7,7 @@ import { authenticateCaller, getTier } from './auth.js'
 import { registerBillingRoutes } from './billing.js'
 import { registerBillingWebhookRoute } from './billingWebhook.js'
 import { registerGeocodeRoutes } from './geocode.js'
-import { freshUser, getUser, migrateLegacy, upsertUser } from './users.js'
+import { freshUser, getEmailBySlug, getUser, migrateLegacy, upsertUser } from './users.js'
 import {
   registerNotificationRoutes,
   sendSyncStalledReminders,
@@ -64,6 +64,29 @@ const derivePassword = async (email, secret) => {
     encoder.encode('couch:' + email.toLowerCase()),
   )
   return bytesToHex(new Uint8Array(sig)).slice(0, 32)
+}
+
+// Referral attribution: parse a `ref` value of the form
+// `qr-user-XXXX` (set by ShareModal / marketing cookie capture) and
+// resolve it to the referrer's lowercased email via the slug→email
+// index in TIERS_KV. Returns null on any failure (missing, malformed,
+// slug unknown, self-referral). Never throws — bad refs must not block
+// signup.
+const REF_PATTERN = /^qr-(user-[a-z0-9]{1,32})$/
+async function resolveReferrer(env, signupEmail, ref) {
+  if (typeof ref !== 'string') return null
+  const m = REF_PATTERN.exec(ref.trim())
+  if (!m) return null
+  const slug = m[1]
+  try {
+    const referrer = await getEmailBySlug(env, slug)
+    if (!referrer) return null
+    if (referrer === signupEmail) return null
+    return referrer
+  } catch (err) {
+    console.error('resolveReferrer:', err)
+    return null
+  }
 }
 
 const constantTimeEqual = (a, b) => {
@@ -217,7 +240,7 @@ app.post('/auth/verify-code', async (c) => {
   } catch {
     body = {}
   }
-  const { email, code } = body || {}
+  const { email, code, ref } = body || {}
   if (typeof email !== 'string' || typeof code !== 'string') {
     return c.json({ ok: false }, 400)
   }
@@ -240,13 +263,19 @@ app.post('/auth/verify-code', async (c) => {
     // If a legacy raw-string tier exists, migrate it; otherwise create a
     // fresh `tern` record. The legacy-fallback inside `getTier` keeps
     // existing callers green during the migration window.
+    //
+    // Referral attribution: when `ref` is present on a brand-new user, look
+    // up the referrer's email by slug and stamp `referredBy`. Phase 1 is
+    // data-only — no bonus is granted here. Bonus mechanics ship in a
+    // follow-on track. We deliberately do NOT block signup on a bad ref.
     if (env.TIERS_KV) {
       try {
         const existing = await getUser(env, email)
         if (!existing) {
           const migrated = await migrateLegacy(env, email)
           if (!migrated) {
-            await upsertUser(env, freshUser(email))
+            const referredBy = await resolveReferrer(env, email.toLowerCase(), ref)
+            await upsertUser(env, freshUser(email, { referredBy }))
           }
         }
       } catch (err) {

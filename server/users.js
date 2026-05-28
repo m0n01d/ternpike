@@ -6,6 +6,11 @@
 //   type UserRecord = {
 //     createdAt: string,            // ISO
 //     email: string,                // PK, lowercased
+//     referredBy: string | null,    // lowercased email of the referrer, set
+//                                   // on first signup if `ref` was present
+//                                   // on /auth/verify-code. Phase 1: data only,
+//                                   // no bonus granted. Phase 2 reads this to
+//                                   // issue Stripe coupons.
 //     stripeCustomerId: string | null,
 //     subscriptionId: string | null,
 //     subscriptionStatus:
@@ -30,6 +35,12 @@
 // lives in a Durable Object (`server/trailblazerSlots.js`); the per-user
 // `trailblazerNumber` here is the authoritative record of which slot a
 // given email holds, set when /confirm succeeds in the DO.
+//
+// Slug→email index: `upsertUser` also writes a paired `slug:<slug>` key
+// pointing at the lowercased email. `slug` is `'user-' + shortHash(email)`
+// where `shortHash` is FNV-1a 32-bit hex, sliced to 4 chars — the same
+// algorithm as `src/Data/UserId.elm` `shortHash`. The two implementations
+// MUST stay byte-for-byte aligned; `users.test.js` pins known hashes.
 
 const VALID_TIERS = new Set(['tern', 'osprey', 'trailblazer'])
 
@@ -42,21 +53,68 @@ const VALID_SUBSCRIPTION_STATUSES = new Set([
 
 const userKey = (email) => 'user:' + email.toLowerCase()
 
+const slugKey = (slug) => 'slug:' + slug
+
+/**
+ * FNV-1a 32-bit hash sliced to a 4-char lowercase hex string. Replicates
+ * `src/Data/UserId.elm` `shortHash` byte-for-byte, including the Elm impl's
+ * use of imprecise Float multiplication followed by `modBy 4294967296`.
+ *
+ * Used by `slugFor` to build the QR/referral slug from an email. Drift
+ * between this and the Elm side would break referral attribution silently
+ * — the test in `users.test.js` pins known inputs to catch that.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+export function shortHash(s) {
+  const FNV_OFFSET = 2166136261
+  const FNV_PRIME = 16777619
+  let hash = FNV_OFFSET
+  for (let i = 0; i < s.length; i++) {
+    const xored = (hash ^ s.charCodeAt(i)) | 0
+    const product = xored * FNV_PRIME
+    let m = product % 4294967296
+    if (m < 0) m += 4294967296
+    hash = m
+  }
+  const hex = Math.floor(hash).toString(16).padStart(8, '0')
+  return hex.slice(0, 4)
+}
+
+/**
+ * Personal QR slug for an email: `'user-' + shortHash(email)`. Matches
+ * the Elm-side `"user-" ++ UserId.shortHash userId` used by ShareModal.
+ *
+ * @param {string} email
+ * @returns {string}
+ */
+export function slugFor(email) {
+  return 'user-' + shortHash(email.toLowerCase())
+}
+
 /**
  * Build a fresh `UserRecord` for a newly-seen email. `tier` defaults to
  * `'tern'` (free) unless the caller passes a legacy override (used by
- * `migrateLegacy`).
+ * `migrateLegacy`). `referredBy` is `null` unless the caller passes the
+ * referrer's lowercased email — see `/auth/verify-code` for the resolve
+ * + self-referral guard.
  *
  * @param {string} email
- * @param {{ tier?: string }} [opts]
+ * @param {{ referredBy?: string|null, tier?: string }} [opts]
  * @returns {object}
  */
 export function freshUser(email, opts = {}) {
   const now = new Date().toISOString()
   const tier = VALID_TIERS.has(opts.tier) ? opts.tier : 'tern'
+  const referredBy =
+    typeof opts.referredBy === 'string' && opts.referredBy.includes('@')
+      ? opts.referredBy.toLowerCase()
+      : null
   return {
     createdAt: now,
     email: email.toLowerCase(),
+    referredBy,
     stripeCustomerId: null,
     subscriptionId: null,
     subscriptionStatus: null,
@@ -126,9 +184,17 @@ export async function upsertUser(env, record) {
   if (existing?.tier === 'trailblazer' && record.tier !== 'trailblazer') {
     throw new Error('upsertUser: refusing to downgrade trailblazer')
   }
+  // `referredBy` is write-once. If a record already exists with a value,
+  // preserve it — the attribution captured at first signup is canonical.
+  const referredBy =
+    existing?.referredBy ??
+    (typeof record.referredBy === 'string' && record.referredBy.includes('@')
+      ? record.referredBy.toLowerCase()
+      : null)
   const next = {
     createdAt: existing?.createdAt || record.createdAt || new Date().toISOString(),
     email,
+    referredBy,
     stripeCustomerId: record.stripeCustomerId ?? null,
     subscriptionId: record.subscriptionId ?? null,
     subscriptionStatus: record.subscriptionStatus ?? null,
@@ -138,7 +204,28 @@ export async function upsertUser(env, record) {
     updatedAt: new Date().toISOString(),
   }
   await env.TIERS_KV.put(userKey(email), JSON.stringify(next))
+  // Slug→email reverse index. Written on every upsert (idempotent — the
+  // mapping is deterministic from email) so existing users predating
+  // this index get backfilled the next time anything touches their
+  // record (billing webhook, /me refresh, etc.).
+  await env.TIERS_KV.put(slugKey(slugFor(email)), email)
   return next
+}
+
+/**
+ * Reverse-lookup an email from its QR/referral slug. Returns the
+ * lowercased email on hit, `null` on miss. Slug must already be
+ * normalized (lowercase, `^[a-z0-9-]{1,32}$`).
+ *
+ * @param {object} env
+ * @param {string} slug
+ * @returns {Promise<string|null>}
+ */
+export async function getEmailBySlug(env, slug) {
+  if (!env.TIERS_KV) return null
+  if (typeof slug !== 'string' || slug.length === 0) return null
+  const email = await env.TIERS_KV.get(slugKey(slug))
+  return email && email.includes('@') ? email : null
 }
 
 /**
