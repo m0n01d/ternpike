@@ -52,6 +52,7 @@ import Data.TripId exposing (TripId)
 import Data.UserId exposing (UserId)
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
+import List.Extra
 import Set
 import Time
 
@@ -200,15 +201,15 @@ medianAmount entries =
         Money.zero
 
     else if remainderBy 2 n == 1 then
-        amounts |> List.drop mid |> List.head |> Maybe.withDefault Money.zero
+        List.Extra.getAt mid amounts |> Maybe.withDefault Money.zero
 
     else
         let
             a =
-                amounts |> List.drop (mid - 1) |> List.head |> Maybe.withDefault Money.zero
+                List.Extra.getAt (mid - 1) amounts |> Maybe.withDefault Money.zero
 
             b =
-                amounts |> List.drop mid |> List.head |> Maybe.withDefault Money.zero
+                List.Extra.getAt mid amounts |> Maybe.withDefault Money.zero
         in
         Money.fromCents ((Money.toCents a + Money.toCents b) // 2)
 
@@ -294,15 +295,15 @@ tripMedian totals =
         Money.zero
 
     else if remainderBy 2 n == 1 then
-        sorted |> List.drop mid |> List.head |> Maybe.withDefault Money.zero
+        List.Extra.getAt mid sorted |> Maybe.withDefault Money.zero
 
     else
         let
             a =
-                sorted |> List.drop (mid - 1) |> List.head |> Maybe.withDefault Money.zero
+                List.Extra.getAt (mid - 1) sorted |> Maybe.withDefault Money.zero
 
             b =
-                sorted |> List.drop mid |> List.head |> Maybe.withDefault Money.zero
+                List.Extra.getAt mid sorted |> Maybe.withDefault Money.zero
         in
         Money.fromCents ((Money.toCents a + Money.toCents b) // 2)
 

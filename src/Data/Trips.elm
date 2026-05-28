@@ -34,6 +34,7 @@ ends in either `TripsLoaded Trips` or one of the empty/failed branches.
 import Data.Trip exposing (Trip)
 import Data.TripId as TripId exposing (TripId)
 import Dict exposing (Dict)
+import List.Extra
 
 
 
@@ -126,7 +127,7 @@ selectTrip newId trips =
         all =
             allTrips trips
     in
-    case List.filter (\t -> t.id == newId) all |> List.head of
+    case List.Extra.find (\t -> t.id == newId) all of
         Just chosen ->
             Trips chosen (List.filter (\t -> t.id /= newId) all)
 
