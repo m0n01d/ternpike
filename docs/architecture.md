@@ -1112,7 +1112,7 @@ The user-facing entry point to upgrade / manage subscription is the
   - **Tern** — three upgrade CTAs: "Osprey — $2.99 / mo",
     "Osprey yearly — $24 / yr (save $12)", and a Trailblazer button
     with a live "N of 500 left" countdown driven by
-    `AuthState.trailblazerAvailable`. Buttons fire
+    `AuthState.trailblazerStatus` (a `RemoteData Http.Error TrailblazerStatus`). Buttons fire
     `BillingCheckoutClicked plan` where `plan` is the wire-form name
     (`"osprey_monthly" | "osprey_yearly" | "trailblazer"`).
   - **Osprey** — only "Manage billing", which fires
@@ -1142,7 +1142,7 @@ All Stripe state is server-authoritative. The three endpoints (in
   - `GET /billing/trailblazer-status` — public, cached 30s. Used by
     the Tern upgrade button's "N of 500 left" countdown. Fetched
     lazily on navigation to `/settings` in `fetchesForRoute` and
-    cached on `AuthState.trailblazerAvailable` so tab-flicking doesn't
+    cached on `AuthState.trailblazerStatus` so tab-flicking doesn't
     re-fetch.
 
 ### Wire-format-fidelity rules

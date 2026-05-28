@@ -372,8 +372,8 @@ type alias PlanProps =
     , billingPortal : RemoteData Http.Error ()
     , subscriptionStatus : Maybe SubscriptionStatus.SubscriptionStatus
     , tier : Tier
-    , trailblazerAvailable : Maybe Int
     , trailblazerNumber : Maybe Int
+    , trailblazerStatus : RemoteData Http.Error Http.Billing.TrailblazerStatus
     }
 
 
@@ -386,8 +386,8 @@ planPropsFromAuth as_ =
     , billingPortal = as_.billingPortal
     , subscriptionStatus = as_.subscriptionStatus
     , tier = as_.tier
-    , trailblazerAvailable = as_.trailblazerAvailable
     , trailblazerNumber = as_.trailblazerNumber
+    , trailblazerStatus = as_.trailblazerStatus
     }
 
 
@@ -613,32 +613,42 @@ viewTrailblazerButton props =
     let
         checkoutBusy =
             props.billingCheckout == RemoteData.Loading
+
+        disabledButton label =
+            Html.button
+                [ Html.Attributes.type_ "button"
+                , Html.Attributes.disabled True
+                , Html.Attributes.class "bg-cream-deep text-muted border border-tan font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-not-allowed"
+                ]
+                [ Html.text label ]
     in
-    case props.trailblazerAvailable of
-        Nothing ->
-            Html.button
-                [ Html.Attributes.type_ "button"
-                , Html.Attributes.disabled True
-                , Html.Attributes.class "bg-cream-deep text-muted border border-tan font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-not-allowed"
-                ]
-                [ Html.text "Loading…" ]
+    case props.trailblazerStatus of
+        RemoteData.NotAsked ->
+            disabledButton "Loading…"
 
-        Just 0 ->
-            Html.button
-                [ Html.Attributes.type_ "button"
-                , Html.Attributes.disabled True
-                , Html.Attributes.class "bg-cream-deep text-muted border border-tan font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg cursor-not-allowed"
-                ]
-                [ Html.text "Trailblazer — Sold out" ]
+        RemoteData.Loading ->
+            disabledButton "Loading…"
 
-        Just n ->
-            viewCheckoutButton
-                { busy = checkoutBusy
-                , disabled = checkoutBusy
-                , label = "Become a Trailblazer — $79 (" ++ String.fromInt n ++ " of 500 left)"
-                , plan = "trailblazer"
-                , style = StyleSecondary
-                }
+        RemoteData.Failure _ ->
+            disabledButton "Couldn't load remaining count"
+
+        RemoteData.Success status ->
+            if status.available == 0 then
+                disabledButton "Trailblazer — Sold out"
+
+            else
+                viewCheckoutButton
+                    { busy = checkoutBusy
+                    , disabled = checkoutBusy
+                    , label =
+                        "Become a Trailblazer — $79 ("
+                            ++ String.fromInt status.available
+                            ++ " of "
+                            ++ String.fromInt status.total
+                            ++ " left)"
+                    , plan = "trailblazer"
+                    , style = StyleSecondary
+                    }
 
 
 viewSubscriptionChip : Maybe SubscriptionStatus.SubscriptionStatus -> Html Msg

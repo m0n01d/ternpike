@@ -15,6 +15,7 @@ the DOM."
 import Data.SubscriptionStatus as SubscriptionStatus
 import Data.Tier exposing (Tier(..))
 import Expect
+import Http
 import Http.Billing
 import Pages.Settings
 import RemoteData
@@ -31,7 +32,7 @@ suite =
         [ describe "Tern"
             [ test "renders three upgrade CTAs" <|
                 \() ->
-                    propsFor { tier = Tern, trailblazerAvailable = Just 412 }
+                    propsFor { tier = Tern, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.has
@@ -41,21 +42,21 @@ suite =
                             ]
             , test "Trailblazer button is disabled with Sold out copy when available == 0" <|
                 \() ->
-                    propsFor { tier = Tern, trailblazerAvailable = Just 0 }
+                    propsFor { tier = Tern, trailblazerStatus = RemoteData.Success { available = 0, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.has
                             [ Test.Html.Selector.text "Trailblazer — Sold out" ]
             , test "Trailblazer button shows Loading… while status is in flight (Nothing)" <|
                 \() ->
-                    propsFor { tier = Tern, trailblazerAvailable = Nothing }
+                    propsFor { tier = Tern, trailblazerStatus = RemoteData.NotAsked }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.has
                             [ Test.Html.Selector.text "Loading…" ]
             , test "clicking the monthly button fires BillingCheckoutClicked osprey_monthly" <|
                 \() ->
-                    propsFor { tier = Tern, trailblazerAvailable = Just 412 }
+                    propsFor { tier = Tern, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.findAll
@@ -68,7 +69,7 @@ suite =
                         |> Test.Html.Event.expect (AuthMsg (BillingCheckoutClicked "osprey_monthly"))
             , test "clicking the yearly button fires BillingCheckoutClicked osprey_yearly" <|
                 \() ->
-                    propsFor { tier = Tern, trailblazerAvailable = Just 412 }
+                    propsFor { tier = Tern, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.findAll
@@ -81,7 +82,7 @@ suite =
                         |> Test.Html.Event.expect (AuthMsg (BillingCheckoutClicked "osprey_yearly"))
             , test "clicking the Trailblazer button fires BillingCheckoutClicked trailblazer" <|
                 \() ->
-                    propsFor { tier = Tern, trailblazerAvailable = Just 412 }
+                    propsFor { tier = Tern, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.findAll
@@ -96,7 +97,7 @@ suite =
                 \() ->
                     let
                         props =
-                            propsFor { tier = Tern, trailblazerAvailable = Just 0 }
+                            propsFor { tier = Tern, trailblazerStatus = RemoteData.Success { available = 0, total = 500 } }
                     in
                     { props
                         | billingCheckout = RemoteData.Failure Http.Billing.CheckoutSoldOut
@@ -109,21 +110,21 @@ suite =
         , describe "Osprey"
             [ test "renders the Manage billing button" <|
                 \() ->
-                    propsFor { tier = Osprey, trailblazerAvailable = Just 412 }
+                    propsFor { tier = Osprey, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.has
                             [ Test.Html.Selector.text "Manage billing" ]
             , test "doesn't render any upgrade CTAs" <|
                 \() ->
-                    propsFor { tier = Osprey, trailblazerAvailable = Just 412 }
+                    propsFor { tier = Osprey, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.hasNot
                             [ Test.Html.Selector.text "Osprey — $2.99 / mo" ]
             , test "clicking Manage billing fires BillingPortalClicked" <|
                 \() ->
-                    propsFor { tier = Osprey, trailblazerAvailable = Just 412 }
+                    propsFor { tier = Osprey, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.find
@@ -137,7 +138,7 @@ suite =
                 \() ->
                     let
                         props =
-                            propsFor { tier = Osprey, trailblazerAvailable = Just 412 }
+                            propsFor { tier = Osprey, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                     in
                     { props | subscriptionStatus = Just SubscriptionStatus.PastDue }
                         |> Pages.Settings.viewPlanSection
@@ -147,7 +148,7 @@ suite =
                 \() ->
                     let
                         props =
-                            propsFor { tier = Osprey, trailblazerAvailable = Just 412 }
+                            propsFor { tier = Osprey, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                     in
                     { props | subscriptionStatus = Just SubscriptionStatus.Active }
                         |> Pages.Settings.viewPlanSection
@@ -159,7 +160,7 @@ suite =
                 \() ->
                     let
                         props =
-                            propsFor { tier = Trailblazer, trailblazerAvailable = Just 0 }
+                            propsFor { tier = Trailblazer, trailblazerStatus = RemoteData.Success { available = 0, total = 500 } }
                     in
                     { props | trailblazerNumber = Just 17 }
                         |> Pages.Settings.viewPlanSection
@@ -168,14 +169,14 @@ suite =
                             [ Test.Html.Selector.text "Trailblazer #17 (of 500)" ]
             , test "renders the View receipts / update card button" <|
                 \() ->
-                    propsFor { tier = Trailblazer, trailblazerAvailable = Just 0 }
+                    propsFor { tier = Trailblazer, trailblazerStatus = RemoteData.Success { available = 0, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.has
                             [ Test.Html.Selector.text "View receipts / update card" ]
             , test "clicking View receipts fires BillingPortalClicked" <|
                 \() ->
-                    propsFor { tier = Trailblazer, trailblazerAvailable = Just 0 }
+                    propsFor { tier = Trailblazer, trailblazerStatus = RemoteData.Success { available = 0, total = 500 } }
                         |> Pages.Settings.viewPlanSection
                         |> Test.Html.Query.fromHtml
                         |> Test.Html.Query.find
@@ -191,7 +192,7 @@ suite =
                 \() ->
                     let
                         props =
-                            propsFor { tier = Tern, trailblazerAvailable = Just 412 }
+                            propsFor { tier = Tern, trailblazerStatus = RemoteData.Success { available = 412, total = 500 } }
                     in
                     { props | billingCheckout = RemoteData.Loading }
                         |> Pages.Settings.viewPlanSection
@@ -213,12 +214,12 @@ suite =
         ]
 
 
-propsFor : { tier : Tier, trailblazerAvailable : Maybe Int } -> Pages.Settings.PlanProps
-propsFor { tier, trailblazerAvailable } =
+propsFor : { tier : Tier, trailblazerStatus : RemoteData.RemoteData Http.Error Http.Billing.TrailblazerStatus } -> Pages.Settings.PlanProps
+propsFor { tier, trailblazerStatus } =
     { billingCheckout = RemoteData.NotAsked
     , billingPortal = RemoteData.NotAsked
     , subscriptionStatus = Nothing
     , tier = tier
-    , trailblazerAvailable = trailblazerAvailable
     , trailblazerNumber = Nothing
+    , trailblazerStatus = trailblazerStatus
     }
