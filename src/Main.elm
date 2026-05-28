@@ -111,6 +111,7 @@ import File
 import Helpers
 import Html exposing (Html)
 import Html.Attributes
+import Html.Extra
 import Http
 import Http.Billing
 import Http.GeocodeApi
@@ -118,6 +119,8 @@ import Http.Me
 import Http.SharedTripApi
 import Json.Decode as D
 import Json.Encode as E
+import List.Extra
+import Maybe.Extra
 import Pages.Add
 import Pages.Guest exposing (viewGuest)
 import Pages.JoinSharedTrip
@@ -1523,7 +1526,7 @@ stripCodeFence s =
             |> String.lines
             |> List.drop 1
             |> (\lines ->
-                    if List.reverse lines |> List.head |> Maybe.map (String.startsWith "```") |> Maybe.withDefault False then
+                    if List.Extra.last lines |> Maybe.Extra.unwrap False (String.startsWith "```") then
                         List.reverse lines |> List.drop 1 |> List.reverse
 
                     else
@@ -1864,7 +1867,7 @@ updateShared msg model =
                             AnthropicKey.fromInput s
                     in
                     ( GuestModel { gs | session = mapGuestConfig (\c -> { c | anthropicKey = newKey }) gs.session }
-                    , saveStorage { key = "anthropic_key", value = newKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "" }
+                    , saveStorage { key = "anthropic_key", value = Maybe.Extra.unwrap "" AnthropicKey.toHeader newKey }
                     )
 
                 AuthModel as_ ->
@@ -1884,7 +1887,7 @@ updateShared msg model =
                                     False
                     in
                     ( AuthModel { as_ | config = { cfg | anthropicKey = newKey }, showByoKeyInput = newShowInput }
-                    , saveStorage { key = "anthropic_key", value = newKey |> Maybe.map AnthropicKey.toHeader |> Maybe.withDefault "" }
+                    , saveStorage { key = "anthropic_key", value = Maybe.Extra.unwrap "" AnthropicKey.toHeader newKey }
                     )
 
         LinkClicked (Browser.Internal url) ->
@@ -4322,7 +4325,7 @@ viewDemoBanner demoMode =
             ]
 
     else
-        Html.text ""
+        Html.Extra.nothing
 
 
 viewAuth : AuthState -> Html Msg
@@ -4374,12 +4377,7 @@ viewAuth as_ =
                 }
             ]
         , UI.Layout.viewBottomNav as_
-        , case as_.confirmDeleteTrip of
-            Just trip ->
-                UI.Layout.viewDeleteConfirmModal trip
-
-            Nothing ->
-                Html.text ""
+        , Html.Extra.viewMaybe UI.Layout.viewDeleteConfirmModal as_.confirmDeleteTrip
         , case ( as_.movePicker, as_.trips ) of
             ( Just expense, TripsLoaded loadedTrips ) ->
                 UI.TripPicker.viewMove
@@ -4389,7 +4387,7 @@ viewAuth as_ =
                     }
 
             _ ->
-                Html.text ""
+                Html.Extra.nothing
         , Pages.Settings.SharedTrips.viewModal as_
         , UI.ShareModal.view as_
         , UI.TripFormModal.view as_
@@ -4418,13 +4416,13 @@ viewBillingBannerForRoute as_ route =
                                 }
 
                         Nothing ->
-                            Html.text ""
+                            Html.Extra.nothing
 
                 Nothing ->
-                    Html.text ""
+                    Html.Extra.nothing
 
         _ ->
-            Html.text ""
+            Html.Extra.nothing
 
 
 
