@@ -32,7 +32,17 @@ config =
         , NoUnused.CustomTypeConstructorArgs.rule
         , NoUnused.CustomTypeConstructors.rule []
         , NoUnused.Dependencies.rule
+
+        -- Data.Stats and Data.SubscriptionStatus expose pure helpers that are
+        -- used only internally (own decoders / bin builders) but must stay
+        -- exposed so elm-verify-examples can run their `-->` doc examples.
+        -- NoUnused.Exports can't see the generated tests (tests/ is ignored),
+        -- so it flags them; suppress the rule for just those two modules.
         , NoUnused.Exports.rule
+            |> Rule.ignoreErrorsForFiles
+                [ "src/Data/Stats.elm"
+                , "src/Data/SubscriptionStatus.elm"
+                ]
         , NoUnused.Modules.rule
         , NoUnused.Parameters.rule
         , NoUnused.Patterns.rule
