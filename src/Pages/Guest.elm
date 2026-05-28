@@ -5,6 +5,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Pages.Settings
+import RemoteData exposing (RemoteData)
 import Types exposing (GuestMsg_(..), GuestState, Msg(..))
 import UI.Button
 import UI.Card
@@ -70,10 +71,10 @@ viewFormCard gs =
             viewEmailForm email { busy = True, label = "Sending…" }
 
         AwaitingCode email ->
-            viewCodeForm email gs.codeInput { busy = False, label = "Verify code" }
+            viewCodeForm email gs.codeInput gs.resendStatus { busy = False, label = "Verify code" }
 
         VerifyingCode email code ->
-            viewCodeForm email code { busy = True, label = "Verifying…" }
+            viewCodeForm email code gs.resendStatus { busy = True, label = "Verifying…" }
 
 
 viewEmailForm : String -> { busy : Bool, label : String } -> Html Msg
@@ -114,8 +115,8 @@ viewEmailForm value { busy, label } =
         ]
 
 
-viewCodeForm : String -> String -> { busy : Bool, label : String } -> Html Msg
-viewCodeForm email code { busy, label } =
+viewCodeForm : String -> String -> RemoteData e () -> { busy : Bool, label : String } -> Html Msg
+viewCodeForm email code resendStatus { busy, label } =
     let
         formAttrs =
             Html.Attributes.class "w-full"
@@ -150,8 +151,50 @@ viewCodeForm email code { busy, label } =
 
               else
                 UI.Button.primary { label = label, onClick = GuestMsg SubmitCode }
+            , viewResendRow resendStatus busy
             ]
         ]
+
+
+viewResendRow : RemoteData e () -> Bool -> Html Msg
+viewResendRow resendStatus verifyBusy =
+    let
+        disabledButton label =
+            Html.button
+                [ Html.Attributes.type_ "button"
+                , Html.Attributes.disabled True
+                , Html.Attributes.class "bg-transparent border border-tan/60 text-moss/60 font-mono uppercase tracking-widest text-xs px-4 py-2 rounded-lg cursor-not-allowed"
+                ]
+                [ Html.text label ]
+
+        idleButton =
+            if verifyBusy then
+                disabledButton "Resend code"
+
+            else
+                UI.Button.ghost { label = "Resend code", onClick = GuestMsg ResendCode }
+
+        successNotice =
+            Html.p
+                [ Html.Attributes.class "text-moss text-xs font-mono uppercase tracking-wide mt-3" ]
+                [ Html.text "New code sent — check your email." ]
+
+        ( button, notice ) =
+            case resendStatus of
+                RemoteData.NotAsked ->
+                    ( idleButton, Html.text "" )
+
+                RemoteData.Loading ->
+                    ( disabledButton "Sending…", Html.text "" )
+
+                RemoteData.Failure _ ->
+                    ( idleButton, Html.text "" )
+
+                RemoteData.Success _ ->
+                    ( idleButton, successNotice )
+    in
+    Html.div [ Html.Attributes.class "mt-4 flex flex-col items-start" ]
+        [ button, notice ]
 
 
 viewErrorChip : GuestState -> Html Msg
@@ -167,8 +210,11 @@ viewErrorChip gs =
             chip err
 
         Nothing ->
-            case gs.session.reason of
-                SessionExpired ->
+            case ( gs.session.reason, gs.resendStatus ) of
+                ( _, RemoteData.Failure _ ) ->
+                    chip "Could not resend code. Try again."
+
+                ( SessionExpired, _ ) ->
                     chip "Session expired — sign in to continue."
 
                 _ ->

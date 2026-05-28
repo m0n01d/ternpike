@@ -758,6 +758,7 @@ Html.div [ Html.Attributes.class "tw-flex" ] [ Html.text "hello world" ]
 
 - Use semantic markup — only `<button>` elements get click handlers.
 - Aggressively refactor modules you touch; clean up tech debt as you go.
+- **`RemoteData` values are pattern-matched once, exhaustively.** When a view (or update branch) consumes a `RemoteData e a`, write a single `case … of` that handles `NotAsked`, `Loading`, `Failure _`, and `Success _` — even if some branches return the same value. No wildcard `_ ->`, no `== RemoteData.Loading` equality checks layered on top of a separate `case` for the label, no `case` for the button plus another `case` for the notice. Return a tuple (or whatever the surrounding code needs) from the one match. Adding a future state to `RemoteData` should be a compile error, not a quiet default. PR #298 (the resend-code button) was the canonical "don't" — three matches plus an `==` check, all on the same value — fixed at review time into one tuple-returning case.
 
 ## elm-review
 

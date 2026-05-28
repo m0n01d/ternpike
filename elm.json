@@ -19,6 +19,7 @@
             "elm/url": "1.0.0",
             "ianmackenzie/elm-units": "2.10.0",
             "justinmimbs/date": "4.1.0",
+            "krisajenkins/remotedata": "6.1.0",
             "terezka/elm-charts": "5.0.0"
         },
         "indirect": {
