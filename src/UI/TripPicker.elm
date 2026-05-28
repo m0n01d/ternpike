@@ -17,6 +17,7 @@ import Data.Trip exposing (Trip)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Types exposing (AuthMsg_(..), Msg(..))
 import UI.Avatar
 import UI.DateView
@@ -72,24 +73,20 @@ viewCandidate expense flocks trip =
         , Html.Events.onClick (AuthMsg (MoveEntry expense trip.id))
         ]
         [ Html.div [ Html.Attributes.class "min-w-0 flex-1" ]
-            [ case maybeFlock of
-                Just flock ->
+            [ Html.Extra.viewMaybe
+                (\flock ->
                     Html.div [ Html.Attributes.class "mb-1" ]
                         [ UI.SharedTripBadge.view flock ]
-
-                Nothing ->
-                    Html.text ""
+                )
+                maybeFlock
             , Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
                 [ Html.text trip.name ]
             , Html.div [ Html.Attributes.class "flex items-center gap-2 mt-1" ]
                 [ Html.span [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-wider text-moss" ]
                     (dateRange trip)
-                , case maybeFlock of
-                    Just flock ->
-                        UI.Avatar.viewStack (Data.SharedTrip.members flock)
-
-                    Nothing ->
-                        Html.text ""
+                , Html.Extra.viewMaybe
+                    (\flock -> UI.Avatar.viewStack (Data.SharedTrip.members flock))
+                    maybeFlock
                 ]
             ]
         , Html.span [ Html.Attributes.class "text-rust shrink-0" ]

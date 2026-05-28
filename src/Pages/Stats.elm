@@ -17,6 +17,9 @@ import Dict
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
+import List.Extra
+import Maybe.Extra
 import Routing
 import Set
 import Svg
@@ -368,46 +371,37 @@ viewBodyReady model entries =
                     )
                 ]
             ]
-        , if List.isEmpty entries then
-            Html.text ""
-
-          else
-            Html.div []
+        , Html.Extra.viewIf (not (List.isEmpty entries))
+            (Html.div []
                 [ UI.Rule.dashedRule
                 , UI.Rule.kicker "TOP CATEGORIES"
                 , UI.Card.subCard
                     [ viewCategoryList entries ]
                 ]
-        , if numDays > 1 then
-            let
+            )
+        , Html.Extra.viewIf (numDays > 1)
+            (let
                 resolved =
                     Maybe.withDefault (StatsGranularity.fromSpan (Stats.spanDays primEntries))
                         model.statsGranularity
-            in
-            Html.div []
+             in
+             Html.div []
                 [ UI.Rule.dashedRule
                 , UI.Rule.kicker (StatsGranularity.kicker resolved)
                 , UI.Card.subCard
                     [ viewDailyChart resolved model.statsHover.dailyBars primEntries ]
                 ]
-
-          else
-            Html.text ""
-        , if numDays > 1 then
-            Html.div []
+            )
+        , Html.Extra.viewIf (numDays > 1)
+            (Html.div []
                 [ UI.Rule.dashedRule
                 , UI.Rule.kicker "CUMULATIVE SPEND"
                 , UI.Card.subCard
                     [ viewCumulativeChart model.statsHover.cumulativePoints entries ]
                 ]
-
-          else
-            Html.text ""
-        , if List.isEmpty top5 then
-            Html.text ""
-
-          else
-            Html.div []
+            )
+        , Html.Extra.viewIf (not (List.isEmpty top5))
+            (Html.div []
                 [ UI.Rule.dashedRule
                 , UI.Rule.kicker "TOP 5 LARGEST"
                 , UI.Card.subCard
@@ -448,6 +442,7 @@ viewBodyReady model entries =
                         )
                     ]
                 ]
+            )
         ]
 
 
@@ -485,11 +480,8 @@ viewCategoryList entries =
                 |> List.maximum
                 |> Maybe.withDefault 1
     in
-    if List.isEmpty rows then
-        Html.text ""
-
-    else
-        Html.div []
+    Html.Extra.viewIf (not (List.isEmpty rows))
+        (Html.div []
             (List.indexedMap
                 (\i r ->
                     categoryRow
@@ -500,6 +492,7 @@ viewCategoryList entries =
                 )
                 rows
             )
+        )
 
 
 categoryRow :
@@ -577,7 +570,7 @@ viewDailyChart resolved hovered primEntries =
             List.head sortedIsos |> Maybe.withDefault ""
 
         lastDate =
-            sortedIsos |> List.reverse |> List.head |> Maybe.withDefault ""
+            List.Extra.last sortedIsos |> Maybe.withDefault ""
 
         days : List DailyDay
         days =
@@ -703,17 +696,13 @@ viewCumulativeChart hovered entries =
             Stats.cumulativePoints (toPrimEntries entries)
 
         firstDate =
-            List.head points |> Maybe.map .date |> Maybe.withDefault ""
+            Maybe.Extra.unwrap "" .date (List.head points)
 
         lastDate =
-            points |> List.reverse |> List.head |> Maybe.map .date |> Maybe.withDefault ""
+            List.Extra.last points |> Maybe.Extra.unwrap "" .date
 
         finalTotal =
-            points
-                |> List.reverse
-                |> List.head
-                |> Maybe.map .y
-                |> Maybe.withDefault 0
+            List.Extra.last points |> Maybe.Extra.unwrap 0 .y
     in
     Html.div []
         [ Html.div [ Html.Attributes.class "flex items-center justify-end mb-1" ]
