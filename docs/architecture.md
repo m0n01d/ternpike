@@ -897,7 +897,11 @@ The Elm-side types for the multi-DB world live in four modules:
 - `Data.SharedTrips` — `Dict String SharedTrip` keyed by `SharedTripId.toString`,
   lives at `AuthState.sharedTrips`. `ownedBy` / `joinedBy` filter by user.
 - `Data.SharedTripUi` — UI state for the shared-trip settings modals
-  (`SharedTripUiState`), lives at `AuthState.sharedTripUi`.
+  (`SharedTripUiState`), lives at `AuthState.sharedTripUi`. Each
+  `SharedTripModal` variant carries its own
+  `request : RemoteData Http.Error <Response>` so the create / invite /
+  leave / transfer HTTP calls have independent busy + error state — no
+  shared `inFlight : Bool` at the parent level.
 
 `Trip.flockId : Maybe SharedTripId` is in-memory only: `Trip.encoder`
 deliberately omits it and `Trip.decoder` only reads it if present.

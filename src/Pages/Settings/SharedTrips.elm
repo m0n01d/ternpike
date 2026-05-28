@@ -10,7 +10,10 @@ into a full email list.
 
 Modals (create / invite / transfer / leave-confirm) are rendered
 separately by `viewModal` — they sit at the page root rather than
-inside the card so they overlay everything.
+inside the card so they overlay everything. Each modal carries its
+own `request : RemoteData Http.Error _` so the button busy state +
+error chip are derived from one exhaustive `case` per CLAUDE.md's
+RemoteData rule.
 
 -}
 
@@ -22,6 +25,8 @@ import Data.UserId as UserId exposing (UserId)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Http
+import RemoteData exposing (RemoteData)
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Avatar
 import UI.BillingBanner
@@ -196,7 +201,7 @@ viewModal as_ =
         SharedTripUi.NoModal ->
             Html.text ""
 
-        SharedTripUi.CreateModal { error, name } ->
+        SharedTripUi.CreateModal { name, request } ->
             modalShell "New shared trip"
                 [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
                     [ Html.text "Give your shared trip a name. You can invite people once it's created." ]
@@ -210,15 +215,15 @@ viewModal as_ =
                         ]
                         []
                     )
-                , viewError error
-                , modalActions
-                    { confirm = ( "Share a trip", AuthMsg SubmitCreateSharedTrip )
-                    , cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
-                    , inFlight = as_.sharedTripUi.inFlight
+                , viewModalActions
+                    { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
+                    , confirmLabel = "Share a trip"
+                    , confirmMsg = AuthMsg SubmitCreateSharedTrip
+                    , request = RemoteData.map (\_ -> ()) request
                     }
                 ]
 
-        SharedTripUi.InviteModal _ { email, error } ->
+        SharedTripUi.InviteModal _ { email, request } ->
             modalShell "Invite to this trip"
                 [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
                     [ Html.text "We'll email them a one-click link to accept." ]
@@ -232,15 +237,15 @@ viewModal as_ =
                         ]
                         []
                     )
-                , viewError error
-                , modalActions
-                    { confirm = ( "Send invite", AuthMsg SubmitInvite )
-                    , cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
-                    , inFlight = as_.sharedTripUi.inFlight
+                , viewModalActions
+                    { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
+                    , confirmLabel = "Send invite"
+                    , confirmMsg = AuthMsg SubmitInvite
+                    , request = request
                     }
                 ]
 
-        SharedTripUi.LeaveConfirmModal sharedTripId { error } ->
+        SharedTripUi.LeaveConfirmModal sharedTripId { request } ->
             let
                 sharedTripName =
                     SharedTrips.get sharedTripId as_.sharedTrips
@@ -255,15 +260,15 @@ viewModal as_ =
                             ++ " shared trip? You'll lose access to its trips on this device, but the shared trip keeps the data."
                         )
                     ]
-                , viewError error
-                , modalActions
-                    { confirm = ( "Leave", AuthMsg (LeaveSharedTripConfirmed sharedTripId) )
-                    , cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
-                    , inFlight = as_.sharedTripUi.inFlight
+                , viewModalActions
+                    { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
+                    , confirmLabel = "Leave"
+                    , confirmMsg = AuthMsg (LeaveSharedTripConfirmed sharedTripId)
+                    , request = request
                     }
                 ]
 
-        SharedTripUi.TransferModal sharedTripId { error, target } ->
+        SharedTripUi.TransferModal sharedTripId { request, target } ->
             let
                 memberOptions =
                     SharedTrips.get sharedTripId as_.sharedTrips
@@ -301,11 +306,11 @@ viewModal as_ =
                                 memberOptions
                         )
                     )
-                , viewError error
-                , modalActions
-                    { confirm = ( "Transfer", AuthMsg SubmitTransfer )
-                    , cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
-                    , inFlight = as_.sharedTripUi.inFlight
+                , viewModalActions
+                    { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
+                    , confirmLabel = "Transfer"
+                    , confirmMsg = AuthMsg SubmitTransfer
+                    , request = request
                     }
                 ]
 
@@ -324,39 +329,72 @@ modalShell title children =
         ]
 
 
-modalActions :
+{-| Render the error chip (if any) plus the confirm/cancel button pair
+for one modal, driven by a single exhaustive `case` over the modal's
+`request : RemoteData Http.Error ()`. Per CLAUDE.md, this is the only
+match against `request` — no separate `isLoading` boolean or
+secondary `case` for the error chip is allowed.
+
+Branches:
+
+  - `NotAsked` — idle. Active confirm button, no chip.
+  - `Loading` — request in flight. Busy confirm button, no chip.
+  - `Failure err` — show the error chip + a still-active confirm
+    button so the user can retry. The HTTP error is rendered via
+    `SharedTripUi.errorMessage`.
+  - `Success ()` — by the time the view sees this, `update` is
+    about to swap `modal = NoModal` in the same step. Render the
+    active confirm button (no chip, nothing busy) so the brief
+    transition frame isn't disabled.
+
+-}
+viewModalActions :
     { cancel : ( String, Msg )
-    , confirm : ( String, Msg )
-    , inFlight : Bool
+    , confirmLabel : String
+    , confirmMsg : Msg
+    , request : RemoteData Http.Error ()
     }
     -> Html Msg
-modalActions { cancel, confirm, inFlight } =
+viewModalActions { cancel, confirmLabel, confirmMsg, request } =
     let
-        ( confirmLabel, confirmMsg ) =
-            confirm
-
         ( cancelLabel, cancelMsg ) =
             cancel
-    in
-    Html.div [ Html.Attributes.class "flex gap-2 mt-4" ]
-        [ if inFlight then
-            UI.Button.primaryBusy { label = confirmLabel }
 
-          else
-            UI.Button.primary { label = confirmLabel, onClick = confirmMsg }
-        , UI.Button.ghost { label = cancelLabel, onClick = cancelMsg }
+        ( chip, confirmButton ) =
+            case request of
+                RemoteData.NotAsked ->
+                    ( Html.text ""
+                    , UI.Button.primary { label = confirmLabel, onClick = confirmMsg }
+                    )
+
+                RemoteData.Loading ->
+                    ( Html.text ""
+                    , UI.Button.primaryBusy { label = confirmLabel }
+                    )
+
+                RemoteData.Failure err ->
+                    ( viewErrorChip (SharedTripUi.errorMessage err)
+                    , UI.Button.primary { label = confirmLabel, onClick = confirmMsg }
+                    )
+
+                RemoteData.Success _ ->
+                    ( Html.text ""
+                    , UI.Button.primary { label = confirmLabel, onClick = confirmMsg }
+                    )
+    in
+    Html.div []
+        [ chip
+        , Html.div [ Html.Attributes.class "flex gap-2 mt-4" ]
+            [ confirmButton
+            , UI.Button.ghost { label = cancelLabel, onClick = cancelMsg }
+            ]
         ]
 
 
-viewError : Maybe String -> Html msg
-viewError maybeError =
-    case maybeError of
-        Just err ->
-            Html.div [ Html.Attributes.class "bg-rust-tint border border-rust rounded-lg p-2.5 mb-3" ]
-                [ Html.p [ Html.Attributes.class "text-sm text-rust" ] [ Html.text err ] ]
-
-        Nothing ->
-            Html.text ""
+viewErrorChip : String -> Html msg
+viewErrorChip message =
+    Html.div [ Html.Attributes.class "bg-rust-tint border border-rust rounded-lg p-2.5 mb-3" ]
+        [ Html.p [ Html.Attributes.class "text-sm text-rust" ] [ Html.text message ] ]
 
 
 formField : String -> Html msg -> Html msg

@@ -3368,7 +3368,7 @@ updateAuth msg as_ =
                                 Just
                                     { form
                                         | submitting = False
-                                        , errors = [ flockErrorMessage err ]
+                                        , errors = [ SharedTripUi.errorMessage err ]
                                     }
                         }
                     , Cmd.none
@@ -3640,7 +3640,7 @@ updateAuth msg as_ =
             )
 
         OpenCreateSharedTripModal ->
-            ( AuthModel (setSharedTripModal (SharedTripUi.CreateModal { error = Nothing, name = "" }) as_)
+            ( AuthModel (setSharedTripModal (SharedTripUi.CreateModal { name = "", request = RemoteData.NotAsked }) as_)
             , Cmd.none
             )
 
@@ -3659,45 +3659,75 @@ updateAuth msg as_ =
                     ( AuthModel as_, Cmd.none )
 
         SubmitCreateSharedTrip ->
-            let
-                ui =
-                    as_.sharedTripUi
-            in
-            case ui.modal of
+            case as_.sharedTripUi.modal of
                 SharedTripUi.CreateModal { name } ->
                     let
                         trimmed =
                             String.trim name
                     in
                     if trimmed == "" then
-                        let
-                            newModal =
-                                SharedTripUi.CreateModal { error = Just "Name is required.", name = name }
-                        in
-                        ( AuthModel { as_ | sharedTripUi = { ui | modal = newModal } }
+                        ( AuthModel
+                            (updateModalRequest
+                                (\m ->
+                                    case m of
+                                        SharedTripUi.CreateModal data ->
+                                            Just
+                                                (SharedTripUi.CreateModal
+                                                    { data | request = RemoteData.Failure (Http.BadBody "Name is required.") }
+                                                )
+
+                                        _ ->
+                                            Nothing
+                                )
+                                as_
+                            )
                         , Cmd.none
                         )
 
                     else
-                        ( AuthModel (setFlockInFlight True as_)
+                        ( AuthModel
+                            (updateModalRequest
+                                (\m ->
+                                    case m of
+                                        SharedTripUi.CreateModal data ->
+                                            Just (SharedTripUi.CreateModal { data | request = RemoteData.Loading })
+
+                                        _ ->
+                                            Nothing
+                                )
+                                as_
+                            )
                         , Http.SharedTripApi.createSharedTrip as_.creds { name = trimmed } (AuthMsg << CreateSharedTripResult)
                         )
 
                 _ ->
                     ( AuthModel as_, Cmd.none )
 
-        CreateSharedTripResult (Err err) ->
-            ( AuthModel (storeFlockError err as_), Cmd.none )
+        CreateSharedTripResult result ->
+            case RemoteData.fromResult result of
+                RemoteData.Success _ ->
+                    ( AuthModel
+                        (setSharedTripModal SharedTripUi.NoModal
+                            { as_ | toast = Just "Shared trip created. It'll show up here once sync settles." }
+                        )
+                    , toastFor
+                    )
 
-        CreateSharedTripResult (Ok _) ->
-            ( AuthModel
-                (setSharedTripModal SharedTripUi.NoModal
-                    { as_
-                        | toast = Just "Shared trip created. It'll show up here once sync settles."
-                    }
-                )
-            , toastFor
-            )
+                remote ->
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.CreateModal data ->
+                                        Just (SharedTripUi.CreateModal { data | request = remote })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
+                    , Cmd.none
+                    )
 
         BillingCheckoutClicked plan ->
             ( AuthModel { as_ | billingError = Nothing, billingInFlight = True }
@@ -3800,7 +3830,7 @@ updateAuth msg as_ =
             ( AuthModel as_, Cmd.none )
 
         OpenInviteModal flockId ->
-            ( AuthModel (setSharedTripModal (SharedTripUi.InviteModal flockId { email = "", error = Nothing }) as_)
+            ( AuthModel (setSharedTripModal (SharedTripUi.InviteModal flockId { email = "", request = RemoteData.NotAsked }) as_)
             , Cmd.none
             )
 
@@ -3821,46 +3851,96 @@ updateAuth msg as_ =
         SubmitInvite ->
             case as_.sharedTripUi.modal of
                 SharedTripUi.InviteModal flockId { email } ->
-                    ( AuthModel (setFlockInFlight True as_)
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.InviteModal id data ->
+                                        Just (SharedTripUi.InviteModal id { data | request = RemoteData.Loading })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
                     , Http.SharedTripApi.inviteToSharedTrip as_.creds flockId { email = email } (AuthMsg << InviteToSharedTripResult)
                     )
 
                 _ ->
                     ( AuthModel as_, Cmd.none )
 
-        InviteToSharedTripResult (Err err) ->
-            ( AuthModel (storeFlockError err as_), Cmd.none )
+        InviteToSharedTripResult result ->
+            case RemoteData.fromResult result of
+                RemoteData.Success _ ->
+                    ( AuthModel
+                        (setSharedTripModal SharedTripUi.NoModal
+                            { as_ | toast = Just "Invite sent." }
+                        )
+                    , toastFor
+                    )
 
-        InviteToSharedTripResult (Ok ()) ->
-            ( AuthModel
-                (setSharedTripModal SharedTripUi.NoModal
-                    { as_
-                        | toast = Just "Invite sent."
-                    }
-                )
-            , toastFor
-            )
+                remote ->
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.InviteModal id data ->
+                                        Just (SharedTripUi.InviteModal id { data | request = remote })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
+                    , Cmd.none
+                    )
 
         OpenLeaveConfirmModal flockId ->
-            ( AuthModel (setSharedTripModal (SharedTripUi.LeaveConfirmModal flockId { error = Nothing }) as_)
+            ( AuthModel (setSharedTripModal (SharedTripUi.LeaveConfirmModal flockId { request = RemoteData.NotAsked }) as_)
             , Cmd.none
             )
 
         LeaveSharedTripConfirmed flockId ->
-            ( AuthModel (setFlockInFlight True as_)
+            ( AuthModel
+                (updateModalRequest
+                    (\m ->
+                        case m of
+                            SharedTripUi.LeaveConfirmModal id _ ->
+                                Just (SharedTripUi.LeaveConfirmModal id { request = RemoteData.Loading })
+
+                            _ ->
+                                Nothing
+                    )
+                    as_
+                )
             , Http.SharedTripApi.leaveSharedTrip as_.creds flockId (AuthMsg << LeaveSharedTripResult)
             )
 
-        LeaveSharedTripResult (Err err) ->
-            ( AuthModel (storeFlockError err as_), Cmd.none )
+        LeaveSharedTripResult result ->
+            case RemoteData.fromResult result of
+                RemoteData.Success _ ->
+                    ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Left shared trip." })
+                    , toastFor
+                    )
 
-        LeaveSharedTripResult (Ok ()) ->
-            ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Left shared trip." })
-            , toastFor
-            )
+                remote ->
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.LeaveConfirmModal id _ ->
+                                        Just (SharedTripUi.LeaveConfirmModal id { request = remote })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
+                    , Cmd.none
+                    )
 
         OpenTransferModal flockId ->
-            ( AuthModel (setSharedTripModal (SharedTripUi.TransferModal flockId { error = Nothing, target = "" }) as_)
+            ( AuthModel (setSharedTripModal (SharedTripUi.TransferModal flockId { request = RemoteData.NotAsked, target = "" }) as_)
             , Cmd.none
             )
 
@@ -3881,20 +3961,46 @@ updateAuth msg as_ =
         SubmitTransfer ->
             case as_.sharedTripUi.modal of
                 SharedTripUi.TransferModal flockId { target } ->
-                    ( AuthModel (setFlockInFlight True as_)
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.TransferModal id data ->
+                                        Just (SharedTripUi.TransferModal id { data | request = RemoteData.Loading })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
                     , Http.SharedTripApi.transferOwnership as_.creds flockId { newOwnerEmail = target } (AuthMsg << TransferToSharedTripResult)
                     )
 
                 _ ->
                     ( AuthModel as_, Cmd.none )
 
-        TransferToSharedTripResult (Err err) ->
-            ( AuthModel (storeFlockError err as_), Cmd.none )
+        TransferToSharedTripResult result ->
+            case RemoteData.fromResult result of
+                RemoteData.Success _ ->
+                    ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Ownership transferred." })
+                    , toastFor
+                    )
 
-        TransferToSharedTripResult (Ok ()) ->
-            ( AuthModel (setSharedTripModal SharedTripUi.NoModal { as_ | toast = Just "Ownership transferred." })
-            , toastFor
-            )
+                remote ->
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.TransferModal id data ->
+                                        Just (SharedTripUi.TransferModal id { data | request = remote })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
+                    , Cmd.none
+                    )
 
         JoinSharedTripAccepted token ->
             ( AuthModel { as_ | joinSharedTripRequest = RemoteData.Loading }
@@ -4144,70 +4250,21 @@ setSharedTripModal modal as_ =
         ui =
             as_.sharedTripUi
     in
-    { as_ | sharedTripUi = { ui | inFlight = False, modal = modal } }
+    { as_ | sharedTripUi = { ui | modal = modal } }
 
 
-setFlockInFlight : Bool -> AuthState -> AuthState
-setFlockInFlight v as_ =
-    let
-        ui =
-            as_.sharedTripUi
-    in
-    { as_ | sharedTripUi = { ui | inFlight = v } }
-
-
-storeFlockError : Http.Error -> AuthState -> AuthState
-storeFlockError err as_ =
-    let
-        message =
-            flockErrorMessage err
-
-        ui =
-            as_.sharedTripUi
-
-        newModal =
-            case ui.modal of
-                SharedTripUi.CreateModal m ->
-                    SharedTripUi.CreateModal { m | error = Just message }
-
-                SharedTripUi.InviteModal id m ->
-                    SharedTripUi.InviteModal id { m | error = Just message }
-
-                SharedTripUi.LeaveConfirmModal id _ ->
-                    SharedTripUi.LeaveConfirmModal id { error = Just message }
-
-                SharedTripUi.TransferModal id m ->
-                    SharedTripUi.TransferModal id { m | error = Just message }
-
-                SharedTripUi.NoModal ->
-                    SharedTripUi.NoModal
-    in
-    { as_ | sharedTripUi = { ui | inFlight = False, modal = newModal } }
-
-
-flockErrorMessage : Http.Error -> String
-flockErrorMessage err =
-    case err of
-        Http.BadStatus 403 ->
-            "Not allowed. Refresh and try again."
-
-        Http.BadStatus 404 ->
-            "That flock wasn't found."
-
-        Http.BadStatus 409 ->
-            "Already a member."
-
-        Http.BadStatus 422 ->
-            "Request rejected. Check the details and try again."
-
-        Http.NetworkError ->
-            "Network error. Try again."
-
-        Http.Timeout ->
-            "Took too long. Try again."
-
-        _ ->
-            "Something went wrong. Try again."
+{-| Replace the currently-open modal's `request` field with a new
+`RemoteData`. Used by both dispatch branches (flipping to `Loading`)
+and result branches (storing `Failure`). No-op when no modal is open
+or when the modal in scope isn't the one we expected (a stale message
+arriving after the user closed the modal).
+-}
+updateModalRequest :
+    (SharedTripUi.SharedTripModal -> Maybe SharedTripUi.SharedTripModal)
+    -> AuthState
+    -> AuthState
+updateModalRequest f as_ =
+    { as_ | sharedTripUi = SharedTripUi.setModalRequest f as_.sharedTripUi }
 
 
 
