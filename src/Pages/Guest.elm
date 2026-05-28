@@ -3,7 +3,9 @@ module Pages.Guest exposing (viewGuest)
 import Data.Guest exposing (GuestReason(..))
 import Html exposing (Html)
 import Html.Attributes
+import Html.Attributes.Extra
 import Html.Events
+import Html.Extra
 import Pages.Settings
 import RemoteData exposing (RemoteData)
 import Types exposing (GuestMsg_(..), GuestState, Msg(..))
@@ -36,26 +38,22 @@ viewGuest gs =
         , viewErrorChip gs
         , Html.div [ Html.Attributes.class "mt-6 text-center" ]
             [ UI.Button.ghost { label = "Settings", onClick = GuestMsg ToggleGuestSettings }
-            , if gs.showSettings then
-                Pages.Settings.viewPanel gs.session.config False gs.version
-
-              else
-                Html.text ""
+            , Html.Extra.viewIf gs.showSettings
+                (Pages.Settings.viewPanel gs.session.config False gs.version)
             ]
         ]
 
 
 viewJoinHint : GuestState -> Html Msg
 viewJoinHint gs =
-    case gs.pendingJoinToken of
-        Just _ ->
+    Html.Extra.viewMaybe
+        (\_ ->
             Html.div [ Html.Attributes.class "max-w-sm w-full mb-4" ]
                 [ Html.p [ Html.Attributes.class "text-sm text-moss text-center" ]
                     [ Html.text "Sign in to accept your shared-trip invite." ]
                 ]
-
-        Nothing ->
-            Html.text ""
+        )
+        gs.pendingJoinToken
 
 
 viewFormCard : GuestState -> Html Msg
@@ -81,13 +79,9 @@ viewEmailForm : String -> { busy : Bool, label : String } -> Html Msg
 viewEmailForm value { busy, label } =
     let
         formAttrs =
-            Html.Attributes.class "w-full"
-                :: (if busy then
-                        []
-
-                    else
-                        [ Html.Events.onSubmit (GuestMsg SubmitEmail) ]
-                   )
+            [ Html.Attributes.class "w-full"
+            , Html.Attributes.Extra.attributeIf (not busy) (Html.Events.onSubmit (GuestMsg SubmitEmail))
+            ]
 
         inputAttrs =
             [ Html.Attributes.type_ "text"
@@ -95,13 +89,8 @@ viewEmailForm value { busy, label } =
             , Html.Attributes.placeholder "your@email.com"
             , Html.Attributes.class "w-full mb-3"
             , Html.Attributes.disabled busy
+            , Html.Attributes.Extra.attributeIf (not busy) (Html.Events.onInput (GuestMsg << EmailInputChanged))
             ]
-                ++ (if busy then
-                        []
-
-                    else
-                        [ Html.Events.onInput (GuestMsg << EmailInputChanged) ]
-                   )
     in
     UI.Card.subCard
         [ Html.form formAttrs
@@ -119,13 +108,9 @@ viewCodeForm : String -> String -> RemoteData e () -> { busy : Bool, label : Str
 viewCodeForm email code resendStatus { busy, label } =
     let
         formAttrs =
-            Html.Attributes.class "w-full"
-                :: (if busy then
-                        []
-
-                    else
-                        [ Html.Events.onSubmit (GuestMsg SubmitCode) ]
-                   )
+            [ Html.Attributes.class "w-full"
+            , Html.Attributes.Extra.attributeIf (not busy) (Html.Events.onSubmit (GuestMsg SubmitCode))
+            ]
 
         inputAttrs =
             [ Html.Attributes.type_ "text"
@@ -133,13 +118,8 @@ viewCodeForm email code resendStatus { busy, label } =
             , Html.Attributes.placeholder "123456"
             , Html.Attributes.class "w-full mb-3"
             , Html.Attributes.disabled busy
+            , Html.Attributes.Extra.attributeIf (not busy) (Html.Events.onInput (GuestMsg << CodeInputChanged))
             ]
-                ++ (if busy then
-                        []
-
-                    else
-                        [ Html.Events.onInput (GuestMsg << CodeInputChanged) ]
-                   )
     in
     UI.Card.subCard
         [ Html.form formAttrs
@@ -182,13 +162,13 @@ viewResendRow resendStatus verifyBusy =
         ( button, notice ) =
             case resendStatus of
                 RemoteData.NotAsked ->
-                    ( idleButton, Html.text "" )
+                    ( idleButton, Html.Extra.nothing )
 
                 RemoteData.Loading ->
-                    ( disabledButton "Sending…", Html.text "" )
+                    ( disabledButton "Sending…", Html.Extra.nothing )
 
                 RemoteData.Failure _ ->
-                    ( idleButton, Html.text "" )
+                    ( idleButton, Html.Extra.nothing )
 
                 RemoteData.Success _ ->
                     ( idleButton, successNotice )
@@ -218,4 +198,4 @@ viewErrorChip gs =
                     chip "Session expired — sign in to continue."
 
                 _ ->
-                    Html.text ""
+                    Html.Extra.nothing

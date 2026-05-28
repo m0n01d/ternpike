@@ -9,8 +9,10 @@ import Data.Tier as Tier exposing (Tier(..))
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Http
 import Http.Billing
+import Maybe.Extra
 import Pages.Settings.SharedTrips
 import RemoteData exposing (RemoteData)
 import Types exposing (AuthMsg_(..), AuthState, Msg(..), SharedMsg_(..))
@@ -67,43 +69,15 @@ viewBody cfg maybeAuthState maybeDayIntensity showInstallPrompt =
             maybeDayIntensity /= Nothing
     in
     Html.div []
-        [ case maybeAuthState of
-            Just as_ ->
-                viewPlanSection (planPropsFromAuth as_)
-
-            Nothing ->
-                Html.text ""
-        , case maybeDayIntensity of
-            Just dayIntensity ->
-                viewDisplaySection dayIntensity
-
-            Nothing ->
-                Html.text ""
-        , case maybeAuthState of
-            Just as_ ->
-                viewNotificationsSection as_
-
-            Nothing ->
-                Html.text ""
-        , if isSignedIn then
-            viewShareSection
-
-          else
-            Html.text ""
-        , if showInstallPrompt then
-            viewInstallSection
-
-          else
-            Html.text ""
+        [ Html.Extra.viewMaybe (\as_ -> viewPlanSection (planPropsFromAuth as_)) maybeAuthState
+        , Html.Extra.viewMaybe viewDisplaySection maybeDayIntensity
+        , Html.Extra.viewMaybe viewNotificationsSection maybeAuthState
+        , Html.Extra.viewIf isSignedIn viewShareSection
+        , Html.Extra.viewIf showInstallPrompt viewInstallSection
         , UI.Rule.kicker "CONNECTION"
         , UI.Card.subCard
             (viewAnthropicKeySection cfg maybeAuthState)
-        , case maybeAuthState of
-            Just as_ ->
-                viewSyncSection as_
-
-            Nothing ->
-                Html.text ""
+        , Html.Extra.viewMaybe viewSyncSection maybeAuthState
         , UI.Rule.kicker "SESSION"
         , UI.Card.subCard
             [ Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
@@ -146,29 +120,23 @@ viewSyncSection as_ =
 
 viewVersionFooter : String -> Html Msg
 viewVersionFooter version =
-    if version /= "" then
-        Html.div [ Html.Attributes.class "mt-6 text-center text-[10px] font-mono uppercase tracking-widest text-muted" ]
+    Html.Extra.viewIf (version /= "")
+        (Html.div [ Html.Attributes.class "mt-6 text-center text-[10px] font-mono uppercase tracking-widest text-muted" ]
             [ Html.text ("VERSION " ++ version) ]
-
-    else
-        Html.text ""
+        )
 
 
 viewAnthropicKeySection : AppConfig -> Maybe AuthState -> List (Html Msg)
 viewAnthropicKeySection cfg maybeAuthState =
     let
         isPaid =
-            maybeAuthState
-                |> Maybe.map (\as_ -> Tier.isPaid as_.tier)
-                |> Maybe.withDefault False
+            Maybe.Extra.unwrap False (\as_ -> Tier.isPaid as_.tier) maybeAuthState
 
         keyIsSet =
             cfg.anthropicKey /= Nothing
 
         showInput =
-            maybeAuthState
-                |> Maybe.map .showByoKeyInput
-                |> Maybe.withDefault False
+            Maybe.Extra.unwrap False .showByoKeyInput maybeAuthState
 
         toggleOn =
             keyIsSet || showInput
@@ -655,7 +623,7 @@ viewSubscriptionChip : Maybe SubscriptionStatus.SubscriptionStatus -> Html Msg
 viewSubscriptionChip maybeStatus =
     case maybeStatus of
         Just SubscriptionStatus.Active ->
-            Html.text ""
+            Html.Extra.nothing
 
         Just status ->
             Html.span
@@ -668,7 +636,7 @@ viewSubscriptionChip maybeStatus =
                 [ Html.text (SubscriptionStatus.label status) ]
 
         Nothing ->
-            Html.text ""
+            Html.Extra.nothing
 
 
 viewToggleRow : { helper : String, label : String, msg : Msg, value : Bool } -> Html Msg

@@ -16,6 +16,7 @@ import Dict
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Extra
 import Json.Decode
 import Routing
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
@@ -213,12 +214,7 @@ viewBody model pending isEditing =
                     []
                 )
             ]
-        , case model.duplicateWarning of
-            Just match ->
-                UI.DuplicateWarning.view match
-
-            Nothing ->
-                Html.text ""
+        , Html.Extra.viewMaybe UI.DuplicateWarning.view model.duplicateWarning
         , Html.button
             [ Html.Events.onClick (AuthMsg SubmitEntry)
             , Html.Attributes.disabled (model.submitting || readOnly)
@@ -297,8 +293,8 @@ its current top-of-screen behaviour.
 -}
 viewFlockContextStrip : Maybe ( Trip, SharedTrip ) -> Html Msg
 viewFlockContextStrip ctx =
-    case ctx of
-        Just ( trip, flock ) ->
+    Html.Extra.viewMaybe
+        (\( trip, flock ) ->
             Html.div
                 [ Html.Attributes.class "mb-4 flex items-center gap-3 bg-cream-deep border border-tan rounded-card px-4 py-3" ]
                 [ UI.SharedTripBadge.view flock
@@ -311,9 +307,8 @@ viewFlockContextStrip ctx =
                         [ Html.text trip.name ]
                     ]
                 ]
-
-        Nothing ->
-            Html.text ""
+        )
+        ctx
 
 
 {-| The "visible to Alice + Bob" caption rendered just under the amount
@@ -323,14 +318,13 @@ three.
 -}
 viewVisibleToCaption : Maybe ( Trip, SharedTrip ) -> Html Msg
 viewVisibleToCaption ctx =
-    case ctx of
-        Just ( _, flock ) ->
+    Html.Extra.viewMaybe
+        (\( _, flock ) ->
             Html.p
                 [ Html.Attributes.class "-mt-2 mb-4 text-center text-[11px] font-mono uppercase tracking-widest text-moss" ]
                 [ Html.text ("Visible to " ++ visibleToLabel flock) ]
-
-        Nothing ->
-            Html.text ""
+        )
+        ctx
 
 
 visibleToLabel : SharedTrip -> String
@@ -380,13 +374,10 @@ viewLoadingBody =
 
 viewScanPreview : AuthState -> Html Msg
 viewScanPreview model =
-    case model.activeScanItemId of
-        Nothing ->
-            Html.text ""
-
-        Just id ->
-            case Dict.get (ScanItemId.toString id) model.scanQueue of
-                Just item ->
+    Html.Extra.viewMaybe
+        (\id ->
+            Html.Extra.viewMaybe
+                (\item ->
                     Html.div [ Html.Attributes.class "sticky top-0 z-10 mb-4" ]
                         [ UI.Card.subCard
                             [ Html.img
@@ -396,9 +387,10 @@ viewScanPreview model =
                                 []
                             ]
                         ]
-
-                Nothing ->
-                    Html.text ""
+                )
+                (Dict.get (ScanItemId.toString id) model.scanQueue)
+        )
+        model.activeScanItemId
 
 
 viewCategoryBtn : Category -> Category -> Html Msg
@@ -458,8 +450,8 @@ viewLocationWidget model pending =
     in
     Html.div []
         [ viewLocationStatus effective
-        , if model.showMapPicker then
-            Html.node "map-picker"
+        , Html.Extra.viewIf model.showMapPicker
+            (Html.node "map-picker"
                 [ Html.Attributes.attribute "lat"
                     (case effective of
                         LocationGot point _ ->
@@ -484,9 +476,7 @@ viewLocationWidget model pending =
                 , Html.Events.on "dismiss" (Json.Decode.succeed (AuthMsg DismissMapPicker))
                 ]
                 []
-
-          else
-            Html.text ""
+            )
         ]
 
 

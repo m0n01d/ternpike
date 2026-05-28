@@ -21,6 +21,7 @@ copy if any field is missing.
 
 import Html exposing (Html)
 import Html.Attributes
+import Html.Extra
 import Http
 import Json.Decode
 import RemoteData
@@ -69,19 +70,17 @@ viewAuthBody as_ token invite =
         ( acceptButton, declineButton, errorChip ) =
             case as_.joinSharedTripRequest of
                 RemoteData.NotAsked ->
-                    ( if wrongRecipient then
-                        Html.text ""
-
-                      else
-                        UI.Button.primary
+                    ( Html.Extra.viewIf (not wrongRecipient)
+                        (UI.Button.primary
                             { label = "Accept"
                             , onClick = AuthMsg (JoinSharedTripAccepted token)
                             }
+                        )
                     , UI.Button.ghost
                         { label = "Decline"
                         , onClick = AuthMsg JoinSharedTripDeclined
                         }
-                    , Html.text ""
+                    , Html.Extra.nothing
                     )
 
                 RemoteData.Loading ->
@@ -92,18 +91,16 @@ viewAuthBody as_ token invite =
                         , Html.Attributes.class "bg-transparent border border-tan/60 text-moss/60 font-mono uppercase tracking-widest text-xs px-4 py-2 rounded-lg cursor-not-allowed"
                         ]
                         [ Html.text "Decline" ]
-                    , Html.text ""
+                    , Html.Extra.nothing
                     )
 
                 RemoteData.Failure err ->
-                    ( if wrongRecipient then
-                        Html.text ""
-
-                      else
-                        UI.Button.primary
+                    ( Html.Extra.viewIf (not wrongRecipient)
+                        (UI.Button.primary
                             { label = "Accept"
                             , onClick = AuthMsg (JoinSharedTripAccepted token)
                             }
+                        )
                     , UI.Button.ghost
                         { label = "Decline"
                         , onClick = AuthMsg JoinSharedTripDeclined
@@ -114,19 +111,17 @@ viewAuthBody as_ token invite =
 
                 RemoteData.Success _ ->
                     -- Navigation fires in the same tick; render idle while in flight.
-                    ( if wrongRecipient then
-                        Html.text ""
-
-                      else
-                        UI.Button.primary
+                    ( Html.Extra.viewIf (not wrongRecipient)
+                        (UI.Button.primary
                             { label = "Accept"
                             , onClick = AuthMsg (JoinSharedTripAccepted token)
                             }
+                        )
                     , UI.Button.ghost
                         { label = "Decline"
                         , onClick = AuthMsg JoinSharedTripDeclined
                         }
-                    , Html.text ""
+                    , Html.Extra.nothing
                     )
     in
     UI.Card.subCard
@@ -147,17 +142,15 @@ viewAuthBody as_ token invite =
                             "You've been invited to join a shared trip."
                     )
                 ]
-            , if wrongRecipient then
-                Html.p [ Html.Attributes.class "text-sm text-rust" ]
+            , Html.Extra.viewIf wrongRecipient
+                (Html.p [ Html.Attributes.class "text-sm text-rust" ]
                     [ Html.text
                         ("This invite is for "
                             ++ intendedEmail
                             ++ ". Sign in with that email to accept it."
                         )
                     ]
-
-              else
-                Html.text ""
+                )
             , errorChip
             , Html.div [ Html.Attributes.class "flex gap-2 mt-2" ]
                 [ acceptButton
