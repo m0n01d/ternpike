@@ -1244,6 +1244,56 @@ types never need to carry it.
 
 ---
 
+## Verification: the Verify layer
+
+The `src/Verify/` modules port the [`verifiable-elm`](https://github.com/m0n01d/verifiable-elm)
+"Surface" pattern: app behavior is verified by *observing it at the surface*,
+hermetically and without the full-stack Playwright e2e harness (docker CouchDB +
+wrangler + Resend), which is the historical source of CI flake.
+
+**The Surface.** A `Verify.Contract.Surface` is `List ( String, String )` — one
+typed value that drives *both* the rendered DOM (via `data-verify-*` attributes,
+emitted by `Contract.verifyAttrs`) and the verification checks. No second schema
+to drift.
+
+**Units, fixtures, invariants** (`Verify.Spec`). A *unit* declares a
+`surface : input -> Surface`, a list of *fixtures* (each a key-free `input` —
+never the full `Model`, because `Browser.Navigation.Key` can't be constructed in
+`elm-test`), and a list of *invariants* (`input -> Surface -> Maybe String`;
+`Nothing` = holds). Every unit ships one `probe = True` fixture whose injected
+regression must trip an invariant — proof the harness catches lies. The pilot
+unit is `Verify.Specs.TierGating` (the "Share a trip" create-row gate).
+
+**Two tiers, one verdict path** (`Verify.Runner` → `Verify.Core.Verdict`):
+
+- **Pure tier** — `tests/MatrixTest.elm` runs every unit × fixture from
+  `Verify.Registry.runAll` under `elm-test`. Hermetic, no backend, no `Main`.
+  Non-probe fixtures must `Pass`; probes must `Fail`. This runs in CI via
+  `.github/workflows/verify.yml` (the `npm test` job — the first elm-test CI
+  gate in the repo).
+- **DOM tier** — `/verify/:unit/:fixture` routes (`Data.Navigation.RouteVerify`,
+  parsed in `Routing.elm`). `Main.init` short-circuits on these: it seeds a
+  fixture `AuthState` via `toAuthState` (no `fetchMe`, no sync, no PouchDB), sets
+  the stored route to `RouteSettings` so the real page renders with its
+  `data-verify-*` attrs, and pushes the matrix to JS through the `verifyResults`
+  port. `src/main.js` skips `attachPouch` for `/verify` paths and exposes
+  `window.__verify` (`manifest()` / `runAll()` / `current()`). The Playwright
+  spec `e2e/specs/verify.spec.ts` (config `e2e/verify.config.ts`, served by the
+  dependency-free `e2e/verify-server.mjs`) reads the attrs + verdict. Run with
+  `npm run verify:dom`.
+
+**Adding a unit:** create `src/Verify/Specs/<Name>.elm` exposing `surface`,
+`results` (`= Runner.runUnit spec`), and an `honest` projection; append its
+`results` to `Verify.Registry.runAll`; attach `Contract.verifyAttrs "<Name>"` to
+the real view; map its fixtures to seed state in `Main.seedVerifyAuthState`.
+
+> Scope: this verifies **client-side** behavior off pure state projections. It
+> does not replace genuine integration specs (real CouchDB sync, Resend email,
+> two-user concurrency) — those stay on Playwright by design. Folding `Msg`s
+> through the real `Main.update` for interactive units is a deferred follow-up
+> (it needs to resolve the `Nav.Key` constraint, e.g. via elm-program-test's
+> `createApplication`).
+
 ## Quick reference: where to find things
 
 | I want to... | Look here |
@@ -1258,3 +1308,4 @@ types never need to carry it.
 | Add an extracted field to the OCR prompt | `src/Main.elm` `ocrSystemPrompt`, `src/Data/Scan.elm` `OcrData` + `ocrDataDecoder` |
 | Add a new Worker endpoint | `server/<name>.js` exporting `register<Name>Routes(app)`; wire from `server/index.js`. Reuse `server/auth.js` for authenticateCaller / getTier / isPaidTier |
 | Change the Ledger map | `src/Helpers.elm` `encodeWaypoints` for the JSON wire shape; `src/main.js` `WaypointMap` for the Leaflet rendering |
+| Add a hermetic verification unit | `src/Verify/Specs/<Name>.elm` + append to `Verify.Registry.runAll`; attach `Verify.Contract.verifyAttrs` to the view; seed in `Main.seedVerifyAuthState`. See the "Verification" section above |

@@ -37,6 +37,8 @@ import UI.Button
 import UI.Card
 import UI.Rule
 import UI.SharedTripBadge
+import Verify.Contract
+import Verify.Specs.TierGating
 
 
 view : AuthState -> Html Msg
@@ -62,7 +64,11 @@ view as_ =
 viewCreateRow : Tier.Tier -> Html Msg
 viewCreateRow tier =
     UI.Card.subCard
-        [ Html.div [ Html.Attributes.class "flex items-start justify-between gap-3" ]
+        [ Html.div
+            (Html.Attributes.class "flex items-start justify-between gap-3"
+                :: Verify.Contract.verifyAttrs "TierGating"
+                    (Verify.Specs.TierGating.surface (Verify.Specs.TierGating.honest tier))
+            )
             [ Html.p [ Html.Attributes.class "text-xs text-muted flex-1" ]
                 [ Html.text
                     (if Tier.isPaid tier then

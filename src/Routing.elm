@@ -57,6 +57,7 @@ routeParser =
             (Parser.s "nest" <?> Query.string "token")
         , Parser.map RouteSettings (Parser.s "settings")
         , Parser.map RouteTrips (Parser.s "trips")
+        , Parser.map RouteVerify (Parser.s "verify" </> Parser.string </> Parser.string)
         ]
 
 
@@ -163,6 +164,9 @@ routeToTab route =
         RouteTrips ->
             TripsTab
 
+        RouteVerify _ _ ->
+            SettingsTab
+
 
 routeTitle : Route -> String
 routeTitle route =
@@ -199,6 +203,9 @@ routeTitle route =
 
         RouteTrips ->
             "TRIPS"
+
+        RouteVerify _ _ ->
+            "VERIFY"
 
 
 effectiveRoute : AuthState -> Route

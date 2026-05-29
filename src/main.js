@@ -204,10 +204,53 @@ import './elements/tp-amount.js'
     /* eslint-enable no-underscore-dangle */
   }
 
+  // /verify/:unit/:fixture mounts a seeded fixture model with no creds and no
+  // sync. Skip attachPouch entirely so nothing reaches couch.ternpike.com —
+  // these routes are hermetic and backend-free (mirrors the /demo guard above).
+  const isVerify = window.location.pathname.includes('/verify/')
+
   if (isDemo) {
     attachDemo(app)
-  } else {
+  } else if (!isVerify) {
     attachPouch(app, { creds: authCreds })
+  }
+
+  // window.__verify: the agent/dashboard interface. Elm pushes the full
+  // verification matrix (plus which unit/fixture is mounted) on a /verify boot;
+  // we expose it as a small read API alongside the existing test hatch. current()
+  // also re-reads the live data-verify-* attributes so the DOM tier can confirm
+  // the rendered surface matches the pure-tier verdict.
+  if (app.ports.verifyResults) {
+    let snapshot = { mountedUnit: null, mountedFixture: null, results: [] }
+    app.ports.verifyResults.subscribe((payload) => {
+      snapshot = payload
+    })
+
+    const domSurface = () => {
+      const el = document.querySelector('[data-verify-unit]')
+      if (!el) return null
+      const out = {}
+      for (const attr of el.attributes) {
+        if (attr.name.startsWith('data-verify-')) {
+          out[attr.name.replace('data-verify-', '')] = attr.value
+        }
+      }
+      return out
+    }
+
+    /* eslint-disable no-underscore-dangle */
+    window.__verify = {
+      manifest: () =>
+        snapshot.results.map((r) => ({ unit: r.unit, fixture: r.fixture, verdict: r.verdict })),
+      runAll: () => snapshot.results,
+      current: () => {
+        const match = snapshot.results.find(
+          (r) => r.unit === snapshot.mountedUnit && r.fixture === snapshot.mountedFixture,
+        )
+        return { ...(match || null), domSurface: domSurface() }
+      },
+    }
+    /* eslint-enable no-underscore-dangle */
   }
 
   // ── Port handlers ──────────────────────────────────────────────────────
