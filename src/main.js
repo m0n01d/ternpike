@@ -222,9 +222,6 @@ import './elements/tp-amount.js'
   // the rendered surface matches the pure-tier verdict.
   if (app.ports.verifyResults) {
     let snapshot = { mountedUnit: null, mountedFixture: null, results: [] }
-    app.ports.verifyResults.subscribe((payload) => {
-      snapshot = payload
-    })
 
     const domSurface = () => {
       // Select the *mounted* unit specifically — a page (e.g. Settings) can
@@ -242,6 +239,45 @@ import './elements/tp-amount.js'
       }
       return out
     }
+
+    // Dev-only verification overlay: on /verify/:unit/:fixture, surface the
+    // mounted unit's verdict + observed attrs on top of the real page, so a
+    // human sees screen + attrs + PASS/FAIL together (matching the reference
+    // dashboard). import.meta.env.DEV is false in `vite build`, so it never
+    // appears in prod / the DOM-tier / visual goldens — those stay clean.
+    const renderVerifyOverlay = () => {
+      if (!snapshot.mountedFixture) return
+      const result = snapshot.results.find(
+        (r) => r.unit === snapshot.mountedUnit && r.fixture === snapshot.mountedFixture,
+      )
+      if (!result) return
+      const pass = (result.verdict || '').startsWith('PASS')
+      // Prefer the live DOM attrs; fall back to the matrix surface (pure-only
+      // units like ScanRouting have no rendered element).
+      const attrs = domSurface() || result.surface || {}
+      const pairs = Object.entries(attrs)
+        .filter(([k]) => k !== 'unit')
+        .map(([k, v]) => `${k}=${v}`)
+        .join('  ·  ')
+      let el = document.getElementById('__verify_overlay')
+      if (!el) {
+        el = document.createElement('div')
+        el.id = '__verify_overlay'
+        document.body.appendChild(el)
+      }
+      el.style.cssText =
+        'position:fixed;top:0;left:0;right:0;z-index:99999;font:12px/1.5 ui-monospace,monospace;' +
+        `background:#1b1b1b;color:#eaeaea;padding:8px 14px;box-shadow:0 1px 6px rgba(0,0,0,.3);border-bottom:3px solid ${pass ? '#5aa469' : '#c8553d'};`
+      el.innerHTML =
+        `<b>${result.unit} / ${result.fixture}</b> ` +
+        `<span style="color:${pass ? '#7fcf8f' : '#ff9b86'};font-weight:700">${result.verdict}</span>` +
+        (pairs ? ` &nbsp;·&nbsp; ${pairs}` : '')
+    }
+
+    app.ports.verifyResults.subscribe((payload) => {
+      snapshot = payload
+      if (import.meta.env.DEV) requestAnimationFrame(renderVerifyOverlay)
+    })
 
     /* eslint-disable no-underscore-dangle */
     window.__verify = {
