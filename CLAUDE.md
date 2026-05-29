@@ -626,14 +626,73 @@ The skill handles the awkward parts: seeding PouchDB, stubbing `auth_creds` so a
 
 Send every screenshot with `SendUserFile` so it appears inline in the conversation. Don't describe pixels in prose — "the button is now forest green" is not a substitute for showing it. Delete the generated `scripts/` folder before ending the turn (see the untracked-files note in Git discipline above).
 
+## Verification (the Verify track) — keep it current
+
+**This is the primary regression net and the PR gate.** The `verifiable-elm`
+Surface pattern lives in `src/Verify/` (`Core`/`Contract`/`Spec`/`Runner`/
+`Registry` + `Specs/*`), the pure matrix in `tests/MatrixTest.elm`, the DOM
+probes at `/verify/:unit/:fixture` + `window.__verify`. Full mechanics:
+`docs/architecture.md` → "Verification: the Verify layer". Track: #345.
+
+**The PR gate (`.github/workflows/verify.yml`) is three browser-light,
+deterministic jobs** — keep all three green before pushing, and run them locally:
+
+| Tier | Command | What it covers |
+|---|---|---|
+| Pure | `npm test` | `elm-verify-examples` + `elm-test` incl. `MatrixTest` (every Verify unit × fixture) |
+| DOM | `npm run verify:dom` | `/verify` probes against a backend-free static server (`e2e/verify-server.mjs`) |
+| Server | `npm --prefix server run test:server` | `node:test` + disposable CouchDB (incl. `test/sec/`) |
+
+`npm run review` and `npm run format:check` run in the pure job too.
+
+**Playwright (`e2e/`, `playwright.config.ts`, `e2e.yml`) is NIGHTLY /
+`workflow_dispatch` only — NOT a PR gate.** It flaked for ~8 min on every PR and
+blocked merges for no signal; it now runs on a schedule for the genuine
+two-user CouchDB-sync journeys that aren't yet hermetic. **Do not re-add a
+`pull_request` trigger to `e2e.yml`** or otherwise make Playwright block PRs.
+The goal is to shrink the nightly suite toward deletion as flows convert (#352/
+#354), not to grow it.
+
+**Every new feature or refactor gets verified — in the same PR:**
+
+1. **User-facing state / gating / view branches →** add or extend a Verify unit:
+   a `surface : input -> Surface` over a key-free projection, fixtures (one per
+   state) + invariants (`input -> Surface -> Maybe String`), **one `probe`
+   fixture that must FAIL**, registered in `Verify.Registry.runAll`, with
+   `Verify.Contract.verifyAttrs` attached to the *real* view and seeding wired
+   in `Main.seedVerifyAuthState`/`applyUnitSeed`. Mirror the existing units
+   (`TierGating`, `NotificationsPaywall`, `ScanRouting`).
+2. **Pure logic / decisions →** plain `elm-test` + `-->` examples (e.g.
+   `Http.SharedTripApi.joinErrorMessage`).
+3. **Server endpoints / behavior →** `server/test/` (`node:test`), including
+   negative + `test/sec/` specs. Server logic is verified server-side, not
+   through a browser.
+
+**Single source of truth — never let the Surface and the view diverge.** The
+branch decision is a pure function both the view and the surface call
+(`Data.Notifications.panelState`, `Data.OcrPath.resolve`). When you change view
+branching, change that function — don't re-derive the logic in the surface.
+
+**Keep it current.** When you add/rename a field, branch, endpoint, or error
+code, update the matching unit / fixture / invariant / server spec **in the same
+commit**. A stale Surface or unrun spec is a silent gap — the `invite-jwt`
+`already_member` drift (#353/#356) sat undetected precisely because the server
+suite wasn't being run. Run the three tiers regularly; if a tier passes
+impossibly fast or a new feature doesn't show at its `/verify` route, suspect a
+stale build, not success (see the stale-bundle notes below).
+
+**Migrating an e2e spec to hermetic coverage:** convert → confirm parity (run
+both) → then delete/relegate the spec. The genuine two-user sync journeys stay
+on the nightly Playwright run until a real seam replaces them.
+
 ## End-to-end + security test patterns
 
-The `e2e/` directory (added in #71) is the Playwright two-browser-context test harness — separate from `playwright-ui` (which is for one-off screenshots). Use `playwright-ui` for "show me what this looks like right now"; use `e2e/` for "this user-journey is a regression-tested invariant." The server-side `[Flock-Sec]` track (now called "shared trips" in code) lives in `server/test/sec/` and runs against a disposable CouchDB.
+The `e2e/` directory (added in #71) is the Playwright two-browser-context test harness — separate from `playwright-ui` (which is for one-off screenshots). Use `playwright-ui` for "show me what this looks like right now"; use `e2e/` for "this user-journey is a regression-tested invariant." The server-side `[Flock-Sec]` track (now called "shared trips" in code) lives in `server/test/sec/` and runs against a disposable CouchDB. **As of #345/#354 the Playwright suite is nightly-only, not a PR gate** — see the "Verification (the Verify track)" section above.
 
 ### Boundary
 
 - **`playwright-ui` (skill):** ad-hoc screenshots during planning or before reporting a UI task done. Throwaway `scripts/` files, no CI.
-- **`e2e/specs/*.spec.ts` (Playwright suite):** multi-context user journeys, two-user concurrency, visual goldens. Runs in CI on every PR via `npm run e2e`.
+- **`e2e/specs/*.spec.ts` (Playwright suite):** multi-context user journeys, two-user concurrency, visual goldens. **Nightly / `workflow_dispatch` only (not a PR gate)** — run locally with `npm run e2e`. The PR gate is the Verify tiers + server suite (see "Verification" above).
 - **`server/test/sec/*.spec.js` (node:test suite):** server-side negative tests against a disposable `couchdb:3` Docker container. Runs via `npm run test:server`.
 
 ### CouchDB gotchas the test track surfaced
