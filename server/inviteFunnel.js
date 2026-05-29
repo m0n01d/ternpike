@@ -17,6 +17,16 @@ import {
   readSharedTripMeta,
   sharedTripDbName,
 } from './sharedTrips.js'
+import {
+  ANTHROPIC_BASE_URL,
+  ANTHROPIC_VERSION,
+  MAX_BASE64_BYTES,
+  MAX_TOKENS,
+  MODEL,
+  SYSTEM_PROMPT,
+  parseFirstReceipt,
+  utcDateKey,
+} from './scanDemo.js'
 
 const encoder = new TextEncoder()
 
@@ -445,6 +455,27 @@ export function buildTeaser(tripDocs, meta) {
 // Register the funnel's routes. `/invite/resolve` (this issue, #331) returns
 // the redacted teaser. `/scan-guest` and the magic-link handlers land in later
 // issues (Wave 1+).
+// Per-day caps for the unauthenticated guest scan (#336). Three gates, since a
+// share token carries no email to key on: per-token (the link), per-IP, and a
+// global circuit-breaker that caps total spend on Ternpike's Anthropic key.
+export const SCAN_GUEST_PER_TOKEN_PER_DAY = 3
+export const SCAN_GUEST_PER_IP_PER_DAY = 30
+export const SCAN_GUEST_GLOBAL_PER_DAY = 500
+
+// PURE rate-limit decision (#336). Given the current daily counts, decide
+// whether this scan is allowed. Returns `{ ok:true, remaining }` (remaining =
+// per-token scans left AFTER this one) or `{ ok:false }`. No KV/IO — the route
+// reads/writes the counters; this only decides, so it is unit-testable.
+export function scanGuestRateDecision({ tokenCount, ipCount, globalCount }) {
+  const t = Number(tokenCount) || 0
+  const i = Number(ipCount) || 0
+  const g = Number(globalCount) || 0
+  if (t >= SCAN_GUEST_PER_TOKEN_PER_DAY) return { ok: false }
+  if (i >= SCAN_GUEST_PER_IP_PER_DAY) return { ok: false }
+  if (g >= SCAN_GUEST_GLOBAL_PER_DAY) return { ok: false }
+  return { ok: true, remaining: SCAN_GUEST_PER_TOKEN_PER_DAY - t - 1 }
+}
+
 export function registerInviteFunnelRoutes(app) {
   // POST /invite/resolve — unauthenticated. The share token rides in the body.
   // Returns ONLY the redacted teaser (docs/nest-invite-funnel.md §C).
@@ -510,5 +541,161 @@ export function registerInviteFunnelRoutes(app) {
       console.error('invite/resolve:', err)
       return c.json({ ok: false, error: 'revoked' }, 403)
     }
+  })
+
+  // POST /scan-guest — unauthenticated guest receipt scan (#336). Authorized by
+  // a share token; rate-limited per-token + per-IP + global; proxied to
+  // Ternpike's Anthropic key SERVER-SIDE (the key never reaches the browser —
+  // CLAUDE.md critical rule). The parsed result is returned inline and NEVER
+  // persisted.
+  //
+  // Status: 200 { ok, ocr, remaining } | 200 { ok:false, no_receipt }
+  //   400 token_required | bad_request ; 401 invalid_token ; 410 expired
+  //   403 revoked | trip_frozen ; 413 too_large ; 429 rate_limited ; 502 upstream
+  app.post('/scan-guest', async (c) => {
+    const env = c.env
+
+    let body
+    try {
+      body = await c.req.json()
+    } catch {
+      body = {}
+    }
+    const token = body && typeof body.token === 'string' ? body.token : ''
+    const base64 = body && typeof body.base64 === 'string' ? body.base64 : ''
+    const mimeType =
+      body && typeof body.mimeType === 'string' ? body.mimeType : ''
+    if (!token) {
+      return c.json({ ok: false, error: 'token_required' }, 400)
+    }
+    if (!base64 || !mimeType || !mimeType.startsWith('image/')) {
+      return c.json({ ok: false, error: 'bad_request' }, 400)
+    }
+    if (base64.length > MAX_BASE64_BYTES) {
+      return c.json({ ok: false, error: 'too_large' }, 413)
+    }
+
+    const verified = await verifyJwt(token, env.SERVER_SECRET)
+    if (!verified.ok) {
+      if (verified.reason === 'expired') {
+        return c.json({ ok: false, error: 'expired' }, 410)
+      }
+      return c.json({ ok: false, error: 'invalid_token' }, 401)
+    }
+    const payload = verified.payload
+    if (
+      !payload ||
+      payload.typ !== 'share' ||
+      typeof payload.flockId !== 'string' ||
+      !payload.flockId
+    ) {
+      return c.json({ ok: false, error: 'invalid_token' }, 401)
+    }
+
+    // Revocation / frozen gate — identical to /invite/resolve.
+    try {
+      const meta = await readMetaForPreview(env, payload.flockId)
+      await assertPreviewable(meta, payload.epoch, payload.jti, env)
+    } catch (err) {
+      if (err instanceof InviteFunnelError) {
+        return c.json({ ok: false, error: err.error }, err.status)
+      }
+      console.error('scan-guest gate:', err)
+      return c.json({ ok: false, error: 'revoked' }, 403)
+    }
+
+    // Three-gate daily rate limit (no invitee email to key on).
+    const date = utcDateKey()
+    const jti =
+      typeof payload.jti === 'string' && payload.jti ? payload.jti : 'nojti'
+    const ip =
+      c.req.header('cf-connecting-ip') ||
+      c.req.header('x-forwarded-for') ||
+      'unknown'
+    const kv = env.INVITE_KV
+    const tokenKey = `scan-guest:${jti}:${date}`
+    const ipKey = `scan-guest-ip:${ip}:${date}`
+    const globalKey = `scan-guest:global:${date}`
+
+    let tokenCount = 0
+    let ipCount = 0
+    let globalCount = 0
+    if (kv) {
+      const [t, i, g] = await Promise.all([
+        kv.get(tokenKey),
+        kv.get(ipKey),
+        kv.get(globalKey),
+      ])
+      tokenCount = parseInt(t || '0', 10) || 0
+      ipCount = parseInt(i || '0', 10) || 0
+      globalCount = parseInt(g || '0', 10) || 0
+    }
+    const decision = scanGuestRateDecision({ tokenCount, ipCount, globalCount })
+    if (!decision.ok) {
+      return c.json({ ok: false, error: 'rate_limited' }, 429)
+    }
+
+    // Proxy to Anthropic with the SERVER-SIDE key.
+    const anthropicBase = env.ANTHROPIC_BASE_URL || ANTHROPIC_BASE_URL
+    let res
+    try {
+      res = await fetch(`${anthropicBase}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': env.ANTHROPIC_API_KEY,
+          'anthropic-version': ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+          max_tokens: MAX_TOKENS,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: mimeType,
+                    data: base64,
+                  },
+                },
+                {
+                  type: 'text',
+                  text: 'Extract expense info from every receipt visible in this image.',
+                },
+              ],
+            },
+          ],
+          model: MODEL,
+          system: SYSTEM_PROMPT,
+        }),
+      })
+    } catch (err) {
+      console.error('scan-guest upstream fetch error:', err)
+      return c.json({ ok: false, error: 'upstream' }, 502)
+    }
+    if (!res.ok) {
+      console.error('scan-guest upstream non-ok:', res.status)
+      return c.json({ ok: false, error: 'upstream' }, 502)
+    }
+
+    const anthropicBody = await res.json()
+    const ocr = parseFirstReceipt(anthropicBody)
+    if (!ocr) {
+      // Quota not consumed — nothing useful came back.
+      return c.json({ ok: false, error: 'no_receipt' }, 200)
+    }
+
+    // Consume one scan against all three counters (best-effort).
+    if (kv) {
+      await Promise.all([
+        kv.put(tokenKey, String(tokenCount + 1), { expirationTtl: 86400 }),
+        kv.put(ipKey, String(ipCount + 1), { expirationTtl: 86400 }),
+        kv.put(globalKey, String(globalCount + 1), { expirationTtl: 86400 }),
+      ])
+    }
+
+    return c.json({ ok: true, ocr, remaining: Math.max(0, decision.remaining) })
   })
 }

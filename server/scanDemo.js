@@ -15,25 +15,25 @@
 // Client posts `{ email, base64, mimeType }`. The model, system prompt,
 // and max_tokens are all server-controlled.
 
-const ANTHROPIC_BASE_URL = 'https://api.anthropic.com'
-const ANTHROPIC_VERSION = '2023-06-01'
+export const ANTHROPIC_BASE_URL = 'https://api.anthropic.com'
+export const ANTHROPIC_VERSION = '2023-06-01'
 const STRIPE_API_BASE = 'https://api.stripe.com'
 const RESEND_API_BASE = 'https://api.resend.com'
 
-const MODEL = 'claude-sonnet-4-6'
-const MAX_TOKENS = 2048
+export const MODEL = 'claude-sonnet-4-6'
+export const MAX_TOKENS = 2048
 const DAILY_LIMIT = 3
 const ONE_DAY_SECONDS = 86400
 const PROMO_EXPIRY_DAYS = 30
-const MAX_BASE64_BYTES = 4 * 1024 * 1024
+export const MAX_BASE64_BYTES = 4 * 1024 * 1024
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 // Keep in sync with `ocrSystemPrompt` in src/Main.elm.
-const SYSTEM_PROMPT =
+export const SYSTEM_PROMPT =
   'You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {"amount": <number>, "category": "<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>", "note": "<brief description max 50 chars>", "longNote": "<detailed description max 560 chars, include what was purchased, where, any relevant context>", "merchant": "<store name>", "address": "<street address as printed on receipt, include city and state/region when visible, or null if not visible>", "date": "<YYYY-MM-DD or null if not visible on receipt>", "paymentMethod": "<cash|credit|null>"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: "$X.XX/gal Xgal Grade" (e.g. "$4.29/gal 12.3gal Regular"); camp: "$XX/night HookupType" (e.g. "$35/night Full"); lodging: "$XX/night Xnights" (e.g. "$89/night 2nights"); ferry: "Origin→Dest vehicle|foot" (e.g. "Juneau→Haines car"); parks: "PassType ParkName" (e.g. "Day Pass Denali"); activities: "Xppl Activity" (e.g. "2ppl Kayaking"); food: "Xppl MealType" (e.g. "3ppl Dinner"); all others: brief description.'
 
-function utcDateKey() {
+export function utcDateKey() {
   return new Date().toISOString().slice(0, 10)
 }
 
@@ -46,7 +46,7 @@ function stripCodeFence(s) {
   return lines.join('\n').trim()
 }
 
-function parseFirstReceipt(anthropicBody) {
+export function parseFirstReceipt(anthropicBody) {
   try {
     const text = anthropicBody?.content?.[0]?.text
     if (typeof text !== 'string') return null
