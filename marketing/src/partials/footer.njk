@@ -1,4 +1,6 @@
-<footer class="mx-auto grid max-w-[1000px] grid-cols-1 items-center gap-y-6 gap-x-10 border-t border-dashed border-tan/70 px-8 pt-10 pb-12 sm:grid-cols-[1fr_auto]">
+<footer class="relative overflow-hidden">
+  <div aria-hidden="true" class="pointer-events-none absolute inset-0 z-0 bg-[url('/img/forest-texture.jpg')] bg-cover bg-center opacity-[0.06]"></div>
+  <div class="relative z-10 mx-auto grid max-w-[1000px] grid-cols-1 items-center gap-y-6 gap-x-10 border-t border-dashed border-tan/70 px-8 pt-10 pb-12 sm:grid-cols-[1fr_auto]">
   <div>
     <div class="font-display text-2xl font-black tracking-[-0.02em] text-forest">
       <span class="inline-block animate-soar">
@@ -25,4 +27,5 @@
   </div>
 
   <div class="border-t border-dashed border-tan/70 pt-5 font-mono text-[9px] uppercase tracking-[0.15em] text-muted sm:col-span-2">{{ footer.legal }}</div>
+  </div>
 </footer>
