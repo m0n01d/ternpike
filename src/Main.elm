@@ -4546,6 +4546,18 @@ viewAuth as_ =
                 RouteLedger _ ->
                     Pages.Ledger.viewTab as_
 
+                RouteMagicLink _ ->
+                    -- Magic-link landing is a guest-only route; an
+                    -- authenticated user who somehow lands here sees
+                    -- the Trips list (the real view lands in #335).
+                    Pages.Trips.viewTab as_
+
+                RouteNestPreview _ ->
+                    -- Nest preview is a guest-only route; an
+                    -- authenticated user who somehow lands here sees
+                    -- the Trips list (the real view lands in #337).
+                    Pages.Trips.viewTab as_
+
                 RouteScan _ ->
                     Pages.Scan.viewTab as_
 

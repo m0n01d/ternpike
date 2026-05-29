@@ -43,6 +43,23 @@ viewGuest gs =
             -- genuine dispatch rather than a degenerate one-arm case.
             viewLogin gs
 
+        Data.Navigation.RouteMagicLink token ->
+            -- Passwordless magic-link landing. The dedicated view
+            -- (`Pages.NestPreview` conversion wall) lands in #335;
+            -- for now fall through to the login form so the auth flow
+            -- remains functional while the funnel UI is in progress.
+            -- `token` is bound here so #335 can reference it from
+            -- this branch without a structural change.
+            viewLogin { gs | pendingJoinToken = Just token }
+
+        Data.Navigation.RouteNestPreview token ->
+            -- Nest invite preview. The dedicated teaser-card view
+            -- lands in #337; for now fall through to the login form
+            -- so the route has a consumer and the String argument
+            -- is extracted (satisfying `NoUnused.CustomTypeConstructorArgs`).
+            -- The real view replaces this branch in #337.
+            viewLogin { gs | pendingJoinToken = Just token }
+
         _ ->
             viewLogin gs
 
