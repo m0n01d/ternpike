@@ -58,6 +58,7 @@ routeParser =
         , Parser.map RouteSettings (Parser.s "settings")
         , Parser.map RouteTrips (Parser.s "trips")
         , Parser.map RouteVerify (Parser.s "verify" </> Parser.string </> Parser.string)
+        , Parser.map RouteVerifyIndex (Parser.s "verify")
         ]
 
 
@@ -167,6 +168,9 @@ routeToTab route =
         RouteVerify _ _ ->
             SettingsTab
 
+        RouteVerifyIndex ->
+            SettingsTab
+
 
 routeTitle : Route -> String
 routeTitle route =
@@ -205,6 +209,9 @@ routeTitle route =
             "TRIPS"
 
         RouteVerify _ _ ->
+            "VERIFY"
+
+        RouteVerifyIndex ->
             "VERIFY"
 
 

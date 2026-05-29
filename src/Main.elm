@@ -147,6 +147,7 @@ import UI.TripFormModal
 import UI.TripPicker
 import Url
 import Validate
+import Verify.Core
 import Verify.Registry
 import Verify.Specs.NotificationsPaywall
 
@@ -1893,6 +1894,20 @@ init flagsJson url key =
                 )
             )
 
+        ( RouteVerifyIndex, _ ) ->
+            -- The human-browsable dashboard: lists every unit × fixture with its
+            -- verdict + deep links. Same no-boot/no-network treatment as the
+            -- per-fixture routes; the whole matrix is pushed to `window.__verify`.
+            ( AuthModel (seedVerifyIndexModel initialColorScheme gs)
+            , verifyResults
+                (E.object
+                    [ ( "mountedUnit", E.string "" )
+                    , ( "mountedFixture", E.string "" )
+                    , ( "results", Verify.Registry.encode Verify.Registry.runAll )
+                    ]
+                )
+            )
+
         ( _, Nothing ) ->
             let
                 bootFetchCmd =
@@ -1989,6 +2004,30 @@ seedVerifyAuthState unit fixture colorScheme gs =
             toAuthState seedCreds RouteSettings gs
     in
     applyUnitSeed unit fixture { booted | colorScheme = colorScheme }
+
+
+{-| Build the seeded `AuthState` for the `/verify` dashboard index. No fixture —
+the dashboard just lists `Verify.Registry.runAll`. Route is `RouteVerifyIndex`
+so `viewAuth` renders the dashboard. No effects fire.
+-}
+seedVerifyIndexModel : ColorScheme.ColorScheme -> GuestState -> AuthState
+seedVerifyIndexModel colorScheme gs =
+    let
+        seedCreds : Creds
+        seedCreds =
+            { dbName = ""
+            , email = "verify@ternpike.test"
+            , password = ""
+            , subscriptionStatus = Nothing
+            , tier = Tier.Tern
+            , trailblazerNumber = Nothing
+            }
+
+        booted : AuthState
+        booted =
+            toAuthState seedCreds RouteVerifyIndex gs
+    in
+    { booted | colorScheme = colorScheme }
 
 
 {-| Apply a unit's fixture state onto the seeded model. Each unit owns its
@@ -5032,6 +5071,59 @@ viewDemoBanner demoMode =
         Html.Extra.nothing
 
 
+{-| The human-browsable verification dashboard at `/verify`. Renders every
+registered unit × fixture from `Verify.Registry.runAll` with its verdict and a
+deep link to the isolated `/verify/:unit/:fixture` route. The "third consumer"
+of the one verdict taxonomy (alongside the elm-test matrix and `window.__verify`).
+-}
+viewVerifyDashboard : String -> Html Msg
+viewVerifyDashboard basePath =
+    let
+        passCount : Int
+        passCount =
+            Verify.Registry.runAll
+                |> List.filter (\r -> r.verdict == Verify.Core.Pass)
+                |> List.length
+
+        total : Int
+        total =
+            List.length Verify.Registry.runAll
+    in
+    Html.div [ Html.Attributes.class "max-w-2xl mx-auto p-6 flex flex-col gap-4" ]
+        [ Html.h1 [ Html.Attributes.class "text-xl font-mono uppercase tracking-widest text-ink" ]
+            [ Html.text "Verify" ]
+        , Html.p [ Html.Attributes.class "text-xs text-muted" ]
+            [ Html.text (String.fromInt passCount ++ " / " ++ String.fromInt total ++ " fixtures passing") ]
+        , Html.div [ Html.Attributes.class "flex flex-col divide-y divide-tan" ]
+            (List.map (viewVerifyRow basePath) Verify.Registry.runAll)
+        ]
+
+
+viewVerifyRow : String -> Verify.Core.RunResult -> Html Msg
+viewVerifyRow basePath result =
+    let
+        ( badgeClass, badgeText ) =
+            case result.verdict of
+                Verify.Core.Pass ->
+                    ( "bg-moss/15 text-moss", "PASS" )
+
+                Verify.Core.Fail _ ->
+                    ( "bg-rust/15 text-rust", "FAIL" )
+    in
+    Html.a
+        [ Html.Attributes.href (basePath ++ "verify/" ++ result.unit ++ "/" ++ result.fixture)
+        , Html.Attributes.class "flex items-center justify-between gap-3 py-2 hover:bg-cream-deep"
+        ]
+        [ Html.span [ Html.Attributes.class "text-sm text-ink" ]
+            [ Html.span [ Html.Attributes.class "text-muted" ] [ Html.text (result.unit ++ " / ") ]
+            , Html.text result.fixture
+            ]
+        , Html.span
+            [ Html.Attributes.class ("shrink-0 px-2 py-0.5 rounded text-[11px] font-mono tracking-widest " ++ badgeClass) ]
+            [ Html.text badgeText ]
+        ]
+
+
 viewAuth : AuthState -> Html Msg
 viewAuth as_ =
     let
@@ -5084,6 +5176,9 @@ viewAuth as_ =
                     -- stored `route` is rewritten to the unit's home page (e.g.
                     -- Settings), so this arm is only here for exhaustiveness.
                     Pages.Settings.viewTab as_
+
+                RouteVerifyIndex ->
+                    { actions = [], body = viewVerifyDashboard as_.basePath, hero = Html.Extra.nothing }
     in
     Html.div []
         [ UI.Layout.viewHeader as_
