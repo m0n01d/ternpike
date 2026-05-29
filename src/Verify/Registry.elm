@@ -14,6 +14,7 @@ themselves.
 import Json.Encode as Encode
 import Verify.Core as Core
 import Verify.Specs.NotificationsPaywall as NotificationsPaywall
+import Verify.Specs.ScanRouting as ScanRouting
 import Verify.Specs.TierGating as TierGating
 
 
@@ -24,6 +25,7 @@ runAll =
     List.concat
         [ TierGating.results
         , NotificationsPaywall.results
+        , ScanRouting.results
         ]
 
 

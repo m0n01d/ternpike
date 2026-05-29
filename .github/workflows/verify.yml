@@ -52,3 +52,19 @@ jobs:
           name: verify-dom-report
           path: e2e/.results-verify
           retention-days: 14
+
+  server:
+    name: Server suite (node:test + disposable CouchDB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: Install server deps
+        run: npm --prefix server ci
+      - name: Run server suite
+        run: npm --prefix server run test:server

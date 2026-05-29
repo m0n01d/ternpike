@@ -22,7 +22,7 @@ copy if any field is missing.
 import Html exposing (Html)
 import Html.Attributes
 import Html.Extra
-import Http
+import Http.SharedTripApi
 import Json.Decode
 import RemoteData
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
@@ -106,7 +106,7 @@ viewAuthBody as_ token invite =
                         , onClick = AuthMsg JoinSharedTripDeclined
                         }
                     , Html.p [ Html.Attributes.class "text-sm text-rust" ]
-                        [ Html.text (joinErrorMessage err) ]
+                        [ Html.text (Http.SharedTripApi.joinErrorMessage err) ]
                     )
 
                 RemoteData.Success _ ->
@@ -158,28 +158,6 @@ viewAuthBody as_ token invite =
                 ]
             ]
         ]
-
-
-joinErrorMessage : Http.Error -> String
-joinErrorMessage err =
-    case err of
-        Http.BadStatus 401 ->
-            "This invite is no longer valid. Ask the inviter for a fresh link."
-
-        Http.BadStatus 403 ->
-            "This invite is for someone else."
-
-        Http.BadStatus 404 ->
-            "Invite expired or already used."
-
-        Http.BadStatus 409 ->
-            "You're already a member of that shared trip."
-
-        Http.BadStatus 410 ->
-            "This invite has expired. Ask the inviter for a fresh link."
-
-        _ ->
-            "Couldn't join — something went wrong. Try again."
 
 
 

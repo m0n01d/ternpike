@@ -7,6 +7,7 @@ module Http.SharedTripApi exposing
     , createSharedTrip
     , getShareLink
     , inviteToSharedTrip
+    , joinErrorMessage
     , joinSharedTrip
     , leaveSharedTrip
     , notifyActivity
@@ -405,3 +406,39 @@ resetShareLinks creds sharedTripId toMsg =
         , timeout = Nothing
         , tracker = Nothing
         }
+
+
+{-| Map a failed `POST /sharedtrips/join` into a user-facing message. Pulled out
+of the JoinSharedTrip page so the status→copy mapping (the regression-prone bit
+the e2e sad-paths used to guard) is unit-testable without a browser.
+
+    joinErrorMessage (Http.BadStatus 410)
+    --> "This invite has expired. Ask the inviter for a fresh link."
+
+    joinErrorMessage (Http.BadStatus 409)
+    --> "You're already a member of that shared trip."
+
+    joinErrorMessage (Http.BadStatus 403)
+    --> "This invite is for someone else."
+
+-}
+joinErrorMessage : Http.Error -> String
+joinErrorMessage err =
+    case err of
+        Http.BadStatus 401 ->
+            "This invite is no longer valid. Ask the inviter for a fresh link."
+
+        Http.BadStatus 403 ->
+            "This invite is for someone else."
+
+        Http.BadStatus 404 ->
+            "Invite expired or already used."
+
+        Http.BadStatus 409 ->
+            "You're already a member of that shared trip."
+
+        Http.BadStatus 410 ->
+            "This invite has expired. Ask the inviter for a fresh link."
+
+        _ ->
+            "Couldn't join — something went wrong. Try again."
