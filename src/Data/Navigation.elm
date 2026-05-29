@@ -45,7 +45,7 @@ type Route
     | RouteEditEntry TripId ExpenseId
     | RouteJoinSharedTrip String
     | RouteLedger TripId
-    | RouteMagicLink String
+    | RouteMagicLink String (Maybe String)
     | RouteNestPreview String
     | RouteScan TripId
     | RouteSettings

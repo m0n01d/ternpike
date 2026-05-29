@@ -4661,7 +4661,7 @@ viewAuth as_ =
                 RouteLedger _ ->
                     Pages.Ledger.viewTab as_
 
-                RouteMagicLink _ ->
+                RouteMagicLink _ _ ->
                     -- Magic-link landing is a guest-only route; an
                     -- authenticated user who somehow lands here sees
                     -- the Trips list (the real view lands in #335).

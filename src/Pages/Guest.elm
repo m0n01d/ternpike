@@ -44,13 +44,11 @@ viewGuest gs =
             -- genuine dispatch rather than a degenerate one-arm case.
             viewLogin gs
 
-        Data.Navigation.RouteMagicLink token ->
-            -- Passwordless magic-link landing. The dedicated view
-            -- (`Pages.NestPreview` conversion wall) lands in #335;
+        Data.Navigation.RouteMagicLink token _ ->
+            -- Passwordless magic-link landing (#337). The confirm-email
+            -- view + verify wiring land in the conversion-wall increment;
             -- for now fall through to the login form so the auth flow
-            -- remains functional while the funnel UI is in progress.
-            -- `token` is bound here so #335 can reference it from
-            -- this branch without a structural change.
+            -- remains functional. `token` is bound for that increment.
             viewLogin { gs | pendingJoinToken = Just token }
 
         Data.Navigation.RouteNestPreview _ ->

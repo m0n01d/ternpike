@@ -295,7 +295,7 @@ topoPosClass route =
         RouteLedger _ ->
             "bg-[position:-640px_-30px]"
 
-        RouteMagicLink _ ->
+        RouteMagicLink _ _ ->
             "bg-[position:-1280px_-80px]"
 
         RouteNestPreview _ ->
