@@ -4,9 +4,12 @@
 // avoided because rolldown-vite's preview crashes in some sandboxed CI.
 import { readFile } from 'node:fs/promises'
 import http from 'node:http'
-import { extname, join, normalize } from 'node:path'
+import { dirname, extname, join, normalize } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const dist = join(process.cwd(), 'dist')
+// Resolve dist/ relative to this file (e2e/../dist), so the server works no
+// matter what cwd Playwright spawns it from.
+const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
 const port = Number(process.env.VERIFY_PORT || 4319)
 
 const contentTypes = {
