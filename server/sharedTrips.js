@@ -338,6 +338,16 @@ async function readAllDocs(env, dbName) {
   return body.rows.map((row) => row.doc).filter(Boolean)
 }
 
+// Read every live doc from a shared-trip DB as admin. Thin exported wrapper
+// over the module-private `readAllDocs` so the invite funnel's `/invite/resolve`
+// teaser builder can aggregate `trip`/`expense`/`amend`/`void` docs server-side
+// without re-deriving the admin-fetch + `_all_docs` plumbing. A 404 (deleted /
+// nonexistent DB) yields an empty array — the caller maps "no docs" to a 403
+// via `readMetaForPreview` long before this runs, so this never leaks existence.
+export async function readSharedTripDocs(env, dbName) {
+  return readAllDocs(env, dbName)
+}
+
 // The subset of `ids` that are live (non-deleted) docs in `dbName`. Used to
 // make the copy idempotent (skip docs already in the shared DB) and to verify
 // the copy landed before any destructive delete.
