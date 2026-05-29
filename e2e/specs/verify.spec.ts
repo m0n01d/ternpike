@@ -98,4 +98,16 @@ test.describe('Verify DOM tier', () => {
       expect(m.verdict, `${m.unit}/${m.fixture}`).toBe('PASS')
     }
   })
+
+  test('the /verify dashboard lists every fixture with deep links', async ({ page }) => {
+    await page.goto('/verify')
+    await page.waitForSelector('a[href*="/verify/"]')
+    const links = await page.locator('a[href*="/verify/"]').evaluateAll((els) =>
+      els.map((e) => e.getAttribute('href')),
+    )
+    // One row per registered unit × fixture.
+    const manifest: Array<unknown> = await page.evaluate(() => (window as any).__verify.runAll())
+    expect(links.length).toBe(manifest.length)
+    expect(links.some((h) => h?.includes('/verify/TierGating/'))).toBe(true)
+  })
 })

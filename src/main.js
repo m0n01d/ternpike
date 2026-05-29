@@ -207,7 +207,7 @@ import './elements/tp-amount.js'
   // /verify/:unit/:fixture mounts a seeded fixture model with no creds and no
   // sync. Skip attachPouch entirely so nothing reaches couch.ternpike.com —
   // these routes are hermetic and backend-free (mirrors the /demo guard above).
-  const isVerify = window.location.pathname.includes('/verify/')
+  const isVerify = /\/verify(\/|$)/.test(window.location.pathname)
 
   if (isDemo) {
     attachDemo(app)
