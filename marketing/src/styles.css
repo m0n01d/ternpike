@@ -60,7 +60,7 @@
   /* Hero subhead — the demoted "Orlando to Juneau" tagline under the new H1.
      Display font in italic + rust accent, sized between H1 and lead body. */
   .hero-subhead {
-    @apply mt-3 font-display italic text-rust text-[clamp(20px,3vw,28px)] leading-[1.25] tracking-[-0.01em];
+    @apply mt-3 font-display italic text-rust-light text-[clamp(20px,3vw,28px)] leading-[1.25] tracking-[-0.01em];
   }
 
   /* Ledger row component family — the canonical @apply escape hatch.

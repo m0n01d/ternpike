@@ -1,12 +1,18 @@
-<section class="py-[100px] px-6 bg-parchment" id="origin">
-  <div class="max-w-[640px] mx-auto">
-    <div class="font-mono text-[10px] tracking-[0.25em] uppercase text-rust mb-4">{{ origin.eyebrow }}</div>
-    <h2 class="font-display font-black text-[clamp(32px,5vw,48px)] tracking-[-0.02em] leading-[1.1] text-forest mb-9">{{ origin.headline }}</h2>
-    <div class="font-body text-[20px] leading-[1.65] text-forest">
+<section class="relative overflow-hidden py-[100px] px-6" id="origin">
+  <picture class="absolute inset-0 z-0 block">
+    <source type="image/avif" srcset="/img/van-on-road.avif">
+    <source type="image/webp" srcset="/img/van-on-road.webp">
+    <img class="h-full w-full object-cover" src="/img/van-on-road.jpg" alt="A camper van on a curving road through the mountains, headed north" width="2000" height="1333" loading="lazy">
+  </picture>
+  <div aria-hidden="true" class="absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgb(26_36_18_/0.92)_0%,rgb(26_36_18_/0.66)_52%,rgb(26_36_18_/0.38)_100%)]"></div>
+  <div class="relative z-10 max-w-[640px] mx-auto">
+    <div class="font-mono text-[10px] tracking-[0.25em] uppercase text-rust-light mb-4">{{ origin.eyebrow }}</div>
+    <h2 class="font-display font-black text-[clamp(32px,5vw,48px)] tracking-[-0.02em] leading-[1.1] text-cream mb-9 [text-shadow:0_2px_24px_rgb(26_36_18_/0.5)]">{{ origin.headline }}</h2>
+    <div class="font-body text-[20px] leading-[1.65] text-cream/95">
       {% for p in origin.paragraphs %}
       <p class="mb-5 last:mb-0">{{ p }}</p>
       {% endfor %}
     </div>
-    <p class="mt-8 font-display italic font-medium text-[18px] text-muted">{{ origin.attribution }}</p>
+    <p class="mt-8 font-display italic font-medium text-[18px] text-tan">{{ origin.attribution }}</p>
   </div>
 </section>
