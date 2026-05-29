@@ -166,6 +166,28 @@ for **empty trips** (S1 with zero entries shows "No expenses yet — try a scan"
 | POST | `/auth/request-magic-link` | none | Mints `typ:"magic"` (+5m), emails `…/auth/magic?token=…&next=<shareToken>`. Always 200. |
 | POST | `/auth/verify-magic-link` | none | Requires `{ token, email }`, enforces the email, single-use `jti`; provisions exactly like `/auth/verify-code` (same response body → reuse the `Creds` path). |
 
+### Notification channels
+
+Two channels coexist without double-notifying (#341):
+
+| Channel | Endpoint | Email | Push |
+|---|---|---|---|
+| **Primary — share-link** | `POST /sharedtrips/:id/share-link` | None | None |
+| **Secondary — email-invite** | `POST /sharedtrips/:id/invite` | Yes (Resend) | Yes (`sendSharedTripInvitePush`, 24h dedup) |
+
+**Share-link is silent by design.** The server mints a `typ:"share"` JWT and returns the URL; the
+inviter calls `navigator.share` client-side. No email is sent, no push is fired. The recipient
+receives the link through whatever channel the inviter chose (iMessage, WhatsApp, etc.).
+
+**Email-invite fires both email and push.** `POST /sharedtrips/:id/invite` sends a Resend email to
+the named invitee and calls `sendSharedTripInvitePush` (fire-and-forget via `waitUntil`). The push
+is deduplicated: if the same `(inviterEmail, inviteeEmail, sharedTripId)` tuple has already
+triggered a push within the last 24h, the second call returns early. Dedup key format:
+`push:invite-dedup:<inviter>:<invitee>:<tripId>` in `PUSH_KV` (TTL = 86400 s).
+
+This means an owner can share a link and also send a direct email invite to the same person — the
+two actions are independent and only the email-invite path produces server-side notifications.
+
 **Redacted teaser** (`/invite/resolve` 200 body):
 
 ```jsonc
