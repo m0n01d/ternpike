@@ -17,7 +17,7 @@ export default defineConfig({
   testMatch: '**/verify.spec.ts',
   forbidOnly: isCI,
   fullyParallel: true,
-  outputDir: 'e2e/.results-verify',
+  outputDir: path.join(repoRoot, 'e2e/.results-verify'),
   reporter: [['list']],
   retries: 0,
   timeout: 30_000,

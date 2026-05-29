@@ -148,6 +148,7 @@ import UI.TripPicker
 import Url
 import Validate
 import Verify.Registry
+import Verify.Specs.NotificationsPaywall
 
 
 
@@ -1882,7 +1883,7 @@ init flagsJson url key =
             -- skips `attachPouch` for `/verify` paths, so nothing reaches the
             -- network. The mounted unit/fixture plus the full matrix are pushed
             -- to `window.__verify`.
-            ( AuthModel (seedVerifyAuthState fixture initialColorScheme gs)
+            ( AuthModel (seedVerifyAuthState unit fixture initialColorScheme gs)
             , verifyResults
                 (E.object
                     [ ( "mountedUnit", E.string unit )
@@ -1965,12 +1966,13 @@ init flagsJson url key =
 
 
 {-| Build the seeded `AuthState` for a `/verify/:unit/:fixture` route. The
-fixture name selects the tier to gate against; the stored route is set to
-`RouteSettings` so the real Settings page (and its tier-gated create-row)
-renders. No effects fire — see the `init` `RouteVerify` branch.
+stored route is set to `RouteSettings` so the real Settings page (with its
+tier-gated create-row and notifications panel) renders, then each unit applies
+its fixture's state via `applyUnitSeed`. No effects fire — see the `init`
+`RouteVerify` branch.
 -}
-seedVerifyAuthState : String -> ColorScheme.ColorScheme -> GuestState -> AuthState
-seedVerifyAuthState fixture colorScheme gs =
+seedVerifyAuthState : String -> String -> ColorScheme.ColorScheme -> GuestState -> AuthState
+seedVerifyAuthState unit fixture colorScheme gs =
     let
         seedCreds : Creds
         seedCreds =
@@ -1978,7 +1980,7 @@ seedVerifyAuthState fixture colorScheme gs =
             , email = "verify@ternpike.test"
             , password = ""
             , subscriptionStatus = Nothing
-            , tier = verifyFixtureTier fixture
+            , tier = Tier.Tern
             , trailblazerNumber = Nothing
             }
 
@@ -1986,7 +1988,36 @@ seedVerifyAuthState fixture colorScheme gs =
         booted =
             toAuthState seedCreds RouteSettings gs
     in
-    { booted | colorScheme = colorScheme }
+    applyUnitSeed unit fixture { booted | colorScheme = colorScheme }
+
+
+{-| Apply a unit's fixture state onto the seeded model. Each unit owns its
+fixture→state mapping (single-sourced with its `Verify.Specs` module); this just
+dispatches by unit name. The default covers tier-only units like TierGating.
+-}
+applyUnitSeed : String -> String -> AuthState -> AuthState
+applyUnitSeed unit fixture as_ =
+    case unit of
+        "NotificationsPaywall" ->
+            let
+                input : Verify.Specs.NotificationsPaywall.Input
+                input =
+                    Verify.Specs.NotificationsPaywall.inputForFixture fixture
+            in
+            { as_
+                | notificationPermission = input.permission
+                , pushSubscribed = input.subscribed
+                , standalone = input.standalone
+                , tier =
+                    if input.isPaid then
+                        Tier.Osprey
+
+                    else
+                        Tier.Tern
+            }
+
+        _ ->
+            { as_ | tier = verifyFixtureTier fixture }
 
 
 {-| Map a verification fixture name to the tier it seeds. Unknown / `tern` /

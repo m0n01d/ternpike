@@ -615,8 +615,10 @@ import './elements/tp-amount.js'
   }
 
   // Fire-and-forget initial emit. The await chain is internal — we
-  // don't gate the rest of init on it.
-  emitNotificationState()
+  // don't gate the rest of init on it. Skipped on /verify routes so the
+  // seeded fixture's notification/standalone state isn't clobbered by the
+  // real device state (same reasoning as the attachPouch skip above).
+  if (!isVerify) emitNotificationState()
 
   if (notificationsSupported && app.ports.subscribePush) {
     app.ports.subscribePush.subscribe(async ({ prefs, vapidPublicKey }) => {

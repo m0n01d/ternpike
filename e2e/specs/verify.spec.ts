@@ -22,7 +22,7 @@ async function gotoVerify(page: Page, fixture: string) {
   await page.waitForSelector('[data-verify-unit="TierGating"]')
 }
 
-test.describe('Verify DOM tier — TierGating', () => {
+test.describe('Verify DOM tier', () => {
   test('free tier locks the create-flock gate', async ({ page }) => {
     await gotoVerify(page, 'tern')
 
@@ -54,6 +54,31 @@ test.describe('Verify DOM tier — TierGating', () => {
 
     const current: VerifyCurrent = await page.evaluate(() => (window as any).__verify.current())
     expect(current.verdict).toBe('PASS')
+  })
+
+  test('osprey standalone, not yet subscribed → enable button', async ({ page }) => {
+    await page.goto('/verify/NotificationsPaywall/can-enable')
+    await page.waitForSelector('[data-verify-unit="NotificationsPaywall"]')
+    const el = page.locator('[data-verify-unit="NotificationsPaywall"]')
+    await expect(el).toHaveAttribute('data-verify-panel', 'enable')
+    await expect(el).toHaveAttribute('data-verify-enable-button', 'enabled')
+  })
+
+  test('free tier → notifications upgrade prompt + disabled button', async ({ page }) => {
+    await page.goto('/verify/NotificationsPaywall/tern')
+    await page.waitForSelector('[data-verify-unit="NotificationsPaywall"]')
+    const el = page.locator('[data-verify-unit="NotificationsPaywall"]')
+    await expect(el).toHaveAttribute('data-verify-panel', 'upgrade')
+    await expect(el).toHaveAttribute('data-verify-enable-button', 'disabled')
+    await expect(el).toHaveAttribute('data-verify-upgrade-copy', 'osprey')
+  })
+
+  test('unsupported browser → no enable button', async ({ page }) => {
+    await page.goto('/verify/NotificationsPaywall/unsupported')
+    await page.waitForSelector('[data-verify-unit="NotificationsPaywall"]')
+    const el = page.locator('[data-verify-unit="NotificationsPaywall"]')
+    await expect(el).toHaveAttribute('data-verify-panel', 'unsupported')
+    await expect(el).toHaveAttribute('data-verify-enable-button', 'absent')
   })
 
   test('the full matrix is exposed and the probe fixture FAILS', async ({ page }) => {

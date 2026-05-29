@@ -21,6 +21,8 @@ import UI.Card
 import UI.DateView
 import UI.Layout
 import UI.Rule
+import Verify.Contract
+import Verify.Specs.NotificationsPaywall
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -316,7 +318,18 @@ viewShareSection =
 
 viewNotificationsSection : AuthState -> Html Msg
 viewNotificationsSection as_ =
-    Html.div []
+    Html.div
+        (Verify.Contract.verifyAttrs "NotificationsPaywall"
+            (Verify.Specs.NotificationsPaywall.surface
+                (Verify.Specs.NotificationsPaywall.honest
+                    { isPaid = Tier.isPaid as_.tier
+                    , permission = as_.notificationPermission
+                    , standalone = as_.standalone
+                    , subscribed = as_.pushSubscribed
+                    }
+                )
+            )
+        )
         [ UI.Rule.kicker "NOTIFICATIONS"
         , UI.Card.subCard (viewNotificationsBody as_)
         ]
@@ -324,72 +337,80 @@ viewNotificationsSection as_ =
 
 viewNotificationsBody : AuthState -> List (Html Msg)
 viewNotificationsBody as_ =
-    if as_.notificationPermission == Notifications.Unsupported then
-        [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-            [ Html.text "Notifications aren't available in this browser. On iPhone or iPad, install Ternpike to your home screen first — tap the Share button in Safari, then choose Add to Home Screen." ]
-        ]
-
-    else if not (Tier.isPaid as_.tier) then
-        [ Html.div [ Html.Attributes.class "flex items-start justify-between gap-3" ]
-            [ Html.p [ Html.Attributes.class "text-xs text-muted flex-1" ]
-                [ Html.text "Upgrade to Osprey to enable weekly scan reminders." ]
-            , Html.button
-                [ Html.Attributes.type_ "button"
-                , Html.Attributes.disabled True
-                , Html.Attributes.class "shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg bg-cream-deep text-muted border border-tan cursor-not-allowed"
-                ]
-                [ Html.text "Enable notifications" ]
+    case
+        Notifications.panelState
+            { isPaid = Tier.isPaid as_.tier
+            , permission = as_.notificationPermission
+            , standalone = as_.standalone
+            , subscribed = as_.pushSubscribed
+            }
+    of
+        Notifications.PanelUnsupported ->
+            [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
+                [ Html.text "Notifications aren't available in this browser. On iPhone or iPad, install Ternpike to your home screen first — tap the Share button in Safari, then choose Add to Home Screen." ]
             ]
-        ]
 
-    else if as_.standalone == Notifications.InBrowser then
-        [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-            [ Html.text "Install Ternpike to your home screen to enable notifications. Tap the Share button in Safari, then choose Add to Home Screen." ]
-        ]
+        Notifications.PanelUpgradeRequired ->
+            [ Html.div [ Html.Attributes.class "flex items-start justify-between gap-3" ]
+                [ Html.p [ Html.Attributes.class "text-xs text-muted flex-1" ]
+                    [ Html.text "Upgrade to Osprey to enable weekly scan reminders." ]
+                , Html.button
+                    [ Html.Attributes.type_ "button"
+                    , Html.Attributes.disabled True
+                    , Html.Attributes.class "shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg bg-cream-deep text-muted border border-tan cursor-not-allowed"
+                    ]
+                    [ Html.text "Enable notifications" ]
+                ]
+            ]
 
-    else if as_.notificationPermission == Notifications.Denied then
-        [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-            [ Html.text "Notifications are blocked. Re-enable them in iOS Settings → Notifications → Ternpike." ]
-        ]
+        Notifications.PanelNeedsInstall ->
+            [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
+                [ Html.text "Install Ternpike to your home screen to enable notifications. Tap the Share button in Safari, then choose Add to Home Screen." ]
+            ]
 
-    else if as_.notificationPermission == Notifications.Granted && as_.pushSubscribed then
-        [ viewToggleRow
-            { helper = "Get a push when you're removed from a shared trip or when billing ownership is transferred to you."
-            , label = "Shared trip access change"
-            , msg = AuthMsg (ToggleNotificationPref Notifications.SharedTripAccessChange)
-            , value = as_.notificationPrefs.sharedTripAccessChange
-            }
-        , viewToggleRow
-            { helper = "Get a push when a co-traveler adds, edits, or voids an expense on a shared trip."
-            , label = "Shared trip activity"
-            , msg = AuthMsg (ToggleNotificationPref Notifications.SharedTripActivity)
-            , value = as_.notificationPrefs.sharedTripActivity
-            }
-        , viewToggleRow
-            { helper = "Get a push when someone invites you to a shared trip. Tap to accept or decline in Settings."
-            , label = "Shared trip invite"
-            , msg = AuthMsg (ToggleNotificationPref Notifications.SharedTripInvite)
-            , value = as_.notificationPrefs.sharedTripInvite
-            }
-        , viewToggleRow
-            { helper = "Get notified if your data hasn't backed up in 3 days. Recommended — this is a data protection alert, not an engagement nudge."
-            , label = "Sync stalled alert"
-            , msg = AuthMsg (ToggleNotificationPref Notifications.SyncStalled)
-            , value = as_.notificationPrefs.syncStalled
-            }
-        , viewToggleRow
-            { helper = "Every Friday at 5pm UTC, we'll nudge you to scan this week's receipts."
-            , label = "Weekly receipt reminder"
-            , msg = AuthMsg (ToggleNotificationPref Notifications.WeeklyScanReminder)
-            , value = as_.notificationPrefs.weeklyScanReminder
-            }
-        ]
+        Notifications.PanelBlocked ->
+            [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
+                [ Html.text "Notifications are blocked. Re-enable them in iOS Settings → Notifications → Ternpike." ]
+            ]
 
-    else
-        [ Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
-            [ Html.text "Weekly Friday reminder to scan receipts. You can turn it off anytime." ]
-        , UI.Button.primary { label = "Enable notifications", onClick = AuthMsg RequestPushPermission }
-        ]
+        Notifications.PanelSubscribed ->
+            [ viewToggleRow
+                { helper = "Get a push when you're removed from a shared trip or when billing ownership is transferred to you."
+                , label = "Shared trip access change"
+                , msg = AuthMsg (ToggleNotificationPref Notifications.SharedTripAccessChange)
+                , value = as_.notificationPrefs.sharedTripAccessChange
+                }
+            , viewToggleRow
+                { helper = "Get a push when a co-traveler adds, edits, or voids an expense on a shared trip."
+                , label = "Shared trip activity"
+                , msg = AuthMsg (ToggleNotificationPref Notifications.SharedTripActivity)
+                , value = as_.notificationPrefs.sharedTripActivity
+                }
+            , viewToggleRow
+                { helper = "Get a push when someone invites you to a shared trip. Tap to accept or decline in Settings."
+                , label = "Shared trip invite"
+                , msg = AuthMsg (ToggleNotificationPref Notifications.SharedTripInvite)
+                , value = as_.notificationPrefs.sharedTripInvite
+                }
+            , viewToggleRow
+                { helper = "Get notified if your data hasn't backed up in 3 days. Recommended — this is a data protection alert, not an engagement nudge."
+                , label = "Sync stalled alert"
+                , msg = AuthMsg (ToggleNotificationPref Notifications.SyncStalled)
+                , value = as_.notificationPrefs.syncStalled
+                }
+            , viewToggleRow
+                { helper = "Every Friday at 5pm UTC, we'll nudge you to scan this week's receipts."
+                , label = "Weekly receipt reminder"
+                , msg = AuthMsg (ToggleNotificationPref Notifications.WeeklyScanReminder)
+                , value = as_.notificationPrefs.weeklyScanReminder
+                }
+            ]
+
+        Notifications.PanelCanEnable ->
+            [ Html.p [ Html.Attributes.class "text-xs text-muted mb-3" ]
+                [ Html.text "Weekly Friday reminder to scan receipts. You can turn it off anytime." ]
+            , UI.Button.primary { label = "Enable notifications", onClick = AuthMsg RequestPushPermission }
+            ]
 
 
 {-| Minimal record `viewPlanSection` actually reads from `AuthState`.
