@@ -461,6 +461,7 @@ type AuthMsg_
     | OcrImagePrepared { dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int }
     | OpenCreateSharedTripModal
     | OpenEditTripForm Trip
+    | OpenInviteCrewModal SharedTripId
     | OpenInviteModal SharedTripId
     | OpenLeaveConfirmModal SharedTripId
     | OpenLedgerMenu ExpenseId

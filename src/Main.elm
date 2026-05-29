@@ -4404,6 +4404,19 @@ updateAuth msg as_ =
                     , Cmd.none
                     )
 
+        OpenInviteCrewModal flockId ->
+            -- Open the modal in NotAsked so its explanatory copy + confirm
+            -- button are actually reachable; the request fires from the
+            -- modal's "Get invite link" button (GetShareLinkClicked), matching
+            -- the Reset-links / Email-invite flows.
+            ( AuthModel
+                (setSharedTripModal
+                    (SharedTripUi.InviteCrewModal flockId { request = RemoteData.NotAsked })
+                    as_
+                )
+            , Cmd.none
+            )
+
         GetShareLinkClicked flockId ->
             ( AuthModel
                 (setSharedTripModal

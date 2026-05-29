@@ -134,7 +134,7 @@ viewSharedTripCard as_ currentUser sharedTrip =
             }
         , Html.div [ Html.Attributes.class "flex flex-wrap gap-2 mt-3" ]
             (if owner then
-                [ UI.Button.secondary { label = "Invite crew", onClick = AuthMsg (GetShareLinkClicked sharedTrip.id) }
+                [ UI.Button.secondary { label = "Invite crew", onClick = AuthMsg (OpenInviteCrewModal sharedTrip.id) }
                 , UI.Button.secondary { label = "Email invite", onClick = AuthMsg (OpenInviteModal sharedTrip.id) }
                 , UI.Button.ghost { label = "Reset links", onClick = AuthMsg (ResetLinksClicked sharedTrip.id) }
                 , UI.Button.ghost { label = "Transfer ownership", onClick = AuthMsg (OpenTransferModal sharedTrip.id) }
