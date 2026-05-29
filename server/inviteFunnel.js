@@ -75,6 +75,86 @@ export async function mintShareToken({ env, flockId, inviter, epoch }) {
 export const shareLinkUrl = (token) =>
   `${NEST_PREVIEW_URL}?token=${encodeURIComponent(token)}`
 
+// Magic (passwordless-signup) tokens live 15 minutes (#333). Short-lived,
+// single-use, and email-confirmed at redemption — see docs/nest-invite-funnel.md
+// §A "Magic token" and §C. The doc text mentions a 5m example; the #333 issue
+// fixes the lifetime at 15m, which is the operative spec here.
+export const MAGIC_TOKEN_EXPIRY_SECONDS = 15 * 60
+
+// Mint a `typ: "magic"` token. Carries ONLY the recipient email + a per-token
+// `jti` nonce for the single-use deny-list. Does NOT carry the invite — the
+// share token rides through the magic-link round-trip via the `next` param
+// (docs/nest-invite-funnel.md §D) and drives auto-join after signup.
+export async function mintMagicToken({ env, email }) {
+  const iat = Math.floor(Date.now() / 1000)
+  const payload = {
+    typ: 'magic',
+    email: String(email).toLowerCase(),
+    jti: randomJti(),
+    iat,
+    exp: iat + MAGIC_TOKEN_EXPIRY_SECONDS,
+  }
+  const token = await signJwt(payload, env.SERVER_SECRET)
+  return { token, payload }
+}
+
+// Build the magic-link URL the email points at. `appBaseUrl` is the app origin
+// (e.g. https://app.ternpike.com); the magic token rides in `token` and the
+// opaque share token (or any client continuation) rides in `next`. Both are
+// url-encoded. `next` is opaque to the server — the client consumes it.
+export function magicLinkUrl(appBaseUrl, token, next) {
+  const base = `${appBaseUrl}/auth/magic?token=${encodeURIComponent(token)}`
+  if (typeof next === 'string' && next) {
+    return `${base}&next=${encodeURIComponent(next)}`
+  }
+  return base
+}
+
+// PURE redemption guard for the magic-link verify path (#333). Takes the raw
+// `verifyJwt` result plus the caller-submitted `bodyEmail` and returns a tagged
+// outcome the route maps to a status. Factored out so the security-critical
+// rules (typ-pinning, email-confirm) are unit-testable without CouchDB:
+//
+//   verified.ok === false, reason 'expired'  → { ok:false, status:410, error:'expired' }
+//   verified.ok === false (any other reason) → { ok:false, status:401, error:'invalid_token' }
+//   payload.typ !== 'magic'                   → { ok:false, status:401, error:'invalid_token' }
+//   payload.email missing                     → { ok:false, status:401, error:'invalid_token' }
+//   bodyEmail missing / mismatched            → { ok:false, status:403, error:'email_mismatch' }
+//   otherwise                                 → { ok:true, email, jti, exp }
+//
+// The email-confirm (`bodyEmail === payload.email`, case-insensitive) is THE
+// mitigation for the forwarding login-CSRF (docs/nest-invite-funnel.md §A): a
+// forwarded link must not let a third party create an account under the
+// original recipient's address. The single-use `jti` deny-list check + write
+// happen in the route (they need KV + the env), not here.
+export function checkMagicRedemption(verified, bodyEmail) {
+  if (!verified || verified.ok !== true) {
+    if (verified && verified.reason === 'expired') {
+      return { ok: false, status: 410, error: 'expired' }
+    }
+    return { ok: false, status: 401, error: 'invalid_token' }
+  }
+  const payload = verified.payload
+  if (!payload || payload.typ !== 'magic') {
+    return { ok: false, status: 401, error: 'invalid_token' }
+  }
+  if (typeof payload.email !== 'string' || !payload.email) {
+    return { ok: false, status: 401, error: 'invalid_token' }
+  }
+  if (typeof bodyEmail !== 'string' || !bodyEmail) {
+    return { ok: false, status: 403, error: 'email_mismatch' }
+  }
+  if (bodyEmail.toLowerCase() !== payload.email.toLowerCase()) {
+    return { ok: false, status: 403, error: 'email_mismatch' }
+  }
+  return {
+    ok: true,
+    email: payload.email,
+    jti: typeof payload.jti === 'string' ? payload.jti : null,
+    exp: typeof payload.exp === 'number' ? payload.exp : null,
+  }
+}
+
 // Tagged error consumers throw and the route layer maps to a JSON response.
 // `{ status, error }` mirrors the shape every other sharedtrips endpoint
 // returns (`c.json({ ok: false, error }, status)`).
