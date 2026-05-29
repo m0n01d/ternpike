@@ -740,4 +740,21 @@ import './elements/tp-amount.js'
     })
   }
 
+  // ── Nest funnel analytics (#340) ──────────────────────────────────────────
+  // Fire-and-forget beacon to POST /invite/track. No auth, no PII — the
+  // payload is { stage, flockId } only. Failures are swallowed silently so
+  // a blocked beacon never disrupts the funnel UX.
+  if (app.ports.trackFunnel) {
+    app.ports.trackFunnel.subscribe(({ stage, flockId }) => {
+      fetch(`${flags.backendUrl}/invite/track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flockId, stage }),
+      }).catch(() => {
+        // Beacon failures are intentionally swallowed — analytics must
+        // never block or degrade the funnel.
+      })
+    })
+  }
+
 })()

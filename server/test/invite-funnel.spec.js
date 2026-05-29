@@ -10,6 +10,7 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  FUNNEL_STAGE_ALLOWLIST,
   GUEST_PREVIEW_GATE,
   SHARE_TOKEN_EXPIRY_SECONDS,
   assertPreviewable,
@@ -18,6 +19,7 @@ import {
   buildTeaser,
   classifyJoinToken,
   deriveInviterName,
+  isAllowedFunnelStage,
   mintShareToken,
   randomJti,
   readMetaForPreview,
@@ -538,5 +540,33 @@ describe('[Invite] /sharedtrips/join frozen rejection (#334)', () => {
         ),
       (e) => e.status === 403 && e.error === 'trip_frozen',
     )
+  })
+})
+
+describe('[Analytics] isAllowedFunnelStage allowlist (#340)', () => {
+  test('all four canonical stages are allowed', () => {
+    for (const stage of FUNNEL_STAGE_ALLOWLIST) {
+      assert.equal(isAllowedFunnelStage(stage), true, `stage "${stage}" should be allowed`)
+    }
+  })
+
+  test('exact allowlist contains the four expected stages', () => {
+    assert.deepEqual(
+      [...FUNNEL_STAGE_ALLOWLIST].sort(),
+      ['convert_requested', 'join_succeeded', 'nest_preview_viewed', 'scan_try_succeeded'],
+    )
+  })
+
+  test('unknown stages are rejected', () => {
+    const unknown = ['', 'foo', 'NEST_PREVIEW_VIEWED', 'nest-preview-viewed', 'admin', '../etc']
+    for (const stage of unknown) {
+      assert.equal(isAllowedFunnelStage(stage), false, `stage "${stage}" should be rejected`)
+    }
+  })
+
+  test('non-string inputs are rejected', () => {
+    for (const val of [null, undefined, 42, {}, [], true]) {
+      assert.equal(isAllowedFunnelStage(val), false, `${JSON.stringify(val)} should be rejected`)
+    }
   })
 })

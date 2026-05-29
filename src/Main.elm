@@ -67,6 +67,7 @@ For the full narrative and document ID conventions, see `docs/architecture.md`.
 
 -}
 
+import Analytics
 import Browser
 import Browser.Dom
 import Browser.Navigation as Nav
@@ -228,6 +229,13 @@ port nativeShare : { mode : String, text : String, title : String, url : String 
 
 
 port nativeShareResult : ({ ok : Bool, reason : String } -> msg) -> Sub msg
+
+
+{-| Fire-and-forget funnel analytics beacon (#340). Payload is
+`{ stage, flockId }` — see `Analytics.elm` for the stage allowlist.
+The JS handler POSTs to `/invite/track` (no auth, no PII).
+-}
+port trackFunnel : { flockId : String, stage : String } -> Cmd msg
 
 
 
@@ -2239,7 +2247,17 @@ updateGuest msg gs =
             requestMagicLink gs
 
         MagicLinkResult result ->
-            ( GuestModel { gs | magicLinkRequest = RemoteData.fromResult result }, Cmd.none )
+            ( GuestModel { gs | magicLinkRequest = RemoteData.fromResult result }
+            , case result of
+                Ok _ ->
+                    trackFunnel
+                        { flockId = Maybe.withDefault "" (shareTokenFromRoute gs.route)
+                        , stage = Analytics.convertRequested
+                        }
+
+                Err _ ->
+                    Cmd.none
+            )
 
         ConfirmMagicEmail ->
             case gs.route of
@@ -2307,14 +2325,27 @@ updateGuest msg gs =
                     ( GuestModel { gs | guestScan = NoScan }, Cmd.none )
 
         GuestScanResult (Ok ocr) ->
-            ( GuestModel { gs | guestScan = Scanned ocr }, Cmd.none )
+            ( GuestModel { gs | guestScan = Scanned ocr }
+            , trackFunnel
+                { flockId = Maybe.withDefault "" (shareTokenFromRoute gs.route)
+                , stage = Analytics.scanTrySucceeded
+                }
+            )
 
         GuestScanResult (Err _) ->
             ( GuestModel { gs | guestScan = NoScan }, Cmd.none )
 
         NestPreviewResult result ->
             ( GuestModel { gs | nestPreview = RemoteData.fromResult result }
-            , Cmd.none
+            , case result of
+                Ok _ ->
+                    trackFunnel
+                        { flockId = Maybe.withDefault "" (shareTokenFromRoute gs.route)
+                        , stage = Analytics.nestPreviewViewed
+                        }
+
+                Err _ ->
+                    Cmd.none
             )
 
         ResendCodeResult result ->
@@ -4472,6 +4503,10 @@ updateAuth msg as_ =
                     , Cmd.batch
                         [ Nav.pushUrl as_.key (as_.basePath ++ "settings")
                         , toastFor
+                        , trackFunnel
+                            { flockId = Data.SharedTripId.toString response.sharedTripId
+                            , stage = Analytics.joinSucceeded
+                            }
                         ]
                     )
 
