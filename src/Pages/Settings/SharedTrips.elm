@@ -38,6 +38,7 @@ import UI.Card
 import UI.Rule
 import UI.SharedTripBadge
 import Verify.Contract
+import Verify.Specs.SharedTripCard
 import Verify.Specs.TierGating
 
 
@@ -115,9 +116,16 @@ viewSharedTripCard as_ currentUser sharedTrip =
 
         membersExpanded =
             SharedTripUi.isExpanded sharedTrip.id as_.sharedTripUi
+
+        cardInput : Verify.Specs.SharedTripCard.Input
+        cardInput =
+            Verify.Specs.SharedTripCard.honest currentUser sharedTrip
     in
     UI.Card.subCard
-        [ Html.div [ Html.Attributes.class "flex items-start justify-between gap-3 mb-3" ]
+        [ Html.div
+            (Html.Attributes.class "flex items-start justify-between gap-3 mb-3"
+                :: Verify.Contract.verifyAttrs "SharedTripCard" (Verify.Specs.SharedTripCard.surface cardInput)
+            )
             [ Html.div [ Html.Attributes.class "flex flex-col gap-1.5 min-w-0" ]
                 [ UI.SharedTripBadge.view sharedTrip
                 , Html.p [ Html.Attributes.class "text-xs text-muted font-mono uppercase tracking-widest" ]
