@@ -1,11 +1,13 @@
 module Data.Notifications exposing
     ( NotificationPrefs
     , NotificationToggle(..)
+    , PanelState(..)
     , Permission(..)
     , StandaloneState(..)
     , decodePrefs
     , defaultPrefs
     , encodePrefs
+    , panelState
     , permissionFromString
     )
 
@@ -143,6 +145,81 @@ either way.
 type StandaloneState
     = InBrowser
     | Standalone
+
+
+
+-- PANEL STATE
+
+
+{-| Which branch the Settings → Notifications panel renders. The single source
+of truth for that decision, shared by the view (`Pages.Settings`) and the
+verification surface (`Verify.Specs.NotificationsPaywall`), so the two can't
+drift.
+
+  - `PanelUnsupported` — the browser has no Notification API.
+  - `PanelUpgradeRequired` — free tier; show the upgrade prompt + disabled button.
+  - `PanelNeedsInstall` — paid but running in a browser tab, not the installed PWA.
+  - `PanelBlocked` — permission denied; show re-enable instructions.
+  - `PanelSubscribed` — granted and subscribed; show the per-pref toggle rows.
+  - `PanelCanEnable` — paid, standalone, not yet subscribed; show the Enable button.
+
+-}
+type PanelState
+    = PanelBlocked
+    | PanelCanEnable
+    | PanelNeedsInstall
+    | PanelSubscribed
+    | PanelUnsupported
+    | PanelUpgradeRequired
+
+
+{-| Decide which notifications-panel branch applies. Mirrors the precedence in
+`Pages.Settings.viewNotificationsBody` exactly.
+
+    panelState { isPaid = False, permission = Granted, standalone = Standalone, subscribed = False }
+    --> PanelUpgradeRequired
+
+    panelState { isPaid = True, permission = Granted, standalone = Standalone, subscribed = True }
+    --> PanelSubscribed
+
+    panelState { isPaid = True, permission = Default, standalone = InBrowser, subscribed = False }
+    --> PanelNeedsInstall
+
+    panelState { isPaid = True, permission = Denied, standalone = Standalone, subscribed = False }
+    --> PanelBlocked
+
+    panelState { isPaid = True, permission = Default, standalone = Standalone, subscribed = False }
+    --> PanelCanEnable
+
+    panelState { isPaid = True, permission = Unsupported, standalone = Standalone, subscribed = True }
+    --> PanelUnsupported
+
+-}
+panelState :
+    { isPaid : Bool
+    , permission : Permission
+    , standalone : StandaloneState
+    , subscribed : Bool
+    }
+    -> PanelState
+panelState { isPaid, permission, standalone, subscribed } =
+    if permission == Unsupported then
+        PanelUnsupported
+
+    else if not isPaid then
+        PanelUpgradeRequired
+
+    else if standalone == InBrowser then
+        PanelNeedsInstall
+
+    else if permission == Denied then
+        PanelBlocked
+
+    else if permission == Granted && subscribed then
+        PanelSubscribed
+
+    else
+        PanelCanEnable
 
 
 

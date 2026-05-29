@@ -312,3 +312,6 @@ topoPosClass route =
 
         RouteTrips ->
             "bg-[position:-580px_-1100px]"
+
+        RouteVerify _ _ ->
+            "bg-[position:-1280px_-80px]"

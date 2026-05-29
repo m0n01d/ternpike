@@ -51,3 +51,4 @@ type Route
     | RouteSettings
     | RouteStats TripId
     | RouteTrips
+    | RouteVerify String String

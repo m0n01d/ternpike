@@ -147,6 +147,8 @@ import UI.TripFormModal
 import UI.TripPicker
 import Url
 import Validate
+import Verify.Registry
+import Verify.Specs.NotificationsPaywall
 
 
 
@@ -236,6 +238,13 @@ port nativeShareResult : ({ ok : Bool, reason : String } -> msg) -> Sub msg
 The JS handler POSTs to `/invite/track` (no auth, no PII).
 -}
 port trackFunnel : { flockId : String, stage : String } -> Cmd msg
+
+
+{-| Push the full verification matrix to JS so the `/verify` routes can expose
+`window.__verify`. Fired only when booting into a `RouteVerify` URL. See
+`Verify.Registry` and the Verify track plan.
+-}
+port verifyResults : E.Value -> Cmd msg
 
 
 
@@ -1867,8 +1876,24 @@ init flagsJson url key =
             , version = dec "version"
             }
     in
-    case authCreds of
-        Nothing ->
+    case ( initialRoute, authCreds ) of
+        ( RouteVerify unit fixture, _ ) ->
+            -- Verification routes mount a seeded fixture model and skip the
+            -- normal boot entirely: no `fetchMe`, no sync, no PouchDB. JS also
+            -- skips `attachPouch` for `/verify` paths, so nothing reaches the
+            -- network. The mounted unit/fixture plus the full matrix are pushed
+            -- to `window.__verify`.
+            ( AuthModel (seedVerifyAuthState unit fixture initialColorScheme gs)
+            , verifyResults
+                (E.object
+                    [ ( "mountedUnit", E.string unit )
+                    , ( "mountedFixture", E.string fixture )
+                    , ( "results", Verify.Registry.encode Verify.Registry.runAll )
+                    ]
+                )
+            )
+
+        ( _, Nothing ) ->
             let
                 bootFetchCmd =
                     case initialRoute of
@@ -1894,7 +1919,7 @@ init flagsJson url key =
             , bootFetchCmd
             )
 
-        Just creds ->
+        ( _, Just creds ) ->
             let
                 as_ =
                     { booted | colorScheme = initialColorScheme }
@@ -1938,6 +1963,76 @@ init flagsJson url key =
             -- of PouchDB, and a stale tier from cached `Creds` would
             -- silently mis-gate paid features until the next login.
             ( AuthModel bootedFinal, Cmd.batch [ fetchMe bootedFinal, checkoutCmd ] )
+
+
+{-| Build the seeded `AuthState` for a `/verify/:unit/:fixture` route. The
+stored route is set to `RouteSettings` so the real Settings page (with its
+tier-gated create-row and notifications panel) renders, then each unit applies
+its fixture's state via `applyUnitSeed`. No effects fire — see the `init`
+`RouteVerify` branch.
+-}
+seedVerifyAuthState : String -> String -> ColorScheme.ColorScheme -> GuestState -> AuthState
+seedVerifyAuthState unit fixture colorScheme gs =
+    let
+        seedCreds : Creds
+        seedCreds =
+            { dbName = ""
+            , email = "verify@ternpike.test"
+            , password = ""
+            , subscriptionStatus = Nothing
+            , tier = Tier.Tern
+            , trailblazerNumber = Nothing
+            }
+
+        booted : AuthState
+        booted =
+            toAuthState seedCreds RouteSettings gs
+    in
+    applyUnitSeed unit fixture { booted | colorScheme = colorScheme }
+
+
+{-| Apply a unit's fixture state onto the seeded model. Each unit owns its
+fixture→state mapping (single-sourced with its `Verify.Specs` module); this just
+dispatches by unit name. The default covers tier-only units like TierGating.
+-}
+applyUnitSeed : String -> String -> AuthState -> AuthState
+applyUnitSeed unit fixture as_ =
+    case unit of
+        "NotificationsPaywall" ->
+            let
+                input : Verify.Specs.NotificationsPaywall.Input
+                input =
+                    Verify.Specs.NotificationsPaywall.inputForFixture fixture
+            in
+            { as_
+                | notificationPermission = input.permission
+                , pushSubscribed = input.subscribed
+                , standalone = input.standalone
+                , tier =
+                    if input.isPaid then
+                        Tier.Osprey
+
+                    else
+                        Tier.Tern
+            }
+
+        _ ->
+            { as_ | tier = verifyFixtureTier fixture }
+
+
+{-| Map a verification fixture name to the tier it seeds. Unknown / `tern` /
+probe fixtures fall back to the free tier.
+-}
+verifyFixtureTier : String -> Tier
+verifyFixtureTier fixture =
+    if String.contains "osprey" fixture then
+        Tier.Osprey
+
+    else if String.contains "trailblazer" fixture then
+        Tier.Trailblazer
+
+    else
+        Tier.Tern
 
 
 
@@ -4983,6 +5078,12 @@ viewAuth as_ =
 
                 RouteTrips ->
                     Pages.Trips.viewTab as_
+
+                RouteVerify _ _ ->
+                    -- Verification routes mount a seeded fixture model whose
+                    -- stored `route` is rewritten to the unit's home page (e.g.
+                    -- Settings), so this arm is only here for exhaustiveness.
+                    Pages.Settings.viewTab as_
     in
     Html.div []
         [ UI.Layout.viewHeader as_
