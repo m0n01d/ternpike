@@ -1,9 +1,9 @@
 name: E2E
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  schedule:
+    - cron: "0 7 * * *" # nightly 07:00 UTC
+  workflow_dispatch: # and on-demand from the Actions tab
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -31,15 +31,9 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      # Pre-build the Elm/Vite bundle so global-setup.ts can launch
-      # `vite preview` against dist/ instead of paying the `vite dev` Elm
-      # cold-compile cost on every CI run. See issue #112.
       - name: Build app
         run: npm run build
 
-      # Only run the mobile project on CI — desktop doubles runtime for
-      # negligible coverage gain at this stage. Re-enable both locally with
-      # `npm run e2e` (no project filter).
       - name: Run E2E
         run: npx playwright test --config=e2e/playwright.config.ts --project=mobile
 
