@@ -1,7 +1,9 @@
 # Nest Invite Funnel
 
-> Status: **spec / planned.** This document is the design; the work is tracked as a multi-issue
-> track (see "Issue track" at the bottom). No funnel code has shipped yet.
+> Status: **core implemented (on PR #342), enhancements pending.** The full
+> invite→preview→scan→convert→join flow is built and green (#327–#337, #341). The remaining
+> enhancements — push/A2HS (#338), owner share-link UI (#339), analytics (#340) — stay as filed
+> issues for a follow-up pass. Server integration + browser e2e run in CI.
 
 A "Nest" is a shared trip ledger that several people contribute to. This funnel turns a tapped
 invite link into a retained, registered crewmate, with the lowest friction the web allows. It is
