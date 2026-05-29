@@ -2148,12 +2148,36 @@ updateShared msg model =
                     )
 
         LinkClicked (Browser.Internal url) ->
-            case model of
-                GuestModel gs ->
-                    ( GuestModel gs, Nav.pushUrl gs.key (Url.toString url) )
+            let
+                ( navKey, basePath ) =
+                    case model of
+                        GuestModel gs ->
+                            ( gs.key, gs.basePath )
 
-                AuthModel as_ ->
-                    ( AuthModel as_, Nav.pushUrl as_.key (Url.toString url) )
+                        AuthModel as_ ->
+                            ( as_.key, as_.basePath )
+
+                isVerifyRoute : Bool
+                isVerifyRoute =
+                    case Routing.routeFromUrl basePath url of
+                        RouteVerify _ _ ->
+                            True
+
+                        RouteVerifyIndex ->
+                            True
+
+                        _ ->
+                            False
+            in
+            -- /verify routes seed their fixture model in `init`, so navigating
+            -- to one (e.g. clicking a dashboard row) must do a full page load —
+            -- client-side pushUrl wouldn't re-seed. A reload is fine for this
+            -- dev/inspection surface.
+            if isVerifyRoute then
+                ( model, Nav.load (Url.toString url) )
+
+            else
+                ( model, Nav.pushUrl navKey (Url.toString url) )
 
         LinkClicked (Browser.External href) ->
             ( model, Nav.load href )
