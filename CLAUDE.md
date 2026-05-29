@@ -792,6 +792,37 @@ The *real* seed path (`seedPouchDB` in `e2e/utils/seed.ts`) uses a different sen
 - **One escape hatch:** `@layer components` with `@apply` is allowed when the same multi-utility chain repeats across N>1 rows of structurally identical markup (the Ledger row is the canonical example). Name the class after what it is (`.ledger-row`, not `.row`). One use = inline the utilities.
 - `src/theme.css` is the single source of truth. Both `src/global.css` (app) and `marketing/src/styles.css` (marketing) `@import` it. Don't redeclare tokens anywhere else.
 
+## Marketing photography & image assets
+
+**Marketing photos live in `marketing/src/img/` and are served at `/img/`.** `marketing/build.mjs`'s static passthrough copies the whole `img/` dir (any extension) into `dist/img/`, alongside `og-default.png`. New photo? Drop the source in `marketing/src/img/`, process it (below), reference it as `/img/<name>.<ext>`.
+
+The current Alaska set is **free-license Unsplash placeholders** tinted toward the forest/sage palette (see #362 / `photo-treatment-preview.html` for the treatment recipe). When we shoot our own, **replace the file in place keeping the same basename** so no markup changes — then re-run the processing pass to regenerate the AVIF/WebP variants.
+
+### Processing pass — run this on every new/replaced photo
+
+There are no system image tools in the container; use `sharp` (prebuilt, bundles libvips — `npm i sharp` in a throwaway dir). The pipeline that shipped in #362:
+
+- **Photos rendered in a `<picture>` (hero, origin band, any future `<img>` photo):** emit three formats from the source — AVIF (`quality: 52`), WebP (`quality: 74`), and a mozjpeg JPEG fallback (`quality: 74, mozjpeg: true`) — keeping the source dimensions. Browsers pick AVIF; the JPEG is the floor for ancient ones.
+- **CSS background textures used at low opacity** (e.g. `forest-texture.jpg` behind pricing/footer at ~5%): quality is invisible, so downscale hard and crush it — `resize({ width: 1200 }).jpeg({ quality: 42, mozjpeg: true })`. Keep the `.jpg` basename so the `bg-[url('/img/…')]` utility is unchanged (no `<picture>` for backgrounds).
+- **Not-yet-wired-in candidates:** just mozjpeg-recompress the JPEG (`quality: 72`) to shave repo weight; defer AVIF/WebP until they're actually placed in the page.
+
+Real numbers from #362: hero 887KB→393KB served (AVIF), origin band 420KB→192KB, `forest-texture` 368KB→70KB.
+
+### `<picture>` markup pattern (Tailwind, no inline styles)
+
+Positioning goes on the `<picture>` (make it `block`); sizing on the inner `<img>`. AVIF first, WebP second, JPEG `<img>` last. Always keep intrinsic `width`/`height` (prevents layout shift); hero photos are eager with `fetchpriority="high"`, everything below the fold is `loading="lazy"`. Decorative tint/texture overlays are `aria-hidden="true"`.
+
+```html
+<picture class="absolute inset-0 z-0 block">
+  <source type="image/avif" srcset="/img/hero-alaska-range.avif">
+  <source type="image/webp" srcset="/img/hero-alaska-range.webp">
+  <img class="h-full w-full object-cover" src="/img/hero-alaska-range.jpg"
+       alt="…" width="2400" height="1601" fetchpriority="high">
+</picture>
+```
+
+After processing, **rebuild (`npm --prefix marketing run build`), confirm the variants land in `marketing/dist/img/`, and re-screenshot** the affected sections per the UI-vetting rules above — AVIF/quality artifacts are invisible in prose and obvious in a screenshot. Commit the `.avif`/`.webp`/`.jpg` together with the refreshed screenshots.
+
 ## Rendering dates, times, and money
 
 **Every DOM render of a date, time, or money value goes through a typed UI element wrapper.** The wrappers (`UI.DateView.short` / `monthDay` / `dateOf` / `timeOf`, `UI.MoneyView.amount` / `wholeDollars`) emit registered web components (`<relative-time>`, `<tp-amount>`) that delegate locale, timezone, currency, and a11y (machine-readable `<time>` semantics, spoken-form `aria-label`s on money) to the browser via `Intl.*`. The Elm side has no business duplicating any of that.
