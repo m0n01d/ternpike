@@ -208,10 +208,17 @@ the auth tree, which has always carried its own `route`.
 
 Transient view state (`statsHover : Data.StatsHover.Hover`,
 `statsGranularity : Maybe Data.StatsGranularity.Granularity`,
-`showDayIntensity : Bool`, `showInstallPrompt : Bool`, `scanQueue`,
-`confirmDeleteTrip`, etc.) also lives on `AuthState`, but it never
-persists — these fields are reset on the relevant pointer-leave /
-submit / sign-out event. `showInstallPrompt` is driven by the
+`showDayIntensity : Bool`, `showInstallPrompt : Bool`,
+`postJoinPrompt : Bool`, `scanQueue`, `confirmDeleteTrip`, etc.) also
+lives on `AuthState`, but it never persists — these fields are reset on
+the relevant pointer-leave / submit / sign-out event. `postJoinPrompt`
+is the one-time post-join retention card (#338): set `True` in the
+`JoinSharedTripResult` Ok arm after a successful funnel conversion,
+cleared by `DismissPostJoinPrompt` (and by `EnableCrewPush` once the user
+opts in). The Settings member-landing renders the Add-to-Home-Screen /
+crew-push card while it's `True`, reusing the existing `showInstallPrompt`
+/ `TriggerInstallPrompt` / `subscribePush` plumbing rather than a new
+port. `showInstallPrompt` is driven by the
 `canInstall` port: `True` once the browser fires
 `beforeinstallprompt` (stashed JS-side), back to `False` after the
 user accepts/dismisses the prompt or after `appinstalled`. The

@@ -285,6 +285,7 @@ toAuthState creds initialRoute gs =
     , notificationPermission = Notifications.Default
     , notificationPrefs = Notifications.defaultPrefs
     , openLedgerMenu = Nothing
+    , postJoinPrompt = False
     , pushSubscribed = False
     , route = initialRoute
     , scanQueue = Dict.empty
@@ -3883,6 +3884,39 @@ updateAuth msg as_ =
         TriggerInstallPrompt ->
             ( AuthModel as_, triggerInstallPrompt () )
 
+        -- Post-join retention (#338). The one-time card on the member
+        -- landing reuses the existing PWA plumbing: the "Add" button is
+        -- `TriggerInstallPrompt` (the same outbound `triggerInstallPrompt`
+        -- port Settings uses), "Not now" / "Got it" is
+        -- `DismissPostJoinPrompt`, and "Turn on alerts" (offered only when
+        -- the app is already standalone) is `EnableCrewPush`.
+        DismissPostJoinPrompt ->
+            ( AuthModel { as_ | postJoinPrompt = False }, Cmd.none )
+
+        -- Default the `sharedTripActivity` pref on and request push.
+        -- Reuses `subscribePush` (the JS handler requests browser
+        -- permission first, then subscribes inside the same user-gesture
+        -- chain — see RequestPushPermission for why we don't batch
+        -- permission + subscribe). Mirrors the new pref optimistically so
+        -- the toggle in Settings reflects it immediately. Dismisses the
+        -- card so it never re-shows.
+        EnableCrewPush ->
+            let
+                oldPrefs : Notifications.NotificationPrefs
+                oldPrefs =
+                    as_.notificationPrefs
+
+                newPrefs : Notifications.NotificationPrefs
+                newPrefs =
+                    { oldPrefs | sharedTripActivity = True }
+            in
+            ( AuthModel { as_ | notificationPrefs = newPrefs, postJoinPrompt = False }
+            , subscribePush
+                { prefs = Notifications.encodePrefs newPrefs
+                , vapidPublicKey = as_.config.vapidPublicKey
+                }
+            )
+
         TakeOverBilling flockId ->
             ( AuthModel as_
             , Http.SharedTripApi.transferOwnership
@@ -4463,9 +4497,16 @@ updateAuth msg as_ =
             in
             case rd of
                 RemoteData.Success response ->
+                    -- Post-join retention (#338): flip the one-time A2HS /
+                    -- crew-push prompt on. The Settings landing renders the
+                    -- post-join card (Add to Home Screen, then crew-activity
+                    -- push once installed) while `postJoinPrompt` is True;
+                    -- `DismissPostJoinPrompt` clears it. We never prompt during
+                    -- the guest preview — only after a successful conversion.
                     ( AuthModel
                         { as_
                             | joinSharedTripRequest = rd
+                            , postJoinPrompt = True
                             , route = RouteSettings
                             , toast = Just ("Joined " ++ response.name ++ ".")
                         }

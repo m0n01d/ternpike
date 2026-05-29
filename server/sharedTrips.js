@@ -1090,6 +1090,7 @@ export function registerSharedTripRoutes(app) {
         allMembers: meta.members,
         amount,
         authorEmail: caller.email,
+        billingOwner: meta.billingOwner,
         note,
         tripId: sharedTripId,
         tripName: meta.name,
