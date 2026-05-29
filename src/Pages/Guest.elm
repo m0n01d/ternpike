@@ -7,6 +7,7 @@ import Html.Attributes
 import Html.Attributes.Extra
 import Html.Events
 import Html.Extra
+import Pages.NestPreview
 import Pages.Settings
 import RemoteData exposing (RemoteData)
 import Types exposing (GuestMsg_(..), GuestState, Msg(..))
@@ -52,13 +53,14 @@ viewGuest gs =
             -- this branch without a structural change.
             viewLogin { gs | pendingJoinToken = Just token }
 
-        Data.Navigation.RouteNestPreview token ->
-            -- Nest invite preview. The dedicated teaser-card view
-            -- lands in #337; for now fall through to the login form
-            -- so the route has a consumer and the String argument
-            -- is extracted (satisfying `NoUnused.CustomTypeConstructorArgs`).
-            -- The real view replaces this branch in #337.
-            viewLogin { gs | pendingJoinToken = Just token }
+        Data.Navigation.RouteNestPreview _ ->
+            -- Nest invite preview (#335). The resolve fetch fires from
+            -- `Main.elm` on entry into this route and lands the decoded
+            -- teaser in `gs.nestPreview`; we render that `RemoteData`
+            -- read-only. The guest-preview gate that decides whether the
+            -- scan affordance is shown rides on the decoded teaser; its
+            -- first consumer is the scan dropzone in #336.
+            Pages.NestPreview.view gs.nestPreview
 
         _ ->
             viewLogin gs
