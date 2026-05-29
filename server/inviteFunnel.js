@@ -75,11 +75,11 @@ export async function mintShareToken({ env, flockId, inviter, epoch }) {
 export const shareLinkUrl = (token) =>
   `${NEST_PREVIEW_URL}?token=${encodeURIComponent(token)}`
 
-// Magic (passwordless-signup) tokens live 15 minutes (#333). Short-lived,
+// Magic (passwordless-signup) tokens live 5 minutes (#333). Short-lived,
 // single-use, and email-confirmed at redemption — see docs/nest-invite-funnel.md
-// §A "Magic token" and §C. The doc text mentions a 5m example; the #333 issue
-// fixes the lifetime at 15m, which is the operative spec here.
-export const MAGIC_TOKEN_EXPIRY_SECONDS = 15 * 60
+// §A "Magic token" and §C. The short lifetime is a deliberate hardening (the
+// security review called for 5m, not 15m) to shrink the link-interception window.
+export const MAGIC_TOKEN_EXPIRY_SECONDS = 5 * 60
 
 // Mint a `typ: "magic"` token. Carries ONLY the recipient email + a per-token
 // `jti` nonce for the single-use deny-list. Does NOT carry the invite — the

@@ -24,8 +24,8 @@ import { signJwt, verifyJwt } from '../jwt.js'
 const SECRET = 'test-server-secret-do-not-use-in-production'
 
 describe('[Auth] magic-link mint + url (#333)', () => {
-  test('MAGIC_TOKEN_EXPIRY_SECONDS is 15 minutes', () => {
-    assert.equal(MAGIC_TOKEN_EXPIRY_SECONDS, 15 * 60)
+  test('MAGIC_TOKEN_EXPIRY_SECONDS is 5 minutes', () => {
+    assert.equal(MAGIC_TOKEN_EXPIRY_SECONDS, 5 * 60)
   })
 
   test('mintMagicToken: verifiable typ:magic token, lowercased email, 15m exp, no invite', async () => {
