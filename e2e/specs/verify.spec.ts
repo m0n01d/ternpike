@@ -116,6 +116,15 @@ test.describe('Verify DOM tier', () => {
     )
   })
 
+  test('shared-trip card: owner sees the Owner badge', async ({ page }) => {
+    await page.goto('/verify/SharedTripCard/owner')
+    await page.waitForSelector('[data-verify-unit="SharedTripCard"]')
+    await expect(page.locator('[data-verify-unit="SharedTripCard"]')).toHaveAttribute(
+      'data-verify-role',
+      'owner',
+    )
+  })
+
   test('the /verify dashboard lists every fixture with deep links', async ({ page }) => {
     await page.goto('/verify')
     await page.waitForSelector('a[href*="/verify/"]')

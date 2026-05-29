@@ -151,6 +151,7 @@ import Verify.Core
 import Verify.Registry
 import Verify.Specs.JoinSharedTrip
 import Verify.Specs.NotificationsPaywall
+import Verify.Specs.SharedTripCard
 
 
 
@@ -2066,6 +2067,9 @@ applyUnitSeed unit fixture as_ =
                 | joinSharedTripRequest = input.request
                 , route = RouteJoinSharedTrip ""
             }
+
+        "SharedTripCard" ->
+            { as_ | sharedTrips = Verify.Specs.SharedTripCard.seededTrips fixture }
 
         _ ->
             { as_ | tier = verifyFixtureTier fixture }
