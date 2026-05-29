@@ -10,6 +10,10 @@ import {
   SHARED_TRIP_DESIGN_DOC_ID,
   buildSharedTripDesignDoc,
 } from './couch/sharedTripValidator.js'
+import {
+  mintShareToken,
+  shareLinkUrl,
+} from './inviteFunnel.js'
 import { signJwt, verifyJwt } from './jwt.js'
 import {
   sendSharedTripAccessChangePush,
@@ -389,6 +393,10 @@ export function registerSharedTripRoutes(app) {
       billingOwner: caller.email,
       billingStatus: 'active',
       billingLapsedAt: null,
+      // Revocation epoch for share-link tokens (#328). Baked into every
+      // `typ: "share"` token at mint; the owner's "reset links" action bumps
+      // it to invalidate all outstanding links at once. New trips start at 0.
+      inviteEpoch: 0,
       createdBy: caller.email,
       createdAt: nowIso(),
     }
@@ -648,6 +656,59 @@ export function registerSharedTripRoutes(app) {
     )
 
     return c.json({ ok: true })
+  })
+
+  // POST /sharedtrips/:id/share-link  (#328)
+  //
+  // Owner-only. Mints a recipient-agnostic `typ: "share"` token (30-day exp)
+  // baked with the trip's current `inviteEpoch`, and returns the funnel URL
+  // `https://app.ternpike.com/nest?token=<token>` for the inviter to hand to
+  // `navigator.share`. Unlike the email invite, no `inviteeEmail` is bound —
+  // anyone holding the link can preview (and, downstream, join). Bounded by the
+  // redacted preview, revocation (epoch + jti deny-list), and the frozen check.
+  //
+  // Auth mirrors `/sharedtrips/:id/invite`: authenticated member required, then
+  // billing-owner required. Non-members get 404 (don't leak existence);
+  // non-owner members get 403.
+  app.post('/sharedtrips/:id/share-link', async (c) => {
+    const env = c.env
+    const caller = await authenticateCaller(c)
+    if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
+
+    const sharedTripId = c.req.param('id')
+    const dbName = sharedTripDbName(sharedTripId)
+
+    let meta
+    try {
+      meta = await readSharedTripMeta(env, dbName)
+    } catch (err) {
+      if (err.status === 404) {
+        return c.json({ ok: false, error: 'not_found' }, 404)
+      }
+      console.error('sharedtrips/share-link read meta:', err)
+      return c.json({ ok: false, error: 'read_failed' }, 500)
+    }
+    if (!meta.members.includes(caller.email)) {
+      // 404 (not 403) — don't confirm existence to non-members. See #68.
+      return c.json({ ok: false, error: 'not_found' }, 404)
+    }
+    if (meta.billingOwner !== caller.email) {
+      // Share-link mint is owner-only, same as the email invite path.
+      return c.json({ ok: false, error: 'not_owner' }, 403)
+    }
+
+    try {
+      const { token } = await mintShareToken({
+        env,
+        flockId: sharedTripId,
+        inviter: caller.email,
+        epoch: typeof meta.inviteEpoch === 'number' ? meta.inviteEpoch : 0,
+      })
+      return c.json({ ok: true, url: shareLinkUrl(token) })
+    } catch (err) {
+      console.error('sharedtrips/share-link:', err)
+      return c.json({ ok: false, error: 'share_link_failed' }, 500)
+    }
   })
 
   app.post('/sharedtrips/join', async (c) => {

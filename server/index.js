@@ -7,6 +7,7 @@ import { authenticateCaller, getTier } from './auth.js'
 import { registerBillingRoutes } from './billing.js'
 import { registerBillingWebhookRoute } from './billingWebhook.js'
 import { registerGeocodeRoutes } from './geocode.js'
+import { registerInviteFunnelRoutes } from './inviteFunnel.js'
 import { freshUser, getEmailBySlug, getUser, migrateLegacy, upsertUser } from './users.js'
 import {
   registerNotificationRoutes,
@@ -183,11 +184,15 @@ const corsConfig = cors({
 app.use('/auth/*', corsConfig)
 app.use('/billing/*', corsConfig)
 app.use('/geocode', corsConfig)
+// Nest invite funnel (#328). `/auth/*` already covers the magic-link
+// endpoints; these two cover the unauthenticated preview + guest-scan surface.
+app.use('/invite/*', corsConfig)
 app.use('/marketing/*', corsConfig)
 app.use('/me', corsConfig)
 app.use('/notifications/*', corsConfig)
 app.use('/scan', corsConfig)
 app.use('/scan-demo', corsConfig)
+app.use('/scan-guest', corsConfig)
 app.use('/sharedtrips/*', corsConfig)
 app.use('/sharedtrips', corsConfig)
 
@@ -366,6 +371,7 @@ app.post('/marketing/waitlist', async (c) => {
 })
 
 registerGeocodeRoutes(app)
+registerInviteFunnelRoutes(app)
 registerNotificationRoutes(app)
 registerQrRoutes(app)
 registerScanRoutes(app)

@@ -21,6 +21,12 @@ function (newDoc, oldDoc, userCtx, secObj) {
 
   if (newDoc._id === 'sharedtrip:meta') {
     if (!isAdmin) reject('sharedtrip:meta is admin-only');
+    // sharedtrip:meta is written only by the auth server (admin creds), so
+    // its field shape is not validated here — the server is the authority on
+    // billingOwner / billingStatus / members / inviteEpoch (#328, share-link
+    // revocation epoch). Allowing the doc through unconditionally for admins
+    // is what permits the new inviteEpoch field to be written without a
+    // validator bump; this comment records that the allowance is intentional.
     return;
   }
 
