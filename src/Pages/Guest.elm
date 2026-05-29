@@ -54,13 +54,13 @@ viewGuest gs =
             viewLogin { gs | pendingJoinToken = Just token }
 
         Data.Navigation.RouteNestPreview _ ->
-            -- Nest invite preview (#335). The resolve fetch fires from
+            -- Nest invite preview (#335/#336). The resolve fetch fires from
             -- `Main.elm` on entry into this route and lands the decoded
             -- teaser in `gs.nestPreview`; we render that `RemoteData`
-            -- read-only. The guest-preview gate that decides whether the
-            -- scan affordance is shown rides on the decoded teaser; its
-            -- first consumer is the scan dropzone in #336.
-            Pages.NestPreview.view gs.nestPreview
+            -- read-only. When the teaser's gate is `ViewScanPreview`, the
+            -- guest can try one receipt scan (#336) — `gs.guestScan` carries
+            -- that state.
+            Pages.NestPreview.view gs.guestScan gs.nestPreview
 
         _ ->
             viewLogin gs

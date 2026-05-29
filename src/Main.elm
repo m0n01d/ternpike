@@ -108,6 +108,7 @@ import Data.UserId as UserId
 import Data.Void as Void
 import Dict
 import File
+import File.Select
 import Helpers
 import Html exposing (Html)
 import Html.Attributes
@@ -137,7 +138,7 @@ import Routing
 import Set
 import Task
 import Time
-import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestState, Model(..), Msg(..), ShareMode(..), SharedMsg_(..))
+import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestScanState(..), GuestState, Model(..), Msg(..), ShareMode(..), SharedMsg_(..))
 import UI.BillingBanner
 import UI.Layout
 import UI.ShareModal
@@ -319,6 +320,7 @@ toGuestState reason as_ =
     , demoMode = as_.demoMode
     , emailInput = ""
     , key = as_.key
+    , guestScan = NoScan
     , nestPreview = RemoteData.NotAsked
     , networkOffline = as_.networkOffline
     , pendingJoinToken = joinTokenFromRoute as_.route
@@ -1776,6 +1778,7 @@ init flagsJson url key =
             , demoMode = demoMode
             , emailInput = ""
             , key = key
+            , guestScan = NoScan
             , nestPreview = RemoteData.NotAsked
             , networkOffline = False
             , pendingJoinToken = joinTokenFromRoute initialRoute
@@ -1959,6 +1962,7 @@ updateShared msg model =
                         , demoMode = as_.demoMode
                         , emailInput = ""
                         , key = as_.key
+                        , guestScan = NoScan
                         , nestPreview = RemoteData.NotAsked
                         , networkOffline = as_.networkOffline
                         , pendingJoinToken = Nothing
@@ -2077,6 +2081,32 @@ scrollToTop =
     Task.perform (\_ -> SharedMsg ScrolledToTop) (Browser.Dom.setViewport 0 0)
 
 
+{-| Split a `data:<mime>;base64,<payload>` URL into its mime type and base64
+payload for the guest scan upload. Returns `Nothing` for a malformed URL.
+-}
+splitDataUrl : String -> Maybe { base64 : String, mimeType : String }
+splitDataUrl dataUrl =
+    case String.split ";base64," dataUrl of
+        [ prefix, b64 ] ->
+            Just { base64 = b64, mimeType = String.dropLeft 5 prefix }
+
+        _ ->
+            Nothing
+
+
+{-| The share token carried by a `RouteNestPreview` URL, if the guest is on
+the preview route — used to authorize the guest scan.
+-}
+shareTokenFromRoute : Route -> Maybe String
+shareTokenFromRoute route =
+    case route of
+        RouteNestPreview token ->
+            Just token
+
+        _ ->
+            Nothing
+
+
 updateGuest : GuestMsg_ -> GuestState -> ( Model, Cmd Msg )
 updateGuest msg gs =
     case msg of
@@ -2130,6 +2160,36 @@ updateGuest msg gs =
 
                 _ ->
                     ( GuestModel gs, Cmd.none )
+
+        GuestScanPick ->
+            ( GuestModel gs
+            , File.Select.file [ "image/*" ] (GuestMsg << GuestScanSelected)
+            )
+
+        GuestScanSelected file ->
+            ( GuestModel { gs | guestScan = Scanning }
+            , Task.perform (GuestMsg << GuestScanLoaded) (File.toUrl file)
+            )
+
+        GuestScanLoaded dataUrl ->
+            case ( splitDataUrl dataUrl, shareTokenFromRoute gs.route ) of
+                ( Just parts, Just token ) ->
+                    ( GuestModel { gs | guestScan = Scanning }
+                    , Http.NestPreviewApi.scanGuest gs.session.config.backendUrl
+                        token
+                        parts.base64
+                        parts.mimeType
+                        (GuestMsg << GuestScanResult)
+                    )
+
+                _ ->
+                    ( GuestModel { gs | guestScan = NoScan }, Cmd.none )
+
+        GuestScanResult (Ok ocr) ->
+            ( GuestModel { gs | guestScan = Scanned ocr }, Cmd.none )
+
+        GuestScanResult (Err _) ->
+            ( GuestModel { gs | guestScan = NoScan }, Cmd.none )
 
         NestPreviewResult result ->
             ( GuestModel { gs | nestPreview = RemoteData.fromResult result }

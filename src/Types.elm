@@ -2,6 +2,7 @@ module Types exposing
     ( AuthMsg_(..)
     , AuthState
     , GuestMsg_(..)
+    , GuestScanState(..)
     , GuestState
     , Model(..)
     , Msg(..)
@@ -53,7 +54,7 @@ import Data.NestPreview exposing (NestPreview)
 import Data.Notifications exposing (NotificationPrefs, NotificationToggle, Permission, StandaloneState)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PendingEntry exposing (ParsedEntry, PendingForm)
-import Data.Scan exposing (ScanItem)
+import Data.Scan exposing (OcrData, ScanItem)
 import Data.ScanItemId exposing (ScanItemId)
 import Data.SharedTripId exposing (SharedTripId)
 import Data.SharedTripUi exposing (SharedTripUiState)
@@ -115,6 +116,7 @@ type alias GuestState =
     , codeInput : String
     , demoMode : Bool
     , emailInput : String
+    , guestScan : GuestScanState
     , key : Nav.Key
     , nestPreview : RemoteData Http.Error NestPreview
     , networkOffline : Bool
@@ -127,6 +129,21 @@ type alias GuestState =
     , today : DateField
     , version : String
     }
+
+
+{-| Guest receipt-scan state for the Nest preview (#336).
+
+  - `NoScan` — the guest hasn't tried a scan yet.
+  - `Scanning` — the image is being read and the `/scan-guest` request is in
+    flight.
+  - `Scanned` — the parsed receipt is shown (S3). Under the default
+    `view_scan_preview` gate it is discarded on conversion, never saved.
+
+-}
+type GuestScanState
+    = NoScan
+    | Scanned OcrData
+    | Scanning
 
 
 {-| Where a `ShareViaNative` Msg should route on the JS side.
@@ -352,6 +369,10 @@ handles them without any per-state no-ops leaking into `updateAuth`.
 type GuestMsg_
     = CodeInputChanged String
     | EmailInputChanged String
+    | GuestScanLoaded String
+    | GuestScanPick
+    | GuestScanResult (Result Http.Error OcrData)
+    | GuestScanSelected File
     | NestPreviewResult (Result Http.Error NestPreview)
     | RequestCodeResult (Result Http.Error ())
     | ResendCode
