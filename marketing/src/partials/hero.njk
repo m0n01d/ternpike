@@ -35,7 +35,7 @@
         {% if action.kind == "primary" %}
       <a href="{{ action.href }}" class="inline-flex items-center font-mono text-[11px] tracking-[0.15em] uppercase bg-rust text-parchment px-8 py-4 rounded-lg no-underline shadow-[0_4px_16px_rgb(184_92_56_/0.25)] transition-[background-color,transform,box-shadow] duration-200 hover:bg-rust-deep hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgb(184_92_56_/0.3)]">{{ action.label }}{% if action.arrow %}<span class="ml-2.5 inline-block leading-none">&rarr;</span>{% endif %}</a>
         {% else %}
-      <a href="{{ action.href }}" class="inline-flex items-center font-mono text-[11px] tracking-[0.15em] uppercase text-moss px-6 py-4 rounded-lg no-underline border border-tan transition-[border-color,color,transform] duration-200 hover:border-moss hover:text-forest hover:-translate-y-0.5">{{ action.label }}{% if action.arrow %}<span class="ml-2.5 inline-block leading-none">&rarr;</span>{% endif %}</a>
+      <a href="{{ action.href }}" class="inline-flex items-center font-mono text-[11px] tracking-[0.15em] uppercase text-cream px-6 py-4 rounded-lg no-underline border border-cream/40 bg-cream/10 backdrop-blur-sm transition-[background-color,border-color,color,transform] duration-200 hover:bg-cream/20 hover:border-cream/70 hover:text-cream hover:-translate-y-0.5">{{ action.label }}{% if action.arrow %}<span class="ml-2.5 inline-block leading-none">&rarr;</span>{% endif %}</a>
         {% endif %}
       {% endfor %}
     </div>
