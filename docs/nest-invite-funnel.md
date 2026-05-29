@@ -252,6 +252,17 @@ on the freshly-joined shared-trip handle.
   send-path, so a freshly-converted free (Tern) user joining an Osprey-owned trip still receives
   crew-activity push for that trip.
 
+**Implementation status (#338):** Shipped. The post-join card lives on the Settings member-landing
+(`Pages.Settings.viewPostJoinCard`), gated on `AuthState.postJoinPrompt` (set in the
+`JoinSharedTripResult` Ok arm, cleared by `DismissPostJoinPrompt` / `EnableCrewPush`). It reuses the
+existing PWA plumbing — `showInstallPrompt` / `TriggerInstallPrompt` for A2HS, `subscribePush` for the
+opt-in (`EnableCrewPush` defaults the `sharedTripActivity` pref on). The owner-tier gate is in
+`sendSharedTripActivityPush` (`server/notifications.js`): it reads `meta.billingOwner` (passed by the
+`/sharedtrips/:id/notify-activity` caller in `server/sharedTrips.js`) and skips the whole fan-out
+unless the owner's tier is paid, falling back to the author's tier when no owner is supplied.
+**Documented gap:** push-only, no email fallback — an iOS user who previews in Safari and never
+installs the PWA gets the manual "Share → Add to Home Screen" guidance and no push retention.
+
 ## F. The guest preview gate (config flag)
 
 A single flag with three values tunes restrictiveness without reworking the flow:

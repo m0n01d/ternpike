@@ -356,6 +356,71 @@ describe('sendSharedTripActivityPush', () => {
     assert.deepEqual(urls, [BOB_ENDPOINT, CAROL_ENDPOINT].sort())
   })
 
+  test('owner-tier gate: free (Tern) member still gets push for a paid-owner trip', async () => {
+    // Bob just converted from the funnel and is on Tern (free). Alice is
+    // the billing owner on Osprey. Bob must still receive crew-activity
+    // push because the gate is on the OWNER's tier, not Bob's.
+    await env.TIERS_KV.put(BOB.toLowerCase(), 'tern')
+    await seedSub(BOB, BOB_ENDPOINT)
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+
+    await sendSharedTripActivityPush(envWithStub(), {
+      action: 'add',
+      allMembers: [ALICE, BOB],
+      amount: 12.5,
+      authorEmail: ALICE,
+      billingOwner: ALICE,
+      note: null,
+      tripId: TRIP_ID,
+      tripName: TRIP_NAME,
+    })
+
+    assert.equal(calls.length, 1, 'free member receives push from paid-owner trip')
+    assert.equal(calls[0].url, BOB_ENDPOINT)
+  })
+
+  test('owner-tier gate: no push for any member when the billing owner is Tern', async () => {
+    // Even a paid recipient gets nothing if the trip's billing owner is
+    // not on a paid plan — the owner funds the hosted push fan-out.
+    await env.TIERS_KV.put(ALICE.toLowerCase(), 'tern')
+    await seedSub(BOB, BOB_ENDPOINT)
+    await seedSub(CAROL, CAROL_ENDPOINT)
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+
+    await sendSharedTripActivityPush(envWithStub(), {
+      action: 'add',
+      allMembers: [ALICE, BOB, CAROL],
+      amount: 30.0,
+      authorEmail: ALICE,
+      billingOwner: ALICE,
+      note: null,
+      tripId: TRIP_ID,
+      tripName: TRIP_NAME,
+    })
+
+    assert.equal(calls.length, 0, 'Tern-owner trip fans out to nobody')
+  })
+
+  test('owner-tier gate: falls back to author when billingOwner is absent', async () => {
+    // Older callers may not pass billingOwner — we gate on the author so
+    // a Tern author can never fan out, but a paid author still can.
+    await env.TIERS_KV.put(ALICE.toLowerCase(), 'tern')
+    await seedSub(BOB, BOB_ENDPOINT)
+    const calls = installFetchSpy(() => new Response('', { status: 201 }))
+
+    await sendSharedTripActivityPush(envWithStub(), {
+      action: 'add',
+      allMembers: [ALICE, BOB],
+      amount: 5.0,
+      authorEmail: ALICE,
+      note: null,
+      tripId: TRIP_ID,
+      tripName: TRIP_NAME,
+    })
+
+    assert.equal(calls.length, 0, 'absent owner + Tern author → no fan-out')
+  })
+
   test('no PUSH_KV binding → no error thrown', async () => {
     // Simulates a misconfigured Worker env — should fail gracefully.
     const noKvEnv = { ...envWithStub(), PUSH_KV: undefined }

@@ -28,13 +28,78 @@ viewTab as_ =
     { actions = []
     , body =
         Html.div []
-            [ viewAppearanceSection as_.colorScheme
+            [ Html.Extra.viewIf as_.postJoinPrompt (viewPostJoinCard as_)
+            , viewAppearanceSection as_.colorScheme
             , viewBody as_.config (Just as_) (Just as_.showDayIntensity) as_.showInstallPrompt
             , Pages.Settings.SharedTrips.view as_
             , viewVersionFooter as_.version
             ]
     , hero = viewHero
     }
+
+
+{-| One-time post-join retention card (#338). Surfaced on the
+member-landing after a successful funnel join — never during the guest
+preview. Reuses the existing PWA plumbing rather than rebuilding it:
+
+  - **Standalone (installed PWA):** offer the crew-activity push opt-in
+    via `EnableCrewPush` (defaults the `sharedTripActivity` pref on, fires
+    `subscribePush`). iOS only exposes push to an installed PWA, so this
+    branch is the only one that can ask for push.
+  - **In-browser + `beforeinstallprompt` fired (`showInstallPrompt`):**
+    offer the native Add-to-Home-Screen via `TriggerInstallPrompt`.
+  - **In-browser + no `beforeinstallprompt` (iOS Safari):** show manual
+    "Share → Add to Home Screen" guidance. Documented gap: an iOS user
+    who never installs gets no push (push-only, no email fallback).
+
+Every branch offers a dismiss (`DismissPostJoinPrompt`) so the card shows
+exactly once.
+
+-}
+viewPostJoinCard : AuthState -> Html Msg
+viewPostJoinCard as_ =
+    let
+        ( bodyChildren, actionChildren ) =
+            if as_.standalone == Notifications.Standalone then
+                ( [ Html.p [ Html.Attributes.class "text-base text-ink font-medium" ]
+                        [ Html.text "You're in!" ]
+                  , Html.p [ Html.Attributes.class "text-sm text-muted" ]
+                        [ Html.text "Get notified when crew adds an expense?" ]
+                  ]
+                , [ UI.Button.primary { label = "Turn on alerts", onClick = AuthMsg EnableCrewPush }
+                  , UI.Button.ghost { label = "Maybe later", onClick = AuthMsg DismissPostJoinPrompt }
+                  ]
+                )
+
+            else if as_.showInstallPrompt then
+                ( [ Html.p [ Html.Attributes.class "text-base text-ink font-medium" ]
+                        [ Html.text "You're in!" ]
+                  , Html.p [ Html.Attributes.class "text-sm text-muted" ]
+                        [ Html.text "Add Ternpike to your home screen so crew alerts can reach you." ]
+                  ]
+                , [ UI.Button.primary { label = "Add", onClick = AuthMsg TriggerInstallPrompt }
+                  , UI.Button.ghost { label = "Not now", onClick = AuthMsg DismissPostJoinPrompt }
+                  ]
+                )
+
+            else
+                ( [ Html.p [ Html.Attributes.class "text-base text-ink font-medium" ]
+                        [ Html.text "Want crew alerts?" ]
+                  , Html.p [ Html.Attributes.class "text-sm text-muted" ]
+                        [ Html.text "Tap the Share button in Safari, then choose Add to Home Screen to get notified when crew adds an expense." ]
+                  ]
+                , [ UI.Button.secondary { label = "Got it", onClick = AuthMsg DismissPostJoinPrompt } ]
+                )
+    in
+    Html.div [ Html.Attributes.class "mb-4" ]
+        [ UI.Rule.kicker "WELCOME"
+        , UI.Card.subCard
+            [ Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
+                (bodyChildren
+                    ++ [ Html.div [ Html.Attributes.class "flex gap-2 mt-1" ] actionChildren ]
+                )
+            ]
+        ]
 
 
 viewPanel : AppConfig -> Bool -> String -> Html Msg

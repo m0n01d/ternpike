@@ -515,14 +515,25 @@ function emailHandle(email) {
 // expense is added, edited, or voided. Called from the server-side
 // expense-notification endpoint in `sharedTrips.js`.
 //
+// Owner-tier gate (#338): shared-trip activity push is gated on the
+// **billing owner's** tier, NOT each recipient's. A freshly-converted
+// free (Tern) member who joins a paid-owner trip still receives
+// crew-activity push for that trip — the owner's paid plan is what funds
+// the hosted push fan-out. If the billing owner is on Tern (no paid
+// plan), the whole fan-out is skipped. `billingOwner` is read from
+// `sharedtrip:meta` by the caller and passed through; when it's absent
+// (older callers, missing meta) we fall back to gating on the author so
+// behavior never silently opens up for an unpaid trip.
+//
 // Fan-out:
-//   1. For each member of `allMembers`, skip `authorEmail`.
-//   2. Look up every `push:sub:<email>:*` for that member.
-//   3. Check `push:pref:*` for `sharedTripActivity === true`.
-//   4. Coalesce rapid bursts: if the same (authorEmail, tripId,
+//   1. Resolve the billing owner's tier; if not paid, skip entirely.
+//   2. For each member of `allMembers`, skip `authorEmail`.
+//   3. Look up every `push:sub:<email>:*` for that member.
+//   4. Check `push:pref:*` for `sharedTripActivity === true`.
+//   5. Coalesce rapid bursts: if the same (authorEmail, tripId,
 //      recipientEmail) tuple has had >2 events within the rolling
 //      60-second window, send a coalesced "N expenses" message instead.
-//   5. 404/410 → delete both KV keys (stale subscription).
+//   6. 404/410 → delete both KV keys (stale subscription).
 //
 // `env.__buildPushPayload` is the test hook short-circuiting VAPID crypto.
 export async function sendSharedTripActivityPush(
@@ -532,12 +543,22 @@ export async function sendSharedTripActivityPush(
     allMembers,    // string[] — full member list from sharedtrip:meta
     amount,        // number — raw amount in dollars, for body copy
     authorEmail,   // string — who performed the action (excluded from fan-out)
+    billingOwner,  // string | undefined — meta.billingOwner; tier gate is on THIS user
     note,          // string | null — note field for 'add' body
     tripId,        // string — sharedTripId (for the deep-link and coalescing key)
     tripName,      // string — for notification title
   },
 ) {
   if (!env.PUSH_KV) return
+
+  // Owner-tier gate: a converted free member still gets crew-activity
+  // push as long as the trip's billing owner is on a paid plan. Fall
+  // back to the author's email if no owner was supplied so we never
+  // default to "send" for a trip whose owner we can't resolve.
+  const ownerEmail = billingOwner || authorEmail
+  const ownerTier = await getTier(env, ownerEmail)
+  if (!isPaidTier(ownerTier)) return
+
   const build = env.__buildPushPayload || buildPushPayload
   const vapid = {
     privateKey: env.VAPID_PRIVATE_KEY,

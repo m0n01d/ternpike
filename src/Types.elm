@@ -244,6 +244,7 @@ type alias AuthState =
     , notificationPermission : Permission
     , notificationPrefs : NotificationPrefs
     , openLedgerMenu : Maybe ExpenseId
+    , postJoinPrompt : Bool
     , pushSubscribed : Bool
     , route : Route
     , scanQueue : Dict String ScanItem
@@ -420,7 +421,9 @@ type AuthMsg_
     | DeleteTrip Trip
     | DismissError
     | DismissMapPicker
+    | DismissPostJoinPrompt
     | DuplicateEntry Expense
+    | EnableCrewPush
     | ExportCsv Data.TripId.TripId
     | FilesSelected (List File)
     | GeolocationDenied
