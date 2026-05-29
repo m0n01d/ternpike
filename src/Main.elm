@@ -149,6 +149,7 @@ import Url
 import Validate
 import Verify.Core
 import Verify.Registry
+import Verify.Specs.JoinSharedTrip
 import Verify.Specs.NotificationsPaywall
 
 
@@ -2053,6 +2054,17 @@ applyUnitSeed unit fixture as_ =
 
                     else
                         Tier.Tern
+            }
+
+        "JoinSharedTrip" ->
+            let
+                input : Verify.Specs.JoinSharedTrip.Input
+                input =
+                    Verify.Specs.JoinSharedTrip.honest (Verify.Specs.JoinSharedTrip.requestForFixture fixture)
+            in
+            { as_
+                | joinSharedTripRequest = input.request
+                , route = RouteJoinSharedTrip ""
             }
 
         _ ->

@@ -13,6 +13,7 @@ themselves.
 
 import Json.Encode as Encode
 import Verify.Core as Core
+import Verify.Specs.JoinSharedTrip as JoinSharedTrip
 import Verify.Specs.NotificationsPaywall as NotificationsPaywall
 import Verify.Specs.ScanRouting as ScanRouting
 import Verify.Specs.TierGating as TierGating
@@ -26,6 +27,7 @@ runAll =
         [ TierGating.results
         , NotificationsPaywall.results
         , ScanRouting.results
+        , JoinSharedTrip.results
         ]
 
 
