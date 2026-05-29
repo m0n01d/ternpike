@@ -134,7 +134,9 @@ viewSharedTripCard as_ currentUser sharedTrip =
             }
         , Html.div [ Html.Attributes.class "flex flex-wrap gap-2 mt-3" ]
             (if owner then
-                [ UI.Button.secondary { label = "Invite", onClick = AuthMsg (OpenInviteModal sharedTrip.id) }
+                [ UI.Button.secondary { label = "Invite crew", onClick = AuthMsg (GetShareLinkClicked sharedTrip.id) }
+                , UI.Button.secondary { label = "Email invite", onClick = AuthMsg (OpenInviteModal sharedTrip.id) }
+                , UI.Button.ghost { label = "Reset links", onClick = AuthMsg (ResetLinksClicked sharedTrip.id) }
                 , UI.Button.ghost { label = "Transfer ownership", onClick = AuthMsg (OpenTransferModal sharedTrip.id) }
                 ]
 
@@ -220,8 +222,20 @@ viewModal as_ =
                     }
                 ]
 
+        SharedTripUi.InviteCrewModal flockId { request } ->
+            modalShell "Invite crew"
+                [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
+                    [ Html.text "Get a shareable link anyone can use to join — no email required. Send it via Messages, WhatsApp, or wherever your crew is." ]
+                , viewModalActions
+                    { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
+                    , confirmLabel = "Get invite link"
+                    , confirmMsg = AuthMsg (GetShareLinkClicked flockId)
+                    , request = RemoteData.map (\_ -> ()) request
+                    }
+                ]
+
         SharedTripUi.InviteModal _ { email, request } ->
-            modalShell "Invite to this trip"
+            modalShell "Email invite"
                 [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
                     [ Html.text "We'll email them a one-click link to accept." ]
                 , formField "EMAIL"
@@ -261,6 +275,18 @@ viewModal as_ =
                     { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
                     , confirmLabel = "Leave"
                     , confirmMsg = AuthMsg (LeaveSharedTripConfirmed sharedTripId)
+                    , request = request
+                    }
+                ]
+
+        SharedTripUi.ResetLinksConfirmModal sharedTripId { request } ->
+            modalShell "Reset invite links?"
+                [ Html.p [ Html.Attributes.class "text-sm text-ink mb-3" ]
+                    [ Html.text "All existing invite links will stop working immediately. People who already joined keep their access. You can create a new link afterwards." ]
+                , viewModalActions
+                    { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
+                    , confirmLabel = "Reset links"
+                    , confirmMsg = AuthMsg (ResetLinksConfirmed sharedTripId)
                     , request = request
                     }
                 ]

@@ -4404,6 +4404,44 @@ updateAuth msg as_ =
                     , Cmd.none
                     )
 
+        GetShareLinkClicked flockId ->
+            ( AuthModel
+                (setSharedTripModal
+                    (SharedTripUi.InviteCrewModal flockId { request = RemoteData.Loading })
+                    as_
+                )
+            , Http.SharedTripApi.getShareLink as_.creds flockId (AuthMsg << GetShareLinkResult)
+            )
+
+        GetShareLinkResult result ->
+            case RemoteData.fromResult result of
+                RemoteData.Success { url } ->
+                    -- Close the modal and fire navigator.share (or clipboard fallback).
+                    ( AuthModel (setSharedTripModal SharedTripUi.NoModal as_)
+                    , nativeShare
+                        { mode = "auto"
+                        , title = "Join my trip on Ternpike"
+                        , text = "I'm tracking expenses on Ternpike — join my trip."
+                        , url = url
+                        }
+                    )
+
+                remote ->
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.InviteCrewModal id _ ->
+                                        Just (SharedTripUi.InviteCrewModal id { request = remote })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
+                    , Cmd.none
+                    )
+
         OpenLeaveConfirmModal flockId ->
             ( AuthModel (setSharedTripModal (SharedTripUi.LeaveConfirmModal flockId { request = RemoteData.NotAsked }) as_)
             , Cmd.none
@@ -4624,6 +4662,57 @@ updateAuth msg as_ =
                 , vapidPublicKey = as_.config.vapidPublicKey
                 }
             )
+
+        ResetLinksClicked flockId ->
+            ( AuthModel
+                (setSharedTripModal
+                    (SharedTripUi.ResetLinksConfirmModal flockId { request = RemoteData.NotAsked })
+                    as_
+                )
+            , Cmd.none
+            )
+
+        ResetLinksConfirmed flockId ->
+            ( AuthModel
+                (updateModalRequest
+                    (\m ->
+                        case m of
+                            SharedTripUi.ResetLinksConfirmModal id _ ->
+                                Just (SharedTripUi.ResetLinksConfirmModal id { request = RemoteData.Loading })
+
+                            _ ->
+                                Nothing
+                    )
+                    as_
+                )
+            , Http.SharedTripApi.resetShareLinks as_.creds flockId (AuthMsg << ResetLinksResult)
+            )
+
+        ResetLinksResult result ->
+            case RemoteData.fromResult result of
+                RemoteData.Success _ ->
+                    ( AuthModel
+                        (setSharedTripModal SharedTripUi.NoModal
+                            { as_ | toast = Just "All share links reset." }
+                        )
+                    , toastFor
+                    )
+
+                remote ->
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.ResetLinksConfirmModal id _ ->
+                                        Just (SharedTripUi.ResetLinksConfirmModal id { request = remote })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
+                    , Cmd.none
+                    )
 
         -- Optimistic flip of the local pref + fire-and-forget save to
         -- the server. The encoded prefs go to the JS port which PUTs

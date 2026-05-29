@@ -75,11 +75,19 @@ type SharedTripModal
         { email : String
         , request : RemoteData Http.Error ()
         }
+    | InviteCrewModal
+        SharedTripId
+        { request : RemoteData Http.Error Http.SharedTripApi.ShareLinkResponse
+        }
     | LeaveConfirmModal
         SharedTripId
         { request : RemoteData Http.Error ()
         }
     | NoModal
+    | ResetLinksConfirmModal
+        SharedTripId
+        { request : RemoteData Http.Error ()
+        }
     | ShareTripModal
         TripId
         { draft : NewFlockDraft
