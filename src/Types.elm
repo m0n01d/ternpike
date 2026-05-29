@@ -49,6 +49,7 @@ import Data.Guest exposing (GuestSession)
 import Data.Location exposing (LocationState)
 import Data.Me
 import Data.Navigation exposing (Route)
+import Data.NestPreview exposing (NestPreview)
 import Data.Notifications exposing (NotificationPrefs, NotificationToggle, Permission, StandaloneState)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PendingEntry exposing (ParsedEntry, PendingForm)
@@ -102,6 +103,11 @@ settings panel from the guest screen to set their Anthropic key
 before signing in. `networkOffline` mirrors `navigator.onLine`
 (inverted) so the guest UI can surface a disconnected banner.
 
+`nestPreview` holds the `RemoteData` lifecycle for the `/invite/resolve`
+response on `RouteNestPreview`. `NotAsked` on every other route; transitions
+to `Loading` → `Success NestPreview` or `Failure` as the resolve request
+progresses. The `Pages.NestPreview` teaser card reads it in #337.
+
 -}
 type alias GuestState =
     { authError : Maybe String
@@ -110,6 +116,7 @@ type alias GuestState =
     , demoMode : Bool
     , emailInput : String
     , key : Nav.Key
+    , nestPreview : RemoteData Http.Error NestPreview
     , networkOffline : Bool
     , pendingJoinToken : Maybe String
     , pendingRef : Maybe String
@@ -345,6 +352,7 @@ handles them without any per-state no-ops leaking into `updateAuth`.
 type GuestMsg_
     = CodeInputChanged String
     | EmailInputChanged String
+    | NestPreviewResult (Result Http.Error NestPreview)
     | RequestCodeResult (Result Http.Error ())
     | ResendCode
     | ResendCodeResult (Result Http.Error ())

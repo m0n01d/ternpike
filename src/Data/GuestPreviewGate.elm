@@ -1,5 +1,6 @@
 module Data.GuestPreviewGate exposing
     ( GuestPreviewGate(..)
+    , decoder
     , label
     )
 
@@ -25,6 +26,8 @@ Wire format: `"temp_session"`, `"view_only"`, `"view_scan_preview"`
 
 -}
 
+import Json.Decode
+
 
 {-| The three guest-preview modes.
 
@@ -37,8 +40,30 @@ type GuestPreviewGate
     | ViewScanPreview
 
 
-{-| Wire-format label for a `GuestPreviewGate`. Inverse of the wire
-decoder that lands in issue #335 alongside `Data.NestPreview`.
+{-| Decode the `"gate"` field from an `/invite/resolve` 200 response.
+Maps `"view_scan_preview"` → `ViewScanPreview`, `"view_only"` → `ViewOnly`,
+`"temp_session"` → `TempSession`. Any unrecognised string decodes to
+`ViewOnly` — the safe, most-restrictive default — so that new server
+variants never crash older clients.
+-}
+decoder : Json.Decode.Decoder GuestPreviewGate
+decoder =
+    Json.Decode.string
+        |> Json.Decode.map
+            (\s ->
+                case s of
+                    "temp_session" ->
+                        TempSession
+
+                    "view_scan_preview" ->
+                        ViewScanPreview
+
+                    _ ->
+                        ViewOnly
+            )
+
+
+{-| Wire-format label for a `GuestPreviewGate`. Inverse of `decoder`.
 
     label TempSession
     --> "temp_session"

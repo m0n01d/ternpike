@@ -116,6 +116,7 @@ import Http
 import Http.Billing
 import Http.GeocodeApi
 import Http.Me
+import Http.NestPreviewApi
 import Http.SharedTripApi
 import Json.Decode as D
 import Json.Encode as E
@@ -318,6 +319,7 @@ toGuestState reason as_ =
     , demoMode = as_.demoMode
     , emailInput = ""
     , key = as_.key
+    , nestPreview = RemoteData.NotAsked
     , networkOffline = as_.networkOffline
     , pendingJoinToken = joinTokenFromRoute as_.route
     , pendingRef = Nothing
@@ -1774,6 +1776,7 @@ init flagsJson url key =
             , demoMode = demoMode
             , emailInput = ""
             , key = key
+            , nestPreview = RemoteData.NotAsked
             , networkOffline = False
             , pendingJoinToken = joinTokenFromRoute initialRoute
             , pendingRef = pendingRef
@@ -1787,7 +1790,30 @@ init flagsJson url key =
     in
     case authCreds of
         Nothing ->
-            ( GuestModel gs, Cmd.none )
+            let
+                bootFetchCmd =
+                    case initialRoute of
+                        RouteNestPreview token ->
+                            Http.NestPreviewApi.resolve
+                                gs.session.config.backendUrl
+                                token
+                                (GuestMsg << NestPreviewResult)
+
+                        _ ->
+                            Cmd.none
+            in
+            ( GuestModel
+                { gs
+                    | nestPreview =
+                        case initialRoute of
+                            RouteNestPreview _ ->
+                                RemoteData.Loading
+
+                            _ ->
+                                RemoteData.NotAsked
+                }
+            , bootFetchCmd
+            )
 
         Just creds ->
             let
@@ -1933,6 +1959,7 @@ updateShared msg model =
                         , demoMode = as_.demoMode
                         , emailInput = ""
                         , key = as_.key
+                        , nestPreview = RemoteData.NotAsked
                         , networkOffline = as_.networkOffline
                         , pendingJoinToken = Nothing
                         , pendingRef = Nothing
@@ -1973,6 +2000,17 @@ updateShared msg model =
                     let
                         newRoute =
                             Routing.routeFromUrl gs.basePath url
+
+                        fetchCmd =
+                            case newRoute of
+                                RouteNestPreview token ->
+                                    Http.NestPreviewApi.resolve
+                                        gs.session.config.backendUrl
+                                        token
+                                        (GuestMsg << NestPreviewResult)
+
+                                _ ->
+                                    Cmd.none
                     in
                     -- Track the route so the guest view can branch on it
                     -- (the funnel's unauthenticated pages render off
@@ -1980,7 +2018,19 @@ updateShared msg model =
                     -- it's parked at boot/re-auth from the original join
                     -- URL and must survive intra-guest navigation so the
                     -- post-sign-in redirect still fires.
-                    ( GuestModel { gs | route = newRoute }, scrollToTop )
+                    ( GuestModel
+                        { gs
+                            | nestPreview =
+                                case newRoute of
+                                    RouteNestPreview _ ->
+                                        RemoteData.Loading
+
+                                    _ ->
+                                        gs.nestPreview
+                            , route = newRoute
+                        }
+                    , Cmd.batch [ scrollToTop, fetchCmd ]
+                    )
 
                 AuthModel as_ ->
                     let
@@ -2080,6 +2130,11 @@ updateGuest msg gs =
 
                 _ ->
                     ( GuestModel gs, Cmd.none )
+
+        NestPreviewResult result ->
+            ( GuestModel { gs | nestPreview = RemoteData.fromResult result }
+            , Cmd.none
+            )
 
         ResendCodeResult result ->
             ( GuestModel { gs | resendStatus = RemoteData.fromResult result }
