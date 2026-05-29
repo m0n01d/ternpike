@@ -1,6 +1,7 @@
 module Pages.Guest exposing (viewGuest)
 
 import Data.Guest exposing (GuestReason(..))
+import Data.Navigation
 import Html exposing (Html)
 import Html.Attributes
 import Html.Attributes.Extra
@@ -16,8 +17,38 @@ import UI.Mascot
 import UI.Rule
 
 
+{-| Route-aware guest dispatch.
+
+The unauthenticated tree is no longer single-purpose: the Nest invite
+funnel (see `docs/nest-invite-funnel.md`) will render preview /
+magic-link pages off `gs.route` while signed out. `viewGuest` is the
+seam those pages slot into — it dispatches on `gs.route`, with every
+route in the app today falling through to the existing login form via
+`viewLogin`. The funnel's dedicated routes (`RouteNestPreview`,
+`RouteMagicLink`) arrive in a follow-on issue (#329); each adds its own
+branch here and renders its own page instead of the login fallback.
+
+`gs.route` is kept current by the `UrlChanged` handler in `Main.elm`
+(`updateShared`), mirroring how `AuthState.route` tracks navigation.
+
+-}
 viewGuest : GuestState -> Html Msg
 viewGuest gs =
+    case gs.route of
+        Data.Navigation.RouteJoinSharedTrip _ ->
+            -- The join-invite landing keeps the login form today (the
+            -- token is parked in `gs.pendingJoinToken` and redeemed
+            -- after sign-in); naming it as an explicit branch documents
+            -- it as the first funnel-adjacent route and keeps this a
+            -- genuine dispatch rather than a degenerate one-arm case.
+            viewLogin gs
+
+        _ ->
+            viewLogin gs
+
+
+viewLogin : GuestState -> Html Msg
+viewLogin gs =
     Html.div
         [ Html.Attributes.class "min-h-dvh flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out" ]
         [ Html.div [ Html.Attributes.class "text-center max-w-sm w-full mb-8" ]

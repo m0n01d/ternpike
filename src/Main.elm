@@ -322,6 +322,7 @@ toGuestState reason as_ =
     , pendingJoinToken = joinTokenFromRoute as_.route
     , pendingRef = Nothing
     , resendStatus = RemoteData.NotAsked
+    , route = as_.route
     , session = { config = as_.config, reason = reason }
     , showSettings = reason == SessionExpired
     , today = as_.today
@@ -1777,6 +1778,7 @@ init flagsJson url key =
             , pendingJoinToken = joinTokenFromRoute initialRoute
             , pendingRef = pendingRef
             , resendStatus = RemoteData.NotAsked
+            , route = initialRoute
             , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
             , today = initialToday
@@ -1935,6 +1937,7 @@ updateShared msg model =
                         , pendingJoinToken = Nothing
                         , pendingRef = Nothing
                         , resendStatus = RemoteData.NotAsked
+                        , route = as_.route
                         , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
                         , showSettings = False
                         , today = as_.today
@@ -1967,7 +1970,17 @@ updateShared msg model =
         UrlChanged url ->
             case model of
                 GuestModel gs ->
-                    ( GuestModel gs, scrollToTop )
+                    let
+                        newRoute =
+                            Routing.routeFromUrl gs.basePath url
+                    in
+                    -- Track the route so the guest view can branch on it
+                    -- (the funnel's unauthenticated pages render off
+                    -- `gs.route`). `pendingJoinToken` is left untouched —
+                    -- it's parked at boot/re-auth from the original join
+                    -- URL and must survive intra-guest navigation so the
+                    -- post-sign-in redirect still fires.
+                    ( GuestModel { gs | route = newRoute }, scrollToTop )
 
                 AuthModel as_ ->
                     let

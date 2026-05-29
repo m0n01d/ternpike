@@ -114,6 +114,7 @@ type alias GuestState =
     , pendingJoinToken : Maybe String
     , pendingRef : Maybe String
     , resendStatus : RemoteData Http.Error ()
+    , route : Route
     , session : GuestSession
     , showSettings : Bool
     , today : DateField
