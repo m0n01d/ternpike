@@ -99,6 +99,23 @@ test.describe('Verify DOM tier', () => {
     }
   })
 
+  test('join: expired token surfaces the mapped error', async ({ page }) => {
+    await page.goto('/verify/JoinSharedTrip/expired')
+    await page.waitForSelector('[data-verify-unit="JoinSharedTrip"]')
+    const el = page.locator('[data-verify-unit="JoinSharedTrip"]')
+    await expect(el).toHaveAttribute('data-verify-accept', 'shown')
+    await expect(el).toHaveAttribute('data-verify-error', /expired/)
+  })
+
+  test('join: in-flight shows a busy accept button', async ({ page }) => {
+    await page.goto('/verify/JoinSharedTrip/loading')
+    await page.waitForSelector('[data-verify-unit="JoinSharedTrip"]')
+    await expect(page.locator('[data-verify-unit="JoinSharedTrip"]')).toHaveAttribute(
+      'data-verify-accept',
+      'busy',
+    )
+  })
+
   test('the /verify dashboard lists every fixture with deep links', async ({ page }) => {
     await page.goto('/verify')
     await page.waitForSelector('a[href*="/verify/"]')

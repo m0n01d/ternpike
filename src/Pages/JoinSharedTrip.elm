@@ -28,6 +28,8 @@ import RemoteData
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Button
 import UI.Card
+import Verify.Contract
+import Verify.Specs.JoinSharedTrip
 
 
 {-| Render the join confirmation for a signed-in user.
@@ -39,7 +41,14 @@ viewAuth as_ token =
             decodeInvite token
     in
     { actions = []
-    , body = viewAuthBody as_ token invite
+    , body =
+        Html.div
+            (Verify.Contract.verifyAttrs "JoinSharedTrip"
+                (Verify.Specs.JoinSharedTrip.surface
+                    (Verify.Specs.JoinSharedTrip.honest as_.joinSharedTripRequest)
+                )
+            )
+            [ viewAuthBody as_ token invite ]
     , hero = viewHero invite
     }
 
