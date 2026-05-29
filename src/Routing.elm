@@ -51,6 +51,10 @@ routeParser =
             (Parser.s "trip" </> Parser.s "stats" <?> Query.string "tripId")
         , Parser.map withJoinToken
             (Parser.s "sharedtrips" </> Parser.s "join" <?> Query.string "token")
+        , Parser.map withMagicToken
+            (Parser.s "auth" </> Parser.s "magic" <?> Query.string "token" <?> Query.string "next")
+        , Parser.map withNestToken
+            (Parser.s "nest" <?> Query.string "token")
         , Parser.map RouteSettings (Parser.s "settings")
         , Parser.map RouteTrips (Parser.s "trips")
         ]
@@ -61,6 +65,26 @@ withJoinToken maybeToken =
     case maybeToken of
         Just token ->
             RouteJoinSharedTrip token
+
+        Nothing ->
+            RouteTrips
+
+
+withMagicToken : Maybe String -> Maybe String -> Route
+withMagicToken maybeToken maybeNext =
+    case maybeToken of
+        Just token ->
+            RouteMagicLink token maybeNext
+
+        Nothing ->
+            RouteTrips
+
+
+withNestToken : Maybe String -> Route
+withNestToken maybeToken =
+    case maybeToken of
+        Just token ->
+            RouteNestPreview token
 
         Nothing ->
             RouteTrips
@@ -121,6 +145,12 @@ routeToTab route =
         RouteLedger _ ->
             LedgerTab
 
+        RouteMagicLink _ _ ->
+            SettingsTab
+
+        RouteNestPreview _ ->
+            SettingsTab
+
         RouteScan _ ->
             ScanTab
 
@@ -151,6 +181,12 @@ routeTitle route =
 
         RouteLedger _ ->
             "LEDGER"
+
+        RouteMagicLink _ _ ->
+            "SIGN IN"
+
+        RouteNestPreview _ ->
+            "TRIP PREVIEW"
 
         RouteScan _ ->
             "SCAN RECEIPTS"

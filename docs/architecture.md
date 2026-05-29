@@ -173,6 +173,39 @@ piece of UI that branches on it. The flag flows `flags → init → gs →
 toAuthState` and back via `toGuestState` so it survives any
 hypothetical session-expired roundtrip without re-detection.
 
+`GuestState` (in `Types.elm`) holds the signed-out flow:
+
+```elm
+type alias GuestState =
+    { authError        : Maybe String
+    , basePath         : String
+    , codeInput        : String
+    , demoMode         : Bool
+    , emailInput       : String
+    , key              : Nav.Key
+    , networkOffline   : Bool
+    , pendingJoinToken : Maybe String
+    , pendingRef       : Maybe String
+    , resendStatus     : RemoteData Http.Error ()
+    , route            : Route
+    , session          : GuestSession
+    , showSettings     : Bool
+    , today            : DateField
+    , version          : String
+    }
+```
+
+`route : Route` is the guest tree's current route, kept in sync by the
+`UrlChanged` handler (`updateShared` in `Main.elm`) exactly as
+`AuthState.route` is. It's seeded from the boot URL in `init`, carried
+across the auth boundary by `toGuestState`/`toAuthState`, and lets the
+guest view (`Pages.Guest.viewGuest`) dispatch on the URL. Today every
+route falls through to the login form via `viewLogin`; the Nest invite
+funnel (`docs/nest-invite-funnel.md`) adds dedicated unauthenticated
+pages that branch off this field. Storing the route here (rather than
+re-parsing the URL in the view) keeps the guest tree consistent with
+the auth tree, which has always carried its own `route`.
+
 Transient view state (`statsHover : Data.StatsHover.Hover`,
 `statsGranularity : Maybe Data.StatsGranularity.Granularity`,
 `showDayIntensity : Bool`, `showInstallPrompt : Bool`, `scanQueue`,

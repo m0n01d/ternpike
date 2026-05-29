@@ -35,6 +35,7 @@ export async function provisionFlock(couch, { name, owner, members }) {
     billingOwner: owner,
     billingStatus: 'active',
     billingLapsedAt: null,
+    inviteEpoch: 0,
     createdBy: owner,
     createdAt: new Date().toISOString(),
   }

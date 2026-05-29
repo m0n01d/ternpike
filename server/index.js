@@ -7,6 +7,13 @@ import { authenticateCaller, getTier } from './auth.js'
 import { registerBillingRoutes } from './billing.js'
 import { registerBillingWebhookRoute } from './billingWebhook.js'
 import { registerGeocodeRoutes } from './geocode.js'
+import {
+  checkMagicRedemption,
+  magicLinkUrl,
+  mintMagicToken,
+  registerInviteFunnelRoutes,
+} from './inviteFunnel.js'
+import { verifyJwt } from './jwt.js'
 import { freshUser, getEmailBySlug, getUser, migrateLegacy, upsertUser } from './users.js'
 import {
   registerNotificationRoutes,
@@ -154,6 +161,51 @@ async function ensureDb(env, dbName, email) {
   if (!sec.ok) throw new Error(`_security PUT ${sec.status}`)
 }
 
+// Shared provisioning path for both `/auth/verify-code` and
+// `/auth/verify-magic-link` (#333). Derives the CouchDB password, ensures the
+// per-user `_users` doc + DB exist, runs the first-login user-record hook
+// (referral attribution included), and returns the EXACT response body shape
+// the Elm `Creds` decoder consumes — so both auth paths reuse the same client
+// code with zero changes. Returns a plain object; the caller wraps it in
+// `c.json(..., 200)`. Throws on a CouchDB failure (caller maps to 500).
+async function provisionUser(env, email, ref) {
+  const password = await derivePassword(email, env.SERVER_SECRET)
+  const dbName = sanitizeDb(email)
+  await ensureUser(env, email, password)
+  await ensureDb(env, dbName, email)
+  // First-login hook: materialize the server-authoritative user record so
+  // downstream billing endpoints have something to point at. See the
+  // `/auth/verify-code` comment for the full rationale (referral attribution
+  // is data-only here — no bonus is granted).
+  if (env.TIERS_KV) {
+    try {
+      const existing = await getUser(env, email)
+      if (!existing) {
+        const migrated = await migrateLegacy(env, email)
+        if (!migrated) {
+          const referredBy = await resolveReferrer(env, email.toLowerCase(), ref)
+          await upsertUser(env, freshUser(email, { referredBy }))
+        }
+      }
+    } catch (err) {
+      console.error('provisionUser upsert:', err)
+    }
+  }
+  const record = await getUser(env, email)
+  const tier = record?.tier || (await getTier(env, email))
+  const subscriptionStatus = record?.subscriptionStatus ?? null
+  const trailblazerNumber = record?.trailblazerNumber ?? null
+  return {
+    dbName,
+    email,
+    ok: true,
+    password,
+    subscriptionStatus,
+    tier,
+    trailblazerNumber,
+  }
+}
+
 const app = new Hono()
 
 const STATIC_ORIGINS = new Set([
@@ -183,11 +235,15 @@ const corsConfig = cors({
 app.use('/auth/*', corsConfig)
 app.use('/billing/*', corsConfig)
 app.use('/geocode', corsConfig)
+// Nest invite funnel (#328). `/auth/*` already covers the magic-link
+// endpoints; these two cover the unauthenticated preview + guest-scan surface.
+app.use('/invite/*', corsConfig)
 app.use('/marketing/*', corsConfig)
 app.use('/me', corsConfig)
 app.use('/notifications/*', corsConfig)
 app.use('/scan', corsConfig)
 app.use('/scan-demo', corsConfig)
+app.use('/scan-guest', corsConfig)
 app.use('/sharedtrips/*', corsConfig)
 app.use('/sharedtrips', corsConfig)
 
@@ -253,52 +309,135 @@ app.post('/auth/verify-code', async (c) => {
   }
   await env.CODES_KV.delete(key)
 
-  const password = await derivePassword(email, env.SERVER_SECRET)
-  const dbName = sanitizeDb(email)
   try {
-    await ensureUser(env, email, password)
-    await ensureDb(env, dbName, email)
-    // First-login hook: materialize the server-authoritative user record
-    // so downstream billing endpoints (#17/#18) have something to point at.
-    // If a legacy raw-string tier exists, migrate it; otherwise create a
-    // fresh `tern` record. The legacy-fallback inside `getTier` keeps
-    // existing callers green during the migration window.
-    //
-    // Referral attribution: when `ref` is present on a brand-new user, look
-    // up the referrer's email by slug and stamp `referredBy`. Phase 1 is
-    // data-only — no bonus is granted here. Bonus mechanics ship in a
-    // follow-on track. We deliberately do NOT block signup on a bad ref.
-    if (env.TIERS_KV) {
-      try {
-        const existing = await getUser(env, email)
-        if (!existing) {
-          const migrated = await migrateLegacy(env, email)
-          if (!migrated) {
-            const referredBy = await resolveReferrer(env, email.toLowerCase(), ref)
-            await upsertUser(env, freshUser(email, { referredBy }))
-          }
-        }
-      } catch (err) {
-        console.error('verify-code user upsert:', err)
-      }
-    }
-    // Load the full record so the client can render subscription status on
-    // the post-login UI without an extra /me round-trip.
-    const record = await getUser(env, email)
-    const tier = record?.tier || await getTier(env, email)
-    const subscriptionStatus = record?.subscriptionStatus ?? null
-    const trailblazerNumber = record?.trailblazerNumber ?? null
-    return c.json({
-      dbName,
-      email,
-      ok: true,
-      password,
-      subscriptionStatus,
-      tier,
-      trailblazerNumber,
-    })
+    // First-login hook + per-user DB provisioning live in `provisionUser`,
+    // shared with `/auth/verify-magic-link` so both auth paths return the
+    // identical `Creds` response body. Referral attribution (`ref`) is
+    // data-only — no bonus is granted here.
+    const creds = await provisionUser(env, email, ref)
+    return c.json(creds)
   } catch (err) {
     console.error('provision:', err)
+    return c.json({ ok: false }, 500)
+  }
+})
+
+// --- Hardened magic-link endpoints (#333) ---
+//
+// Passwordless signup for the Nest invite funnel. The magic token is short-
+// lived (15m), single-use (jti deny-list in INVITE_KV), and email-confirmed at
+// redemption (the forwarding login-CSRF mitigation). See
+// docs/nest-invite-funnel.md §A "Magic token" and §C.
+
+// POST /auth/request-magic-link — `{ email, next? }`. ALWAYS returns
+// `{ ok: true }` (200) regardless of whether the email exists, so the endpoint
+// can't be used to enumerate accounts. Only a malformed/missing email is a 400.
+// `next` (typically the opaque share token) rides through to the magic-link
+// URL so the share survives the round-trip (docs §D).
+app.post('/auth/request-magic-link', async (c) => {
+  const env = c.env
+  let body
+  try {
+    body = await c.req.json()
+  } catch {
+    body = {}
+  }
+  const { email, next } = body || {}
+  if (typeof email !== 'string' || !email.includes('@')) {
+    return c.json({ ok: false }, 400)
+  }
+
+  const { token } = await mintMagicToken({ env, email })
+  const appBaseUrl = env.APP_BASE_URL || 'https://app.ternpike.com'
+  const url = magicLinkUrl(appBaseUrl, token, next)
+
+  try {
+    // Raw fetch (not the Resend SDK) so the `RESEND_BASE_URL` env binding
+    // reaches the call site under workerd (CLAUDE.md "Resend + workerd").
+    const resendBase = env.RESEND_BASE_URL || 'https://api.resend.com'
+    const res = await fetch(`${resendBase}/emails`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Ternpike <noreply@ternpike.com>',
+        to: email,
+        subject: 'Your Ternpike sign-in link',
+        text: `Tap to sign in to Ternpike:\n\n${url}\n\nThis link expires in 15 minutes and can be used once.\n`,
+      }),
+    })
+    if (!res.ok) {
+      console.error('request-magic-link sendMail:', res.status)
+    }
+  } catch (err) {
+    // Never leak send failures to the caller — enumeration-resistant by design.
+    console.error('request-magic-link sendMail:', err)
+  }
+  // Always 200, regardless of whether the email exists or mail send succeeded.
+  return c.json({ ok: true })
+})
+
+// POST /auth/verify-magic-link — `{ token, email }`. Verifies the magic token,
+// pins `typ:"magic"`, enforces the email-confirm, consumes the single-use jti,
+// then provisions IDENTICALLY to `/auth/verify-code` (same response body, so
+// the client `Creds` path is reused unchanged). `next` is opaque to the server.
+//
+// Status contract:
+//   400              — missing/empty `token`
+//   401 invalid_token — bad signature / malformed / wrong payload typ / consumed
+//   403 email_mismatch — `body.email` absent or != `payload.email`
+//   410 expired       — token past its `exp`
+//   200 { dbName, email, ok, password, subscriptionStatus, tier, trailblazerNumber }
+app.post('/auth/verify-magic-link', async (c) => {
+  const env = c.env
+  let body
+  try {
+    body = await c.req.json()
+  } catch {
+    body = {}
+  }
+  const token = body && typeof body.token === 'string' ? body.token : ''
+  if (!token) {
+    return c.json({ ok: false, error: 'token_required' }, 400)
+  }
+
+  const verified = await verifyJwt(token, env.SERVER_SECRET)
+  // checkMagicRedemption maps verify failure → 410/401, pins typ:"magic", and
+  // enforces the email-confirm (forwarding login-CSRF mitigation).
+  const redemption = checkMagicRedemption(verified, body && body.email)
+  if (!redemption.ok) {
+    return c.json({ ok: false, error: redemption.error }, redemption.status)
+  }
+
+  // Single-use: a consumed jti is a flat 401 (the link was already redeemed).
+  const denyKey = redemption.jti ? `revoked:${redemption.jti}` : null
+  if (denyKey && env.INVITE_KV) {
+    const consumed = await env.INVITE_KV.get(denyKey)
+    if (consumed) {
+      return c.json({ ok: false, error: 'invalid_token' }, 401)
+    }
+  }
+
+  try {
+    const creds = await provisionUser(env, redemption.email, body && body.ref)
+    // Burn the jti AFTER a successful provision so a transient CouchDB error
+    // doesn't permanently consume the user's only valid link. TTL = remaining
+    // token life, so the deny-list entry expires exactly when the token would.
+    if (denyKey && env.INVITE_KV) {
+      const nowSec = Math.floor(Date.now() / 1000)
+      const ttl = redemption.exp ? redemption.exp - nowSec : null
+      const opts = ttl && ttl > 0 ? { expirationTtl: ttl } : undefined
+      try {
+        await env.INVITE_KV.put(denyKey, '1', opts)
+      } catch (err) {
+        console.error('verify-magic-link jti consume:', err)
+      }
+    }
+    return c.json(creds)
+  } catch (err) {
+    console.error('verify-magic-link provision:', err)
     return c.json({ ok: false }, 500)
   }
 })
@@ -366,6 +505,7 @@ app.post('/marketing/waitlist', async (c) => {
 })
 
 registerGeocodeRoutes(app)
+registerInviteFunnelRoutes(app)
 registerNotificationRoutes(app)
 registerQrRoutes(app)
 registerScanRoutes(app)

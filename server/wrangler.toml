@@ -42,6 +42,18 @@ id = "4a9baf82359545ef981e7dcc6a646f94"
 binding = "PUSH_KV"
 id = "679c582bcded4fef8fdb3cebcb8940cc"
 
+# Nest invite-funnel revocation deny-list (#328). Keys:
+#   revoked:<jti>  -> "1"  (per-token kill; TTL = remaining token life)
+# Used by `assertPreviewable` in server/inviteFunnel.js to revoke a single
+# leaked share link (the per-trip `inviteEpoch` on sharedtrip:meta revokes all
+# links at once; this KV revokes one). Also backs magic-token single-use in a
+# later issue. The `id` below is a PLACEHOLDER — provision the real namespace
+# in the Cloudflare dashboard (or `wrangler kv namespace create INVITE_KV`) and
+# paste the returned id here before deploy.
+[[kv_namespaces]]
+binding = "INVITE_KV"
+id = "0000000000000000000000000000000a"
+
 # QR-sticker scan counters (key: `<slug>`, value: JSON `{count, firstAt, lastAt}`).
 # Slugs are normalized to `[a-z0-9-]{1,32}`. Sized for ad-hoc growth-hacker
 # stickers — a few dozen slugs at most. Bumped via executionCtx.waitUntil on

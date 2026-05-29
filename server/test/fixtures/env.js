@@ -88,6 +88,7 @@ export function buildEnv(couch, overrides = {}) {
     TIER_WEBHOOK_SECRET: 'test-webhook-secret',
     CODES_KV: memoryKv(),
     TIERS_KV: memoryKv(),
+    INVITE_KV: memoryKv(),
     ...overrides,
   }
 }

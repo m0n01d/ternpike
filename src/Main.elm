@@ -108,6 +108,7 @@ import Data.UserId as UserId
 import Data.Void as Void
 import Dict
 import File
+import File.Select
 import Helpers
 import Html exposing (Html)
 import Html.Attributes
@@ -116,6 +117,7 @@ import Http
 import Http.Billing
 import Http.GeocodeApi
 import Http.Me
+import Http.NestPreviewApi
 import Http.SharedTripApi
 import Json.Decode as D
 import Json.Encode as E
@@ -136,7 +138,7 @@ import Routing
 import Set
 import Task
 import Time
-import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestState, Model(..), Msg(..), ShareMode(..), SharedMsg_(..))
+import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestScanState(..), GuestState, Model(..), Msg(..), ShareMode(..), SharedMsg_(..))
 import UI.BillingBanner
 import UI.Layout
 import UI.ShareModal
@@ -318,10 +320,15 @@ toGuestState reason as_ =
     , demoMode = as_.demoMode
     , emailInput = ""
     , key = as_.key
+    , guestScan = NoScan
+    , magicLinkRequest = RemoteData.NotAsked
+    , showConvert = False
+    , nestPreview = RemoteData.NotAsked
     , networkOffline = as_.networkOffline
     , pendingJoinToken = joinTokenFromRoute as_.route
     , pendingRef = Nothing
     , resendStatus = RemoteData.NotAsked
+    , route = as_.route
     , session = { config = as_.config, reason = reason }
     , showSettings = reason == SessionExpired
     , today = as_.today
@@ -1090,6 +1097,69 @@ verifyCode email gs =
         )
 
 
+{-| Request a passwordless magic link for the conversion wall (#337). Sends the
+guest's email plus the share token (`next`, from the preview route) so the
+emailed link can drive convert+join in one step. Mirrors `requestCode`.
+-}
+requestMagicLink : GuestState -> ( Model, Cmd Msg )
+requestMagicLink gs =
+    let
+        email =
+            String.trim gs.emailInput
+
+        bodyFields =
+            ( "email", E.string email )
+                :: (case shareTokenFromRoute gs.route of
+                        Just token ->
+                            [ ( "next", E.string token ) ]
+
+                        Nothing ->
+                            []
+                   )
+    in
+    if email == "" then
+        ( GuestModel { gs | authError = Just "Enter your email address." }, Cmd.none )
+
+    else
+        ( GuestModel { gs | authError = Nothing, magicLinkRequest = RemoteData.Loading }
+        , Http.post
+            { url = gs.session.config.backendUrl ++ "/auth/request-magic-link"
+            , body = Http.jsonBody (E.object bodyFields)
+            , expect = Http.expectWhatever (GuestMsg << MagicLinkResult)
+            }
+        )
+
+
+{-| Verify a magic-link token at the landing route (#337). The caller-confirmed
+email (`gs.emailInput`) is enforced server-side against the token (forwarding
+defense). `maybeNext` is the share token from the link, stashed in
+`pendingJoinToken` so the post-sign-in redirect joins the trip. Mirrors
+`verifyCode`.
+-}
+verifyMagicLink : String -> Maybe String -> GuestState -> ( Model, Cmd Msg )
+verifyMagicLink token maybeNext gs =
+    let
+        email =
+            String.trim gs.emailInput
+    in
+    if email == "" then
+        ( GuestModel { gs | authError = Just "Enter the email this link was sent to." }, Cmd.none )
+
+    else
+        ( GuestModel
+            { gs
+                | authError = Nothing
+                , magicLinkRequest = RemoteData.Loading
+                , pendingJoinToken = maybeNext
+            }
+        , Http.post
+            { url = gs.session.config.backendUrl ++ "/auth/verify-magic-link"
+            , body = Http.jsonBody (E.object [ ( "token", E.string token ), ( "email", E.string email ) ])
+            , expect = Http.expectJson (GuestMsg << MagicVerifyResult) credsDecoder
+            }
+        )
+
+
 handleTripsFetched : Dict.Dict String Trip -> AuthState -> ( Model, Cmd Msg )
 handleTripsFetched tripsDict as_ =
     let
@@ -1773,10 +1843,15 @@ init flagsJson url key =
             , demoMode = demoMode
             , emailInput = ""
             , key = key
+            , guestScan = NoScan
+            , magicLinkRequest = RemoteData.NotAsked
+            , showConvert = False
+            , nestPreview = RemoteData.NotAsked
             , networkOffline = False
             , pendingJoinToken = joinTokenFromRoute initialRoute
             , pendingRef = pendingRef
             , resendStatus = RemoteData.NotAsked
+            , route = initialRoute
             , session = { config = cfg, reason = NotLoggedIn }
             , showSettings = False
             , today = initialToday
@@ -1785,7 +1860,30 @@ init flagsJson url key =
     in
     case authCreds of
         Nothing ->
-            ( GuestModel gs, Cmd.none )
+            let
+                bootFetchCmd =
+                    case initialRoute of
+                        RouteNestPreview token ->
+                            Http.NestPreviewApi.resolve
+                                gs.session.config.backendUrl
+                                token
+                                (GuestMsg << NestPreviewResult)
+
+                        _ ->
+                            Cmd.none
+            in
+            ( GuestModel
+                { gs
+                    | nestPreview =
+                        case initialRoute of
+                            RouteNestPreview _ ->
+                                RemoteData.Loading
+
+                            _ ->
+                                RemoteData.NotAsked
+                }
+            , bootFetchCmd
+            )
 
         Just creds ->
             let
@@ -1931,10 +2029,15 @@ updateShared msg model =
                         , demoMode = as_.demoMode
                         , emailInput = ""
                         , key = as_.key
+                        , guestScan = NoScan
+                        , magicLinkRequest = RemoteData.NotAsked
+                        , showConvert = False
+                        , nestPreview = RemoteData.NotAsked
                         , networkOffline = as_.networkOffline
                         , pendingJoinToken = Nothing
                         , pendingRef = Nothing
                         , resendStatus = RemoteData.NotAsked
+                        , route = as_.route
                         , session = { config = { anthropicKey = Nothing, backendUrl = "", vapidPublicKey = "" }, reason = NotLoggedIn }
                         , showSettings = False
                         , today = as_.today
@@ -1967,7 +2070,40 @@ updateShared msg model =
         UrlChanged url ->
             case model of
                 GuestModel gs ->
-                    ( GuestModel gs, scrollToTop )
+                    let
+                        newRoute =
+                            Routing.routeFromUrl gs.basePath url
+
+                        fetchCmd =
+                            case newRoute of
+                                RouteNestPreview token ->
+                                    Http.NestPreviewApi.resolve
+                                        gs.session.config.backendUrl
+                                        token
+                                        (GuestMsg << NestPreviewResult)
+
+                                _ ->
+                                    Cmd.none
+                    in
+                    -- Track the route so the guest view can branch on it
+                    -- (the funnel's unauthenticated pages render off
+                    -- `gs.route`). `pendingJoinToken` is left untouched —
+                    -- it's parked at boot/re-auth from the original join
+                    -- URL and must survive intra-guest navigation so the
+                    -- post-sign-in redirect still fires.
+                    ( GuestModel
+                        { gs
+                            | nestPreview =
+                                case newRoute of
+                                    RouteNestPreview _ ->
+                                        RemoteData.Loading
+
+                                    _ ->
+                                        gs.nestPreview
+                            , route = newRoute
+                        }
+                    , Cmd.batch [ scrollToTop, fetchCmd ]
+                    )
 
                 AuthModel as_ ->
                     let
@@ -2012,6 +2148,32 @@ updateShared msg model =
 scrollToTop : Cmd Msg
 scrollToTop =
     Task.perform (\_ -> SharedMsg ScrolledToTop) (Browser.Dom.setViewport 0 0)
+
+
+{-| Split a `data:<mime>;base64,<payload>` URL into its mime type and base64
+payload for the guest scan upload. Returns `Nothing` for a malformed URL.
+-}
+splitDataUrl : String -> Maybe { base64 : String, mimeType : String }
+splitDataUrl dataUrl =
+    case String.split ";base64," dataUrl of
+        [ prefix, b64 ] ->
+            Just { base64 = b64, mimeType = String.dropLeft 5 prefix }
+
+        _ ->
+            Nothing
+
+
+{-| The share token carried by a `RouteNestPreview` URL, if the guest is on
+the preview route — used to authorize the guest scan.
+-}
+shareTokenFromRoute : Route -> Maybe String
+shareTokenFromRoute route =
+    case route of
+        RouteNestPreview token ->
+            Just token
+
+        _ ->
+            Nothing
 
 
 updateGuest : GuestMsg_ -> GuestState -> ( Model, Cmd Msg )
@@ -2067,6 +2229,93 @@ updateGuest msg gs =
 
                 _ ->
                     ( GuestModel gs, Cmd.none )
+
+        StartConversion ->
+            ( GuestModel { gs | showConvert = True, magicLinkRequest = RemoteData.NotAsked, authError = Nothing }
+            , Cmd.none
+            )
+
+        MagicLinkRequested ->
+            requestMagicLink gs
+
+        MagicLinkResult result ->
+            ( GuestModel { gs | magicLinkRequest = RemoteData.fromResult result }, Cmd.none )
+
+        ConfirmMagicEmail ->
+            case gs.route of
+                RouteMagicLink token next ->
+                    verifyMagicLink token next gs
+
+                _ ->
+                    ( GuestModel gs, Cmd.none )
+
+        MagicVerifyResult (Ok creds) ->
+            let
+                ( landingRoute, landingUrl ) =
+                    case gs.pendingJoinToken of
+                        Just token ->
+                            ( RouteJoinSharedTrip token
+                            , gs.basePath ++ "sharedtrips/join?token=" ++ token
+                            )
+
+                        Nothing ->
+                            ( RouteTrips, gs.basePath ++ "trips" )
+
+                as_ =
+                    toAuthState creds landingRoute gs
+            in
+            ( AuthModel as_
+            , Cmd.batch
+                [ saveStorage { key = "auth_creds", value = E.encode 0 (encodeCreds creds) }
+                , startSync (encodeCreds creds)
+                , Nav.replaceUrl gs.key landingUrl
+                , fetchMe as_
+                ]
+            )
+
+        MagicVerifyResult (Err _) ->
+            ( GuestModel
+                { gs
+                    | authError = Just "That link is invalid or expired. Ask for a fresh one."
+                    , magicLinkRequest = RemoteData.NotAsked
+                }
+            , Cmd.none
+            )
+
+        GuestScanPick ->
+            ( GuestModel gs
+            , File.Select.file [ "image/*" ] (GuestMsg << GuestScanSelected)
+            )
+
+        GuestScanSelected file ->
+            ( GuestModel { gs | guestScan = Scanning }
+            , Task.perform (GuestMsg << GuestScanLoaded) (File.toUrl file)
+            )
+
+        GuestScanLoaded dataUrl ->
+            case ( splitDataUrl dataUrl, shareTokenFromRoute gs.route ) of
+                ( Just parts, Just token ) ->
+                    ( GuestModel { gs | guestScan = Scanning }
+                    , Http.NestPreviewApi.scanGuest gs.session.config.backendUrl
+                        token
+                        parts.base64
+                        parts.mimeType
+                        (GuestMsg << GuestScanResult)
+                    )
+
+                _ ->
+                    ( GuestModel { gs | guestScan = NoScan }, Cmd.none )
+
+        GuestScanResult (Ok ocr) ->
+            ( GuestModel { gs | guestScan = Scanned ocr }, Cmd.none )
+
+        GuestScanResult (Err _) ->
+            ( GuestModel { gs | guestScan = NoScan }, Cmd.none )
+
+        NestPreviewResult result ->
+            ( GuestModel { gs | nestPreview = RemoteData.fromResult result }
+            , Cmd.none
+            )
 
         ResendCodeResult result ->
             ( GuestModel { gs | resendStatus = RemoteData.fromResult result }
@@ -4532,6 +4781,18 @@ viewAuth as_ =
 
                 RouteLedger _ ->
                     Pages.Ledger.viewTab as_
+
+                RouteMagicLink _ _ ->
+                    -- Magic-link landing is a guest-only route; an
+                    -- authenticated user who somehow lands here sees
+                    -- the Trips list (the real view lands in #335).
+                    Pages.Trips.viewTab as_
+
+                RouteNestPreview _ ->
+                    -- Nest preview is a guest-only route; an
+                    -- authenticated user who somehow lands here sees
+                    -- the Trips list (the real view lands in #337).
+                    Pages.Trips.viewTab as_
 
                 RouteScan _ ->
                     Pages.Scan.viewTab as_

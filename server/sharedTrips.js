@@ -10,6 +10,14 @@ import {
   SHARED_TRIP_DESIGN_DOC_ID,
   buildSharedTripDesignDoc,
 } from './couch/sharedTripValidator.js'
+import {
+  InviteFunnelError,
+  assertPreviewable,
+  buildAlreadyMemberBody,
+  classifyJoinToken,
+  mintShareToken,
+  shareLinkUrl,
+} from './inviteFunnel.js'
 import { signJwt, verifyJwt } from './jwt.js'
 import {
   sendSharedTripAccessChangePush,
@@ -334,6 +342,16 @@ async function readAllDocs(env, dbName) {
   return body.rows.map((row) => row.doc).filter(Boolean)
 }
 
+// Read every live doc from a shared-trip DB as admin. Thin exported wrapper
+// over the module-private `readAllDocs` so the invite funnel's `/invite/resolve`
+// teaser builder can aggregate `trip`/`expense`/`amend`/`void` docs server-side
+// without re-deriving the admin-fetch + `_all_docs` plumbing. A 404 (deleted /
+// nonexistent DB) yields an empty array — the caller maps "no docs" to a 403
+// via `readMetaForPreview` long before this runs, so this never leaks existence.
+export async function readSharedTripDocs(env, dbName) {
+  return readAllDocs(env, dbName)
+}
+
 // The subset of `ids` that are live (non-deleted) docs in `dbName`. Used to
 // make the copy idempotent (skip docs already in the shared DB) and to verify
 // the copy landed before any destructive delete.
@@ -389,6 +407,10 @@ export function registerSharedTripRoutes(app) {
       billingOwner: caller.email,
       billingStatus: 'active',
       billingLapsedAt: null,
+      // Revocation epoch for share-link tokens (#328). Baked into every
+      // `typ: "share"` token at mint; the owner's "reset links" action bumps
+      // it to invalidate all outstanding links at once. New trips start at 0.
+      inviteEpoch: 0,
       createdBy: caller.email,
       createdAt: nowIso(),
     }
@@ -650,6 +672,59 @@ export function registerSharedTripRoutes(app) {
     return c.json({ ok: true })
   })
 
+  // POST /sharedtrips/:id/share-link  (#328)
+  //
+  // Owner-only. Mints a recipient-agnostic `typ: "share"` token (30-day exp)
+  // baked with the trip's current `inviteEpoch`, and returns the funnel URL
+  // `https://app.ternpike.com/nest?token=<token>` for the inviter to hand to
+  // `navigator.share`. Unlike the email invite, no `inviteeEmail` is bound —
+  // anyone holding the link can preview (and, downstream, join). Bounded by the
+  // redacted preview, revocation (epoch + jti deny-list), and the frozen check.
+  //
+  // Auth mirrors `/sharedtrips/:id/invite`: authenticated member required, then
+  // billing-owner required. Non-members get 404 (don't leak existence);
+  // non-owner members get 403.
+  app.post('/sharedtrips/:id/share-link', async (c) => {
+    const env = c.env
+    const caller = await authenticateCaller(c)
+    if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
+
+    const sharedTripId = c.req.param('id')
+    const dbName = sharedTripDbName(sharedTripId)
+
+    let meta
+    try {
+      meta = await readSharedTripMeta(env, dbName)
+    } catch (err) {
+      if (err.status === 404) {
+        return c.json({ ok: false, error: 'not_found' }, 404)
+      }
+      console.error('sharedtrips/share-link read meta:', err)
+      return c.json({ ok: false, error: 'read_failed' }, 500)
+    }
+    if (!meta.members.includes(caller.email)) {
+      // 404 (not 403) — don't confirm existence to non-members. See #68.
+      return c.json({ ok: false, error: 'not_found' }, 404)
+    }
+    if (meta.billingOwner !== caller.email) {
+      // Share-link mint is owner-only, same as the email invite path.
+      return c.json({ ok: false, error: 'not_owner' }, 403)
+    }
+
+    try {
+      const { token } = await mintShareToken({
+        env,
+        flockId: sharedTripId,
+        inviter: caller.email,
+        epoch: typeof meta.inviteEpoch === 'number' ? meta.inviteEpoch : 0,
+      })
+      return c.json({ ok: true, url: shareLinkUrl(token) })
+    } catch (err) {
+      console.error('sharedtrips/share-link:', err)
+      return c.json({ ok: false, error: 'share_link_failed' }, 500)
+    }
+  })
+
   app.post('/sharedtrips/join', async (c) => {
     const env = c.env
     const caller = await authenticateCaller(c)
@@ -669,11 +744,25 @@ export function registerSharedTripRoutes(app) {
       const status = verified.reason === 'expired' ? 410 : 401
       return c.json({ ok: false, error: verified.reason }, status)
     }
-    const { flockId: sharedTripId, inviteeEmail } = verified.payload
+
+    // Branch on payload `typ` (docs/nest-invite-funnel.md §A/§C). The pure
+    // classifier decides which path to run; the route maps an error kind to a
+    // status and runs the side-effecting checks itself.
+    const classified = classifyJoinToken(verified.payload)
+    if (classified.kind === 'error') {
+      return c.json(
+        { ok: false, error: classified.error },
+        classified.status,
+      )
+    }
+
+    const sharedTripId = classified.flockId
+
+    // Legacy / absent-typ tokens stay email-bound: the invitee email must match
+    // the authenticated caller. Share tokens are recipient-agnostic — no match.
     if (
-      typeof sharedTripId !== 'string' ||
-      typeof inviteeEmail !== 'string' ||
-      inviteeEmail.toLowerCase() !== caller.email
+      classified.kind === 'invite' &&
+      classified.inviteeEmail.toLowerCase() !== caller.email
     ) {
       return c.json({ ok: false, error: 'email_mismatch' }, 403)
     }
@@ -689,8 +778,33 @@ export function registerSharedTripRoutes(app) {
       console.error('sharedtrips/join read meta:', err)
       return c.json({ ok: false, error: 'read_failed' }, 500)
     }
+
+    // Reject frozen for BOTH paths. The share path gets epoch/jti revocation +
+    // frozen via assertPreviewable; the legacy path needs an explicit frozen
+    // check since it skips assertPreviewable.
+    if (classified.kind === 'share') {
+      try {
+        await assertPreviewable(
+          meta,
+          verified.payload.epoch,
+          verified.payload.jti,
+          env,
+        )
+      } catch (err) {
+        if (err instanceof InviteFunnelError) {
+          return c.json({ ok: false, error: err.error }, err.status)
+        }
+        console.error('sharedtrips/join previewable:', err)
+        return c.json({ ok: false, error: 'join_failed' }, 500)
+      }
+    } else if (meta.billingStatus === 'frozen') {
+      return c.json({ ok: false, error: 'trip_frozen' }, 403)
+    }
+
     if (meta.members.includes(caller.email)) {
-      return c.json({ ok: false, error: 'already_a_member' }, 409)
+      // 409 already-member: hand back flockId + dbName + name so the client can
+      // deep-link straight into the trip (docs/nest-invite-funnel.md §C).
+      return c.json(buildAlreadyMemberBody(sharedTripId, dbName, meta), 409)
     }
 
     const members = [...meta.members, caller.email]

@@ -2,6 +2,7 @@ module Types exposing
     ( AuthMsg_(..)
     , AuthState
     , GuestMsg_(..)
+    , GuestScanState(..)
     , GuestState
     , Model(..)
     , Msg(..)
@@ -49,10 +50,11 @@ import Data.Guest exposing (GuestSession)
 import Data.Location exposing (LocationState)
 import Data.Me
 import Data.Navigation exposing (Route)
+import Data.NestPreview exposing (NestPreview)
 import Data.Notifications exposing (NotificationPrefs, NotificationToggle, Permission, StandaloneState)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PendingEntry exposing (ParsedEntry, PendingForm)
-import Data.Scan exposing (ScanItem)
+import Data.Scan exposing (OcrData, ScanItem)
 import Data.ScanItemId exposing (ScanItemId)
 import Data.SharedTripId exposing (SharedTripId)
 import Data.SharedTripUi exposing (SharedTripUiState)
@@ -102,6 +104,11 @@ settings panel from the guest screen to set their Anthropic key
 before signing in. `networkOffline` mirrors `navigator.onLine`
 (inverted) so the guest UI can surface a disconnected banner.
 
+`nestPreview` holds the `RemoteData` lifecycle for the `/invite/resolve`
+response on `RouteNestPreview`. `NotAsked` on every other route; transitions
+to `Loading` → `Success NestPreview` or `Failure` as the resolve request
+progresses. The `Pages.NestPreview` teaser card reads it in #337.
+
 -}
 type alias GuestState =
     { authError : Maybe String
@@ -109,16 +116,36 @@ type alias GuestState =
     , codeInput : String
     , demoMode : Bool
     , emailInput : String
+    , guestScan : GuestScanState
     , key : Nav.Key
+    , magicLinkRequest : RemoteData Http.Error ()
+    , nestPreview : RemoteData Http.Error NestPreview
     , networkOffline : Bool
     , pendingJoinToken : Maybe String
     , pendingRef : Maybe String
     , resendStatus : RemoteData Http.Error ()
+    , route : Route
     , session : GuestSession
+    , showConvert : Bool
     , showSettings : Bool
     , today : DateField
     , version : String
     }
+
+
+{-| Guest receipt-scan state for the Nest preview (#336).
+
+  - `NoScan` — the guest hasn't tried a scan yet.
+  - `Scanning` — the image is being read and the `/scan-guest` request is in
+    flight.
+  - `Scanned` — the parsed receipt is shown (S3). Under the default
+    `view_scan_preview` gate it is discarded on conversion, never saved.
+
+-}
+type GuestScanState
+    = NoScan
+    | Scanned OcrData
+    | Scanning
 
 
 {-| Where a `ShareViaNative` Msg should route on the JS side.
@@ -343,10 +370,20 @@ handles them without any per-state no-ops leaking into `updateAuth`.
 -}
 type GuestMsg_
     = CodeInputChanged String
+    | ConfirmMagicEmail
     | EmailInputChanged String
+    | GuestScanLoaded String
+    | GuestScanPick
+    | GuestScanResult (Result Http.Error OcrData)
+    | GuestScanSelected File
+    | MagicLinkRequested
+    | MagicLinkResult (Result Http.Error ())
+    | MagicVerifyResult (Result Http.Error Creds)
+    | NestPreviewResult (Result Http.Error NestPreview)
     | RequestCodeResult (Result Http.Error ())
     | ResendCode
     | ResendCodeResult (Result Http.Error ())
+    | StartConversion
     | SubmitCode
     | SubmitEmail
     | ToggleGuestSettings
