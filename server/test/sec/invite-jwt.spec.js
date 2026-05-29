@@ -177,7 +177,10 @@ describe('[Flock-Sec] invite JWT abuse (#67)', () => {
       body: { token },
     })
     assert.equal(second.status, 409)
-    assert.equal(second.body.error, 'already_a_member')
+    // The /sharedtrips/join duplicate path returns 'already_member' (see
+    // inviteFunnel.js + invite-funnel.spec.js). sharedTrips.js still carries a
+    // stale 'already_a_member' string — flagged for cleanup, not asserted here.
+    assert.equal(second.body.error, 'already_member')
   })
 
   test('alg:none: strip signature, set header alg to "none" → 401', async () => {
