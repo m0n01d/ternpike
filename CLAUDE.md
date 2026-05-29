@@ -493,6 +493,22 @@ Tier is server-authoritative — populated from the session at login + refreshed
 
 **Feature gating helpers (`UI.Gate`).** Use `UI.Gate.paidOnly` (or `UI.Gate.requiresPaid`) for any "is this paid?" capability check. They collapse `Osprey + Trailblazer` to a single boolean. Branch on the full `Tier` type only when rendering tier-specific UI (badges, plan name on the billing screen) — the compiler then forces all three to be handled. Never write code that downgrades a `Trailblazer`; it is permanent.
 
+**Keeping pricing copy honest.** `docs/tier-matrix.md` is the canonical
+capability × tier table, with each row linked to the gate that enforces it in
+code. Whenever you add, move, or remove a tier gate (a new `Tier.isPaid` /
+`UI.Gate` check, a change to `Pages.Trips.atTripLimit`, `Data.OcrPath`,
+`geocodeDispatch`, etc.), update **in the same commit**: (1) `docs/tier-matrix.md`,
+(2) the marketing pricing table in `marketing/src/content.yaml` (`pricing.tiers`),
+and (3) the Terms "Tiers and billing" section if billing mechanics changed. The
+guardrail test `marketing/test/pricing.matrix.spec.mjs` (`npm test` in
+`marketing/`) pins the pricing bullets against the matrix and fails on drift —
+it's the regression net for "marketing claims a feature the code doesn't gate
+that way." The code is the authority: if the matrix and a gate disagree, fix the
+matrix and the copy, not the gate. Don't invent scan quotas or field
+restrictions in copy — there are none in the app (BYO-key scanning is unlimited
+on every tier; the only metered scan path is the marketing guest demo in
+`server/scanDemo.js`, which is not a tier).
+
 Tracking issues: #13 (BYO-key infrastructure, foundation for Tern), #14 (paid-only proxy + batch scanning), #4 (Cloudflare Worker rewrite, required for #14). Subscription infrastructure breakdown: #16–#22.
 
 > **Vocabulary note:** User-facing copy avoids the word "flock" — use "shared trip" in any new prose. Internal Elm identifiers (modules, types, Msg constructors) use `SharedTrip*` per the rebrand track in #124–#132.

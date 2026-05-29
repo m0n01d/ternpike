@@ -5,7 +5,8 @@
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs && npx wrangler dev",
-    "deploy": "npm run build && npx wrangler deploy"
+    "deploy": "npm run build && npx wrangler deploy",
+    "test": "node --test test/*.matrix.spec.mjs"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",

@@ -177,10 +177,11 @@ pricing:
       featured: false
       features:
         - "Offline expense log"
-        - "Unlimited trips"
-        - "5 receipt scans / month"
-        - "Amount and category only"
-        - "No account required"
+        - "Up to 3 trips"
+        - "Bring-your-own AI key scanning"
+        - "Manual entry — every field"
+        - "Cross-device sync"
+        - "Stats dashboard"
       cta:
         label: "Download free"
         href: "#signup"
@@ -195,11 +196,12 @@ pricing:
       badge: "Recommended"
       features:
         - "Everything in Tern"
-        - "Unlimited receipt scanning"
-        - "Full receipt details (merchant, date, notes, GPS)"
-        - "Cross-device sync"
+        - "Unlimited trips"
+        - "Hosted scanning — no API key needed"
+        - "Batch scanning"
+        - "GPS auto-location on receipts"
         - "Nest. Shared ledger for couples and travel groups."
-        - "Stats dashboard"
+        - "Push notifications"
         - "CSV export"
       cta:
         label: "Start flying"
