@@ -67,6 +67,7 @@ For the full narrative and document ID conventions, see `docs/architecture.md`.
 
 -}
 
+import Analytics
 import Browser
 import Browser.Dom
 import Browser.Navigation as Nav
@@ -230,6 +231,13 @@ port nativeShare : { mode : String, text : String, title : String, url : String 
 port nativeShareResult : ({ ok : Bool, reason : String } -> msg) -> Sub msg
 
 
+{-| Fire-and-forget funnel analytics beacon (#340). Payload is
+`{ stage, flockId }` — see `Analytics.elm` for the stage allowlist.
+The JS handler POSTs to `/invite/track` (no auth, no PII).
+-}
+port trackFunnel : { flockId : String, stage : String } -> Cmd msg
+
+
 
 -- ROUTING
 -- See src/Routing.elm
@@ -285,6 +293,7 @@ toAuthState creds initialRoute gs =
     , notificationPermission = Notifications.Default
     , notificationPrefs = Notifications.defaultPrefs
     , openLedgerMenu = Nothing
+    , postJoinPrompt = False
     , pushSubscribed = False
     , route = initialRoute
     , scanQueue = Dict.empty
@@ -2239,7 +2248,17 @@ updateGuest msg gs =
             requestMagicLink gs
 
         MagicLinkResult result ->
-            ( GuestModel { gs | magicLinkRequest = RemoteData.fromResult result }, Cmd.none )
+            ( GuestModel { gs | magicLinkRequest = RemoteData.fromResult result }
+            , case result of
+                Ok _ ->
+                    trackFunnel
+                        { flockId = Maybe.withDefault "" (shareTokenFromRoute gs.route)
+                        , stage = Analytics.convertRequested
+                        }
+
+                Err _ ->
+                    Cmd.none
+            )
 
         ConfirmMagicEmail ->
             case gs.route of
@@ -2307,14 +2326,27 @@ updateGuest msg gs =
                     ( GuestModel { gs | guestScan = NoScan }, Cmd.none )
 
         GuestScanResult (Ok ocr) ->
-            ( GuestModel { gs | guestScan = Scanned ocr }, Cmd.none )
+            ( GuestModel { gs | guestScan = Scanned ocr }
+            , trackFunnel
+                { flockId = Maybe.withDefault "" (shareTokenFromRoute gs.route)
+                , stage = Analytics.scanTrySucceeded
+                }
+            )
 
         GuestScanResult (Err _) ->
             ( GuestModel { gs | guestScan = NoScan }, Cmd.none )
 
         NestPreviewResult result ->
             ( GuestModel { gs | nestPreview = RemoteData.fromResult result }
-            , Cmd.none
+            , case result of
+                Ok _ ->
+                    trackFunnel
+                        { flockId = Maybe.withDefault "" (shareTokenFromRoute gs.route)
+                        , stage = Analytics.nestPreviewViewed
+                        }
+
+                Err _ ->
+                    Cmd.none
             )
 
         ResendCodeResult result ->
@@ -3883,6 +3915,39 @@ updateAuth msg as_ =
         TriggerInstallPrompt ->
             ( AuthModel as_, triggerInstallPrompt () )
 
+        -- Post-join retention (#338). The one-time card on the member
+        -- landing reuses the existing PWA plumbing: the "Add" button is
+        -- `TriggerInstallPrompt` (the same outbound `triggerInstallPrompt`
+        -- port Settings uses), "Not now" / "Got it" is
+        -- `DismissPostJoinPrompt`, and "Turn on alerts" (offered only when
+        -- the app is already standalone) is `EnableCrewPush`.
+        DismissPostJoinPrompt ->
+            ( AuthModel { as_ | postJoinPrompt = False }, Cmd.none )
+
+        -- Default the `sharedTripActivity` pref on and request push.
+        -- Reuses `subscribePush` (the JS handler requests browser
+        -- permission first, then subscribes inside the same user-gesture
+        -- chain — see RequestPushPermission for why we don't batch
+        -- permission + subscribe). Mirrors the new pref optimistically so
+        -- the toggle in Settings reflects it immediately. Dismisses the
+        -- card so it never re-shows.
+        EnableCrewPush ->
+            let
+                oldPrefs : Notifications.NotificationPrefs
+                oldPrefs =
+                    as_.notificationPrefs
+
+                newPrefs : Notifications.NotificationPrefs
+                newPrefs =
+                    { oldPrefs | sharedTripActivity = True }
+            in
+            ( AuthModel { as_ | notificationPrefs = newPrefs, postJoinPrompt = False }
+            , subscribePush
+                { prefs = Notifications.encodePrefs newPrefs
+                , vapidPublicKey = as_.config.vapidPublicKey
+                }
+            )
+
         TakeOverBilling flockId ->
             ( AuthModel as_
             , Http.SharedTripApi.transferOwnership
@@ -4339,6 +4404,57 @@ updateAuth msg as_ =
                     , Cmd.none
                     )
 
+        OpenInviteCrewModal flockId ->
+            -- Open the modal in NotAsked so its explanatory copy + confirm
+            -- button are actually reachable; the request fires from the
+            -- modal's "Get invite link" button (GetShareLinkClicked), matching
+            -- the Reset-links / Email-invite flows.
+            ( AuthModel
+                (setSharedTripModal
+                    (SharedTripUi.InviteCrewModal flockId { request = RemoteData.NotAsked })
+                    as_
+                )
+            , Cmd.none
+            )
+
+        GetShareLinkClicked flockId ->
+            ( AuthModel
+                (setSharedTripModal
+                    (SharedTripUi.InviteCrewModal flockId { request = RemoteData.Loading })
+                    as_
+                )
+            , Http.SharedTripApi.getShareLink as_.creds flockId (AuthMsg << GetShareLinkResult)
+            )
+
+        GetShareLinkResult result ->
+            case RemoteData.fromResult result of
+                RemoteData.Success { url } ->
+                    -- Close the modal and fire navigator.share (or clipboard fallback).
+                    ( AuthModel (setSharedTripModal SharedTripUi.NoModal as_)
+                    , nativeShare
+                        { mode = "auto"
+                        , title = "Join my trip on Ternpike"
+                        , text = "I'm tracking expenses on Ternpike — join my trip."
+                        , url = url
+                        }
+                    )
+
+                remote ->
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.InviteCrewModal id _ ->
+                                        Just (SharedTripUi.InviteCrewModal id { request = remote })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
+                    , Cmd.none
+                    )
+
         OpenLeaveConfirmModal flockId ->
             ( AuthModel (setSharedTripModal (SharedTripUi.LeaveConfirmModal flockId { request = RemoteData.NotAsked }) as_)
             , Cmd.none
@@ -4463,15 +4579,26 @@ updateAuth msg as_ =
             in
             case rd of
                 RemoteData.Success response ->
+                    -- Post-join retention (#338): flip the one-time A2HS /
+                    -- crew-push prompt on. The Settings landing renders the
+                    -- post-join card (Add to Home Screen, then crew-activity
+                    -- push once installed) while `postJoinPrompt` is True;
+                    -- `DismissPostJoinPrompt` clears it. We never prompt during
+                    -- the guest preview — only after a successful conversion.
                     ( AuthModel
                         { as_
                             | joinSharedTripRequest = rd
+                            , postJoinPrompt = True
                             , route = RouteSettings
                             , toast = Just ("Joined " ++ response.name ++ ".")
                         }
                     , Cmd.batch
                         [ Nav.pushUrl as_.key (as_.basePath ++ "settings")
                         , toastFor
+                        , trackFunnel
+                            { flockId = Data.SharedTripId.toString response.sharedTripId
+                            , stage = Analytics.joinSucceeded
+                            }
                         ]
                     )
 
@@ -4548,6 +4675,57 @@ updateAuth msg as_ =
                 , vapidPublicKey = as_.config.vapidPublicKey
                 }
             )
+
+        ResetLinksClicked flockId ->
+            ( AuthModel
+                (setSharedTripModal
+                    (SharedTripUi.ResetLinksConfirmModal flockId { request = RemoteData.NotAsked })
+                    as_
+                )
+            , Cmd.none
+            )
+
+        ResetLinksConfirmed flockId ->
+            ( AuthModel
+                (updateModalRequest
+                    (\m ->
+                        case m of
+                            SharedTripUi.ResetLinksConfirmModal id _ ->
+                                Just (SharedTripUi.ResetLinksConfirmModal id { request = RemoteData.Loading })
+
+                            _ ->
+                                Nothing
+                    )
+                    as_
+                )
+            , Http.SharedTripApi.resetShareLinks as_.creds flockId (AuthMsg << ResetLinksResult)
+            )
+
+        ResetLinksResult result ->
+            case RemoteData.fromResult result of
+                RemoteData.Success _ ->
+                    ( AuthModel
+                        (setSharedTripModal SharedTripUi.NoModal
+                            { as_ | toast = Just "All share links reset." }
+                        )
+                    , toastFor
+                    )
+
+                remote ->
+                    ( AuthModel
+                        (updateModalRequest
+                            (\m ->
+                                case m of
+                                    SharedTripUi.ResetLinksConfirmModal id _ ->
+                                        Just (SharedTripUi.ResetLinksConfirmModal id { request = remote })
+
+                                    _ ->
+                                        Nothing
+                            )
+                            as_
+                        )
+                    , Cmd.none
+                    )
 
         -- Optimistic flip of the local pref + fire-and-forget save to
         -- the server. The encoded prefs go to the JS port which PUTs

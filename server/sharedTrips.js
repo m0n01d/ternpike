@@ -725,6 +725,56 @@ export function registerSharedTripRoutes(app) {
     }
   })
 
+  // POST /sharedtrips/:id/reset-links  (#339)
+  //
+  // Owner-only. Bumps `sharedtrip:meta.inviteEpoch` by 1, which invalidates
+  // every outstanding share token at once (assertPreviewable rejects any token
+  // whose baked-in epoch ≠ the live meta epoch). Returns `{ ok, inviteEpoch }`
+  // so the caller can confirm the new epoch.
+  //
+  // Auth mirrors `/sharedtrips/:id/share-link`: authenticated member required,
+  // then billing-owner required. Non-members get 404 (don't leak existence);
+  // non-owner members get 403.
+  app.post('/sharedtrips/:id/reset-links', async (c) => {
+    const env = c.env
+    const caller = await authenticateCaller(c)
+    if (!caller) return c.json({ ok: false, error: 'unauthorized' }, 401)
+
+    const sharedTripId = c.req.param('id')
+    const dbName = sharedTripDbName(sharedTripId)
+
+    let meta
+    try {
+      meta = await readSharedTripMeta(env, dbName)
+    } catch (err) {
+      if (err.status === 404) {
+        return c.json({ ok: false, error: 'not_found' }, 404)
+      }
+      console.error('sharedtrips/reset-links read meta:', err)
+      return c.json({ ok: false, error: 'read_failed' }, 500)
+    }
+    if (!meta.members.includes(caller.email)) {
+      // 404 (not 403) — don't confirm existence to non-members. See #68.
+      return c.json({ ok: false, error: 'not_found' }, 404)
+    }
+    if (meta.billingOwner !== caller.email) {
+      // Reset is owner-only, same as the share-link mint path.
+      return c.json({ ok: false, error: 'not_owner' }, 403)
+    }
+
+    try {
+      const currentEpoch =
+        typeof meta.inviteEpoch === 'number' ? meta.inviteEpoch : 0
+      const newEpoch = currentEpoch + 1
+      const updatedMeta = { ...meta, inviteEpoch: newEpoch }
+      await writeSharedTripMeta(env, dbName, updatedMeta)
+      return c.json({ ok: true, inviteEpoch: newEpoch })
+    } catch (err) {
+      console.error('sharedtrips/reset-links write:', err)
+      return c.json({ ok: false, error: 'reset_failed' }, 500)
+    }
+  })
+
   app.post('/sharedtrips/join', async (c) => {
     const env = c.env
     const caller = await authenticateCaller(c)
@@ -1090,6 +1140,7 @@ export function registerSharedTripRoutes(app) {
         allMembers: meta.members,
         amount,
         authorEmail: caller.email,
+        billingOwner: meta.billingOwner,
         note,
         tripId: sharedTripId,
         tripName: meta.name,

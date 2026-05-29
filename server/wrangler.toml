@@ -47,12 +47,10 @@ id = "679c582bcded4fef8fdb3cebcb8940cc"
 # Used by `assertPreviewable` in server/inviteFunnel.js to revoke a single
 # leaked share link (the per-trip `inviteEpoch` on sharedtrip:meta revokes all
 # links at once; this KV revokes one). Also backs magic-token single-use in a
-# later issue. The `id` below is a PLACEHOLDER — provision the real namespace
-# in the Cloudflare dashboard (or `wrangler kv namespace create INVITE_KV`) and
-# paste the returned id here before deploy.
+# later issue.
 [[kv_namespaces]]
 binding = "INVITE_KV"
-id = "0000000000000000000000000000000a"
+id = "bf003c1ee6bd46b88e06d5d24be41f67"
 
 # QR-sticker scan counters (key: `<slug>`, value: JSON `{count, firstAt, lastAt}`).
 # Slugs are normalized to `[a-z0-9-]{1,32}`. Sized for ad-hoc growth-hacker

@@ -476,6 +476,22 @@ export function scanGuestRateDecision({ tokenCount, ipCount, globalCount }) {
   return { ok: true, remaining: SCAN_GUEST_PER_TOKEN_PER_DAY - t - 1 }
 }
 
+// The four funnel stages the Elm client tracks (#340). Exported so unit tests
+// can assert the allowlist without spinning up the full Hono router.
+export const FUNNEL_STAGE_ALLOWLIST = new Set([
+  'convert_requested',
+  'join_succeeded',
+  'nest_preview_viewed',
+  'scan_try_succeeded',
+])
+
+// PURE allowlist check for `POST /invite/track`. Returns true when `stage` is
+// a non-empty string matching one of the four known funnel stages. Exported so
+// the stage-validation logic is unit-testable without I/O.
+export function isAllowedFunnelStage(stage) {
+  return typeof stage === 'string' && stage.length > 0 && FUNNEL_STAGE_ALLOWLIST.has(stage)
+}
+
 export function registerInviteFunnelRoutes(app) {
   // POST /invite/resolve — unauthenticated. The share token rides in the body.
   // Returns ONLY the redacted teaser (docs/nest-invite-funnel.md §C).
@@ -697,5 +713,48 @@ export function registerInviteFunnelRoutes(app) {
     }
 
     return c.json({ ok: true, ocr, remaining: Math.max(0, decision.remaining) })
+  })
+
+  // POST /invite/track — unauthenticated funnel analytics beacon (#340).
+  // Body: { stage, flockId }.  No PII — `stage` is validated against
+  // `FUNNEL_STAGE_ALLOWLIST`; unknown stages are silently ignored. `flockId`
+  // is received but not stored in the counter key (future use for per-trip
+  // breakdowns). Counters are per-stage-per-day, cookie-free.
+  //
+  // Counter key: `funnel:<stage>:<utcDate>` in `INVITE_KV`, incremented by 1.
+  // TTL: 90 days (enough for trend reporting; not indefinite storage).
+  // Always returns { ok: true } — failures are swallowed client-side; this
+  // endpoint must never block or degrade the funnel.
+  app.post('/invite/track', async (c) => {
+    const env = c.env
+
+    let body
+    try {
+      body = await c.req.json()
+    } catch {
+      body = {}
+    }
+
+    const stage = body && typeof body.stage === 'string' ? body.stage.trim() : ''
+
+    // Unknown or missing stages are silently ignored — the server never
+    // errors on a beacon so the client funnel is never disrupted.
+    if (!isAllowedFunnelStage(stage)) {
+      return c.json({ ok: true })
+    }
+
+    const kv = env.INVITE_KV
+    if (kv) {
+      const date = utcDateKey()
+      const key = `funnel:${stage}:${date}`
+      // Best-effort increment: read → add → write. A race between two
+      // simultaneous beacons may drop one count, which is acceptable for
+      // analytics (exact precision not required). KV transactions aren't
+      // available in Workers.
+      const current = parseInt((await kv.get(key)) || '0', 10) || 0
+      await kv.put(key, String(current + 1), { expirationTtl: 90 * 24 * 60 * 60 })
+    }
+
+    return c.json({ ok: true })
   })
 }

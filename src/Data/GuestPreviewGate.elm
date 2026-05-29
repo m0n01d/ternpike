@@ -1,7 +1,6 @@
 module Data.GuestPreviewGate exposing
     ( GuestPreviewGate(..)
     , decoder
-    , label
     )
 
 {-| The server-configured flag that controls how much of the Nest invite
@@ -61,28 +60,3 @@ decoder =
                     _ ->
                         ViewOnly
             )
-
-
-{-| Wire-format label for a `GuestPreviewGate`. Inverse of `decoder`.
-
-    label TempSession
-    --> "temp_session"
-
-    label ViewOnly
-    --> "view_only"
-
-    label ViewScanPreview
-    --> "view_scan_preview"
-
--}
-label : GuestPreviewGate -> String
-label gate =
-    case gate of
-        TempSession ->
-            "temp_session"
-
-        ViewOnly ->
-            "view_only"
-
-        ViewScanPreview ->
-            "view_scan_preview"

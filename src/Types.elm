@@ -244,6 +244,7 @@ type alias AuthState =
     , notificationPermission : Permission
     , notificationPrefs : NotificationPrefs
     , openLedgerMenu : Maybe ExpenseId
+    , postJoinPrompt : Bool
     , pushSubscribed : Bool
     , route : Route
     , scanQueue : Dict String ScanItem
@@ -420,7 +421,9 @@ type AuthMsg_
     | DeleteTrip Trip
     | DismissError
     | DismissMapPicker
+    | DismissPostJoinPrompt
     | DuplicateEntry Expense
+    | EnableCrewPush
     | ExportCsv Data.TripId.TripId
     | FilesSelected (List File)
     | GeolocationDenied
@@ -436,6 +439,8 @@ type AuthMsg_
     | GotSaveTripTime Time.Posix
     | GotSubmitTime ParsedEntry Time.Posix
     | GotSyncTime Time.Posix
+    | GetShareLinkClicked SharedTripId
+    | GetShareLinkResult (Result Http.Error Http.SharedTripApi.ShareLinkResponse)
     | GotVoidTime Expense Time.Posix
     | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
     | HoverDailyBars (List (CI.One DailyDay CI.Bar))
@@ -456,6 +461,7 @@ type AuthMsg_
     | OcrImagePrepared { dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int }
     | OpenCreateSharedTripModal
     | OpenEditTripForm Trip
+    | OpenInviteCrewModal SharedTripId
     | OpenInviteModal SharedTripId
     | OpenLeaveConfirmModal SharedTripId
     | OpenLedgerMenu ExpenseId
@@ -469,6 +475,9 @@ type AuthMsg_
     | PushSubscribeReceived { error : String, ok : Bool }
     | RefreshClicked
     | RequestPushPermission
+    | ResetLinksClicked SharedTripId
+    | ResetLinksConfirmed SharedTripId
+    | ResetLinksResult (Result Http.Error ())
     | ReviewScanItem String
     | SaveTripForm
     | ScanProxyResult { body : String, itemId : String, ok : Bool, status : Int }

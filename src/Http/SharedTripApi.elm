@@ -1,26 +1,31 @@
 module Http.SharedTripApi exposing
     ( CreateSharedTripResponse
     , JoinSharedTripResponse
+    , ShareLinkResponse
     , adoptTrip
     , authHeader
     , createSharedTrip
+    , getShareLink
     , inviteToSharedTrip
     , joinSharedTrip
     , leaveSharedTrip
     , notifyActivity
+    , resetShareLinks
     , transferOwnership
     )
 
-{-| HTTP client for the five shared-trip-membership endpoints served by
+{-| HTTP client for the shared-trip-membership endpoints served by
 `api.ternpike.com`.
 
-These wrap the endpoints introduced in #57:
+These wrap the endpoints introduced in #57 and extended in #339:
 
   - `POST /sharedtrips` — create.
   - `POST /sharedtrips/:id/invite` — invite a user by email.
   - `POST /sharedtrips/join` — redeem an invite JWT.
   - `POST /sharedtrips/:id/leave` — leave a shared trip (non-owner only).
   - `POST /sharedtrips/:id/transfer` — transfer ownership to another member.
+  - `POST /sharedtrips/:id/share-link` — mint a recipient-agnostic share link (owner-only).
+  - `POST /sharedtrips/:id/reset-links` — bump inviteEpoch to revoke all outstanding share links (owner-only).
 
 Every request uses HTTP Basic with the per-user CouchDB credentials
 already stored in `Data.Auth.Creds` — same shape the app uses to talk
@@ -335,6 +340,67 @@ transferOwnership creds sharedTripId { newOwnerEmail } toMsg =
                 (Json.Encode.object
                     [ ( "newOwnerEmail", Json.Encode.string newOwnerEmail ) ]
                 )
+        , expect = Http.expectWhatever toMsg
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| Response from `POST /sharedtrips/:id/share-link`: the funnel URL to hand
+to `navigator.share` (or copy to clipboard as fallback).
+-}
+type alias ShareLinkResponse =
+    { url : String
+    }
+
+
+shareLinkResponseDecoder : Json.Decode.Decoder ShareLinkResponse
+shareLinkResponseDecoder =
+    Json.Decode.succeed ShareLinkResponse
+        |> Pipeline.required "url" Json.Decode.string
+
+
+{-| `POST /sharedtrips/:id/share-link` — owner-only. Mints a recipient-agnostic
+`typ:"share"` token (30-day exp) baked with the trip's current `inviteEpoch`
+and returns the funnel URL `https://app.ternpike.com/nest?token=<token>` for
+the inviter to hand to `navigator.share`.
+
+Unlike the email invite, no `inviteeEmail` is bound — anyone holding the link
+can preview (and join) the shared trip.
+
+-}
+getShareLink :
+    Creds
+    -> SharedTripId
+    -> (Result Http.Error ShareLinkResponse -> msg)
+    -> Cmd msg
+getShareLink creds sharedTripId toMsg =
+    Http.request
+        { method = "POST"
+        , headers = [ authHeader creds ]
+        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/share-link"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg shareLinkResponseDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| `POST /sharedtrips/:id/reset-links` — owner-only. Bumps
+`sharedtrip:meta.inviteEpoch` by 1, which invalidates every outstanding
+share token at once. Returns `{ ok, inviteEpoch }` confirming the new epoch.
+-}
+resetShareLinks :
+    Creds
+    -> SharedTripId
+    -> (Result Http.Error () -> msg)
+    -> Cmd msg
+resetShareLinks creds sharedTripId toMsg =
+    Http.request
+        { method = "POST"
+        , headers = [ authHeader creds ]
+        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/reset-links"
+        , body = Http.emptyBody
         , expect = Http.expectWhatever toMsg
         , timeout = Nothing
         , tracker = Nothing

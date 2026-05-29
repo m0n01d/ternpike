@@ -10,6 +10,7 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  FUNNEL_STAGE_ALLOWLIST,
   GUEST_PREVIEW_GATE,
   SHARE_TOKEN_EXPIRY_SECONDS,
   assertPreviewable,
@@ -18,6 +19,7 @@ import {
   buildTeaser,
   classifyJoinToken,
   deriveInviterName,
+  isAllowedFunnelStage,
   mintShareToken,
   randomJti,
   readMetaForPreview,
@@ -537,6 +539,86 @@ describe('[Invite] /sharedtrips/join frozen rejection (#334)', () => {
           env,
         ),
       (e) => e.status === 403 && e.error === 'trip_frozen',
+    )
+  })
+})
+
+describe('[Analytics] isAllowedFunnelStage allowlist (#340)', () => {
+  test('all four canonical stages are allowed', () => {
+    for (const stage of FUNNEL_STAGE_ALLOWLIST) {
+      assert.equal(isAllowedFunnelStage(stage), true, `stage "${stage}" should be allowed`)
+    }
+  })
+
+  test('exact allowlist contains the four expected stages', () => {
+    assert.deepEqual(
+      [...FUNNEL_STAGE_ALLOWLIST].sort(),
+      ['convert_requested', 'join_succeeded', 'nest_preview_viewed', 'scan_try_succeeded'],
+    )
+  })
+
+  test('unknown stages are rejected', () => {
+    const unknown = ['', 'foo', 'NEST_PREVIEW_VIEWED', 'nest-preview-viewed', 'admin', '../etc']
+    for (const stage of unknown) {
+      assert.equal(isAllowedFunnelStage(stage), false, `stage "${stage}" should be rejected`)
+    }
+  })
+
+  test('non-string inputs are rejected', () => {
+    for (const val of [null, undefined, 42, {}, [], true]) {
+      assert.equal(isAllowedFunnelStage(val), false, `${JSON.stringify(val)} should be rejected`)
+    }
+  })
+})
+
+describe('[Invite] reset-links epoch bump (#339)', () => {
+  // Tests the pure invariant: a token minted with epoch N is rejected by
+  // assertPreviewable once the live meta epoch has been bumped to N+1.
+  // The actual HTTP endpoint (POST /sharedtrips/:id/reset-links) does the
+  // write-meta step; here we confirm the guard that makes the revocation
+  // work — no Docker required.
+
+  const noKv = { INVITE_KV: { async get() { return null } } }
+
+  test('token epoch === live epoch → allowed', async () => {
+    // Epoch 3 in both token and meta — should not throw.
+    await assert.doesNotReject(() =>
+      assertPreviewable({ inviteEpoch: 3 }, 3, 'jti_abc', noKv),
+    )
+  })
+
+  test('token epoch < live epoch (epoch bumped) → 403 revoked', async () => {
+    // Meta was at epoch 3 when token was minted; owner bumped to 4.
+    await assert.rejects(
+      () => assertPreviewable({ inviteEpoch: 4 }, 3, 'jti_abc', noKv),
+      (e) => e.status === 403 && e.error === 'revoked',
+    )
+  })
+
+  test('token epoch > live epoch → 403 revoked (tampered)', async () => {
+    // A tampered token claiming a future epoch is also rejected.
+    await assert.rejects(
+      () => assertPreviewable({ inviteEpoch: 2 }, 5, 'jti_abc', noKv),
+      (e) => e.status === 403 && e.error === 'revoked',
+    )
+  })
+
+  test('epoch bump invalidates previously minted token (integration of mint + guard)', async () => {
+    const env = { SERVER_SECRET: SECRET, ...noKv }
+    const { payload } = await mintShareToken({
+      env,
+      flockId: 'testflk',
+      inviter: 'owner@example.com',
+      epoch: 7,
+    })
+    // Meta at epoch 7 — token is valid.
+    await assert.doesNotReject(() =>
+      assertPreviewable({ inviteEpoch: 7 }, payload.epoch, payload.jti, noKv),
+    )
+    // Owner bumps epoch to 8 — same token is now revoked.
+    await assert.rejects(
+      () => assertPreviewable({ inviteEpoch: 8 }, payload.epoch, payload.jti, noKv),
+      (e) => e.status === 403 && e.error === 'revoked',
     )
   })
 })
