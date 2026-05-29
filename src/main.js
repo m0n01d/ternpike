@@ -227,7 +227,12 @@ import './elements/tp-amount.js'
     })
 
     const domSurface = () => {
-      const el = document.querySelector('[data-verify-unit]')
+      // Select the *mounted* unit specifically — a page (e.g. Settings) can
+      // render several verify units, so a bare [data-verify-unit] would grab
+      // whichever comes first in the DOM.
+      const el = snapshot.mountedUnit
+        ? document.querySelector(`[data-verify-unit="${snapshot.mountedUnit}"]`)
+        : document.querySelector('[data-verify-unit]')
       if (!el) return null
       const out = {}
       for (const attr of el.attributes) {
