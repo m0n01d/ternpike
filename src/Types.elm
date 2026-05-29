@@ -118,6 +118,7 @@ type alias GuestState =
     , emailInput : String
     , guestScan : GuestScanState
     , key : Nav.Key
+    , magicLinkRequest : RemoteData Http.Error ()
     , nestPreview : RemoteData Http.Error NestPreview
     , networkOffline : Bool
     , pendingJoinToken : Maybe String
@@ -125,6 +126,7 @@ type alias GuestState =
     , resendStatus : RemoteData Http.Error ()
     , route : Route
     , session : GuestSession
+    , showConvert : Bool
     , showSettings : Bool
     , today : DateField
     , version : String
@@ -368,15 +370,20 @@ handles them without any per-state no-ops leaking into `updateAuth`.
 -}
 type GuestMsg_
     = CodeInputChanged String
+    | ConfirmMagicEmail
     | EmailInputChanged String
     | GuestScanLoaded String
     | GuestScanPick
     | GuestScanResult (Result Http.Error OcrData)
     | GuestScanSelected File
+    | MagicLinkRequested
+    | MagicLinkResult (Result Http.Error ())
+    | MagicVerifyResult (Result Http.Error Creds)
     | NestPreviewResult (Result Http.Error NestPreview)
     | RequestCodeResult (Result Http.Error ())
     | ResendCode
     | ResendCodeResult (Result Http.Error ())
+    | StartConversion
     | SubmitCode
     | SubmitEmail
     | ToggleGuestSettings

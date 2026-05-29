@@ -44,21 +44,17 @@ viewGuest gs =
             -- genuine dispatch rather than a degenerate one-arm case.
             viewLogin gs
 
-        Data.Navigation.RouteMagicLink token _ ->
-            -- Passwordless magic-link landing (#337). The confirm-email
-            -- view + verify wiring land in the conversion-wall increment;
-            -- for now fall through to the login form so the auth flow
-            -- remains functional. `token` is bound for that increment.
-            viewLogin { gs | pendingJoinToken = Just token }
+        Data.Navigation.RouteMagicLink _ _ ->
+            -- Passwordless magic-link landing (#337): confirm the email the
+            -- link was sent to, then verify + sign in (handled in `Main.elm`).
+            Pages.NestPreview.viewMagicConfirm gs
 
         Data.Navigation.RouteNestPreview _ ->
-            -- Nest invite preview (#335/#336). The resolve fetch fires from
-            -- `Main.elm` on entry into this route and lands the decoded
-            -- teaser in `gs.nestPreview`; we render that `RemoteData`
-            -- read-only. When the teaser's gate is `ViewScanPreview`, the
-            -- guest can try one receipt scan (#336) — `gs.guestScan` carries
-            -- that state.
-            Pages.NestPreview.view gs.guestScan gs.nestPreview
+            -- Nest invite preview (#335/#336/#337). The resolve fetch fires from
+            -- `Main.elm` on entry; the decoded teaser lands in `gs.nestPreview`.
+            -- The view renders the teaser, the optional guest scan, and the
+            -- conversion CTA.
+            Pages.NestPreview.view gs
 
         _ ->
             viewLogin gs

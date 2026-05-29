@@ -321,6 +321,8 @@ toGuestState reason as_ =
     , emailInput = ""
     , key = as_.key
     , guestScan = NoScan
+    , magicLinkRequest = RemoteData.NotAsked
+    , showConvert = False
     , nestPreview = RemoteData.NotAsked
     , networkOffline = as_.networkOffline
     , pendingJoinToken = joinTokenFromRoute as_.route
@@ -1095,6 +1097,69 @@ verifyCode email gs =
         )
 
 
+{-| Request a passwordless magic link for the conversion wall (#337). Sends the
+guest's email plus the share token (`next`, from the preview route) so the
+emailed link can drive convert+join in one step. Mirrors `requestCode`.
+-}
+requestMagicLink : GuestState -> ( Model, Cmd Msg )
+requestMagicLink gs =
+    let
+        email =
+            String.trim gs.emailInput
+
+        bodyFields =
+            ( "email", E.string email )
+                :: (case shareTokenFromRoute gs.route of
+                        Just token ->
+                            [ ( "next", E.string token ) ]
+
+                        Nothing ->
+                            []
+                   )
+    in
+    if email == "" then
+        ( GuestModel { gs | authError = Just "Enter your email address." }, Cmd.none )
+
+    else
+        ( GuestModel { gs | authError = Nothing, magicLinkRequest = RemoteData.Loading }
+        , Http.post
+            { url = gs.session.config.backendUrl ++ "/auth/request-magic-link"
+            , body = Http.jsonBody (E.object bodyFields)
+            , expect = Http.expectWhatever (GuestMsg << MagicLinkResult)
+            }
+        )
+
+
+{-| Verify a magic-link token at the landing route (#337). The caller-confirmed
+email (`gs.emailInput`) is enforced server-side against the token (forwarding
+defense). `maybeNext` is the share token from the link, stashed in
+`pendingJoinToken` so the post-sign-in redirect joins the trip. Mirrors
+`verifyCode`.
+-}
+verifyMagicLink : String -> Maybe String -> GuestState -> ( Model, Cmd Msg )
+verifyMagicLink token maybeNext gs =
+    let
+        email =
+            String.trim gs.emailInput
+    in
+    if email == "" then
+        ( GuestModel { gs | authError = Just "Enter the email this link was sent to." }, Cmd.none )
+
+    else
+        ( GuestModel
+            { gs
+                | authError = Nothing
+                , magicLinkRequest = RemoteData.Loading
+                , pendingJoinToken = maybeNext
+            }
+        , Http.post
+            { url = gs.session.config.backendUrl ++ "/auth/verify-magic-link"
+            , body = Http.jsonBody (E.object [ ( "token", E.string token ), ( "email", E.string email ) ])
+            , expect = Http.expectJson (GuestMsg << MagicVerifyResult) credsDecoder
+            }
+        )
+
+
 handleTripsFetched : Dict.Dict String Trip -> AuthState -> ( Model, Cmd Msg )
 handleTripsFetched tripsDict as_ =
     let
@@ -1779,6 +1844,8 @@ init flagsJson url key =
             , emailInput = ""
             , key = key
             , guestScan = NoScan
+            , magicLinkRequest = RemoteData.NotAsked
+            , showConvert = False
             , nestPreview = RemoteData.NotAsked
             , networkOffline = False
             , pendingJoinToken = joinTokenFromRoute initialRoute
@@ -1963,6 +2030,8 @@ updateShared msg model =
                         , emailInput = ""
                         , key = as_.key
                         , guestScan = NoScan
+                        , magicLinkRequest = RemoteData.NotAsked
+                        , showConvert = False
                         , nestPreview = RemoteData.NotAsked
                         , networkOffline = as_.networkOffline
                         , pendingJoinToken = Nothing
@@ -2160,6 +2229,58 @@ updateGuest msg gs =
 
                 _ ->
                     ( GuestModel gs, Cmd.none )
+
+        StartConversion ->
+            ( GuestModel { gs | showConvert = True, magicLinkRequest = RemoteData.NotAsked, authError = Nothing }
+            , Cmd.none
+            )
+
+        MagicLinkRequested ->
+            requestMagicLink gs
+
+        MagicLinkResult result ->
+            ( GuestModel { gs | magicLinkRequest = RemoteData.fromResult result }, Cmd.none )
+
+        ConfirmMagicEmail ->
+            case gs.route of
+                RouteMagicLink token next ->
+                    verifyMagicLink token next gs
+
+                _ ->
+                    ( GuestModel gs, Cmd.none )
+
+        MagicVerifyResult (Ok creds) ->
+            let
+                ( landingRoute, landingUrl ) =
+                    case gs.pendingJoinToken of
+                        Just token ->
+                            ( RouteJoinSharedTrip token
+                            , gs.basePath ++ "sharedtrips/join?token=" ++ token
+                            )
+
+                        Nothing ->
+                            ( RouteTrips, gs.basePath ++ "trips" )
+
+                as_ =
+                    toAuthState creds landingRoute gs
+            in
+            ( AuthModel as_
+            , Cmd.batch
+                [ saveStorage { key = "auth_creds", value = E.encode 0 (encodeCreds creds) }
+                , startSync (encodeCreds creds)
+                , Nav.replaceUrl gs.key landingUrl
+                , fetchMe as_
+                ]
+            )
+
+        MagicVerifyResult (Err _) ->
+            ( GuestModel
+                { gs
+                    | authError = Just "That link is invalid or expired. Ask for a fresh one."
+                    , magicLinkRequest = RemoteData.NotAsked
+                }
+            , Cmd.none
+            )
 
         GuestScanPick ->
             ( GuestModel gs

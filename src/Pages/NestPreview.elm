@@ -1,4 +1,4 @@
-module Pages.NestPreview exposing (view)
+module Pages.NestPreview exposing (view, viewMagicConfirm)
 
 {-| The redacted-teaser preview page for the Nest invite funnel
 (`docs/nest-invite-funnel.md` §B/§C, states S1 / S2 / S3 / S6 / empty-trip).
@@ -27,24 +27,26 @@ import Data.NestPreview exposing (NestPreview)
 import Data.Scan exposing (OcrData)
 import Html exposing (Html)
 import Html.Attributes
+import Html.Events
 import Http
-import RemoteData exposing (RemoteData)
-import Types exposing (GuestMsg_(..), GuestScanState(..), Msg(..))
+import RemoteData
+import Types exposing (GuestMsg_(..), GuestScanState(..), GuestState, Msg(..))
 import UI.Button
 import UI.Card
 import UI.DateView
 import UI.MoneyView
 
 
-{-| Render the Nest invite preview for a guest. Takes the guest scan state (so
-S2/S3 can render) and the resolve `RemoteData`.
+{-| Render the Nest invite preview (S0/S1/S2/S3/S6) for a guest from the
+`GuestState` — the resolve `RemoteData`, the scan state, and the conversion
+sub-state (the email form / "check your email").
 -}
-view : GuestScanState -> RemoteData Http.Error NestPreview -> Html Msg
-view scan remote =
+view : GuestState -> Html Msg
+view gs =
     Html.div
         [ Html.Attributes.class "min-h-dvh flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px]" ]
         [ Html.div [ Html.Attributes.class "max-w-sm w-full" ]
-            [ case remote of
+            [ case gs.nestPreview of
                 RemoteData.NotAsked ->
                     viewLoading
 
@@ -55,7 +57,38 @@ view scan remote =
                     viewDeadInvite err
 
                 RemoteData.Success teaser ->
-                    viewTeaser scan teaser
+                    viewTeaser gs teaser
+            ]
+        ]
+
+
+{-| S4b — the magic-link landing (`RouteMagicLink`). The guest confirms the
+email the link was sent to (forwarding defense), then we verify + sign in.
+-}
+viewMagicConfirm : GuestState -> Html Msg
+viewMagicConfirm gs =
+    Html.div
+        [ Html.Attributes.class "min-h-dvh flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px]" ]
+        [ Html.div [ Html.Attributes.class "max-w-sm w-full" ]
+            [ UI.Card.subCard
+                [ Html.form
+                    [ Html.Attributes.class "flex flex-col gap-3"
+                    , Html.Events.onSubmit (GuestMsg ConfirmMagicEmail)
+                    ]
+                    [ Html.h1 [ Html.Attributes.class "font-display text-2xl font-bold text-forest" ]
+                        [ Html.text "Confirm your email to finish joining" ]
+                    , Html.input
+                        [ Html.Attributes.type_ "email"
+                        , Html.Attributes.class "w-full rounded-card border border-tan px-3 py-2"
+                        , Html.Attributes.placeholder "you@email.com"
+                        , Html.Attributes.value gs.emailInput
+                        , Html.Events.onInput (GuestMsg << EmailInputChanged)
+                        ]
+                        []
+                    , UI.Button.primary { label = "Confirm & join", onClick = GuestMsg ConfirmMagicEmail }
+                    , viewConvertError gs
+                    ]
+                ]
             ]
         ]
 
@@ -88,8 +121,8 @@ spinner label =
 {-| S1 — the redacted teaser. Empty trips (`entryCount == 0`) swap the
 stats + placeholder-map block for the scan-nudge empty-state copy.
 -}
-viewTeaser : GuestScanState -> NestPreview -> Html Msg
-viewTeaser scan teaser =
+viewTeaser : GuestState -> NestPreview -> Html Msg
+viewTeaser gs teaser =
     UI.Card.subCard
         [ Html.div [ Html.Attributes.class "flex flex-col gap-4" ]
             [ Html.p [ Html.Attributes.class "text-sm text-moss" ]
@@ -112,9 +145,64 @@ viewTeaser scan teaser =
 
               else
                 viewStatsAndMap teaser
-            , viewScanOrHint scan teaser.gate
+            , viewScanOrHint gs.guestScan teaser.gate
+            , viewConvert gs
             ]
         ]
+
+
+{-| S4 — the conversion area below the teaser. A "Join this trip" button that
+reveals an email field; submitting requests a magic link, then we show the
+"check your email" confirmation. Reuses `gs.emailInput`.
+-}
+viewConvert : GuestState -> Html Msg
+viewConvert gs =
+    case gs.magicLinkRequest of
+        RemoteData.Success () ->
+            Html.div [ Html.Attributes.class "rounded-card bg-cream-deep border border-tan/60 px-4 py-4 text-center" ]
+                [ Html.p [ Html.Attributes.class "text-sm font-medium text-forest" ]
+                    [ Html.text "Check your email" ]
+                , Html.p [ Html.Attributes.class "text-xs text-muted mt-1" ]
+                    [ Html.text "Tap the link we sent to join the trip." ]
+                ]
+
+        _ ->
+            if gs.showConvert then
+                Html.form
+                    [ Html.Attributes.class "flex flex-col gap-2"
+                    , Html.Events.onSubmit (GuestMsg MagicLinkRequested)
+                    ]
+                    [ Html.input
+                        [ Html.Attributes.type_ "email"
+                        , Html.Attributes.class "w-full rounded-card border border-tan px-3 py-2"
+                        , Html.Attributes.placeholder "you@email.com"
+                        , Html.Attributes.value gs.emailInput
+                        , Html.Events.onInput (GuestMsg << EmailInputChanged)
+                        ]
+                        []
+                    , UI.Button.primary { label = "Email me a link", onClick = GuestMsg MagicLinkRequested }
+                    , viewConvertError gs
+                    ]
+
+            else
+                UI.Button.primary { label = "Join to save this trip", onClick = GuestMsg StartConversion }
+
+
+{-| Surface a magic-link request/verify failure as a small error chip.
+-}
+viewConvertError : GuestState -> Html Msg
+viewConvertError gs =
+    case ( gs.magicLinkRequest, gs.authError ) of
+        ( RemoteData.Failure _, _ ) ->
+            Html.p [ Html.Attributes.class "text-xs text-rust text-center" ]
+                [ Html.text "Couldn't send the link. Check the address and try again." ]
+
+        ( _, Just message ) ->
+            Html.p [ Html.Attributes.class "text-xs text-rust text-center" ]
+                [ Html.text message ]
+
+        _ ->
+            Html.text ""
 
 
 {-| The stat chips + placeholder map shown for a non-empty trip. The teaser
