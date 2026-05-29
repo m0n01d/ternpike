@@ -11,6 +11,10 @@ import {
   buildSharedTripDesignDoc,
 } from './couch/sharedTripValidator.js'
 import {
+  InviteFunnelError,
+  assertPreviewable,
+  buildAlreadyMemberBody,
+  classifyJoinToken,
   mintShareToken,
   shareLinkUrl,
 } from './inviteFunnel.js'
@@ -740,11 +744,25 @@ export function registerSharedTripRoutes(app) {
       const status = verified.reason === 'expired' ? 410 : 401
       return c.json({ ok: false, error: verified.reason }, status)
     }
-    const { flockId: sharedTripId, inviteeEmail } = verified.payload
+
+    // Branch on payload `typ` (docs/nest-invite-funnel.md §A/§C). The pure
+    // classifier decides which path to run; the route maps an error kind to a
+    // status and runs the side-effecting checks itself.
+    const classified = classifyJoinToken(verified.payload)
+    if (classified.kind === 'error') {
+      return c.json(
+        { ok: false, error: classified.error },
+        classified.status,
+      )
+    }
+
+    const sharedTripId = classified.flockId
+
+    // Legacy / absent-typ tokens stay email-bound: the invitee email must match
+    // the authenticated caller. Share tokens are recipient-agnostic — no match.
     if (
-      typeof sharedTripId !== 'string' ||
-      typeof inviteeEmail !== 'string' ||
-      inviteeEmail.toLowerCase() !== caller.email
+      classified.kind === 'invite' &&
+      classified.inviteeEmail.toLowerCase() !== caller.email
     ) {
       return c.json({ ok: false, error: 'email_mismatch' }, 403)
     }
@@ -760,8 +778,33 @@ export function registerSharedTripRoutes(app) {
       console.error('sharedtrips/join read meta:', err)
       return c.json({ ok: false, error: 'read_failed' }, 500)
     }
+
+    // Reject frozen for BOTH paths. The share path gets epoch/jti revocation +
+    // frozen via assertPreviewable; the legacy path needs an explicit frozen
+    // check since it skips assertPreviewable.
+    if (classified.kind === 'share') {
+      try {
+        await assertPreviewable(
+          meta,
+          verified.payload.epoch,
+          verified.payload.jti,
+          env,
+        )
+      } catch (err) {
+        if (err instanceof InviteFunnelError) {
+          return c.json({ ok: false, error: err.error }, err.status)
+        }
+        console.error('sharedtrips/join previewable:', err)
+        return c.json({ ok: false, error: 'join_failed' }, 500)
+      }
+    } else if (meta.billingStatus === 'frozen') {
+      return c.json({ ok: false, error: 'trip_frozen' }, 403)
+    }
+
     if (meta.members.includes(caller.email)) {
-      return c.json({ ok: false, error: 'already_a_member' }, 409)
+      // 409 already-member: hand back flockId + dbName + name so the client can
+      // deep-link straight into the trip (docs/nest-invite-funnel.md §C).
+      return c.json(buildAlreadyMemberBody(sharedTripId, dbName, meta), 409)
     }
 
     const members = [...meta.members, caller.email]

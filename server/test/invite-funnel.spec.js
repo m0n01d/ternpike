@@ -14,7 +14,9 @@ import {
   SHARE_TOKEN_EXPIRY_SECONDS,
   assertPreviewable,
   assertSharePayload,
+  buildAlreadyMemberBody,
   buildTeaser,
+  classifyJoinToken,
   deriveInviterName,
   mintShareToken,
   randomJti,
@@ -390,5 +392,151 @@ describe('[Invite] buildTeaser aggregation + redaction (#331)', () => {
     const docs = [expense('e1', 0.1, '2026-05-21'), expense('e2', 0.2, '2026-05-21')]
     const t = buildTeaser(docs, META)
     assert.equal(t.totalSpent, 0.3)
+  })
+})
+
+describe('[Invite] classifyJoinToken — /sharedtrips/join branch selection (#334)', () => {
+  test('typ:"share" → share path (no email match required)', () => {
+    const out = classifyJoinToken({
+      typ: 'share',
+      flockId: 'abc',
+      epoch: 2,
+      jti: 'deadbeefcafe',
+    })
+    assert.deepEqual(out, { flockId: 'abc', kind: 'share' })
+    // A share token carries no inviteeEmail — the classifier must not surface
+    // one, so the route can never accidentally email-match a share token.
+    assert.equal(out.inviteeEmail, undefined)
+  })
+
+  test('typ:"invite" → legacy email-match path, surfaces inviteeEmail', () => {
+    const out = classifyJoinToken({
+      typ: 'invite',
+      flockId: 'abc',
+      inviteeEmail: 'bob@example.com',
+    })
+    assert.deepEqual(out, {
+      flockId: 'abc',
+      inviteeEmail: 'bob@example.com',
+      kind: 'invite',
+    })
+  })
+
+  test('absent typ (legacy 7-day token in the wild) → email-match path', () => {
+    // The 7-day tokens already issued carry no payload typ — back-compat treats
+    // absent as "invite" (docs/nest-invite-funnel.md §A).
+    const out = classifyJoinToken({
+      flockId: 'abc',
+      inviteeEmail: 'bob@example.com',
+    })
+    assert.equal(out.kind, 'invite')
+    assert.equal(out.inviteeEmail, 'bob@example.com')
+
+    // Explicit null typ is also treated as legacy.
+    const nullTyp = classifyJoinToken({
+      typ: null,
+      flockId: 'abc',
+      inviteeEmail: 'bob@example.com',
+    })
+    assert.equal(nullTyp.kind, 'invite')
+  })
+
+  test('unknown typ (e.g. "magic") → 401 invalid_token_type', () => {
+    const out = classifyJoinToken({ typ: 'magic', flockId: 'abc' })
+    assert.deepEqual(out, {
+      kind: 'error',
+      status: 401,
+      error: 'invalid_token_type',
+    })
+  })
+
+  test('missing/blank flockId → 401 invalid_token (any typ)', () => {
+    assert.equal(classifyJoinToken({ typ: 'share' }).status, 401)
+    assert.equal(
+      classifyJoinToken({ typ: 'share' }).error,
+      'invalid_token',
+    )
+    assert.equal(classifyJoinToken({ typ: 'share', flockId: '' }).status, 401)
+    assert.equal(
+      classifyJoinToken({ typ: 'invite', inviteeEmail: 'b@x.io' }).error,
+      'invalid_token',
+    )
+  })
+
+  test('legacy/invite token missing inviteeEmail → 401 invalid_token', () => {
+    const out = classifyJoinToken({ typ: 'invite', flockId: 'abc' })
+    assert.deepEqual(out, {
+      kind: 'error',
+      status: 401,
+      error: 'invalid_token',
+    })
+    // Absent-typ with no inviteeEmail is the same failure.
+    assert.equal(
+      classifyJoinToken({ flockId: 'abc' }).error,
+      'invalid_token',
+    )
+  })
+
+  test('null / non-object payload → 401 invalid_token', () => {
+    assert.equal(classifyJoinToken(null).status, 401)
+    assert.equal(classifyJoinToken(undefined).status, 401)
+    assert.equal(classifyJoinToken('nope').error, 'invalid_token')
+  })
+})
+
+describe('[Invite] buildAlreadyMemberBody — 409 deep-link body (#334)', () => {
+  test('includes flockId, dbName, and the trip name', () => {
+    const body = buildAlreadyMemberBody('abc', 'sharedtrip-abc', {
+      name: 'Honeymoon',
+      members: ['a@x.io'],
+    })
+    assert.deepEqual(body, {
+      dbName: 'sharedtrip-abc',
+      error: 'already_member',
+      flockId: 'abc',
+      name: 'Honeymoon',
+      ok: false,
+    })
+  })
+
+  test('name falls back to null on a legacy meta with no name', () => {
+    const body = buildAlreadyMemberBody('abc', 'sharedtrip-abc', {
+      members: ['a@x.io'],
+    })
+    assert.equal(body.name, null)
+    // null survives JSON.stringify (undefined would be dropped).
+    assert.ok(JSON.stringify(body).includes('"name":null'))
+  })
+
+  test('null meta → name null, still carries flockId + dbName', () => {
+    const body = buildAlreadyMemberBody('abc', 'sharedtrip-abc', null)
+    assert.equal(body.flockId, 'abc')
+    assert.equal(body.dbName, 'sharedtrip-abc')
+    assert.equal(body.name, null)
+  })
+})
+
+describe('[Invite] /sharedtrips/join frozen rejection (#334)', () => {
+  // The share path rejects frozen via assertPreviewable (covered above); this
+  // pins that a frozen trip throws trip_frozen on a clean (non-revoked) share
+  // token — i.e. the join handler's share branch will surface 403 trip_frozen.
+  test('share path: frozen trip → 403 trip_frozen via assertPreviewable', async () => {
+    const env = {
+      INVITE_KV: {
+        async get() {
+          return null
+        },
+      },
+    }
+    await assert.rejects(
+      () =>
+        assertPreviewable(
+          { inviteEpoch: 0, billingStatus: 'frozen' },
+          0,
+          'aaaaaaaaaaaa',
+          env,
+        ),
+      (e) => e.status === 403 && e.error === 'trip_frozen',
+    )
   })
 })

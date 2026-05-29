@@ -181,6 +181,75 @@ export function assertSharePayload(payload) {
   return payload
 }
 
+// PURE classification of a verified `/sharedtrips/join` token payload into the
+// branch the route should run (docs/nest-invite-funnel.md §A/§C). Decides which
+// `typ` ⇒ which checks WITHOUT any CouchDB / KV / env access, so the
+// branch-selection logic is unit-testable in isolation.
+//
+//   payload.typ === 'share'                  → recipient-agnostic: NO email
+//                                              match; run assertPreviewable
+//                                              (epoch/jti revocation + frozen).
+//   payload.typ === 'invite' OR absent       → legacy email-bound (incl. 7-day
+//                                              tokens in the wild): keep the
+//                                              `inviteeEmail === caller.email`
+//                                              check + reject frozen.
+//   anything else                            → 401 invalid_token_type.
+//
+// Returns a tagged outcome:
+//   { kind: 'share',  flockId }
+//   { kind: 'invite', flockId, inviteeEmail }
+//   { kind: 'error',  status, error }
+//
+// The route maps `kind:'error'` to `c.json({ ok:false, error }, status)` and
+// runs the membership add for the other two kinds.
+export function classifyJoinToken(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return { kind: 'error', status: 401, error: 'invalid_token' }
+  }
+
+  const flockId = payload.flockId
+  if (typeof flockId !== 'string' || !flockId) {
+    return { kind: 'error', status: 401, error: 'invalid_token' }
+  }
+
+  const typ = payload.typ
+
+  if (typ === 'share') {
+    return { flockId, kind: 'share' }
+  }
+
+  // Legacy email-bound invites: explicit `typ:"invite"` OR an absent `typ`
+  // (the 7-day tokens already in the wild carry no payload typ — treat absent
+  // as "invite" so they keep working, per docs §A back-compat).
+  if (typ === 'invite' || typ === undefined || typ === null) {
+    const inviteeEmail = payload.inviteeEmail
+    if (typeof inviteeEmail !== 'string' || !inviteeEmail) {
+      // A legacy/invite token MUST carry an inviteeEmail to email-match against.
+      return { kind: 'error', status: 401, error: 'invalid_token' }
+    }
+    return { flockId, inviteeEmail, kind: 'invite' }
+  }
+
+  // Magic tokens and any future/unknown typ are not valid at the join surface.
+  return { kind: 'error', status: 401, error: 'invalid_token_type' }
+}
+
+// PURE construction of the 409 already-member response body
+// (docs/nest-invite-funnel.md §C). Includes `flockId`, `dbName`, and the trip
+// `name` so the client can deep-link straight into the already-joined trip
+// instead of dead-ending. `meta.name` may be absent on a legacy trip doc — fall
+// back to `null` rather than emitting `undefined` (which JSON.stringify drops).
+export function buildAlreadyMemberBody(flockId, dbName, meta) {
+  const name = meta && typeof meta.name === 'string' ? meta.name : null
+  return {
+    dbName,
+    error: 'already_member',
+    flockId,
+    name,
+    ok: false,
+  }
+}
+
 // Resolve a shared trip's meta for an UNAUTHENTICATED funnel caller, mapping a
 // missing/nonexistent trip to 403 (not 404) so an attacker cannot enumerate
 // trip ids through the public resolve endpoint. Any 404 from CouchDB — or a
