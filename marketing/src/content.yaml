@@ -23,7 +23,7 @@ hero:
   headline: "Every dollar, from Orlando to Juneau."
   subheadline: ""
   sub:
-    - "Snap a receipt, log where you are, watch the trip add up — by day and by category. Works offline, built for life out there."
+    - "Snap a receipt and Ternpike logs the rest: amount, place, category. The trip adds up as you go. Works offline, built for life out there."
   actions:
     - kind: "primary"
       label: "Join the waitlist"
@@ -43,17 +43,17 @@ howItWorks:
       icon: "📸"
       iconName: "camera"
       title: "Snap your receipts"
-      body: "Photograph one receipt or a whole stack at day's end. Ternpike reads them and pulls out the amount, merchant, category, and a note. No signal? Just type it in. Nothing gets lost."
+      body: "Photograph one receipt or a whole stack at day's end. Ternpike reads each one and fills in the amount, merchant, category, a note, and where you were. Nothing gets lost."
     - number: "02"
-      icon: "📍"
-      iconName: "map-pin"
-      title: "Log your location"
-      body: "Every expense gets a GPS pin. Your route builds itself as you go."
-    - number: "03"
       icon: "✅"
       iconName: "check"
+      title: "Review and confirm"
+      body: "A quick glance to make sure it got everything right. Fix a typo, add a note, move on."
+    - number: "03"
+      icon: "📊"
+      iconName: "chart-bar"
       title: "See the full picture"
-      body: "Open the ledger. See what you've spent by day and by category. Know your daily average before you decide whether to splurge on a cabin or sleep in the truck."
+      body: "Open the ledger. Every expense logged, categorized, and pinned to the map, grouped by day. Know your daily average before you decide whether to splurge on a cabin or sleep in the truck."
 
 ocrDemo:
   eyebrow: "Try it"
@@ -161,7 +161,7 @@ pricing:
   sectionLabel: "Pricing"
   seoHeadline: "Pricing for every kind of road tripper"
   headline: "Simple.\nNo surprises."
-  launchNote: "Launch pricing — lock it in from the waitlist."
+  launchNote: "Launch pricing. Lock it in from the waitlist."
   finePrint: "Tern is genuinely free, forever. No trials that flip to paid."
   tiers:
     - id: "fledgling"
