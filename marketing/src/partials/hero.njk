@@ -26,9 +26,11 @@
 
     <h1 class="font-display font-black text-[clamp(36px,6.4vw,68px)] tracking-[-0.025em] leading-[1.04] text-cream max-w-[880px] [text-shadow:0_2px_24px_rgb(26_36_18_/0.45)] animate-fade-up [animation-delay:150ms]">{{ hero.headline }}</h1>
 
+    {% if hero.subheadline %}
     <p class="hero-subhead animate-fade-up [animation-delay:200ms]">{{ hero.subheadline }}</p>
+    {% endif %}
 
-    <div class="mt-6 max-w-[620px] animate-fade-up [animation-delay:250ms]">
+    <div class="mt-8 max-w-[620px] animate-fade-up [animation-delay:250ms]">
       {% for paragraph in hero.sub %}
       <p class="font-body text-[clamp(17px,2.2vw,20px)] text-cream/90 leading-[1.5]{% if not loop.first %} mt-2{% endif %}">{{ paragraph }}</p>
       {% endfor %}

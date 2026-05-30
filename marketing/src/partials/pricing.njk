@@ -3,7 +3,13 @@
   <div class="relative z-10 mx-auto max-w-[1100px]">
     <div class="mb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-rust">{{ pricing.sectionLabel }}</div>
     <h2 class="font-display text-[clamp(36px,6vw,60px)] font-black leading-[1.05] tracking-[-0.02em] text-forest">{{ pricing.seoHeadline }}</h2>
-    <p class="section-subhead mb-14">{{ pricing.headline | replace("\n", "<br>") | safe }}</p>
+    <p class="section-subhead mb-10">{{ pricing.headline | replace("\n", "<br>") | safe }}</p>
+
+    {% if pricing.launchNote %}
+    <div class="mb-10 inline-flex items-center gap-2 rounded-full border border-rust/40 bg-rust/10 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-rust">
+      <span aria-hidden="true">★</span>{{ pricing.launchNote }}
+    </div>
+    {% endif %}
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
       {% for tier in pricing.tiers %}

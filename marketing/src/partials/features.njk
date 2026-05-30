@@ -2,8 +2,7 @@
 <section class="topo topo-features bg-parchment px-6 py-25" id="features">
   <div class="mx-auto max-w-[1100px]">
     <div class="mb-3 font-mono text-[10px] uppercase tracking-[0.22em] text-rust [font-variant-caps:all-small-caps]">{{ features.eyebrow }}</div>
-    <h2 class="font-display text-[clamp(36px,6vw,60px)] font-black leading-[1.05] tracking-[-0.02em] text-forest">{{ features.seoHeadline }}</h2>
-    <p class="section-subhead mb-14">{{ features.headlineHtml | safe }}</p>
+    <h2 class="mb-14 font-display text-[clamp(36px,6vw,60px)] font-black leading-[1.05] tracking-[-0.02em] text-forest">{{ features.headlineHtml | safe }}</h2>
 
     <div class="grid grid-cols-1 gap-6 min-[600px]:grid-cols-2 min-[900px]:grid-cols-3">
       {% for item in features.items %}

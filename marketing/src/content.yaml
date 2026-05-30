@@ -1,6 +1,6 @@
 meta:
   title: "Ternpike — Expense Tracker for Road Trips, Van Life & RVs"
-  description: "Built for road trippers, van lifers, and overlanders. Scan receipts, log GPS, share a ledger with your crew. Works offline. Free, with a lifetime tier."
+  description: "Offline travel expense tracking for road trips, van life & RVs. Scan receipts, log GPS, share a road-trip ledger with your crew. Works offline. Join the waitlist."
   lang: "en"
 
 brand:
@@ -16,17 +16,17 @@ nav:
     - label: "Pricing"
       href: "/#pricing"
   cta:
-    label: "Get Started"
+    label: "Join the waitlist"
     href: "/#signup"
 
 hero:
-  headline: "Expense tracking for road trips, van life, and the long way home."
-  subheadline: "Orlando to Juneau. Every dollar accounted for."
+  headline: "Every dollar, from Orlando to Juneau."
+  subheadline: ""
   sub:
-    - "Ternpike is the offline-first trip expense tracker built for life on the road. Snap a receipt, log your location, see exactly what each day costs. Built on the Alaska Highway, used in the real world."
+    - "Snap a receipt, log where you are, watch the trip add up — by day and by category. Works offline, built for life out there."
   actions:
     - kind: "primary"
-      label: "Start for free"
+      label: "Join the waitlist"
       arrow: true
       href: "#signup"
     - kind: "ghost"
@@ -37,14 +37,13 @@ hero:
 
 howItWorks:
   eyebrow: "How it works"
-  seoHeadline: "How Ternpike tracks road trip expenses"
   headlineHtml: "Three steps.<br>Then get some sleep."
   steps:
     - number: "01"
       icon: "📸"
       iconName: "camera"
       title: "Snap your receipts"
-      body: "Photograph one receipt or a stack at the end of the day. Ternpike reads them and pulls out the amount, merchant, category, and a note. No signal? Just type it in. Nothing gets lost."
+      body: "Photograph one receipt or a whole stack at day's end. Ternpike reads them and pulls out the amount, merchant, category, and a note. No signal? Just type it in. Nothing gets lost."
     - number: "02"
       icon: "📍"
       iconName: "map-pin"
@@ -60,7 +59,7 @@ ocrDemo:
   eyebrow: "Try it"
   seoHeadline: "Try receipt scanning right here"
   headlineHtml: "Drop a receipt.<br>We'll mail it back, read."
-  body: "Drop a photo, leave your email, and we'll send you back exactly what Ternpike extracted from it. Three on us, no sign-up."
+  body: "Drop a photo, leave your email, and we'll send you back exactly what Ternpike extracted from it. Three free scans, no sign-up."
   dropPrompt: "Choose a receipt"
   dropHint: "JPEG / PNG / HEIC, up to ~8 MB"
   emailLabel: "Where do we send it?"
@@ -72,7 +71,7 @@ ocrDemo:
   steps:
     - "We read the receipt with the same OCR that runs in the app."
     - "You get an email with amount, merchant, date, category, payment, and a short note."
-    - "Plus a one-time discount code if you want to keep going."
+    - "Plus a launch discount when we open up."
   sentTitle: "Receipt's on its way."
   sentBody: "Look for it at"
   errors:
@@ -85,7 +84,6 @@ ocrDemo:
 
 features:
   eyebrow: "Features"
-  seoHeadline: "Built for offline travel expense tracking"
   headlineHtml: "Built for the realities<br>of remote travel."
   items:
     - icon: "📶"
@@ -102,8 +100,8 @@ features:
       body: "Every expense with a location plots on a live map. A record of everywhere you stopped and everything you spent."
     - icon: "📄"
       iconName: "file-export"
-      title: "Your data"
-      body: "Your expenses live in your account. Export to CSV anytime."
+      title: "Yours, and exportable"
+      body: "Your expenses, your account, CSV export anytime. We're not in the business of selling your data."
     - icon: "👥"
       iconName: "users"
       title: "Nest. Shared ledger."
@@ -115,7 +113,6 @@ features:
 
 ledgerPreview:
   sectionLabel: "The ledger"
-  seoHeadline: "The road trip ledger"
   headline: "Looks like a journal.\nWorks like a spreadsheet."
   caption: "Every expense logged, categorized, and mapped. Grouped by day so the story of your trip reads like a trip, not an accounting report."
   totalLabel: "Running total"
@@ -164,6 +161,7 @@ pricing:
   sectionLabel: "Pricing"
   seoHeadline: "Pricing for every kind of road tripper"
   headline: "Simple.\nNo surprises."
+  launchNote: "Launch pricing — lock it in from the waitlist."
   finePrint: "Tern is genuinely free, forever. No trials that flip to paid."
   tiers:
     - id: "fledgling"
@@ -180,7 +178,7 @@ pricing:
         - "Cross-device sync"
         - "Stats dashboard"
       cta:
-        label: "Download free"
+        label: "Join the waitlist"
         href: "#signup"
         style: "ghost"
         arrow: false
@@ -201,7 +199,7 @@ pricing:
         - "Push notifications"
         - "CSV export"
       cta:
-        label: "Start flying"
+        label: "Join the waitlist"
         href: "#signup"
         style: "primary"
         arrow: true
@@ -218,7 +216,7 @@ pricing:
         - "Loyalty discount on v2"
         - "Your name in the credits"
       cta:
-        label: "Claim your spot"
+        label: "Claim your spot (first 500)"
         href: "#signup"
         style: "ghost"
         arrow: false
@@ -239,7 +237,7 @@ comparison:
   headline: "The only app that does all four."
   columns:
     - kind: "them"
-      heading: "Every other app"
+      heading: "Most travel expense apps"
       rows:
         - icon: "❌"
           text: "No receipt scanning"
@@ -262,14 +260,14 @@ comparison:
           text: "Free tier that's actually free"
 
 emailCapture:
-  headlineHtml: "Know what the road costs<br>before you plan the next one."
-  sub: "Get notified when the managed version launches. Zero setup, just scan and go."
+  headlineHtml: "Stop doing math<br>in your head."
+  sub: "We launch in a few weeks. Join the waitlist and you'll be first in."
   placeholder: "your@email.com"
-  buttonLabel: "Notify me"
+  buttonLabel: "Join the waitlist"
   successLabel: "You're in ✓"
   successPlaceholder: "See you on the road."
   errorLabel: "Something went wrong — try again?"
-  fine: "No spam. We're building this in public."
+  fine: "No spam. One email when we're live."
 
 footer:
   tagline: "Track every turn of the road."
