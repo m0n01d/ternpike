@@ -37,6 +37,7 @@ import Json.Encode
 import Msg.Scan exposing (Msg(..))
 import Page.Scan
 import ProgramTest exposing (ProgramTest, SimulatedEffect)
+import Set
 import SimulatedEffect.Cmd
 import SimulatedEffect.Http
 import SimulatedEffect.Navigation
@@ -202,6 +203,7 @@ seedModel =
     , error = Nothing
     , form = FreshForm (PendingEntry.defaultPendingEntry seedDate)
     , network = Data.Sync.Online
+    , ocrInFlight = Set.empty
     , route = RouteScan (TripId.fromString "trip::2026-05-30::abc")
     , scanQueue = Dict.singleton "scan-0" processingItem
     , scanSeq = 0
@@ -292,13 +294,15 @@ suite =
                         , Test.Html.Selector.text "ready"
                         , Test.Html.Selector.text "Denali Cafe"
                         ]
-        , test "GotOcrResult Err surfaces the error on the item and marks it ready" <|
+        , test "GotOcrResult Err with a permanent (non-flap) reason surfaces it and marks ready" <|
             \() ->
+                -- A parse/refusal error is terminal: retrying won't help, so
+                -- the card goes to `ScanReady` with the error shown.
                 start
-                    |> ProgramTest.update (scanMsg (GotOcrResult "scan-0" (Err "Network error")))
+                    |> ProgramTest.update (scanMsg (GotOcrResult "scan-0" (Err "Couldn't parse receipt JSON: bad token")))
                     |> ProgramTest.expectViewHas
                         [ Test.Html.Selector.tag "li"
                         , Test.Html.Selector.text "ready"
-                        , Test.Html.Selector.text "Network error"
+                        , Test.Html.Selector.text "Couldn't parse receipt JSON: bad token"
                         ]
         ]

@@ -208,6 +208,7 @@ toAuthState creds initialRoute gs =
     , network = gs.network
     , notificationPermission = Notifications.Default
     , notificationPrefs = Notifications.defaultPrefs
+    , ocrInFlight = Set.empty
     , openLedgerMenu = Nothing
     , postJoinPrompt = False
     , pushSubscribed = False
@@ -2114,8 +2115,34 @@ updateAuth msg as_ =
 
                             else
                                 Cmd.none
+
+                        -- Reconnect orchestration (#373): on a genuine
+                        -- transition INTO `Synced` — the proven CouchDB
+                        -- round-trip, NOT `navigator.onLine` — kick the
+                        -- deferred-scan retry. `Synced` oscillates
+                        -- (Synced → Syncing → Synced per replication
+                        -- cycle) so this fires repeatedly; the
+                        -- `RetryDeferredScans` handler is idempotent (its
+                        -- concurrency gate dispatches zero once the
+                        -- in-flight set is at the tier cap), and routing it
+                        -- through the normal `ScanMsg` path lets the
+                        -- auth-expiry logout win the race when sync instead
+                        -- reports `AuthExpired`.
+                        syncedEdge =
+                            state == Synced && as_.syncState /= Synced
+
+                        retryDeferredCmd =
+                            if syncedEdge then
+                                Task.perform
+                                    (\_ -> AuthMsg (ScanMsg Msg.Scan.RetryDeferredScans))
+                                    (Task.succeed ())
+
+                            else
+                                Cmd.none
                     in
-                    ( AuthModel { as_ | syncState = state }, Cmd.batch [ loadCmd, capturedSyncedAt ] )
+                    ( AuthModel { as_ | syncState = state }
+                    , Cmd.batch [ loadCmd, capturedSyncedAt, retryDeferredCmd ]
+                    )
 
                 Ok AuthExpiredMsg ->
                     ( GuestModel (toGuestState SessionExpired as_)
@@ -4214,6 +4241,7 @@ scanModelFromAuth as_ =
     , error = as_.error
     , form = as_.form
     , network = as_.network
+    , ocrInFlight = as_.ocrInFlight
     , route = as_.route
     , scanQueue = as_.scanQueue
     , scanSeq = as_.scanSeq
@@ -4235,6 +4263,7 @@ mergeScanModel scan as_ =
         , duplicateWarning = scan.duplicateWarning
         , error = scan.error
         , form = scan.form
+        , ocrInFlight = scan.ocrInFlight
         , route = scan.route
         , scanQueue = scan.scanQueue
         , scanSeq = scan.scanSeq

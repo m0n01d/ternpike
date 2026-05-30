@@ -4,18 +4,23 @@ module Data.Scan exposing
     , ExifPhase(..)
     , GeocodePhase(..)
     , OcrData
+    , OcrFailureKind(..)
     , ScanItem
     , ScanStatus(..)
+    , byoFailureKind
     , captureRoute
     , childId
     , currentSchemaVersion
     , effectiveLocation
+    , hostedFailureKind
+    , maxOcrRetries
     , mintId
     , needsReview
     , ocrDataDecoder
     , ocrDataEncoder
     , ocrDataListDecoder
     , reconcileHydratedQueue
+    , reconnectCandidates
     , scanItemDecoder
     , scanItemEncoder
     )
@@ -56,6 +61,7 @@ import Dict exposing (Dict)
 import Json.Decode
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
+import Set exposing (Set)
 
 
 {-| Lifecycle stage of one queued receipt.
@@ -455,6 +461,165 @@ captureRoute { offline } ocrPath =
 
             else
                 Now
+
+
+
+-- RECONNECT ORCHESTRATION (#373)
+
+
+{-| How many times the OCR pipeline may be re-attempted for one item
+before it gives up and surfaces a terminal error. Only a real retryable
+HTTP response (429 / 5xx with a body) bumps the count — a bare
+connectivity flap (network error / timeout / status 0) returns the item
+to `ScanDeferred` without spending from this budget, so flapping
+connectivity on the days-later reconnect can't burn through it.
+
+    maxOcrRetries
+    --> 3
+
+-}
+maxOcrRetries : Int
+maxOcrRetries =
+    3
+
+
+{-| Classify an OCR failure as transient (a connectivity flap that must
+NOT spend the retry budget) or terminal (a real server response that
+should). Drives the reconnect-retry bookkeeping in `Page.Scan`.
+
+  - `Transient` — the request never got a response: the connection died,
+    timed out, or returned status 0. Return the item to `ScanDeferred`
+    and try again on the next reconnect WITHOUT incrementing `retryCount`.
+  - `Retryable` — a real retryable HTTP response (429 / 500 / 502 / 503
+    with a body): bump `retryCount`; at `maxOcrRetries` give up with a
+    terminal error.
+  - `Permanent` — any other failure (400, 401, 402, 403, parse error,
+    refusal): there is no point retrying, so go terminal immediately.
+
+-}
+type OcrFailureKind
+    = Permanent
+    | Retryable
+    | Transient
+
+
+{-| Classify a hosted-proxy OCR failure from its raw HTTP status.
+
+`0` is the "connection died, never got a response" sentinel the proxy
+port reports for a network drop — treat it as a flap (`Transient`).
+`429` and the retryable `5xx` family are real server responses worth a
+bounded retry. Everything else is `Permanent`.
+
+    hostedFailureKind 0
+    --> Transient
+
+    hostedFailureKind 503
+    --> Retryable
+
+    hostedFailureKind 402
+    --> Permanent
+
+-}
+hostedFailureKind : Int -> OcrFailureKind
+hostedFailureKind status =
+    if status == 0 then
+        Transient
+
+    else if status == 429 || status == 500 || status == 502 || status == 503 then
+        Retryable
+
+    else
+        Permanent
+
+
+{-| Classify a BYO (direct-Anthropic) OCR failure from its
+already-collapsed error string. The direct path runs through
+`Effect.ocrResponseToResult`, which folds the `Http.Error` down to a
+human string before it reaches `Page.Scan`, so the status is recovered
+from the sentinel substrings that helper emits:
+
+  - "Network error …" / "… timed out …" → the request never landed
+    (`Transient`); a flap, don't spend the budget.
+
+  - "(HTTP 429)" / "(HTTP 500|502|503)" → a real retryable response
+    (`Retryable`).
+
+  - anything else (parse error, refusal, 4xx) → `Permanent`.
+
+    byoFailureKind "Network error — check your connection and try again"
+    --> Transient
+
+    byoFailureKind "Anthropic error (HTTP 503): overloaded"
+    --> Retryable
+
+    byoFailureKind "OCR request failed (HTTP 429)"
+    --> Retryable
+
+    byoFailureKind "Couldn't parse receipt JSON: unexpected token"
+    --> Permanent
+
+-}
+byoFailureKind : String -> OcrFailureKind
+byoFailureKind err =
+    if String.contains "Network error" err || String.contains "timed out" err then
+        Transient
+
+    else if
+        String.contains "(HTTP 429)" err
+            || String.contains "(HTTP 500)" err
+            || String.contains "(HTTP 502)" err
+            || String.contains "(HTTP 503)" err
+    then
+        Retryable
+
+    else
+        Permanent
+
+
+{-| Pick the ids of the deferred scan items to start OCR for on
+reconnect, honouring the concurrency cap.
+
+`slots = max 0 (tierCap - inFlightCount)`; candidates are ONLY items in
+`ScanDeferred` (never an already-processing / ready / submitted item),
+excluding any id already in flight, any item whose last persist failed
+(`persistError == True` — its image may not be durable, so don't spend
+an OCR call on it), and any id in `excluded`. `excluded` is how the
+dispatch-next path keeps a just-failed item that bounced back to
+`ScanDeferred` from being retried in the same tick (no backoff): it
+waits for the next `Synced` edge instead. The first `slots` such ids
+(Dict order, i.e. id-sorted, which is capture order) are returned.
+
+Idempotent by construction: once the in-flight set is at the cap,
+`slots` is `0` and the result is `[]`, so the oscillating `Synced` edge
+(Synced → Syncing → Synced each replication cycle) can fire this as
+often as it likes without double-dispatching.
+
+    import Dict
+    import Set
+
+    -- No free slots → dispatch nothing, however many are deferred.
+    reconnectCandidates 1 1 Set.empty Dict.empty
+    --> []
+
+-}
+reconnectCandidates : Int -> Int -> Set String -> Dict String ScanItem -> List String
+reconnectCandidates tierCap inFlightCount excluded queue =
+    let
+        slots : Int
+        slots =
+            max 0 (tierCap - inFlightCount)
+    in
+    queue
+        |> Dict.toList
+        |> List.filter
+            (\( id, item ) ->
+                item.status
+                    == ScanDeferred
+                    && not item.persistError
+                    && not (Set.member id excluded)
+            )
+        |> List.take slots
+        |> List.map Tuple.first
 
 
 {-| Decode one OCR JSON object into an `OcrData`. Every field is

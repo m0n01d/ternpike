@@ -247,6 +247,7 @@ type alias AuthState =
     , network : NetworkState
     , notificationPermission : Permission
     , notificationPrefs : NotificationPrefs
+    , ocrInFlight : Set String
     , openLedgerMenu : Maybe ExpenseId
     , postJoinPrompt : Bool
     , pushSubscribed : Bool
