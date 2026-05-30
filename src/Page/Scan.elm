@@ -1,23 +1,27 @@
-module Page.Scan exposing (update)
+module Page.Scan exposing (Model, update)
 
 {-| The Scan / OCR feature's `update`, carved out of `Main.updateAuth`
-(#368). This is a pure mechanical extraction — same messages produce the
-same state transitions; only the code's home moved.
+(#368) and re-typed over an `Effect` seam (#369).
 
-`update` operates over the whole `AuthState` rather than a self-contained
-`Scan.Model` because the geo arms (`GotExifCoords` / `GotGeocodeResult`)
-still write back into `as_.form` via `syncScanLocationToForm`. Narrowing
-the seam to a dedicated model is deferred to #F2.
+`update` operates over a narrow [`Model`](#Model) record slice of
+`AuthState` — only the fields the Scan flows actually touch — rather than
+the full `AuthState`. `AuthState` embeds `key : Nav.Key`, which cannot be
+hand-constructed, so a test can't build a seed `AuthState`; the slice is
+fully constructible and so makes the Scan slice drivable under
+`avh4/elm-program-test`. The router (`Main.updateAuth`) builds the slice
+from `AuthState`, runs `update`, and merges the result back.
 
-@docs update
+Side effects are returned as a description (`Effect`) rather than a raw
+`Cmd`; the router lifts via `Effect.perform`, tests via `Effect.simulate`.
+
+@docs Model, update
 
 -}
 
-import Browser.Navigation as Nav
-import Data.AnthropicKey as AnthropicKey
-import Data.Auth exposing (AppConfig)
+import Data.Auth exposing (AppConfig, Creds)
 import Data.Category
 import Data.DateField as DateField
+import Data.Expense exposing (Expense)
 import Data.GeoPoint as GeoPoint
 import Data.Location
 import Data.Money as Money
@@ -26,29 +30,54 @@ import Data.OcrPath as OcrPath exposing (OcrPath(..))
 import Data.PendingEntry as PendingEntry exposing (PendingForm(..))
 import Data.Scan as Scan exposing (ExifPhase(..), GeocodePhase(..), ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
+import Data.SharedTrips exposing (SharedTrips)
 import Data.Tier as Tier
 import Data.Trip as Trip exposing (Trip)
 import Data.Trips as Trips exposing (TripsState(..))
+import Data.UserId exposing (UserId)
 import Dict
-import File
-import Http
-import Http.GeocodeApi
+import Effect exposing (Effect(..))
 import Json.Decode
 import Json.Encode
 import List.Extra
 import Maybe.Extra
 import Msg.Scan exposing (Msg(..))
-import Ports
 import Routing
-import Task
-import Types exposing (AuthState)
 
 
-{-| Handle a Scan message against the current `AuthState`. Returns the
-new `AuthState` plus any `Cmd`; the caller (`Main.updateAuth`) lifts the
-`AuthState` into a `Model`.
+{-| The slice of `AuthState` the Scan flows read or write. Constructible
+without a `Nav.Key`, so a test can seed it directly (see the module doc).
+
+The `currentUser` / `sharedTrips` / `tier` trio satisfies
+`Data.Trip.TierContext` so `geocodeDispatch` can resolve the trip's
+effective tier; the rest are the form / queue / routing fields the
+handlers touch.
+
 -}
-update : Msg.Scan.Msg -> AuthState -> ( AuthState, Cmd Types.Msg )
+type alias Model =
+    { activeScanItemId : Maybe ScanItemId.ScanItemId
+    , basePath : String
+    , config : AppConfig
+    , creds : Creds
+    , currentUser : UserId
+    , duplicateWarning : Maybe Expense
+    , error : Maybe String
+    , form : PendingForm
+    , route : Route
+    , scanQueue : Dict.Dict String ScanItem
+    , sharedTrips : SharedTrips
+    , tier : Tier.Tier
+    , today : DateField.DateField
+    , trips : TripsState
+    }
+
+
+{-| Handle a Scan message against the Scan [`Model`](#Model) slice.
+Returns the new slice plus an [`Effect`](Effect#Effect) describing any
+side effects; the caller (`Main.updateAuth`) merges the slice back into
+`AuthState` and lifts the effect via `Effect.perform`.
+-}
+update : Msg.Scan.Msg -> Model -> ( Model, Effect )
 update msg as_ =
     case msg of
         FilesSelected files ->
@@ -62,10 +91,10 @@ update msg as_ =
                 newQueue =
                     List.foldl (\( id, _ ) d -> Dict.insert id (freshScanItem id) d) as_.scanQueue indexed
 
-                urlCmds =
-                    List.map (\( id, f ) -> Task.perform (Types.AuthMsg << Types.ScanMsg << GotFileUrl id) (File.toUrl f)) indexed
+                urlEffects =
+                    List.map (\( id, f ) -> Effect.FetchFileUrl id f) indexed
             in
-            ( { as_ | scanQueue = newQueue }, Cmd.batch urlCmds )
+            ( { as_ | scanQueue = newQueue }, Batch urlEffects )
 
         GotFileUrl itemId dataUrl ->
             let
@@ -86,7 +115,7 @@ update msg as_ =
                     Dict.update itemId (Maybe.map (\i -> { i | imageUrl = dataUrl, status = newStatus })) as_.scanQueue
             in
             ( { as_ | scanQueue = updatedQueue }
-            , Cmd.batch
+            , Batch
                 [ if canScan then
                     -- Always route through the JS-side downscaler before
                     -- the OCR call. Anthropic's image limit is 5 MiB on
@@ -94,11 +123,11 @@ update msg as_ =
                     -- run 6–8 MB so we'd otherwise 400 on every photo.
                     -- We use the EXIF data URL for GPS extraction in
                     -- parallel because exifr needs the original bytes.
-                    Ports.prepareOcrImage { dataUrl = dataUrl, id = itemId, maxBytes = ocrMaxBase64Bytes }
+                    Effect.PrepareOcrImage { dataUrl = dataUrl, id = itemId, maxBytes = ocrMaxBase64Bytes }
 
                   else
-                    Cmd.none
-                , Ports.extractExifGps { id = itemId, dataUrl = dataUrl }
+                    NoEffect
+                , Effect.ExtractExifGps { dataUrl = dataUrl, id = itemId }
                 ]
             )
 
@@ -106,7 +135,7 @@ update msg as_ =
             case Dict.get payload.id as_.scanQueue of
                 Nothing ->
                     -- item was cleared/submitted while resize was in flight — no-op
-                    ( as_, Cmd.none )
+                    ( as_, NoEffect )
 
                 Just _ ->
                     if payload.error /= "" then
@@ -124,7 +153,7 @@ update msg as_ =
                                     )
                                     as_.scanQueue
                         in
-                        ( { as_ | scanQueue = updatedQueue }, Cmd.none )
+                        ( { as_ | scanQueue = updatedQueue }, NoEffect )
 
                     else
                         let
@@ -134,7 +163,12 @@ update msg as_ =
                                     as_.scanQueue
                         in
                         ( { as_ | scanQueue = updatedQueue }
-                        , makeOcrCall payload.id (OcrPath.resolve as_.config.anthropicKey as_.tier) as_.config (extractBase64 payload.dataUrl) (getMimeType payload.dataUrl)
+                        , Effect.MakeOcrCall
+                            { backendUrl = as_.config.backendUrl
+                            , body = ocrRequestBody (extractBase64 payload.dataUrl) (getMimeType payload.dataUrl)
+                            , itemId = payload.id
+                            , path = OcrPath.resolve as_.config.anthropicKey as_.tier
+                            }
                         )
 
         GotOcrResult itemId result ->
@@ -151,11 +185,11 @@ update msg as_ =
                 ( afterOcr, touchedIds ) =
                     applyOcrResult itemId parsed as_.scanQueue
 
-                ( afterGeocodeFlip, geocodeCmds ) =
+                ( afterGeocodeFlip, geocodeEffects ) =
                     geocodeDispatch touchedIds afterOcr as_
             in
             ( { as_ | scanQueue = afterGeocodeFlip }
-            , Cmd.batch geocodeCmds
+            , Batch geocodeEffects
             )
 
         ScanProxyResult { body, itemId, ok, status } ->
@@ -177,11 +211,11 @@ update msg as_ =
                 ( afterOcr, touchedIds ) =
                     applyOcrResult itemId result as_.scanQueue
 
-                ( afterGeocodeFlip, geocodeCmds ) =
+                ( afterGeocodeFlip, geocodeEffects ) =
                     geocodeDispatch touchedIds afterOcr as_
             in
             ( { as_ | scanQueue = afterGeocodeFlip }
-            , Cmd.batch geocodeCmds
+            , Batch geocodeEffects
             )
 
         GotExifCoords itemId (Just lat) (Just lon) _ ->
@@ -193,7 +227,7 @@ update msg as_ =
                     Dict.update itemId (Maybe.map (\i -> { i | exif = ExifFound point })) as_.scanQueue
             in
             ( syncScanLocationToForm itemId { as_ | scanQueue = newQueue }
-            , Cmd.none
+            , NoEffect
             )
 
         GotExifCoords itemId _ _ debug ->
@@ -202,7 +236,7 @@ update msg as_ =
                     Dict.update itemId (Maybe.map (\i -> { i | exif = ExifMissing, exifDebug = debug })) as_.scanQueue
             in
             ( syncScanLocationToForm itemId { as_ | scanQueue = newQueue }
-            , Cmd.none
+            , NoEffect
             )
 
         GotGeocodeResult itemId result ->
@@ -224,13 +258,13 @@ update msg as_ =
                     Dict.update itemId (Maybe.map (\i -> { i | geocode = newPhase })) as_.scanQueue
             in
             ( syncScanLocationToForm itemId { as_ | scanQueue = newQueue }
-            , Cmd.none
+            , NoEffect
             )
 
         ReviewScanItem itemId ->
             case Dict.get itemId as_.scanQueue of
                 Nothing ->
-                    ( as_, Cmd.none )
+                    ( as_, NoEffect )
 
                 Just item ->
                     let
@@ -272,7 +306,7 @@ update msg as_ =
                         , form = FreshForm newPending
                         , route = newRoute
                       }
-                    , Cmd.none
+                    , NoEffect
                     )
 
         BackToQueue ->
@@ -292,15 +326,15 @@ update msg as_ =
               }
             , case Routing.routeTripId as_.route of
                 Just tid ->
-                    Nav.pushUrl as_.key (Routing.tabToPath as_.basePath tid ScanTab)
+                    Effect.Navigate (Routing.tabToPath as_.basePath tid ScanTab)
 
                 Nothing ->
-                    Cmd.none
+                    NoEffect
             )
 
         ClearDoneItems ->
             ( { as_ | scanQueue = Dict.filter (\_ i -> i.status /= ScanSubmitted) as_.scanQueue }
-            , Cmd.none
+            , NoEffect
             )
 
 
@@ -331,7 +365,7 @@ are never overridden; the user's intent wins. Idle is also left alone
 to match how new scans behave on the fresh form path.
 
 -}
-syncScanLocationToForm : String -> AuthState -> AuthState
+syncScanLocationToForm : String -> Model -> Model
 syncScanLocationToForm itemId as_ =
     case ( as_.activeScanItemId, Dict.get itemId as_.scanQueue ) of
         ( Just activeId, Just item ) ->
@@ -385,8 +419,8 @@ syncScanLocationToForm itemId as_ =
 
 {-| For each touched scan item that has a non-empty OCR-extracted
 address, flip the item's `geocode` phase to `GeocodeRequested` and
-emit a `POST /geocode` Cmd. Returns the updated queue alongside the
-Cmds so the caller writes both into the model in one go.
+emit a `Geocode` effect (`POST /geocode`). Returns the updated queue
+alongside the effects so the caller writes both into the model in one go.
 
 Only fires on paid-tier trips — free users skip the call entirely
 (the server would 403 it). EXIF GPS no longer blocks the dispatch:
@@ -399,8 +433,8 @@ kitchen on batch scans). The geocode result overrides EXIF in
 geocodeDispatch :
     List String
     -> Dict.Dict String ScanItem
-    -> AuthState
-    -> ( Dict.Dict String ScanItem, List (Cmd Types.Msg) )
+    -> Model
+    -> ( Dict.Dict String ScanItem, List Effect )
 geocodeDispatch ids queue as_ =
     let
         eligible : Bool
@@ -420,26 +454,26 @@ geocodeDispatch ids queue as_ =
 
 
 geocodeDispatchOne :
-    Data.Auth.Creds
+    Creds
     -> String
-    -> ( Dict.Dict String ScanItem, List (Cmd Types.Msg) )
-    -> ( Dict.Dict String ScanItem, List (Cmd Types.Msg) )
-geocodeDispatchOne creds id ( queue, cmds ) =
+    -> ( Dict.Dict String ScanItem, List Effect )
+    -> ( Dict.Dict String ScanItem, List Effect )
+geocodeDispatchOne creds id ( queue, effects ) =
     case Dict.get id queue |> Maybe.andThen (\item -> Maybe.andThen .address item.ocrData) of
         Just rawAddress ->
             if String.trim rawAddress /= "" then
                 ( Dict.update id (Maybe.map (\item -> { item | geocode = GeocodeRequested })) queue
-                , Http.GeocodeApi.geocode creds { address = rawAddress } (Types.AuthMsg << Types.ScanMsg << GotGeocodeResult id) :: cmds
+                , Effect.Geocode creds id rawAddress :: effects
                 )
 
             else
-                ( queue, cmds )
+                ( queue, effects )
 
         Nothing ->
-            ( queue, cmds )
+            ( queue, effects )
 
 
-activeTripForGeocode : AuthState -> Maybe Trip
+activeTripForGeocode : Model -> Maybe Trip
 activeTripForGeocode as_ =
     case ( Routing.routeTripId as_.route, as_.trips ) of
         ( Just tripId, TripsLoaded loadedTrips ) ->
@@ -458,62 +492,42 @@ ocrSystemPrompt =
     "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"address\": \"<street address as printed on receipt, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
 
 
-makeOcrCall : String -> OcrPath -> AppConfig -> String -> String -> Cmd Types.Msg
-makeOcrCall itemId path config base64Data mimeType =
-    let
-        body =
-            Json.Encode.object
-                [ ( "model", Json.Encode.string "claude-sonnet-4-6" )
-                , ( "max_tokens", Json.Encode.int 2048 )
-                , ( "system", Json.Encode.string ocrSystemPrompt )
-                , ( "messages"
-                  , Json.Encode.list identity
-                        [ Json.Encode.object
-                            [ ( "role", Json.Encode.string "user" )
-                            , ( "content"
-                              , Json.Encode.list identity
-                                    [ Json.Encode.object
-                                        [ ( "type", Json.Encode.string "image" )
-                                        , ( "source"
-                                          , Json.Encode.object
-                                                [ ( "type", Json.Encode.string "base64" )
-                                                , ( "media_type", Json.Encode.string mimeType )
-                                                , ( "data", Json.Encode.string base64Data )
-                                                ]
-                                          )
+{-| Build the Anthropic `/v1/messages` request body for an OCR call. The
+same JSON is sent by the direct (BYO-key) and hosted-proxy paths; the
+`Effect.MakeOcrCall` interpreter picks the transport from the `OcrPath`.
+-}
+ocrRequestBody : String -> String -> Json.Encode.Value
+ocrRequestBody base64Data mimeType =
+    Json.Encode.object
+        [ ( "model", Json.Encode.string "claude-sonnet-4-6" )
+        , ( "max_tokens", Json.Encode.int 2048 )
+        , ( "system", Json.Encode.string ocrSystemPrompt )
+        , ( "messages"
+          , Json.Encode.list identity
+                [ Json.Encode.object
+                    [ ( "role", Json.Encode.string "user" )
+                    , ( "content"
+                      , Json.Encode.list identity
+                            [ Json.Encode.object
+                                [ ( "type", Json.Encode.string "image" )
+                                , ( "source"
+                                  , Json.Encode.object
+                                        [ ( "type", Json.Encode.string "base64" )
+                                        , ( "media_type", Json.Encode.string mimeType )
+                                        , ( "data", Json.Encode.string base64Data )
                                         ]
-                                    , Json.Encode.object
-                                        [ ( "type", Json.Encode.string "text" )
-                                        , ( "text", Json.Encode.string "Extract expense info from every receipt visible in this image." )
-                                        ]
-                                    ]
-                              )
+                                  )
+                                ]
+                            , Json.Encode.object
+                                [ ( "type", Json.Encode.string "text" )
+                                , ( "text", Json.Encode.string "Extract expense info from every receipt visible in this image." )
+                                ]
                             ]
-                        ]
-                  )
-                ]
-    in
-    case path of
-        ByoPath key ->
-            Http.request
-                { method = "POST"
-                , headers =
-                    [ Http.header "x-api-key" (AnthropicKey.toHeader key)
-                    , Http.header "anthropic-version" "2023-06-01"
-                    , Http.header "anthropic-dangerous-direct-browser-access" "true"
+                      )
                     ]
-                , url = "https://api.anthropic.com/v1/messages"
-                , body = Http.jsonBody body
-                , expect = Http.expectStringResponse (Types.AuthMsg << Types.ScanMsg << GotOcrResult itemId) ocrResponseToResult
-                , timeout = Nothing
-                , tracker = Nothing
-                }
-
-        HostedPath ->
-            Ports.scanProxyOut { backendUrl = config.backendUrl, body = body, itemId = itemId }
-
-        Unscannable ->
-            Cmd.none
+                ]
+          )
+        ]
 
 
 {-| Target max-byte budget for the base64-encoded image we send to
@@ -525,46 +539,6 @@ over: 4 MiB ≈ a 3 MiB binary image, plenty for a receipt.
 ocrMaxBase64Bytes : Int
 ocrMaxBase64Bytes =
     4 * 1024 * 1024
-
-
-{-| Convert an Anthropic HTTP response into a human-readable error
-string or the raw success body. We use `expectStringResponse` (rather
-than `expectString`) so that non-2xx responses keep their body — the
-body is where Anthropic's actual error message lives, and surfacing it
-on the Scan card is the whole point of #N.
--}
-ocrResponseToResult : Http.Response String -> Result String String
-ocrResponseToResult response =
-    case response of
-        Http.BadUrl_ url ->
-            Err ("Bad URL: " ++ url)
-
-        Http.Timeout_ ->
-            Err "OCR request timed out — try again"
-
-        Http.NetworkError_ ->
-            Err "Network error — check your connection and try again"
-
-        Http.BadStatus_ meta body ->
-            Err (formatAnthropicError meta.statusCode body)
-
-        Http.GoodStatus_ _ body ->
-            Ok body
-
-
-{-| Pull the `error.message` field out of an Anthropic error JSON body
-(`{"type":"error","error":{"type":"...","message":"..."}}`) and frame
-it for display. Falls back to a status-only message if the body isn't
-the expected shape.
--}
-formatAnthropicError : Int -> String -> String
-formatAnthropicError status body =
-    case Json.Decode.decodeString (Json.Decode.field "error" (Json.Decode.field "message" Json.Decode.string)) body of
-        Ok msg ->
-            "Anthropic error (HTTP " ++ String.fromInt status ++ "): " ++ msg
-
-        Err _ ->
-            "OCR request failed (HTTP " ++ String.fromInt status ++ ")"
 
 
 {-| Truncate a string to `n` characters, appending an ellipsis if it

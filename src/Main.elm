@@ -106,6 +106,7 @@ import Data.Trips as Trips exposing (TripsState(..))
 import Data.UserId as UserId
 import Data.Void as Void
 import Dict
+import Effect
 import File
 import File.Select
 import Helpers
@@ -2130,8 +2131,13 @@ updateAuth msg as_ =
             )
 
         ScanMsg m ->
-            Page.Scan.update m as_
-                |> Tuple.mapFirst AuthModel
+            let
+                ( scanModel, effect ) =
+                    Page.Scan.update m (scanModelFromAuth as_)
+            in
+            ( AuthModel (mergeScanModel scanModel as_)
+            , Effect.perform as_.key effect
+            )
 
         AddressChanged s ->
             authPending (\p -> { p | address = s }) { as_ | duplicateWarning = Nothing }
@@ -4084,6 +4090,45 @@ updateAuth msg as_ =
 
 
 -- FLOCK HELPERS
+
+
+{-| Project the narrow `Page.Scan.Model` slice out of `AuthState` for the
+Scan-message router. The slice carries only the fields the Scan flows
+touch, leaving the un-constructible `Nav.Key` (and everything else)
+behind so the Scan slice stays drivable under `elm-program-test`.
+-}
+scanModelFromAuth : AuthState -> Page.Scan.Model
+scanModelFromAuth as_ =
+    { activeScanItemId = as_.activeScanItemId
+    , basePath = as_.basePath
+    , config = as_.config
+    , creds = as_.creds
+    , currentUser = as_.currentUser
+    , duplicateWarning = as_.duplicateWarning
+    , error = as_.error
+    , form = as_.form
+    , route = as_.route
+    , scanQueue = as_.scanQueue
+    , sharedTrips = as_.sharedTrips
+    , tier = as_.tier
+    , today = as_.today
+    , trips = as_.trips
+    }
+
+
+{-| Merge a `Page.Scan.update` result back into the full `AuthState`,
+writing through only the slice fields the Scan flows mutate.
+-}
+mergeScanModel : Page.Scan.Model -> AuthState -> AuthState
+mergeScanModel scan as_ =
+    { as_
+        | activeScanItemId = scan.activeScanItemId
+        , duplicateWarning = scan.duplicateWarning
+        , error = scan.error
+        , form = scan.form
+        , route = scan.route
+        , scanQueue = scan.scanQueue
+    }
 
 
 setSharedTripModal : SharedTripUi.SharedTripModal -> AuthState -> AuthState
