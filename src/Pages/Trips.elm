@@ -59,7 +59,7 @@ viewActions as_ =
                     [ UI.Button.iconButton
                         { icon = UI.Icons.share "w-4 h-4"
                         , onClick = AuthMsg (OpenShareTripModal activeTrip)
-                        , title = "Share trip"
+                        , title = "Share this trip"
                         }
                     ]
 

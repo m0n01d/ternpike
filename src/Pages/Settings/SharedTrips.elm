@@ -73,7 +73,7 @@ viewCreateRow tier =
             [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
                 [ Html.text
                     (if Tier.isPaid tier then
-                        "Start a brand-new shared trip to log expenses together with a partner or household. (To share a trip you already have, use Share from the Trips list.)"
+                        "Start a brand-new shared trip to log expenses together with a partner or household. (To share a trip you already have, use \"Share this trip\" from the Trips list.)"
 
                      else
                         "Start a new shared trip with a partner or household so you can log expenses together. Upgrade to Osprey to start one."
@@ -326,7 +326,7 @@ viewModal as_ =
                         ]
                     , viewModalActions
                         { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
-                        , confirmLabel = "Share"
+                        , confirmLabel = "Share trip"
                         , confirmMsg = AuthMsg SubmitShareTrip
                         , request = request
                         }
