@@ -43,7 +43,7 @@ howItWorks:
       icon: "📸"
       iconName: "camera"
       title: "Snap your receipts"
-      body: "Photograph one receipt or a whole stack at day's end. Ternpike reads each one and fills in the amount, merchant, category, a note, and where you were. No signal? Just type it in. Nothing gets lost."
+      body: "Photograph one receipt or a whole stack at day's end. Ternpike reads each one and fills in the amount, merchant, category, a note, and where you were. Nothing gets lost."
     - number: "02"
       icon: "✅"
       iconName: "check"
