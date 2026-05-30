@@ -274,8 +274,6 @@ emailCapture:
 footer:
   tagline: "Track every turn of the road."
   links:
-    - label: "GitHub"
-      href: "https://github.com/m0n01d/ternpike"
     - label: "Privacy"
       href: "/privacy"
     - label: "Terms"
