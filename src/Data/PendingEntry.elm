@@ -3,7 +3,11 @@ module Data.PendingEntry exposing
     , ParsedEntry
     , PendingEntry
     , PendingForm(..)
+    , defaultPendingEntry
+    , formPending
+    , mapForm
     , parseEntry
+    , setLocation
     )
 
 {-| In-progress expense form on the Add page.
@@ -189,3 +193,52 @@ errorOf r =
 
         Err e ->
             Just e
+
+
+{-| A blank `PendingEntry` for a brand-new expense on the given day.
+Category defaults to `Fuel` and location to `LocationIdle`.
+-}
+defaultPendingEntry : DateField -> PendingEntry
+defaultPendingEntry today =
+    { address = ""
+    , amount = ""
+    , category = Data.Category.Fuel
+    , date = DateField.toIso today
+    , locationState = LocationIdle
+    , longNote = ""
+    , merchant = ""
+    , note = ""
+    , paymentMethod = Nothing
+    }
+
+
+{-| Apply a transform to whichever `PendingEntry` the form is holding,
+preserving the `EditForm` / `FreshForm` discriminator.
+-}
+mapForm : (PendingEntry -> PendingEntry) -> PendingForm -> PendingForm
+mapForm f form =
+    case form of
+        EditForm id p ->
+            EditForm id (f p)
+
+        FreshForm p ->
+            FreshForm (f p)
+
+
+{-| Extract the underlying `PendingEntry` from a `PendingForm`.
+-}
+formPending : PendingForm -> PendingEntry
+formPending form =
+    case form of
+        EditForm _ p ->
+            p
+
+        FreshForm p ->
+            p
+
+
+{-| Set the `locationState` on a `PendingEntry`.
+-}
+setLocation : LocationState -> PendingEntry -> PendingEntry
+setLocation ls p =
+    { p | locationState = ls }

@@ -18,6 +18,7 @@ import Html.Attributes
 import Html.Events
 import Html.Extra
 import Json.Decode
+import Msg.Scan
 import Routing
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Button
@@ -92,7 +93,7 @@ formPending form =
 viewNewActions : AuthState -> List (Html Msg)
 viewNewActions model =
     if model.activeScanItemId /= Nothing then
-        [ UI.Button.ghost { label = "← queue", onClick = AuthMsg BackToQueue } ]
+        [ UI.Button.ghost { label = "← queue", onClick = AuthMsg (ScanMsg Msg.Scan.BackToQueue) } ]
 
     else
         []
