@@ -6,6 +6,7 @@
 // freezes any whose `billingLapsedAt + 14d <= now` is the smaller change and
 // scales fine at our user volume. See `scheduled()` at the bottom.
 
+import { getTier, isPaidTier } from './auth.js'
 import {
   SHARED_TRIP_DESIGN_DOC_ID,
   buildSharedTripDesignDoc,
@@ -173,19 +174,20 @@ async function authenticateCaller(c) {
   }
 }
 
-export async function getTier(env, email) {
-  if (!env.TIERS_KV) return 'tern'
-  const v = await env.TIERS_KV.get(email.toLowerCase())
-  if (v === 'osprey' || v === 'trailblazer') return v
-  return 'tern'
-}
+// Tier reads MUST go through the canonical `getTier`/`isPaidTier` in auth.js.
+// That implementation reads the modern `user:<email>` JSON `UserRecord` first
+// (written by `upsertUser` on the billing path) and only falls back to the
+// legacy bare `<email>` key. An earlier local copy here read *only* the legacy
+// key, so a paid user whose tier lived in the `user:` record (the normal case
+// post-billing) was misread as `tern` and 403'd on every shared-trip paid
+// check. Re-exported so existing importers of `getTier` from this module keep
+// working.
+export { getTier, isPaidTier }
 
 export async function setTier(env, email, tier) {
   if (!env.TIERS_KV) throw new Error('TIERS_KV not bound')
   await env.TIERS_KV.put(email.toLowerCase(), tier)
 }
-
-const isPaidTier = (tier) => tier === 'osprey' || tier === 'trailblazer'
 
 async function couchGetJson(env, path) {
   const r = await couchAdmin(env, path)
