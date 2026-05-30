@@ -91,7 +91,7 @@ import Data.Navigation exposing (Route(..), Tab(..))
 import Data.Notifications as Notifications
 import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
-import Data.Scan exposing (ScanStatus(..))
+import Data.Scan exposing (ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip as SharedTrip
 import Data.SharedTripId
@@ -151,6 +151,7 @@ import Verify.Core
 import Verify.Registry
 import Verify.Specs.JoinSharedTrip
 import Verify.Specs.NotificationsPaywall
+import Verify.Specs.ScanQueueCard
 import Verify.Specs.SharedTripCard
 
 
@@ -1474,6 +1475,49 @@ applyUnitSeed unit fixture as_ =
             { as_
                 | joinSharedTripRequest = input.request
                 , route = RouteJoinSharedTrip ""
+            }
+
+        "ScanQueueCard" ->
+            let
+                -- Fixed trip id for the verify seed — stable across fixture runs.
+                verifyTripId : TripId.TripId
+                verifyTripId =
+                    TripId.fromString "trip::2024-01-01T00:00:00.000Z::verify"
+
+                verifyTrip : Trip.Trip
+                verifyTrip =
+                    { budget = Money.zero
+                    , coverPhotoUrl = ""
+                    , description = ""
+                    , endDate = epochDate
+                    , flockId = Nothing
+                    , id = verifyTripId
+                    , name = "Verify Trip"
+                    , startDate = epochDate
+                    }
+
+                seededItem : ScanItem
+                seededItem =
+                    Verify.Specs.ScanQueueCard.seededItem fixture
+
+                -- The ocrPath is derived from tier + anthropicKey in the real
+                -- view. Seed tier to produce the right path for this fixture:
+                -- "unavailable" needs Unscannable → Tern with no key.
+                -- Everything else needs HostedPath → Osprey with no key.
+                seededTier : Tier.Tier
+                seededTier =
+                    if fixture == "unavailable" then
+                        Tier.Tern
+
+                    else
+                        Tier.Osprey
+            in
+            { as_
+                | route = RouteScan verifyTripId
+                , scanQueue = Dict.singleton (ScanItemId.toString seededItem.id) seededItem
+                , storageAvailable = Verify.Specs.ScanQueueCard.seededStorageAvailable fixture
+                , tier = seededTier
+                , trips = TripsLoaded (Trips.singleton verifyTrip)
             }
 
         "SharedTripCard" ->

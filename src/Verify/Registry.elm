@@ -16,6 +16,7 @@ import Verify.Core as Core
 import Verify.Specs.JoinSharedTrip as JoinSharedTrip
 import Verify.Specs.NotificationsPaywall as NotificationsPaywall
 import Verify.Specs.ScanDeferral as ScanDeferral
+import Verify.Specs.ScanQueueCard as ScanQueueCard
 import Verify.Specs.ScanRouting as ScanRouting
 import Verify.Specs.SharedTripCard as SharedTripCard
 import Verify.Specs.TierGating as TierGating
@@ -29,6 +30,7 @@ runAll =
         [ TierGating.results
         , NotificationsPaywall.results
         , ScanDeferral.results
+        , ScanQueueCard.results
         , ScanRouting.results
         , JoinSharedTrip.results
         , SharedTripCard.results

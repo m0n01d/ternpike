@@ -5,10 +5,12 @@ module Data.Scan exposing
     , GeocodePhase(..)
     , OcrData
     , OcrFailureKind(..)
+    , ScanCardState(..)
     , ScanItem
     , ScanStatus(..)
     , byoFailureKind
     , captureRoute
+    , cardState
     , currentSchemaVersion
     , effectiveLocation
     , hostedFailureKind
@@ -515,6 +517,150 @@ items that need attention.
 needsReview : OcrData -> Bool
 needsReview ocr =
     ocr.amount == Nothing || ocr.merchant == Nothing || ocr.date == Nothing
+
+
+{-| Which visual card a `ScanItem` renders as in the scan queue.
+
+This is the single source of truth shared by both `Pages.Scan.viewScanCardBody`
+and `Verify.Specs.ScanQueueCard` — changing one without changing the other
+produces a compiler error (the `case` must be exhaustive on both sides).
+
+Constructors (alphabetised):
+
+  - `CardDeferred` — durably saved offline; OCR will run on reconnect.
+  - `CardNeedsReview` — OCR returned but a structural field (amount, merchant,
+    or date) is missing; the "Needs review" badge appears.
+  - `CardOcrFailed` — OCR ran but produced no usable data (`ocrData = Nothing`).
+  - `CardPersistError` — the durable-store write failed (`persistError = True`)
+    or IndexedDB is unavailable (`storageAvailable = False`); the image may not
+    survive a reload.
+  - `CardProcessing` — OCR in flight (`ScanProcessing`) or file freshly picked
+    but not yet read (`ScanQueued`).
+  - `CardReady` — OCR returned with all structural fields present; ready to
+    review without the "Needs review" badge.
+  - `CardSubmitted` — the expense was filed; the card stays visible (greyed out)
+    until "Clear submitted" is tapped.
+  - `CardUnavailable` — OCR path is `Unscannable` while deferred (tier lapsed /
+    no BYO key); receipt is saved but can't be scanned automatically.
+
+-}
+type ScanCardState
+    = CardDeferred
+    | CardNeedsReview
+    | CardOcrFailed
+    | CardPersistError
+    | CardProcessing
+    | CardReady
+    | CardSubmitted
+    | CardUnavailable
+
+
+{-| Derive the card state for a queued scan item, given the current OCR path
+and storage availability. This is the pure decision the view and the Verify
+surface both call — see `ScanCardState` for the full case matrix.
+
+    import Data.OcrPath exposing (OcrPath(..))
+    import Data.ScanItemId
+
+    -- A deferred item with storage available and a hosted path → CardDeferred.
+    cardState { storageAvailable = True }
+        { draft = Nothing
+        , exif = ExifMissing
+        , exifDebug = ""
+        , expectedExpenseId = Nothing
+        , geocode = GeocodeNotAttempted
+        , id = Data.ScanItemId.fromString "scan::0::0"
+        , imageUrl = ""
+        , lastError = Nothing
+        , ocrData = Nothing
+        , ocrError = Nothing
+        , persistError = False
+        , retryCount = 0
+        , schemaVersion = 1
+        , status = ScanDeferred
+        }
+        HostedPath
+    --> CardDeferred
+
+    -- A persist-error item → CardPersistError (beats ocrPath).
+    cardState { storageAvailable = True }
+        { draft = Nothing
+        , exif = ExifMissing
+        , exifDebug = ""
+        , expectedExpenseId = Nothing
+        , geocode = GeocodeNotAttempted
+        , id = Data.ScanItemId.fromString "scan::0::0"
+        , imageUrl = ""
+        , lastError = Nothing
+        , ocrData = Nothing
+        , ocrError = Nothing
+        , persistError = True
+        , retryCount = 0
+        , schemaVersion = 1
+        , status = ScanDeferred
+        }
+        HostedPath
+    --> CardPersistError
+
+    -- ScanSubmitted → CardSubmitted regardless of ocrPath.
+    cardState { storageAvailable = True }
+        { draft = Nothing
+        , exif = ExifMissing
+        , exifDebug = ""
+        , expectedExpenseId = Nothing
+        , geocode = GeocodeNotAttempted
+        , id = Data.ScanItemId.fromString "scan::0::0"
+        , imageUrl = ""
+        , lastError = Nothing
+        , ocrData = Nothing
+        , ocrError = Nothing
+        , persistError = False
+        , retryCount = 0
+        , schemaVersion = 1
+        , status = ScanSubmitted
+        }
+        HostedPath
+    --> CardSubmitted
+
+-}
+cardState : { storageAvailable : Bool } -> ScanItem -> OcrPath -> ScanCardState
+cardState { storageAvailable } item ocrPath =
+    case item.status of
+        ScanDeferred ->
+            if item.persistError || not storageAvailable then
+                CardPersistError
+
+            else
+                case ocrPath of
+                    Unscannable ->
+                        CardUnavailable
+
+                    ByoPath _ ->
+                        CardDeferred
+
+                    HostedPath ->
+                        CardDeferred
+
+        ScanProcessing ->
+            CardProcessing
+
+        ScanQueued ->
+            CardProcessing
+
+        ScanReady ->
+            case item.ocrData of
+                Just ocr ->
+                    if needsReview ocr then
+                        CardNeedsReview
+
+                    else
+                        CardReady
+
+                Nothing ->
+                    CardOcrFailed
+
+        ScanSubmitted ->
+            CardSubmitted
 
 
 {-| The queue keys of every item whose `expectedExpenseId` matches the
