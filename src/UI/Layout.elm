@@ -52,7 +52,7 @@ viewHeader as_ =
                 ]
             ]
         , Html.div [ Html.Attributes.class "flex items-center gap-3" ]
-            [ viewSyncBadge { networkOffline = as_.networkOffline, syncState = as_.syncState }
+            [ viewSyncBadge { networkOffline = Data.Sync.isOffline as_.network, syncState = as_.syncState }
             , Html.a
                 [ Html.Attributes.href settingsHref
                 , Html.Attributes.class

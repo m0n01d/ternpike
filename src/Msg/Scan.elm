@@ -16,11 +16,14 @@ It carries only the data types its constructor payloads need.
 import File exposing (File)
 import Http
 import Http.GeocodeApi
+import Time
 
 
 {-| Every Scan-page action. See `Page.Scan.update` for the handlers.
 
-  - `FilesSelected` — user picked one or more files to scan.
+  - `FilesSelected` — user picked one or more files to scan. Fires a
+    `Time.now` task so the durable id uses the real capture millis.
+  - `FilesStamped` — the `Time.now` for a batch resolved; mint ids now.
   - `GotFileUrl` — a selected file finished reading into a data URL.
   - `OcrImagePrepared` — JS finished downscaling an image for OCR.
   - `GotOcrResult` — direct (BYO-key) Anthropic response landed.
@@ -36,6 +39,7 @@ type Msg
     = BackToQueue
     | ClearDoneItems
     | FilesSelected (List File)
+    | FilesStamped Time.Posix (List File)
     | GotExifCoords String (Maybe Float) (Maybe Float) String
     | GotFileUrl String String
     | GotGeocodeResult String (Result Http.Error Http.GeocodeApi.GeocodeResponse)
