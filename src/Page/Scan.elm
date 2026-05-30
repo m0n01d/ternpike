@@ -255,7 +255,8 @@ update msg as_ =
         ScanProxyResult { body, itemId, ok, status } ->
             -- Hosted-proxy response. The raw `status` is intact here, so the
             -- transient-vs-terminal split goes through `Scan.hostedFailureKind`
-            -- (status 0 = connection died = flap).
+            -- (status 0 = connection died = flap; 401 / 403 = reconnect
+            -- auth-handshake window = flap, see #400).
             let
                 outcome : OcrOutcome
                 outcome =
@@ -263,12 +264,21 @@ update msg as_ =
                         outcomeFromBody body
 
                     else if status == 402 then
+                        -- Genuine tier gate (payment required): the user is on
+                        -- a free tier hitting the hosted proxy. Permanent — no
+                        -- retry will help, surface the upgrade prompt.
                         OcrFailed Scan.Permanent "Hosted scanning requires an Osprey or Trailblazer subscription."
 
-                    else if status == 401 then
-                        OcrFailed Scan.Permanent "Sign in again to continue scanning."
-
                     else
+                        -- Everything else, including 401 / 403, is classified
+                        -- by `Scan.hostedFailureKind`. A reconnect-time 401/403
+                        -- is the CouchDB-session re-handshake window, NOT a
+                        -- permanent auth failure (a truly-expired session is
+                        -- caught out-of-band via sync `AuthExpired` →
+                        -- guest screen). Treating it transiently requeues the
+                        -- item WITHOUT burning `retryCount`, so the next
+                        -- reconnect retry succeeds instead of permanently
+                        -- stranding the receipt (#400).
                         OcrFailed (Scan.hostedFailureKind status)
                             ("Hosted scan failed (HTTP " ++ String.fromInt status ++ "): " ++ body)
             in
