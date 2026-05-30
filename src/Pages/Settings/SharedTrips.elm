@@ -97,13 +97,13 @@ viewEmptyState : Html Msg
 viewEmptyState =
     UI.Card.subCard
         [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-            [ Html.text "You haven't shared a trip yet. Start a "
+            [ Html.text "You're not in any shared trips yet. Use \"New shared trip\" above to start a fresh one, share a trip you already have from the "
             , Html.a
                 [ Html.Attributes.href "/trips"
                 , Html.Attributes.class "text-rust-deep underline"
                 ]
-                [ Html.text "shared trip" ]
-            , Html.text " from the Trips page, or accept an invite link to join one."
+                [ Html.text "Trips page" ]
+            , Html.text ", or accept an invite link to join someone else's."
             ]
         ]
 
