@@ -281,18 +281,62 @@ The mechanics that avoid an import cycle (Elm forbids them):
 - Feature messages live in a dedicated `Msg.Foo` module (e.g. `Msg.Scan`)
   that **does not import `Types`**. `Types.AuthMsg_` gains one variant,
   `ScanMsg Msg.Scan.Msg`, and imports `Msg.Scan`.
-- `Page.Foo` (e.g. `Page.Scan`) imports `Types` (for `AuthState` and the
-  `Types.AuthMsg` / `Types.ScanMsg` constructors) and `Msg.Foo` (for the
-  message constructors it pattern-matches), and exposes
-  `update : Msg.Foo.Msg -> AuthState -> ( AuthState, Cmd Types.Msg )`.
-- `updateAuth` collapses every feature arm to one router arm:
-  `ScanMsg m -> Page.Scan.update m as_ |> Tuple.mapFirst AuthModel`.
+- `Page.Foo` (e.g. `Page.Scan`) imports `Msg.Foo` (for the message
+  constructors it pattern-matches) and exposes
+  `update : Msg.Foo.Msg -> Page.Foo.Model -> ( Page.Foo.Model, Effect )`.
+- `updateAuth` collapses every feature arm to one router arm that projects
+  the slice out of `AuthState`, runs `update`, merges the slice back, and
+  lifts the returned `Effect` to a `Cmd`:
 
-Because `Page.Scan.update` operates over the whole `AuthState` (the EXIF /
-geocode arms still write `as_.form` via `syncScanLocationToForm`), the seam
-is not yet a self-contained `Scan.Model` — that narrowing is a later step.
-The win today is that Scan changes touch only `Page/Scan.elm` + `Msg/Scan.elm`,
-never `Main.elm` or `AuthMsg_`.
+  ```elm
+  ScanMsg m ->
+      let
+          ( scanModel, effect ) =
+              Page.Scan.update m (scanModelFromAuth as_)
+      in
+      ( AuthModel (mergeScanModel scanModel as_), Effect.perform as_.key effect )
+  ```
+
+#### The `Effect` seam + narrow `Model` slice (#369)
+
+`Page.Scan.update` was re-typed in #369 from `… -> AuthState -> ( AuthState, Cmd Types.Msg )`
+to `… -> Page.Scan.Model -> ( Page.Scan.Model, Effect )`. Two changes, one purpose
+— making the Scan slice **hermetically testable under `avh4/elm-program-test`**
+(the first PR-gated feature; see "Verification" / `CLAUDE.md`):
+
+- **Narrow `Model` slice.** `AuthState` embeds `key : Nav.Key`, and a `Nav.Key`
+  cannot be hand-constructed — so a test can't build a seed `AuthState`.
+  `Page.Scan.Model` is the subset of `AuthState` fields the Scan flows actually
+  touch (`activeScanItemId`, `basePath`, `config`, `creds`, `currentUser`,
+  `duplicateWarning`, `error`, `form`, `route`, `scanQueue`, `sharedTrips`,
+  `tier`, `today`, `trips`) — no `Nav.Key`, so it's fully constructible in a
+  test. `Main.scanModelFromAuth` / `mergeScanModel` project and merge. The
+  `currentUser` / `sharedTrips` / `tier` trio is carried because
+  `geocodeDispatch` needs them to satisfy `Data.Trip.TierContext`.
+- **`Effect` seam (`src/Effect.elm`).** `update` returns a description of its
+  side effects (`Effect` ADT) instead of an opaque `Cmd`. `Effect.perform :
+  Nav.Key -> Effect -> Cmd Types.Msg` is the production interpreter (the router
+  hands it `as_.key`); the test-side `simulate : Effect -> SimulatedEffect
+  Types.Msg` (in `tests/PageScanEffectTest.elm`) mirrors it effect-for-effect.
+  `Effect` carries no `Nav.Key` — the key is supplied at `perform` time — which
+  keeps the slice and the seed state key-free. `simulate` lives in the test tree
+  because `avh4/elm-program-test` is a test-only dependency; importing its
+  `SimulatedEffect.*` modules from `src/` would pull the harness into the
+  production build.
+
+  Variants (one per construction site in `Page.Scan.update`, as
+  `NoUnused.CustomTypeConstructors` requires): `Batch (List Effect)`,
+  `ExtractExifGps`, `FetchFileUrl File`, `Geocode Creds itemId address`,
+  `MakeOcrCall { backendUrl, body, itemId, path }`, `Navigate String` (the
+  `BackToQueue` `Nav.pushUrl`), `NoEffect`, `PrepareOcrImage`. Persistence/merge
+  effects (`SaveScanItem` / `DeleteScanItem` / `MintIdsThen`) are deferred to
+  the issues that supply their callers.
+
+`Effect.perform` reconstructs exactly the Cmds #368 moved, so behavior is
+identical — `npm test` stays green and the wire traffic is unchanged. The win:
+Scan changes touch only `Page/Scan.elm` + `Msg/Scan.elm` + `Effect.elm`, never
+`AuthMsg_`, and `tests/PageScanEffectTest.elm` drives the real `update` through
+`simulate` to pin state transitions.
 
 The top-level `( AuthMsg _, GuestModel gs ) -> ( GuestModel gs, Cmd.none )`
 arm intentionally drops an `AuthMsg` that arrives after the session was torn
@@ -642,11 +686,17 @@ The Scan/OCR feature's update logic lives in its own module,
 `Page.Scan` (carved out of `Main.updateAuth` in #368 — see "Nested update
 dispatch" below). The Scan messages live in `Msg.Scan` and nest under
 `AuthMsg_`'s single `ScanMsg Msg.Scan.Msg` variant; `Main.updateAuth`
-routes them with one arm (`ScanMsg m -> Page.Scan.update m as_ |>
-Tuple.mapFirst AuthModel`). The helpers named below all live in
-`Page.Scan`.
+routes them with one arm that projects the narrow `Page.Scan.Model` slice
+out of `AuthState`, runs `Page.Scan.update`, merges the slice back, and
+lifts the returned `Effect` via `Effect.perform as_.key` (the `Effect`
+seam — see "Nested update dispatch" below). The helpers named below all
+live in `Page.Scan`.
 
-Receipts go through Anthropic's vision model via `Page.Scan.makeOcrCall`. The
+Receipts go through Anthropic's vision model: `Page.Scan.update` emits an
+`Effect.MakeOcrCall { backendUrl, body, itemId, path }` whose `body` is built by
+`Page.Scan.ocrRequestBody`, and `Effect.perform` picks the transport from the
+`OcrPath` — direct Anthropic `Http.request` for `ByoPath`, the `scanProxyOut`
+port for `HostedPath`, nothing for `Unscannable`. The
 system prompt (`Page.Scan.ocrSystemPrompt`) asks Claude to extract one JSON
 object per receipt in the image, with these fields (every one optional —
 Claude returns `null` for whatever it couldn't read):
@@ -667,9 +717,9 @@ right days before you tap Review on each one.
 When OCR fails (HTTP error from Anthropic, refusal, unparseable JSON,
 or no receipts detected), the failure reason is captured on
 `ScanItem.ocrError : Maybe String` and rendered on the Scan card below
-the "OCR failed — fill manually" header. `Page.Scan.makeOcrCall` uses
-`Http.expectStringResponse` (not `expectString`) so non-2xx bodies are
-preserved — that's where Anthropic's `error.message` lives, and
+the "OCR failed — fill manually" header. `Effect.perform`'s `MakeOcrCall`
+interpreter uses `Http.expectStringResponse` (not `expectString`), with an
+internal response parser in `Effect`, so non-2xx bodies are preserved — that's where Anthropic's `error.message` lives, and
 surfacing it lets the user tell a rate-limit from a corrupt-image from
 a paymentMethod the decoder didn't recognize.
 
