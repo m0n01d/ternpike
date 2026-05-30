@@ -407,7 +407,7 @@ deliberately separate places:
 | Tier | Examples | Why this tier |
 |---|---|---|
 | **Server** (Worker KV) | Subscription tier, `stripeCustomerId`, identity | Source of truth. Re-checked on every gated request — never trusted from the client. |
-| **IndexedDB** (outside PouchDB) | JWT (`auth_creds`), BYO API keys (`ai_config`) | Device-local. Must not sync — keys would land on CouchDB. |
+| **IndexedDB** (outside PouchDB) | JWT (`auth_creds`), BYO API keys (`ai_config`), the durable offline scan queue (`scanQueue` store) | Device-local. Must not sync — keys would land on CouchDB; in-flight scan captures are device-specific. |
 | **PouchDB** | Expenses, trips, amendments, voids, `user:profile` | Things that should sync across the user's devices, that aren't secret and aren't server-authoritative. |
 
 The trap to avoid: don't put `tier` or `stripeCustomerId` in PouchDB even as a
@@ -460,6 +460,44 @@ namespace is needed in the `_id`):
 - API keys — IndexedDB only, never PouchDB.
 - `email`, `googleSub` — already in `AuthState` from the auth flow, no need
   to duplicate.
+
+### The durable offline scan queue (`scanQueue` IndexedDB store)
+
+The same IndexedDB database that holds `auth_creds` (`alaska-tracker`, opened
+in `src/main.js`) has a second object store, `scanQueue` (added at db version
+2, #371), keyed by scan id (`scan::<millis>::<seq>`). It durably holds the
+offline receipt-scan queue — captured images plus the user's typed draft — so
+nothing is lost across a reload or a days-later reconnect. Each value is a
+`Data.Scan.scanItemEncoder` JSON blob; Elm reads them back through
+`scanItemDecoder` + `reconcileHydratedQueue`. The queue is device-local (an
+in-flight capture belongs to the device that took the photo) and never synced.
+
+**The version-2 migration is safety-critical** — a botched `onupgradeneeded`
+bricks `auth_creds` and logs everyone out. `openDB` therefore:
+
+- Guards each store by `oldVersion`: `if (oldVersion < 1)` creates `kv`,
+  `if (oldVersion < 2)` creates `scanQueue`. The pre-#371 code created `kv`
+  unconditionally, which throws `ConstraintError` the instant the upgrade
+  re-runs against an existing DB.
+- Rejects on `req.onblocked` (another tab still holds v1 open) so the boot
+  `idbGet` doesn't hang forever — the boot reads are wrapped in try/catch and
+  degrade to "no creds" (login screen) instead of a blank hung screen.
+- Sets `db.onversionchange = () => db.close()` on the open connection so a
+  *future* tab's upgrade isn't blocked by this one.
+
+**Lifecycle rules:**
+
+- `clearStorage` (token-expiry logout) drops `auth_creds` but LEAVES the
+  scan queue intact — an unsent receipt must survive a 401.
+- `clearAllStorage` (Settings → Reset, via `ResetSettingsClicked`) explicitly
+  `clear()`s the `scanQueue` store too (self-guarded for a DB still at v1).
+- A failed `saveScanItem` `put` (e.g. `QuotaExceededError`, which the generic
+  `idbSet` silently swallows) is surfaced through the `scanItemSaved` ack so
+  Elm flips `persistError` on the item.
+- A boot probe (trivial `getAll` of `scanQueue`) plus a best-effort
+  `navigator.storage.persist()` report device storage availability via
+  `storageStatus` → `AuthState.storageAvailable` (Private Browsing / Lockdown
+  Mode read as unavailable).
 
 ### Server-side user record (`UserRecord` in `server/users.js`)
 
@@ -574,6 +612,23 @@ Example:
 | `DbDeleted` | `{ id }` of deleted doc |
 | `SyncStateMsg` | `"syncing" \| "synced" \| "error" \| "auth_error"` |
 
+### Durable scan-queue ports (#371)
+
+Separate from the `pouchOut`/`pouchIn` pair, the offline scan queue has its own
+ports (declared in `src/Ports.elm`, handled in `src/main.js`):
+
+| Direction | Port | Payload | What it does |
+|---|---|---|---|
+| Elm → JS | `loadScanQueue` | — | `getAll` the `scanQueue` store; reply via `scanQueueLoaded`. Fired from `init`'s authed branch + the `VerifyCodeResult`/`MagicVerifyResult` re-login arms. |
+| JS → Elm | `scanQueueLoaded` | array of `scanItemEncoder` docs | Decoded item-by-item (bad docs quarantined) → `reconcileHydratedQueue` → `Dict.union` into the live queue. |
+| Elm → JS | `saveScanItem` | one `scanItemEncoder` doc | `put` it; ack via `scanItemSaved`. Surfaces `QuotaExceededError` (unlike `idbSet`). |
+| JS → Elm | `scanItemSaved` | `{ id, ok, error }` | `ok:false` flips `persistError` on the item. |
+| JS → Elm | `storageStatus` | `{ available, persisted }` | Boot probe + best-effort `navigator.storage.persist()`; `available` lands on `AuthState.storageAvailable`. |
+
+The `deleteScanItem` port (submit/clear) is deferred to #374/#375 — the JS
+handler exists in `main.js`, but no Elm `port` is declared until those issues
+add the first caller (per `NoUnused`).
+
 ---
 
 ## Startup sequence
@@ -589,6 +644,13 @@ Browser loads
             ├─ fetchMe (GET /me) fires immediately
             │    └─ refreshes tier + subscriptionStatus + trailblazerNumber
             │       from the server, re-persists Creds to IndexedDB
+            ├─ loadScanQueue port fires immediately (#371)
+            │    └─ JS getAll's the scanQueue store → scanQueueLoaded →
+            │       decode + reconcileHydratedQueue → as_.scanQueue.
+            │       Device-local, no PouchDB race, so it's safe on the
+            │       critical path. Also re-fired from the in-SPA re-login
+            │       arms (VerifyCodeResult / MagicVerifyResult), since
+            │       toAuthState clears scanQueue and init never re-runs.
             └─ startSync port called immediately
                  └─ pouch.js begins db.sync(remote, { live, retry })
                       └─ On first "synced" event → Elm receives SyncStateMsg Synced

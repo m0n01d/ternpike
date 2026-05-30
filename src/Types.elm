@@ -257,6 +257,7 @@ type alias AuthState =
     , standalone : StandaloneState
     , statsGranularity : Maybe Granularity
     , statsHover : Hover
+    , storageAvailable : Bool
     , submitting : Bool
     , subscriptionStatus : Maybe SubscriptionStatus
     , syncState : SyncState
@@ -469,7 +470,9 @@ type AuthMsg_
     | ResetLinksConfirmed SharedTripId
     | ResetLinksResult (Result Http.Error ())
     | SaveTripForm
+    | ScanItemSaved { error : String, id : String, ok : Bool }
     | ScanMsg Msg.Scan.Msg
+    | ScanQueueLoaded Json.Decode.Value
     | SetStatsGranularity Granularity
     | ShareResultReceived { ok : Bool, reason : String }
     | ShareTripAdoptResult (Result Http.Error ())
@@ -482,6 +485,7 @@ type AuthMsg_
     | SharedTripActivityNotified
     | SignOutClicked
     | SkipLocation
+    | StorageStatusReceived { available : Bool, persisted : Bool }
     | SubmitEntry
     | SubmitInvite
     | SubmitShareTrip

@@ -48,17 +48,57 @@ import './elements/tp-amount.js'
 
   // ── IndexedDB key/value store ──────────────────────────────────────────
 
-  const IDB_NAME  = 'alaska-tracker'
-  const IDB_STORE = 'kv'
+  const IDB_NAME       = 'alaska-tracker'
+  const IDB_VERSION    = 2
+  const IDB_STORE      = 'kv'
+  const IDB_SCAN_STORE = 'scanQueue'
   let _db = null
 
+  // ── Safe IndexedDB open + migration (#371) ─────────────────────────────
+  //
+  // Migration flow — every branch matters because a botched upgrade bricks
+  // `auth_creds` (→ everyone gets logged out):
+  //
+  //   onupgradeneeded: fired on a fresh DB (oldVersion 0) AND on a version
+  //     bump (oldVersion 1 → newVersion 2). The store creation is GUARDED by
+  //     `oldVersion` so it's idempotent: the old code did an unconditional
+  //     `createObjectStore('kv')`, which throws `ConstraintError` the moment
+  //     it re-runs against a DB that already has `kv` (i.e. every existing
+  //     user). `if (oldVersion < 1)` creates `kv` only on a truly fresh DB;
+  //     `if (oldVersion < 2)` adds `scanQueue` for both fresh and v1 DBs.
+  //
+  //   onblocked: the upgrade can't start because another tab still holds the
+  //     DB open at v1. Without handling this the open promise never settles,
+  //     `idbGet('auth_creds')` hangs forever, and boot stalls on a blank
+  //     screen — indistinguishable from "logged out". We reject so the
+  //     caller's try/catch degrades to "no creds" instead of hanging.
+  //
+  //   db.onversionchange (on the SUCCESSFULLY-opened connection): a *future*
+  //     tab wants to upgrade and we're the one blocking it. Close our
+  //     connection so that tab's `onblocked` clears and its upgrade proceeds —
+  //     otherwise the second tab hangs (the mirror image of the case above).
   function openDB() {
     if (_db) return Promise.resolve(_db)
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open(IDB_NAME, 1)
-      req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE)
-      req.onsuccess  = e => { _db = e.target.result; resolve(_db) }
-      req.onerror    = e => reject(e.target.error)
+      const req = indexedDB.open(IDB_NAME, IDB_VERSION)
+      req.onupgradeneeded = e => {
+        const db = e.target.result
+        if (e.oldVersion < 1 && !db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE)
+        }
+        if (e.oldVersion < 2 && !db.objectStoreNames.contains(IDB_SCAN_STORE)) {
+          db.createObjectStore(IDB_SCAN_STORE)
+        }
+      }
+      req.onsuccess = e => {
+        _db = e.target.result
+        // If another tab later requests a higher version, step aside so its
+        // upgrade isn't blocked by this open connection.
+        _db.onversionchange = () => { _db.close(); _db = null }
+        resolve(_db)
+      }
+      req.onerror   = e => reject(e.target.error)
+      req.onblocked = () => reject(new Error('IndexedDB upgrade blocked by another open tab'))
     })
   }
 
@@ -86,6 +126,61 @@ import './elements/tp-amount.js'
     return new Promise((resolve, reject) => {
       const tx = db.transaction(IDB_STORE, 'readwrite')
       keys.forEach(k => tx.objectStore(IDB_STORE).delete(k))
+      tx.oncomplete = () => resolve()
+      tx.onerror    = () => reject(tx.error)
+    })
+  }
+
+  // ── Durable scan queue store (#371) ────────────────────────────────────
+  //
+  // Keyed by the scan id (`scan::<millis>::<seq>`) so a `put` of an item
+  // already in the store overwrites in place. Each item is the
+  // `scanItemEncoder` JSON Elm hands across `saveScanItem`.
+
+  async function scanQueueGetAll() {
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_SCAN_STORE).objectStore(IDB_SCAN_STORE).getAll()
+      req.onsuccess = () => resolve(req.result || [])
+      req.onerror   = () => reject(req.error)
+    })
+  }
+
+  // Resolves on commit, rejects on error. The error is surfaced (not
+  // swallowed like `idbSet`) so a `QuotaExceededError` reaches the Elm
+  // `scanItemSaved` ack and flips `persistError`.
+  async function scanQueuePut(item, id) {
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_SCAN_STORE, 'readwrite')
+      tx.objectStore(IDB_SCAN_STORE).put(item, id)
+      tx.oncomplete = () => resolve()
+      tx.onerror    = () => reject(tx.error)
+      tx.onabort    = () => reject(tx.error || new Error('scanQueue put aborted'))
+    })
+  }
+
+  // Deferred caller (#374/#375): no Elm `deleteScanItem` port exists yet, but
+  // the JS handler is wired so submit/clear can flip it on without touching
+  // main.js's IDB plumbing.
+  async function scanQueueDelete(id) {
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_SCAN_STORE, 'readwrite')
+      tx.objectStore(IDB_SCAN_STORE).delete(id)
+      tx.oncomplete = () => resolve()
+      tx.onerror    = () => reject(tx.error)
+    })
+  }
+
+  async function scanQueueClear() {
+    const db = await openDB()
+    // Guard for a DB still at v1 where the store doesn't exist yet (an upgrade
+    // that hasn't run / was blocked). Nothing to clear → resolve.
+    if (!db.objectStoreNames.contains(IDB_SCAN_STORE)) return
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_SCAN_STORE, 'readwrite')
+      tx.objectStore(IDB_SCAN_STORE).clear()
       tx.oncomplete = () => resolve()
       tx.onerror    = () => reject(tx.error)
     })
@@ -134,14 +229,26 @@ import './elements/tp-amount.js'
   }
 
   // ── Load all persisted settings before starting Elm ───────────────────
-
-  const [authCredsRaw, anthropicKey, pendingRefStored] = isDemo
-    ? [null, null, null]
-    : await Promise.all([
+  //
+  // Wrapped in try/catch (#371): if the IndexedDB open/upgrade fails or is
+  // blocked by another tab (see `openDB`'s onblocked/onversionchange notes),
+  // we degrade to "no creds" and boot the guest UI rather than hanging on a
+  // blank screen forever. The Elm router then shows the login screen — the
+  // user re-authenticates rather than being stuck.
+  let authCredsRaw = null
+  let anthropicKey = null
+  let pendingRefStored = null
+  if (!isDemo) {
+    try {
+      ;[authCredsRaw, anthropicKey, pendingRefStored] = await Promise.all([
         idbGet('auth_creds'),
         idbGet('anthropic_key'),
         idbGet('pending_ref'),
       ])
+    } catch (err) {
+      console.error('[idb] boot read failed — degrading to no creds:', err)
+    }
+  }
 
   // Cookie → IDB promotion. The marketing site sets `tp_ref` on
   // `.ternpike.com`; we hoist it into IDB so it survives cookie expiry
@@ -302,7 +409,115 @@ import './elements/tp-amount.js'
       localStorage.setItem('color_scheme', value)
       applyColorScheme(value)
     }
+    // Keep the in-module `authCreds` in lockstep with the store (#371). The
+    // CouchDB sync auth header (`basicAuthHeader`) reads `authCreds.email`
+    // / `.password` directly. `value` is the SERIALIZED creds string, so a
+    // raw `authCreds = value` would leave `.email` undefined → every synced
+    // request 401s after an in-SPA re-login. Parse it, mirroring the
+    // `color_scheme` special-case above.
+    if (key === 'auth_creds') {
+      try {
+        authCreds = JSON.parse(value)
+      } catch (err) {
+        console.error('[auth] failed to parse saved auth_creds:', err)
+      }
+    }
   })
+
+  // ── Durable scan queue: load / save / delete ports (#371) ──────────────
+  //
+  // Gated off /verify and /demo like the rest of the device-storage wiring —
+  // those routes are hermetic and never touch the real IndexedDB.
+  if (!isVerify && !isDemo) {
+    // loadScanQueue → getAll → scanQueueLoaded. A read failure (Private
+    // Browsing / Lockdown Mode) reports `available:false` via storageStatus
+    // and hands Elm an empty array so hydration proceeds without erroring.
+    if (app.ports.loadScanQueue) {
+      app.ports.loadScanQueue.subscribe(async () => {
+        try {
+          const items = await scanQueueGetAll()
+          if (app.ports.scanQueueLoaded) app.ports.scanQueueLoaded.send(items)
+        } catch (err) {
+          console.error('[scanQueue] load failed:', err)
+          if (app.ports.scanQueueLoaded) app.ports.scanQueueLoaded.send([])
+          if (app.ports.storageStatus) {
+            app.ports.storageStatus.send({ available: false, persisted: false })
+          }
+        }
+      })
+    }
+
+    // saveScanItem → put → scanItemSaved {id, ok, error}. The existing
+    // `idbSet` swallows `QuotaExceededError`; this path surfaces it so Elm
+    // flips `persistError` and never shows "Saved · will scan later" for an
+    // item that didn't actually persist.
+    if (app.ports.saveScanItem) {
+      app.ports.saveScanItem.subscribe(async (item) => {
+        const id = item && item.id
+        try {
+          await scanQueuePut(item, id)
+          if (app.ports.scanItemSaved) {
+            app.ports.scanItemSaved.send({ id, ok: true, error: '' })
+          }
+        } catch (err) {
+          console.error('[scanQueue] save failed:', err)
+          if (app.ports.scanItemSaved) {
+            app.ports.scanItemSaved.send({
+              id,
+              ok: false,
+              error: (err && err.name) || 'save failed',
+            })
+          }
+        }
+      })
+    }
+
+    // deleteScanItem: NO Elm port yet — #374/#375 (submit/clear) add the Elm
+    // declaration + caller. The JS handler is wired here so those issues only
+    // touch Elm. Guarded so the absent port can't throw.
+    if (app.ports.deleteScanItem) {
+      app.ports.deleteScanItem.subscribe(async (id) => {
+        try {
+          await scanQueueDelete(id)
+        } catch (err) {
+          console.error('[scanQueue] delete failed:', err)
+        }
+      })
+    }
+
+    // Boot storage probe + best-effort persistence (#371). Both run off the
+    // critical path (never awaited before Elm starts). The probe does a
+    // trivial read of `scanQueue`; if it throws (Private Browsing / Lockdown),
+    // report unavailable so the capture hero can refuse the durability
+    // promise. `navigator.storage.persist()` is feature-detected and its
+    // rejection swallowed — it resolves `false` when the UA declines, which we
+    // report honestly rather than overpromising.
+    ;(async () => {
+      let available = true
+      try {
+        await scanQueueGetAll()
+      } catch (err) {
+        console.error('[scanQueue] storage probe failed:', err)
+        available = false
+      }
+
+      let persisted = false
+      try {
+        if (navigator.storage && navigator.storage.persisted) {
+          persisted = await navigator.storage.persisted()
+        }
+        if (!persisted && navigator.storage && navigator.storage.persist) {
+          persisted = await navigator.storage.persist()
+        }
+      } catch (_) {
+        // best-effort: leave `persisted` as-is
+      }
+
+      if (app.ports.storageStatus) {
+        app.ports.storageStatus.send({ available, persisted })
+      }
+    })()
+  }
 
   // ── Network status ─────────────────────────────────────────────────────
   if (app.ports.networkStatus) {
@@ -336,9 +551,26 @@ import './elements/tp-amount.js'
     })
   }
 
-  app.ports.clearStorage.subscribe(() => idbDel('auth_creds'))
+  // Token-expiry logout: drop creds but LEAVE the durable scan queue intact
+  // (#371) — an unsent receipt captured offline must survive a 401 so it's
+  // still there after the user re-authenticates.
+  app.ports.clearStorage.subscribe(() => {
+    authCreds = null
+    idbDel('auth_creds')
+  })
 
-  app.ports.clearAllStorage.subscribe(() => idbDel(...APP_KEYS))
+  // Full reset (Settings → Reset, via `ResetSettingsClicked`): wipe the kv
+  // keys AND explicitly clear the scanQueue store (#371). `scanQueueClear`
+  // self-guards for a DB still at v1 where the store doesn't exist.
+  app.ports.clearAllStorage.subscribe(async () => {
+    authCreds = null
+    await idbDel(...APP_KEYS)
+    try {
+      await scanQueueClear()
+    } catch (err) {
+      console.error('[scanQueue] clear failed:', err)
+    }
+  })
 
   app.ports.requestGeolocation.subscribe(() => {
     if (!('geolocation' in navigator)) {

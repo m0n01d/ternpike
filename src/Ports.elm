@@ -1,10 +1,11 @@
 port module Ports exposing
     ( canInstall, clearAllStorage, clearStorage, downloadFile
     , extractExifGps, gotExifResult, gotGpsCoords
-    , nativeShare, nativeShareResult, networkStatus, notificationState
+    , loadScanQueue, nativeShare, nativeShareResult, networkStatus, notificationState
     , ocrImagePrepared, pouchIn, pouchOut, prepareOcrImage, pushSubscribeResult
-    , requestGeolocation, savePushPrefs, saveStorage, scanProxyIn, scanProxyOut
-    , startSync, stopSync, subscribePush, trackFunnel, triggerInstallPrompt
+    , requestGeolocation, saveScanItem, savePushPrefs, saveStorage, scanItemSaved
+    , scanProxyIn, scanProxyOut, scanQueueLoaded, startSync, stopSync, storageStatus
+    , subscribePush, trackFunnel, triggerInstallPrompt
     , unsubscribePush, verifyResults
     )
 
@@ -15,10 +16,11 @@ in `Main`; only their home moved (#368).
 
 @docs canInstall, clearAllStorage, clearStorage, downloadFile
 @docs extractExifGps, gotExifResult, gotGpsCoords
-@docs nativeShare, nativeShareResult, networkStatus, notificationState
+@docs loadScanQueue, nativeShare, nativeShareResult, networkStatus, notificationState
 @docs ocrImagePrepared, pouchIn, pouchOut, prepareOcrImage, pushSubscribeResult
-@docs requestGeolocation, savePushPrefs, saveStorage, scanProxyIn, scanProxyOut
-@docs startSync, stopSync, subscribePush, trackFunnel, triggerInstallPrompt
+@docs requestGeolocation, saveScanItem, savePushPrefs, saveStorage, scanItemSaved
+@docs scanProxyIn, scanProxyOut, scanQueueLoaded, startSync, stopSync, storageStatus
+@docs subscribePush, trackFunnel, triggerInstallPrompt
 @docs unsubscribePush, verifyResults
 
 -}
@@ -117,3 +119,52 @@ port trackFunnel : { flockId : String, stage : String } -> Cmd msg
 `Verify.Registry` and the Verify track plan.
 -}
 port verifyResults : Json.Encode.Value -> Cmd msg
+
+
+
+-- DURABLE SCAN QUEUE (#371)
+--
+-- The offline scan queue is persisted to an IndexedDB object store
+-- (`scanQueue`) keyed by scan id. `loadScanQueue` asks JS to `getAll` the
+-- store and hand it back via `scanQueueLoaded`; `saveScanItem` persists one
+-- normalized item, acked through `scanItemSaved` (so a `QuotaExceededError`
+-- surfaces as `persistError` instead of being silently swallowed). The
+-- `deleteScanItem` port is deferred to #374/#375 (submit/clear), which add
+-- the first Elm caller — see `src/main.js` for its JS handler. `storageStatus`
+-- carries the boot probe + best-effort `navigator.storage.persist()` result.
+
+
+{-| Ask JS to `getAll` the durable `scanQueue` store and reply via
+[`scanQueueLoaded`](#scanQueueLoaded). Fired from `init`'s authed branch and
+the in-SPA re-login arms (`VerifyCodeResult` / `MagicVerifyResult`).
+-}
+port loadScanQueue : () -> Cmd msg
+
+
+{-| The hydrated queue as a JSON array of `scanItemEncoder`-shaped docs.
+Decoded item-by-item through `Data.Scan.scanItemDecoder` (bad docs are
+quarantined), then normalized by `Data.Scan.reconcileHydratedQueue`.
+-}
+port scanQueueLoaded : (Json.Decode.Value -> msg) -> Sub msg
+
+
+{-| Persist one `scanItemEncoder`-shaped doc to the durable `scanQueue`
+store. Acked through [`scanItemSaved`](#scanItemSaved).
+-}
+port saveScanItem : Json.Decode.Value -> Cmd msg
+
+
+{-| Save-ack for [`saveScanItem`](#saveScanItem). `ok` is `False` (with a
+non-empty `error`) when the underlying `put` threw — e.g.
+`QuotaExceededError`. Elm flips `persistError` on the matching item so the
+capture UI never promises durability it didn't get.
+-}
+port scanItemSaved : ({ error : String, id : String, ok : Bool } -> msg) -> Sub msg
+
+
+{-| Device storage availability + persistence. `available` is `False` when
+the boot probe of the `scanQueue` store failed (Private Browsing / Lockdown
+Mode); `persisted` reflects `navigator.storage.persisted()` /
+`persist()` (best-effort, resolves `False` when the UA declines).
+-}
+port storageStatus : ({ available : Bool, persisted : Bool } -> msg) -> Sub msg
