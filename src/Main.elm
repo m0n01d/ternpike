@@ -187,6 +187,7 @@ toAuthState creds initialRoute gs =
     , colorScheme = ColorScheme.Auto
     , config = gs.session.config
     , confirmDeleteTrip = Nothing
+    , confirmRemoveScan = Nothing
     , creds = creds
     , currentLocation = LocationIdle
     , currentUser = UserId.fromString creds.email
@@ -4397,6 +4398,7 @@ scanModelFromAuth as_ =
     { activeScanItemId = as_.activeScanItemId
     , basePath = as_.basePath
     , config = as_.config
+    , confirmRemoveScan = as_.confirmRemoveScan
     , creds = as_.creds
     , currentUser = as_.currentUser
     , duplicateWarning = as_.duplicateWarning
@@ -4423,6 +4425,7 @@ mergeScanModel : Page.Scan.Model -> AuthState -> AuthState
 mergeScanModel scan as_ =
     { as_
         | activeScanItemId = scan.activeScanItemId
+        , confirmRemoveScan = scan.confirmRemoveScan
         , duplicateWarning = scan.duplicateWarning
         , error = scan.error
         , form = scan.form

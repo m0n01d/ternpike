@@ -47,6 +47,7 @@ viewBodyWithContext as_ =
         [ viewFlockContextStrip (activeFlockContext as_)
         , viewBody as_
         , viewTierAffordances as_
+        , Html.Extra.viewMaybe (viewRemoveScanModal as_.scanQueue) as_.confirmRemoveScan
         ]
 
 
@@ -519,7 +520,10 @@ viewScanCardBody ctx item =
                     Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
                         [ viewNeedsReviewBadge
                         , viewOcrSummary ocr
-                        , viewReviewButton item.id
+                        , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+                            [ viewReviewButton item.id
+                            , viewRemoveButton item.id
+                            ]
                         ]
 
                 Nothing ->
@@ -541,7 +545,10 @@ viewScanCardBody ctx item =
             in
             Html.div [ Html.Attributes.class "flex flex-col gap-2" ]
                 [ viewOcrFailure item.retryCount errorReason
-                , viewReviewButton item.id
+                , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+                    [ viewReviewButton item.id
+                    , viewRemoveButton item.id
+                    ]
                 ]
 
         CardPersistError ->
@@ -569,7 +576,10 @@ viewScanCardBody ctx item =
                 Just ocr ->
                     Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
                         [ viewOcrSummary ocr
-                        , viewReviewButton item.id
+                        , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+                            [ viewReviewButton item.id
+                            , viewRemoveButton item.id
+                            ]
                         ]
 
                 Nothing ->
@@ -611,7 +621,10 @@ viewDeferredCard item =
             , Html.span [] [ Html.text "will scan when back online" ]
             ]
         , viewDeferredDraftSummary item.draft
-        , viewDeferredButton item.id
+        , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+            [ viewDeferredButton item.id
+            , viewRemoveButton item.id
+            ]
         ]
 
 
@@ -737,6 +750,57 @@ viewDeferredButton id =
         , Html.Attributes.class "self-start py-1.5 px-3 rounded-lg border border-rust/40 text-rust text-xs font-bold cursor-pointer bg-transparent"
         ]
         [ Html.text "Add details →" ]
+
+
+{-| Trash icon button that opens the per-item remove confirm modal.
+Rendered on deferred, ready, needs-review, and ocr-failed cards.
+-}
+viewRemoveButton : ScanItemId.ScanItemId -> Html Msg
+viewRemoveButton id =
+    UI.Button.iconButton
+        { icon = UI.Icons.trash "w-4 h-4"
+        , onClick = AuthMsg (ScanMsg (Msg.Scan.RequestRemoveScan (ScanItemId.toString id)))
+        , title = "Remove receipt"
+        }
+
+
+{-| Confirm modal for removing a single scan-queue item. Renders over the
+page when `confirmRemoveScan == Just id`. Shows the item's thumbnail and
+draft summary so the user can confirm they are deleting the right receipt.
+-}
+viewRemoveScanModal : Dict.Dict String ScanItem -> String -> Html Msg
+viewRemoveScanModal queue itemId =
+    let
+        maybeItem : Maybe ScanItem
+        maybeItem =
+            Dict.get itemId queue
+    in
+    Html.div
+        [ Html.Attributes.class "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-6" ]
+        [ Html.div
+            [ Html.Attributes.class "w-full max-w-sm p-6 border bg-parchment dark:bg-cream border-tan rounded-2xl shadow-panel bg-[image:var(--bg-grain)]" ]
+            [ Html.Extra.viewMaybe viewRemoveScanItemPreview maybeItem
+            , Html.p [ Html.Attributes.class "mb-2 text-lg font-bold text-ink font-display" ]
+                [ Html.text "Remove this receipt?" ]
+            , Html.p [ Html.Attributes.class "mb-6 text-sm leading-relaxed text-muted" ]
+                [ Html.text "This can't be undone — the photo is only on this device." ]
+            , Html.div [ Html.Attributes.class "flex gap-3" ]
+                [ UI.Button.ghost { label = "Cancel", onClick = AuthMsg (ScanMsg Msg.Scan.CancelRemoveScan) }
+                , UI.Button.danger { label = "Remove", onClick = AuthMsg (ScanMsg (Msg.Scan.ConfirmRemoveScan itemId)) }
+                ]
+            ]
+        ]
+
+
+{-| Thumbnail and draft summary shown in the remove-receipt confirm modal,
+so the user can confirm they are removing the right item.
+-}
+viewRemoveScanItemPreview : ScanItem -> Html Msg
+viewRemoveScanItemPreview item =
+    Html.div [ Html.Attributes.class "flex items-start gap-3 mb-4" ]
+        [ viewScanThumbnail item
+        , viewDeferredDraftSummary item.draft
+        ]
 
 
 {-| Compact summary of a deferred item's typed draft (merchant, amount,
