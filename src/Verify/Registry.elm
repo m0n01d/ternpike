@@ -15,6 +15,7 @@ import Json.Encode as Encode
 import Verify.Core as Core
 import Verify.Specs.JoinSharedTrip as JoinSharedTrip
 import Verify.Specs.NotificationsPaywall as NotificationsPaywall
+import Verify.Specs.ScanDeferral as ScanDeferral
 import Verify.Specs.ScanRouting as ScanRouting
 import Verify.Specs.SharedTripCard as SharedTripCard
 import Verify.Specs.TierGating as TierGating
@@ -27,6 +28,7 @@ runAll =
     List.concat
         [ TierGating.results
         , NotificationsPaywall.results
+        , ScanDeferral.results
         , ScanRouting.results
         , JoinSharedTrip.results
         , SharedTripCard.results
