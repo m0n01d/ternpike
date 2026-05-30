@@ -191,8 +191,8 @@ Form state:
 
 Ephemeral UI:
 
-  - `confirmDeleteTrip`, `showLedgerMap`, `showMapPicker` — modal/toggle
-    state for the corresponding pages.
+  - `confirmDeleteTrip`, `confirmRemoveScan`, `showLedgerMap`,
+    `showMapPicker` — modal/toggle state for the corresponding pages.
   - `activeScanItemId` — set while the user is reviewing one scan-queue
     item on the Add tab; flipping the effective route to
     `RouteAddReviewScan`.
@@ -232,6 +232,7 @@ type alias AuthState =
     , colorScheme : ColorScheme
     , config : AppConfig
     , confirmDeleteTrip : Maybe Trip
+    , confirmRemoveScan : Maybe String
     , creds : Creds
     , currentUser : Data.UserId.UserId
     , demoMode : Bool

@@ -61,6 +61,7 @@ type alias Model =
     { activeScanItemId : Maybe ScanItemId.ScanItemId
     , basePath : String
     , config : AppConfig
+    , confirmRemoveScan : Maybe String
     , creds : Creds
     , currentUser : UserId
     , duplicateWarning : Maybe Expense
@@ -527,6 +528,33 @@ update msg as_ =
                 , scanTombstones = List.foldl Set.insert as_.scanTombstones clearedIds
               }
             , Batch (List.map Effect.DeleteScanItem clearedIds)
+            )
+
+        RequestRemoveScan itemId ->
+            -- Open the confirm modal for this item. No deletion yet.
+            ( { as_ | confirmRemoveScan = Just itemId }
+            , NoEffect
+            )
+
+        CancelRemoveScan ->
+            -- Dismiss the confirm modal without deleting anything.
+            ( { as_ | confirmRemoveScan = Nothing }
+            , NoEffect
+            )
+
+        ConfirmRemoveScan itemId ->
+            -- Remove the item from the in-memory queue, tombstone it so a
+            -- mid-flight `loadScanQueue` can't resurrect it (#374 resurrect-
+            -- bug guard), and fire the durable-store delete. If the id is no
+            -- longer in the queue (submitted/cleared while the modal was
+            -- open), Dict.remove is a clean no-op and the modal still clears.
+            ( { as_
+                | confirmRemoveScan = Nothing
+                , ocrInFlight = Set.remove itemId as_.ocrInFlight
+                , scanQueue = Dict.remove itemId as_.scanQueue
+                , scanTombstones = Set.insert itemId as_.scanTombstones
+              }
+            , Batch [ Effect.DeleteScanItem itemId ]
             )
 
 

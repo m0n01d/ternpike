@@ -39,7 +39,14 @@ import Time
     receipts, and the minting instant.
   - `ReviewScanItem` — open the Add form pre-filled from a scan item.
   - `BackToQueue` — return from the Add review form to the scan queue.
+  - `CancelRemoveScan` — dismiss the remove-receipt confirm modal without
+    deleting anything.
   - `ClearDoneItems` — drop submitted items from the queue.
+  - `ConfirmRemoveScan` — confirmed remove: delete the item from the
+    in-memory queue, tombstone it (so a mid-flight `loadScanQueue`
+    can't resurrect it), and fire `Effect.DeleteScanItem`. A stale id
+    (item already gone) is a clean no-op that still clears the modal.
+  - `RequestRemoveScan` — open the confirm modal for a given item id.
   - `RetryDeferredScans` — connectivity returned (the proven `Synced`
     sync edge in `Main`): run OCR for as many `ScanDeferred` items as the
     tier concurrency cap allows. Idempotent — a redundant `Synced` edge
@@ -48,7 +55,9 @@ import Time
 -}
 type Msg
     = BackToQueue
+    | CancelRemoveScan
     | ClearDoneItems
+    | ConfirmRemoveScan String
     | FilesSelected (List File)
     | FilesStamped Time.Posix (List File)
     | GotExifCoords String (Maybe Float) (Maybe Float) String
@@ -57,6 +66,7 @@ type Msg
     | GotMintedScanIds String (List Data.Scan.OcrData) Time.Posix
     | GotOcrResult String (Result String String)
     | OcrImagePrepared { dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int }
+    | RequestRemoveScan String
     | RetryDeferredScans
     | ReviewScanItem String
     | ScanProxyResult { body : String, itemId : String, ok : Bool, status : Int }

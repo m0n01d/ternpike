@@ -198,6 +198,7 @@ seedModel =
         , backendUrl = "https://api.ternpike.com"
         , vapidPublicKey = ""
         }
+    , confirmRemoveScan = Nothing
     , creds =
         { dbName = "ternpike"
         , email = "alice@example.com"
