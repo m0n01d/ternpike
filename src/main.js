@@ -442,7 +442,13 @@ import './elements/tp-amount.js'
           console.error('[scanQueue] load failed:', err)
           if (app.ports.scanQueueLoaded) app.ports.scanQueueLoaded.send([])
           if (app.ports.storageStatus) {
-            app.ports.storageStatus.send({ available: false, persisted: false })
+            const earlyInstalled =
+              window.navigator.standalone === true ||
+              (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+            const earlyIsIos =
+              typeof window.navigator.standalone !== 'undefined' ||
+              (/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream)
+            app.ports.storageStatus.send({ available: false, installed: earlyInstalled, isIos: earlyIsIos, persisted: false })
           }
         }
       })
@@ -493,6 +499,9 @@ import './elements/tp-amount.js'
     // promise. `navigator.storage.persist()` is feature-detected and its
     // rejection swallowed — it resolves `false` when the UA declines, which we
     // report honestly rather than overpromising.
+    // `installed` detects whether the app is running as an installed PWA
+    // (standalone mode, #377). iOS only grants persist() via the installed-app
+    // heuristic, so the durability promise is only reliable in standalone.
     ;(async () => {
       let available = true
       try {
@@ -514,8 +523,21 @@ import './elements/tp-amount.js'
         // best-effort: leave `persisted` as-is
       }
 
+      // Detect standalone (installed PWA) mode. `navigator.standalone` is a
+      // non-standard iOS Safari boolean; `display-mode: standalone` is the
+      // standard equivalent supported by Chrome/Android and iOS 16.4+.
+      const installed =
+        window.navigator.standalone === true ||
+        (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+
+      // Detect iOS/iPadOS. `navigator.standalone` only exists on iOS; the
+      // maxTouchPoints guard catches iPadOS 13+ where the UA drops "iPad".
+      const isIos =
+        typeof window.navigator.standalone !== 'undefined' ||
+        (/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream)
+
       if (app.ports.storageStatus) {
-        app.ports.storageStatus.send({ available, persisted })
+        app.ports.storageStatus.send({ available, installed, isIos, persisted })
       }
     })()
   }

@@ -244,6 +244,7 @@ type alias AuthState =
     , sharedTrips : Data.SharedTrips.SharedTrips
     , form : PendingForm
     , geoBlocked : Bool
+    , isIosDevice : Bool
     , joinSharedTripRequest : RemoteData Http.Error Http.SharedTripApi.JoinSharedTripResponse
     , key : Nav.Key
     , lastSyncedAt : Maybe Time.Posix
@@ -257,6 +258,7 @@ type alias AuthState =
     , ocrInFlight : Set String
     , openLedgerMenu : Maybe ExpenseId
     , postJoinPrompt : Bool
+    , pwaInstalled : Bool
     , pushSubscribed : Bool
     , route : Route
     , scanQueue : Dict String ScanItem
@@ -271,6 +273,7 @@ type alias AuthState =
     , statsGranularity : Maybe Granularity
     , statsHover : Hover
     , storageAvailable : Bool
+    , storagePersisted : Bool
     , submitting : Bool
     , subscriptionStatus : Maybe SubscriptionStatus
     , syncState : SyncState
@@ -498,7 +501,7 @@ type AuthMsg_
     | SharedTripActivityNotified
     | SignOutClicked
     | SkipLocation
-    | StorageStatusReceived { available : Bool, persisted : Bool }
+    | StorageStatusReceived { available : Bool, installed : Bool, isIos : Bool, persisted : Bool }
     | SubmitEntry
     | SubmitInvite
     | SubmitShareTrip

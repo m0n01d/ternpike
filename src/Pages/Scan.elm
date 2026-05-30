@@ -308,7 +308,13 @@ viewBody model =
                 List.filter (\i -> i.exifDebug /= "") items
         in
         Html.div []
-            [ viewDeferredBadge deferredCount model.network
+            [ viewDeferredBadge
+                { count = deferredCount
+                , isIosDevice = model.isIosDevice
+                , networkState = model.network
+                , pwaInstalled = model.pwaInstalled
+                , storagePersisted = model.storagePersisted
+                }
             , Html.div [ Html.Attributes.class "flex flex-col gap-3 mb-4" ]
                 (List.map (viewScanCard ctx) sortedItems)
             , Html.Extra.viewIf hasSubmitted <|
@@ -354,12 +360,24 @@ viewEmptyState model =
 
 
 {-| Confidence affordance — shows the count of durably-saved deferred
-receipts so the user knows they are safe when offline. Visible only
-when there is at least one deferred item. Online: "will scan shortly".
-Offline: "will scan when you're back online".
+receipts so the user knows they are safe when offline. Visible only when
+there is at least one deferred item.
+
+When `storagePersisted` is `False`, a warning tone is added: WebKit's
+~7-day eviction window means receipts may not survive a multi-day gap unless
+the user installs the PWA. When the device is iOS and not yet installed,
+an instructional line nudges the user toward Add to Home Screen (#377).
+
 -}
-viewDeferredBadge : Int -> Data.Sync.NetworkState -> Html Msg
-viewDeferredBadge count networkState =
+viewDeferredBadge :
+    { count : Int
+    , isIosDevice : Bool
+    , networkState : Data.Sync.NetworkState
+    , pwaInstalled : Bool
+    , storagePersisted : Bool
+    }
+    -> Html Msg
+viewDeferredBadge { count, isIosDevice, networkState, pwaInstalled, storagePersisted } =
     if count == 0 then
         Html.Extra.nothing
 
@@ -380,12 +398,62 @@ viewDeferredBadge count networkState =
 
                 else
                     "will scan shortly"
+
+            -- Warning tone: not-persisted means WebKit's ~7-day eviction window
+            -- may clear the IndexedDB store. Installed PWA bypasses this via the
+            -- installed-app heuristic that grants navigator.storage.persist().
+            showWarning : Bool
+            showWarning =
+                not storagePersisted
+
+            -- Install nudge: iOS never fires `beforeinstallprompt`, so the only
+            -- affordance is instructional copy. Show it when on iOS, not yet
+            -- installed, and there are deferred items to protect.
+            showInstallNudge : Bool
+            showInstallNudge =
+                isIosDevice && not pwaInstalled
         in
         Html.div
-            [ Html.Attributes.class "mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cream-deep border border-tan" ]
-            [ Html.span [ Html.Attributes.class "text-moss" ] [ UI.Icons.camera "w-4 h-4" ]
-            , Html.span [ Html.Attributes.class "text-sm text-forest font-semibold" ]
-                [ Html.text (String.fromInt count ++ " " ++ noun ++ " saved · " ++ suffix) ]
+            [ Html.Attributes.classList
+                [ ( "mb-4 rounded-xl border px-4 py-2.5", True )
+                , ( "bg-rust-tint border-rust/40", showWarning )
+                , ( "bg-cream-deep border-tan", not showWarning )
+                ]
+            ]
+            [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+                [ Html.span
+                    [ Html.Attributes.classList
+                        [ ( "text-rust", showWarning )
+                        , ( "text-moss", not showWarning )
+                        ]
+                    ]
+                    [ UI.Icons.camera "w-4 h-4" ]
+                , Html.span
+                    [ Html.Attributes.classList
+                        [ ( "text-sm font-semibold", True )
+                        , ( "text-rust", showWarning )
+                        , ( "text-forest", not showWarning )
+                        ]
+                    ]
+                    [ Html.text
+                        (String.fromInt count
+                            ++ " "
+                            ++ noun
+                            ++ " saved · "
+                            ++ suffix
+                            ++ (if showWarning then
+                                    " — may not survive a week offline unless installed"
+
+                                else
+                                    ""
+                               )
+                        )
+                    ]
+                ]
+            , Html.Extra.viewIf showInstallNudge <|
+                Html.p
+                    [ Html.Attributes.class "mt-1.5 text-xs text-rust" ]
+                    [ Html.text "Add Ternpike to your Home Screen so receipts survive while you’re offline." ]
             ]
 
 

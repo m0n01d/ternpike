@@ -508,6 +508,40 @@ bricks `auth_creds` and logs everyone out. `openDB` therefore:
   `storageStatus` → `AuthState.storageAvailable` (Private Browsing / Lockdown
   Mode read as unavailable).
 
+**Honest persistence contract (iOS/WebKit — #377):**
+
+`navigator.storage.persist()` resolves `true` only when the UA grants
+*persistent* storage via the installed-app heuristic. On iOS/iPadOS this means
+the user must have added Ternpike to their Home Screen — a plain Safari tab will
+almost always return `false`.
+
+| Context | Storage eviction | `persist()` result |
+|---|---|---|
+| **Installed PWA (standalone, iOS 17+)** | Persistent — survives indefinitely | `true` (granted by installed-app heuristic) |
+| **Safari tab (in-browser)** | WebKit's ~7-day eviction window when the site hasn't been visited | `false` (not granted) |
+| **Chrome/Android (installed PWA)** | Persistent | `true` |
+| **Private Browsing / Lockdown Mode** | None — IndexedDB is unavailable | `false` (probe fails) |
+
+Note: Safari and the installed PWA on the same device use **separate storage
+partitions** — a queue item saved in a Safari tab is NOT visible in the installed
+app and vice versa. This is a WebKit partition boundary, not a Ternpike choice.
+
+The `storageStatus` port payload (`{ available, installed, isIos, persisted }`)
+maps to three `AuthState` fields:
+
+- `storageAvailable : Bool` — `False` in Private Browsing / Lockdown Mode.
+- `storagePersisted : Bool` — `False` when `persist()` was denied; warns the
+  user that receipts may be evicted after ~7 days of inactivity.
+- `pwaInstalled : Bool` — `True` when running in standalone (installed-PWA) mode.
+- `isIosDevice : Bool` — `True` on iOS/iPadOS; gates the static
+  Add-to-Home-Screen nudge (iOS never fires `beforeinstallprompt`).
+
+When `storagePersisted == False` and deferred items exist, the confidence badge
+(`viewDeferredBadge` in `Pages.Scan`) switches to a warning tone and appends
+"may not survive a week offline unless installed." When additionally
+`isIosDevice == True && not pwaInstalled`, it shows the Add-to-Home-Screen
+instructional line.
+
 ### Server-side user record (`UserRecord` in `server/users.js`)
 
 Lives in `TIERS_KV` under `user:<lowercased-email>`. Alphabetized fields:
@@ -635,7 +669,7 @@ ports (declared in `src/Ports.elm`, handled in `src/main.js`):
 | Elm → JS | `saveScanItem` | one `scanItemEncoder` doc | `put` it; ack via `scanItemSaved`. Surfaces `QuotaExceededError` (unlike `idbSet`). |
 | JS → Elm | `scanItemSaved` | `{ id, ok, error }` | `ok:false` flips `persistError` on the item. |
 | Elm → JS | `deleteScanItem` | the durable `scan::…` id (String) | `delete` one row; fire-and-forget, idempotent (absent-key delete is a no-op). Callers: the `ExpenseChanged` submit-clear echo, the multi-receipt split source, and `ClearDoneItems` (#374). |
-| JS → Elm | `storageStatus` | `{ available, persisted }` | Boot probe + best-effort `navigator.storage.persist()`; `available` lands on `AuthState.storageAvailable`. |
+| JS → Elm | `storageStatus` | `{ available, installed, isIos, persisted }` | Boot probe + best-effort `navigator.storage.persist()`. `available` → `AuthState.storageAvailable`; `persisted` → `storagePersisted`; `installed` → `pwaInstalled`; `isIos` → `isIosDevice`. See "Honest persistence contract" above. |
 
 **Delete semantics (#374).** Every delete is really "absence," and a re-delivered
 change-feed echo or a late `getAll` could otherwise resurrect a deleted receipt.
