@@ -65,6 +65,7 @@ type alias Model =
     , form : PendingForm
     , route : Route
     , scanQueue : Dict.Dict String ScanItem
+    , scanSeq : Int
     , sharedTrips : SharedTrips
     , tier : Tier.Tier
     , today : DateField.DateField
@@ -82,11 +83,14 @@ update msg as_ =
     case msg of
         FilesSelected files ->
             let
-                startIdx =
-                    Dict.size as_.scanQueue
-
+                -- Durable, collision-free ids: the per-session counter
+                -- (`scanSeq`) is the high-order segment and the file's
+                -- position in this batch the low-order one, so two
+                -- captures in the same millisecond can't collide. #372
+                -- swaps the first segment for the real capture millis
+                -- once it wires a `Time.now` task into the capture path.
                 indexed =
-                    List.indexedMap (\i f -> ( "scan-" ++ String.fromInt (startIdx + i), f )) files
+                    List.indexedMap (\i f -> ( Scan.mintId as_.scanSeq i, f )) files
 
                 newQueue =
                     List.foldl (\( id, _ ) d -> Dict.insert id (freshScanItem id) d) as_.scanQueue indexed
@@ -94,7 +98,7 @@ update msg as_ =
                 urlEffects =
                     List.map (\( id, f ) -> Effect.FetchFileUrl id f) indexed
             in
-            ( { as_ | scanQueue = newQueue }, Batch urlEffects )
+            ( { as_ | scanQueue = newQueue, scanSeq = as_.scanSeq + 1 }, Batch urlEffects )
 
         GotFileUrl itemId dataUrl ->
             let
@@ -344,13 +348,19 @@ update msg as_ =
 
 freshScanItem : String -> ScanItem
 freshScanItem id =
-    { exif = ExifChecking
+    { draft = Nothing
+    , exif = ExifChecking
     , exifDebug = ""
+    , expectedExpenseId = Nothing
     , geocode = GeocodeNotAttempted
     , id = ScanItemId.fromString id
     , imageUrl = ""
+    , lastError = Nothing
     , ocrData = Nothing
     , ocrError = Nothing
+    , persistError = False
+    , retryCount = 0
+    , schemaVersion = Scan.currentSchemaVersion
     , status = ScanQueued
     }
 
@@ -688,24 +698,27 @@ applyOcrResult itemId parsed queue =
                         queueWithoutSource =
                             Dict.remove itemId queue
 
-                        startIdx =
-                            Dict.size queueWithoutSource
-
                         indexed =
                             List.indexedMap
                                 (\i data ->
                                     let
                                         rawId =
-                                            "scan-" ++ String.fromInt (startIdx + i)
+                                            Scan.childId itemId i
                                     in
                                     ( rawId
-                                    , { exif = source.exif
+                                    , { draft = source.draft
+                                      , exif = source.exif
                                       , exifDebug = source.exifDebug
+                                      , expectedExpenseId = Nothing
                                       , geocode = source.geocode
                                       , id = ScanItemId.fromString rawId
                                       , imageUrl = source.imageUrl
+                                      , lastError = Nothing
                                       , ocrData = Just data
                                       , ocrError = Nothing
+                                      , persistError = False
+                                      , retryCount = source.retryCount
+                                      , schemaVersion = Scan.currentSchemaVersion
                                       , status = ScanReady
                                       }
                                     )

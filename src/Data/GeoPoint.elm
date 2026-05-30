@@ -1,4 +1,4 @@
-module Data.GeoPoint exposing (GeoPoint, decoderPair, format, fromDegrees, latDegrees, lonDegrees)
+module Data.GeoPoint exposing (GeoPoint, decoderPair, encoder, format, fromDegrees, latDegrees, lonDegrees)
 
 {-| A single geographic point — latitude and longitude as `Angle` values
 from `ianmackenzie/elm-units` — wrapped in an opaque constructor so that
@@ -14,7 +14,7 @@ the legacy `{ lat, lon }` wire format.
 `format` is byte-for-byte compatible with the previous `Helpers.formatCoord`
 so the Ledger row layout doesn't shift when call sites migrate.
 
-@docs GeoPoint, decoderPair, format, fromDegrees, latDegrees, lonDegrees
+@docs GeoPoint, decoderPair, encoder, format, fromDegrees, latDegrees, lonDegrees
 
 
 ## Stable invariants (PINNED-KEEP)
@@ -36,6 +36,7 @@ so the Ledger row layout doesn't shift when call sites migrate.
 
 import Angle exposing (Angle)
 import Json.Decode
+import Json.Encode
 
 
 {-| A geographic point. Opaque — build with `fromDegrees` or one of the
@@ -120,3 +121,21 @@ decoderPair =
         )
         (Json.Decode.maybe (Json.Decode.field "lat" Json.Decode.float))
         (Json.Decode.maybe (Json.Decode.field "lon" Json.Decode.float))
+
+
+{-| Encode a `GeoPoint` as a `{ "lat": <degrees>, "lon": <degrees> }`
+object — the same sibling-field shape `decoderPair` reads back. Used by
+`Data.Scan.scanItemEncoder` to persist a captured EXIF / geocode point
+into the durable scan queue (IndexedDB) so it survives a reload.
+
+The degrees come back out through `latDegrees` / `lonDegrees`, so this
+round-trips through `decoderPair` modulo the few ULPs of radian
+float-error documented on `latDegrees`.
+
+-}
+encoder : GeoPoint -> Json.Encode.Value
+encoder point =
+    Json.Encode.object
+        [ ( "lat", Json.Encode.float (latDegrees point) )
+        , ( "lon", Json.Encode.float (lonDegrees point) )
+        ]

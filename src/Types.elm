@@ -248,6 +248,7 @@ type alias AuthState =
     , pushSubscribed : Bool
     , route : Route
     , scanQueue : Dict String ScanItem
+    , scanSeq : Int
     , showByoKeyInput : Bool
     , showDayIntensity : Bool
     , showInstallPrompt : Bool

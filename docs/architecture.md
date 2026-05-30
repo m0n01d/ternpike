@@ -308,8 +308,9 @@ to `… -> Page.Scan.Model -> ( Page.Scan.Model, Effect )`. Two changes, one pur
   cannot be hand-constructed — so a test can't build a seed `AuthState`.
   `Page.Scan.Model` is the subset of `AuthState` fields the Scan flows actually
   touch (`activeScanItemId`, `basePath`, `config`, `creds`, `currentUser`,
-  `duplicateWarning`, `error`, `form`, `route`, `scanQueue`, `sharedTrips`,
-  `tier`, `today`, `trips`) — no `Nav.Key`, so it's fully constructible in a
+  `duplicateWarning`, `error`, `form`, `route`, `scanQueue`, `scanSeq`,
+  `sharedTrips`, `tier`, `today`, `trips`) — no `Nav.Key`, so it's fully
+  constructible in a
   test. `Main.scanModelFromAuth` / `mergeScanModel` project and merge. The
   `currentUser` / `sharedTrips` / `tier` trio is carried because
   `geocodeDispatch` needs them to satisfy `Data.Trip.TierContext`.
@@ -713,6 +714,43 @@ category pill, merchant, the extracted date with provenance ("📅 May
 21" vs. "📅 Today · no date on receipt"), and the address — so a week's
 worth of batch-scanned receipts are visibly distributed across the
 right days before you tap Review on each one.
+
+#### Durable scan queue (#370 foundation)
+
+The `ScanItem` type/codec layer is built to survive a reload so an
+offline capture isn't lost. The data-model pieces (no offline *behavior*
+is wired yet — that lands in #371–#374):
+
+- **`ScanStatus` adds `ScanDeferred`** (alphabetized:
+  `ScanDeferred | ScanProcessing | ScanQueued | ScanReady | ScanSubmitted`)
+  — a receipt captured offline (or before the network state is known)
+  whose image is persisted but for which no OCR has run.
+- **`ScanItem` gains** (alphabetized) `draft : Maybe DraftFields`,
+  `expectedExpenseId : Maybe String`, `lastError : Maybe String`,
+  `persistError : Bool`, `retryCount : Int`, `schemaVersion : Int`.
+  `DraftFields` is a **`Maybe`-typed** record (not a `PendingEntry`
+  clone) — `Nothing` means "user hasn't set this field," so a persisted
+  draft never clobbers OCR output with a defaulted `Fuel`/today (the #93
+  sentinel lesson).
+- **Durable id `scan::<millis>::<seq>`** (`Data.ScanItemId`), where
+  `<seq>` is a monotonic per-session counter on `AuthState.scanSeq`
+  (collision-free across same-millisecond captures, unlike a per-batch
+  index). Mint via `Scan.mintId millis seq`; multi-receipt split
+  children use `Scan.childId parentId i` (`scan::<parentId>::<i>`). The
+  id is persisted to the offline store but, like before, never reaches
+  PouchDB.
+- **`Scan.scanItemEncoder` / `scanItemDecoder`** (de)serialize a
+  `ScanItem` losslessly for the durable store, reusing the field codecs
+  (`Money`, `DateField`, `Category.label`, `PaymentMethod.toString`,
+  the new `GeoPoint.encoder`). The decoder is tolerant: a missing
+  `status` defaults to `ScanDeferred`, missing `draft` to `Nothing`,
+  missing `schemaVersion` to `currentSchemaVersion` — and the queue is
+  decoded item-by-item so one bad doc can't fail the whole load.
+- **`Scan.reconcileHydratedQueue`** normalizes the queue at boot: reset
+  reload-orphaned in-flight statuses (`ScanProcessing`/`ScanQueued`) to
+  `ScanDeferred`, **preserve `ScanReady` and `ScanSubmitted`**. It does
+  NOT decide delete-vs-keep for submitted items — at boot
+  `AuthState.expenses` is empty, so the PouchDB change echo owns that.
 
 When OCR fails (HTTP error from Anthropic, refusal, unparseable JSON,
 or no receipts detected), the failure reason is captured on
