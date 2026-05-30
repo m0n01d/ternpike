@@ -265,10 +265,9 @@ update msg as_ =
                     else if status == 402 then
                         OcrFailed Scan.Permanent "Hosted scanning requires an Osprey or Trailblazer subscription."
 
-                    else if status == 401 then
-                        OcrFailed Scan.Permanent "Sign in again to continue scanning."
-
                     else
+                        -- 401/403 are Transient (auth re-handshake window on reconnect);
+                        -- 0 is a connection drop. All handled by `Scan.hostedFailureKind`.
                         OcrFailed (Scan.hostedFailureKind status)
                             ("Hosted scan failed (HTTP " ++ String.fromInt status ++ "): " ++ body)
             in
