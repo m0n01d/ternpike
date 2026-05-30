@@ -41,6 +41,7 @@ import Json.Encode
 import Msg.Scan
 import Ports
 import Task
+import Time
 import Types
 
 
@@ -55,6 +56,12 @@ import Types
   - `Navigate` — `Nav.pushUrl` to a new route (the `BackToQueue` path).
   - `NoEffect` — do nothing (mirrors `Cmd.none`).
   - `PrepareOcrImage` — outbound port: downscale an image before OCR.
+  - `SaveScanItem` — outbound port: persist one queue item to the durable
+    offline store, so an offline capture (or a typed draft) survives a
+    reload / background-kill.
+  - `StampCapture` — run `Time.now` for a freshly-picked batch, tagging
+    the result back as `FilesStamped` so the durable id uses the real
+    capture millis (the `scanSeq` counter stays the collision suffix).
 
 -}
 type Effect
@@ -66,6 +73,8 @@ type Effect
     | Navigate String
     | NoEffect
     | PrepareOcrImage { dataUrl : String, id : String, maxBytes : Int }
+    | SaveScanItem Json.Encode.Value
+    | StampCapture (List File)
 
 
 {-| Interpret an `Effect` as the production `Cmd Types.Msg` it describes.
@@ -114,6 +123,12 @@ perform key effect =
 
         PrepareOcrImage payload ->
             Ports.prepareOcrImage payload
+
+        SaveScanItem value ->
+            Ports.saveScanItem value
+
+        StampCapture files ->
+            Task.perform (\now -> scanMsg (Msg.Scan.FilesStamped now files)) Time.now
 
 
 

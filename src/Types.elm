@@ -62,7 +62,7 @@ import Data.SharedTrips
 import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
 import Data.SubscriptionStatus exposing (SubscriptionStatus)
-import Data.Sync exposing (SyncState)
+import Data.Sync exposing (NetworkState, SyncState)
 import Data.Tier exposing (Tier)
 import Data.Trip exposing (Trip, TripField, TripForm)
 import Data.TripId exposing (TripId)
@@ -101,8 +101,10 @@ Holds the email/code form inputs plus the pre-login `GuestSession`
 (config + flow step). `authError` carries transient error chips that
 clear on the next transition. `showSettings` lets the user open the
 settings panel from the guest screen to set their Anthropic key
-before signing in. `networkOffline` mirrors `navigator.onLine`
-(inverted) so the guest UI can surface a disconnected banner.
+before signing in. `network` mirrors `navigator.onLine` as a tri-state
+(`Unknown` until the first `networkStatus` report lands) so the guest UI
+can surface a disconnected banner; `Unknown` is treated as offline-safe
+(see `Data.Sync.isOffline`).
 
 `nestPreview` holds the `RemoteData` lifecycle for the `/invite/resolve`
 response on `RouteNestPreview`. `NotAsked` on every other route; transitions
@@ -120,7 +122,7 @@ type alias GuestState =
     , key : Nav.Key
     , magicLinkRequest : RemoteData Http.Error ()
     , nestPreview : RemoteData Http.Error NestPreview
-    , networkOffline : Bool
+    , network : NetworkState
     , pendingJoinToken : Maybe String
     , pendingRef : Maybe String
     , resendStatus : RemoteData Http.Error ()
@@ -196,10 +198,12 @@ Ephemeral UI:
     `RouteAddReviewScan`.
   - `error`, `toast`, `submitting` — banner, transient toast, submit
     spinner.
-  - `networkOffline` — `True` while the browser reports no connection
-    (driven by `navigator.onLine` + `online`/`offline` events via the
-    `networkStatus` port). Used to gate the layout banner, sync-dot
-    state, and the Scan page's network-dependent affordances.
+  - `network` — connectivity as a tri-state (`Unknown` until the first
+    `networkStatus` report, then `Online` / `Offline` from
+    `navigator.onLine` + `online`/`offline` events). Used to gate the
+    layout banner, sync-dot state, and the Scan page's capture routing.
+    `Unknown` is treated as offline-safe — see `Data.Sync.isOffline` —
+    so the boot window defers OCR rather than firing a doomed call.
   - `showInstallPrompt` — `True` once the browser has fired
     `beforeinstallprompt` and the deferred event is stashed on the JS
     side. Driven by the `canInstall` port; reset to `False` after the
@@ -240,7 +244,7 @@ type alias AuthState =
     , loadingExpenses : Set String
     , loadingTrips : Set String
     , movePicker : Maybe Expense
-    , networkOffline : Bool
+    , network : NetworkState
     , notificationPermission : Permission
     , notificationPrefs : NotificationPrefs
     , openLedgerMenu : Maybe ExpenseId

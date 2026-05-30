@@ -2,12 +2,14 @@ module Pages.Scan exposing (viewTab)
 
 import Data.AnthropicKey as AnthropicKey
 import Data.Category as Category
+import Data.Money as Money
 import Data.Navigation exposing (Tab(..))
 import Data.OcrPath as OcrPath exposing (OcrPath(..))
-import Data.Scan exposing (OcrData, ScanItem, ScanStatus(..), needsReview)
+import Data.Scan exposing (DraftFields, OcrData, ScanItem, ScanStatus(..), needsReview)
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip exposing (SharedTrip)
 import Data.SharedTrips
+import Data.Sync
 import Data.Trip as Trip exposing (Trip)
 import Data.Trips
 import Dict
@@ -163,30 +165,44 @@ viewFlockContextStrip ctx =
 
 viewHero : AuthState -> Html Msg
 viewHero as_ =
-    if as_.networkOffline then
-        viewOfflineHero
-
-    else if isActiveTripReadOnly as_ then
+    if isActiveTripReadOnly as_ then
+        -- The shared-trip read-only lock is a hard product constraint and
+        -- wins over connectivity — never let capture proceed here.
         viewReadOnlyHero
 
+    else if Data.Sync.isOffline as_.network then
+        viewOfflineHero as_.storageAvailable
+
     else
-        Html.label
-            [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep cursor-pointer hover:bg-tan/30 transition-colors" ]
-            [ Html.div [ Html.Attributes.class "flex justify-center mb-3 text-moss" ]
-                [ UI.Icons.camera "w-12 h-12" ]
-            , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
-                [ Html.text "Tap to add receipts" ]
-            , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
-                [ Html.text "Stack them up, or lay them out — Ternpike processes in parallel." ]
-            , Html.input
-                [ Html.Attributes.type_ "file"
-                , Html.Attributes.accept "image/*"
-                , Html.Attributes.attribute "multiple" "true"
-                , Html.Attributes.class "hidden"
-                , Html.Events.on "change" (Json.Decode.map (AuthMsg << ScanMsg << Msg.Scan.FilesSelected) (Json.Decode.at [ "target", "files" ] fileListDecoder))
-                ]
-                []
+        viewCaptureHero
+            { copy = "Stack them up, or lay them out — Ternpike processes in parallel."
+            , title = "Tap to add receipts"
+            }
+
+
+{-| The live capture dropzone — a `<label>` wrapping a hidden file input.
+Shared by the online hero and the offline (deferred-capture) hero so the
+file input stays wired the same way in both.
+-}
+viewCaptureHero : { copy : String, title : String } -> Html Msg
+viewCaptureHero { copy, title } =
+    Html.label
+        [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep cursor-pointer hover:bg-tan/30 transition-colors" ]
+        [ Html.div [ Html.Attributes.class "flex justify-center mb-3 text-moss" ]
+            [ UI.Icons.camera "w-12 h-12" ]
+        , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
+            [ Html.text title ]
+        , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
+            [ Html.text copy ]
+        , Html.input
+            [ Html.Attributes.type_ "file"
+            , Html.Attributes.accept "image/*"
+            , Html.Attributes.attribute "multiple" "true"
+            , Html.Attributes.class "hidden"
+            , Html.Events.on "change" (Json.Decode.map (AuthMsg << ScanMsg << Msg.Scan.FilesSelected) (Json.Decode.at [ "target", "files" ] fileListDecoder))
             ]
+            []
+        ]
 
 
 viewReadOnlyHero : Html Msg
@@ -221,17 +237,32 @@ isActiveTripReadOnly model =
             False
 
 
-viewOfflineHero : Html Msg
-viewOfflineHero =
-    Html.div
-        [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep opacity-70" ]
-        [ Html.div [ Html.Attributes.class "flex justify-center mb-3 text-muted" ]
-            [ UI.Icons.camera "w-12 h-12" ]
-        , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
-            [ Html.text "Connect to scan receipts" ]
-        , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
-            [ Html.text "Scanning needs the network. We'll be ready when you're back." ]
-        ]
+{-| Offline hero. With durable storage available, capture stays LIVE —
+the receipt is saved and read once the network returns (the deferred
+flow). Without it (Private Browsing / Lockdown Mode, from #371) we can't
+honor the durability promise, so we refuse capture rather than silently
+lose the image on reload.
+-}
+viewOfflineHero : Bool -> Html Msg
+viewOfflineHero storageAvailable =
+    if storageAvailable then
+        viewCaptureHero
+            { copy = "Snap now — we'll read it when you're back online."
+            , title = "Tap to capture receipts"
+            }
+
+    else
+        Html.div
+            [ Html.Attributes.class "block w-full py-12 px-6 text-center border-2 border-dashed border-tan rounded-card bg-cream-deep opacity-70"
+            , Html.Attributes.title "This browser mode can't save receipts offline."
+            ]
+            [ Html.div [ Html.Attributes.class "flex justify-center mb-3 text-muted" ]
+                [ UI.Icons.camera "w-12 h-12" ]
+            , Html.div [ Html.Attributes.class "font-display text-xl text-forest" ]
+                [ Html.text "Can't save offline here" ]
+            , Html.div [ Html.Attributes.class "mt-1 text-sm text-muted" ]
+                [ Html.text "This browser mode can't store receipts. Reconnect, or turn off Private Browsing, to scan." ]
+            ]
 
 
 viewBody : AuthState -> Html Msg
@@ -323,12 +354,14 @@ viewScanCardBody : ScanItem -> Html Msg
 viewScanCardBody item =
     case item.status of
         ScanDeferred ->
-            -- Captured offline; no OCR has run yet. The full deferred
-            -- card (with the "Add details" offline-edit affordance) is
-            -- wired in #372 — this is the placeholder until then.
+            -- Captured offline; no OCR has run yet. The user can fill the
+            -- fields by hand now via "Add details" (#372) — those edits
+            -- persist to the item's draft and survive a reload. A draft
+            -- summary shows when one exists so the card isn't blank.
             Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
                 [ Html.div [ Html.Attributes.class "text-moss text-xs" ] [ Html.text "Saved offline" ]
-                , viewProgressBar "w-1/4"
+                , viewDeferredDraftSummary item.draft
+                , viewDeferredButton item.id
                 ]
 
         ScanQueued ->
@@ -414,6 +447,56 @@ viewReviewButton id =
         , Html.Attributes.class "self-start py-1.5 px-3 rounded-lg bg-rust text-parchment text-xs font-bold cursor-pointer border-none"
         ]
         [ Html.text "Review →" ]
+
+
+{-| Offline-edit entry point on a deferred card. Reuses `ReviewScanItem`
+to open the Add form pre-seeded from the item's draft; the label reads
+"Add details" / "Edit details" depending on whether a draft exists yet.
+-}
+viewDeferredButton : ScanItemId.ScanItemId -> Html Msg
+viewDeferredButton id =
+    Html.button
+        [ Html.Events.onClick (AuthMsg (ScanMsg (Msg.Scan.ReviewScanItem (ScanItemId.toString id))))
+        , Html.Attributes.class "self-start py-1.5 px-3 rounded-lg border border-rust/40 text-rust text-xs font-bold cursor-pointer bg-transparent"
+        ]
+        [ Html.text "Add details →" ]
+
+
+{-| Compact summary of a deferred item's typed draft (merchant, amount,
+date), so a saved-offline card reflects what the user has already filled
+in. Renders nothing until the user has set at least one field.
+-}
+viewDeferredDraftSummary : Maybe DraftFields -> Html Msg
+viewDeferredDraftSummary maybeDraft =
+    case maybeDraft of
+        Nothing ->
+            Html.Extra.nothing
+
+        Just draft ->
+            let
+                merchantRow : Html Msg
+                merchantRow =
+                    Html.Extra.viewMaybe
+                        (\m -> Html.div [ Html.Attributes.class "text-sm text-forest truncate" ] [ Html.text m ])
+                        draft.merchant
+
+                amountRow : Html Msg
+                amountRow =
+                    Html.Extra.viewMaybe
+                        (\amt -> Html.div [ Html.Attributes.class "text-rust font-mono text-sm font-bold" ] [ UI.MoneyView.amount amt ])
+                        (draft.amount |> Maybe.andThen Money.fromDollarString)
+
+                dateRow : Html Msg
+                dateRow =
+                    Html.Extra.viewMaybe
+                        (\date -> Html.div [ Html.Attributes.class "text-xs text-forest" ] [ Html.text "📅 ", UI.DateView.monthDay date ])
+                        draft.date
+            in
+            Html.div [ Html.Attributes.class "flex flex-col gap-0.5" ]
+                [ amountRow
+                , merchantRow
+                , dateRow
+                ]
 
 
 viewSkeletonBars : Html Msg

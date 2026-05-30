@@ -98,7 +98,7 @@ import Data.SharedTripId
 import Data.SharedTripUi as SharedTripUi
 import Data.SharedTrips as SharedTrips
 import Data.StatsHover as StatsHover
-import Data.Sync exposing (SyncState(..))
+import Data.Sync exposing (NetworkState(..), SyncState(..))
 import Data.Tier as Tier exposing (Tier)
 import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
@@ -205,7 +205,7 @@ toAuthState creds initialRoute gs =
     , loadingExpenses = Set.empty
     , loadingTrips = Set.empty
     , movePicker = Nothing
-    , networkOffline = gs.networkOffline
+    , network = gs.network
     , notificationPermission = Notifications.Default
     , notificationPrefs = Notifications.defaultPrefs
     , openLedgerMenu = Nothing
@@ -251,7 +251,7 @@ toGuestState reason as_ =
     , magicLinkRequest = RemoteData.NotAsked
     , showConvert = False
     , nestPreview = RemoteData.NotAsked
-    , networkOffline = as_.networkOffline
+    , network = as_.network
     , pendingJoinToken = joinTokenFromRoute as_.route
     , pendingRef = Nothing
     , resendStatus = RemoteData.NotAsked
@@ -1225,7 +1225,7 @@ init flagsJson url key =
             , magicLinkRequest = RemoteData.NotAsked
             , showConvert = False
             , nestPreview = RemoteData.NotAsked
-            , networkOffline = False
+            , network = Unknown
             , pendingJoinToken = joinTokenFromRoute initialRoute
             , pendingRef = pendingRef
             , resendStatus = RemoteData.NotAsked
@@ -1580,10 +1580,10 @@ updateShared msg model =
         NetworkStatusChanged isOnline ->
             case model of
                 GuestModel gs ->
-                    ( GuestModel { gs | networkOffline = not isOnline }, Cmd.none )
+                    ( GuestModel { gs | network = networkStateFromOnline isOnline }, Cmd.none )
 
                 AuthModel as_ ->
-                    ( AuthModel { as_ | networkOffline = not isOnline }, Cmd.none )
+                    ( AuthModel { as_ | network = networkStateFromOnline isOnline }, Cmd.none )
 
         ResetSettingsClicked ->
             case model of
@@ -1611,7 +1611,7 @@ updateShared msg model =
                         , magicLinkRequest = RemoteData.NotAsked
                         , showConvert = False
                         , nestPreview = RemoteData.NotAsked
-                        , networkOffline = as_.networkOffline
+                        , network = as_.network
                         , pendingJoinToken = Nothing
                         , pendingRef = Nothing
                         , resendStatus = RemoteData.NotAsked
@@ -4185,6 +4185,19 @@ updateAuth msg as_ =
 -- FLOCK HELPERS
 
 
+{-| Map a `navigator.onLine` boolean (from the `networkStatus` port) to a
+`NetworkState`. The `Unknown` third state only exists before the first
+report; once a report lands we always know `Online` or `Offline`.
+-}
+networkStateFromOnline : Bool -> NetworkState
+networkStateFromOnline isOnline =
+    if isOnline then
+        Online
+
+    else
+        Offline
+
+
 {-| Project the narrow `Page.Scan.Model` slice out of `AuthState` for the
 Scan-message router. The slice carries only the fields the Scan flows
 touch, leaving the un-constructible `Nav.Key` (and everything else)
@@ -4200,10 +4213,12 @@ scanModelFromAuth as_ =
     , duplicateWarning = as_.duplicateWarning
     , error = as_.error
     , form = as_.form
+    , network = as_.network
     , route = as_.route
     , scanQueue = as_.scanQueue
     , scanSeq = as_.scanSeq
     , sharedTrips = as_.sharedTrips
+    , storageAvailable = as_.storageAvailable
     , tier = as_.tier
     , today = as_.today
     , trips = as_.trips
@@ -4432,7 +4447,7 @@ viewAuth as_ =
     in
     Html.div []
         [ UI.Layout.viewHeader as_
-        , UI.Layout.viewOfflineBanner as_.networkOffline
+        , UI.Layout.viewOfflineBanner (Data.Sync.isOffline as_.network)
         , UI.Layout.viewErrorBanner as_.error
         , viewBillingBannerForRoute as_ route
         , Html.div [ Html.Attributes.class "pb-[calc(env(safe-area-inset-bottom)+5rem)]" ]

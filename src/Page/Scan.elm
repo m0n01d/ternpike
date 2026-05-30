@@ -26,11 +26,12 @@ import Data.GeoPoint as GeoPoint
 import Data.Location
 import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
-import Data.OcrPath as OcrPath exposing (OcrPath(..))
+import Data.OcrPath as OcrPath
 import Data.PendingEntry as PendingEntry exposing (PendingForm(..))
-import Data.Scan as Scan exposing (ExifPhase(..), GeocodePhase(..), ScanItem, ScanStatus(..))
+import Data.Scan as Scan exposing (CaptureRoute(..), ExifPhase(..), GeocodePhase(..), ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrips exposing (SharedTrips)
+import Data.Sync exposing (NetworkState)
 import Data.Tier as Tier
 import Data.Trip as Trip exposing (Trip)
 import Data.Trips as Trips exposing (TripsState(..))
@@ -43,6 +44,7 @@ import List.Extra
 import Maybe.Extra
 import Msg.Scan exposing (Msg(..))
 import Routing
+import Time
 
 
 {-| The slice of `AuthState` the Scan flows read or write. Constructible
@@ -63,10 +65,12 @@ type alias Model =
     , duplicateWarning : Maybe Expense
     , error : Maybe String
     , form : PendingForm
+    , network : NetworkState
     , route : Route
     , scanQueue : Dict.Dict String ScanItem
     , scanSeq : Int
     , sharedTrips : SharedTrips
+    , storageAvailable : Bool
     , tier : Tier.Tier
     , today : DateField.DateField
     , trips : TripsState
@@ -82,15 +86,23 @@ update : Msg.Scan.Msg -> Model -> ( Model, Effect )
 update msg as_ =
     case msg of
         FilesSelected files ->
+            -- Capture the real wall-clock millis before minting ids, so the
+            -- durable `scan::<millis>::<seq>` id reflects when the user
+            -- actually snapped the receipt. `FilesStamped` does the minting.
+            ( as_, Effect.StampCapture files )
+
+        FilesStamped now files ->
             let
-                -- Durable, collision-free ids: the per-session counter
-                -- (`scanSeq`) is the high-order segment and the file's
-                -- position in this batch the low-order one, so two
-                -- captures in the same millisecond can't collide. #372
-                -- swaps the first segment for the real capture millis
-                -- once it wires a `Time.now` task into the capture path.
+                millis : Int
+                millis =
+                    Time.posixToMillis now
+
+                -- Durable, collision-free ids: the capture millis is the
+                -- high-order segment and the per-session counter
+                -- (`scanSeq`) advances per item so two captures in the
+                -- same millisecond can't collide (see `Scan.mintId`).
                 indexed =
-                    List.indexedMap (\i f -> ( Scan.mintId as_.scanSeq i, f )) files
+                    List.indexedMap (\i f -> ( Scan.mintId millis (as_.scanSeq + i), f )) files
 
                 newQueue =
                     List.foldl (\( id, _ ) d -> Dict.insert id (freshScanItem id) d) as_.scanQueue indexed
@@ -98,42 +110,80 @@ update msg as_ =
                 urlEffects =
                     List.map (\( id, f ) -> Effect.FetchFileUrl id f) indexed
             in
-            ( { as_ | scanQueue = newQueue, scanSeq = as_.scanSeq + 1 }, Batch urlEffects )
+            ( { as_ | scanQueue = newQueue, scanSeq = as_.scanSeq + List.length files }
+            , Batch urlEffects
+            )
 
         GotFileUrl itemId dataUrl ->
             let
                 ocrPath =
                     OcrPath.resolve as_.config.anthropicKey as_.tier
 
-                canScan =
-                    ocrPath /= Unscannable
+                route : Scan.CaptureRoute
+                route =
+                    Scan.captureRoute { offline = Data.Sync.isOffline as_.network } ocrPath
 
-                newStatus =
-                    if canScan then
-                        ScanProcessing
-
-                    else
-                        ScanReady
-
-                updatedQueue =
-                    Dict.update itemId (Maybe.map (\i -> { i | imageUrl = dataUrl, status = newStatus })) as_.scanQueue
+                -- EXIF runs locally (`fetch(dataUrl)`, no network) on every
+                -- path, so GPS is captured even for a deferred receipt.
+                exifEffect : Effect
+                exifEffect =
+                    Effect.ExtractExifGps { dataUrl = dataUrl, id = itemId }
             in
-            ( { as_ | scanQueue = updatedQueue }
-            , Batch
-                [ if canScan then
-                    -- Always route through the JS-side downscaler before
-                    -- the OCR call. Anthropic's image limit is 5 MiB on
-                    -- the base64 payload; modern phone JPEGs routinely
-                    -- run 6–8 MB so we'd otherwise 400 on every photo.
-                    -- We use the EXIF data URL for GPS extraction in
-                    -- parallel because exifr needs the original bytes.
-                    Effect.PrepareOcrImage { dataUrl = dataUrl, id = itemId, maxBytes = ocrMaxBase64Bytes }
+            case route of
+                Now ->
+                    let
+                        updatedQueue =
+                            Dict.update itemId (Maybe.map (\i -> { i | imageUrl = dataUrl, status = ScanProcessing })) as_.scanQueue
+                    in
+                    ( { as_ | scanQueue = updatedQueue }
+                    , Batch
+                        [ -- Always route through the JS-side downscaler before
+                          -- the OCR call. Anthropic's image limit is 5 MiB on
+                          -- the base64 payload; modern phone JPEGs routinely
+                          -- run 6–8 MB so we'd otherwise 400 on every photo.
+                          -- We use the EXIF data URL for GPS extraction in
+                          -- parallel because exifr needs the original bytes.
+                          Effect.PrepareOcrImage { dataUrl = dataUrl, id = itemId, maxBytes = ocrMaxBase64Bytes }
+                        , exifEffect
+                        ]
+                    )
 
-                  else
-                    NoEffect
-                , Effect.ExtractExifGps { dataUrl = dataUrl, id = itemId }
-                ]
-            )
+                Deferred ->
+                    -- Offline (or boot-window `Unknown`): park the capture as
+                    -- `ScanDeferred` and persist it IMMEDIATELY, so an iOS
+                    -- background-kill right after capture can't lose the
+                    -- image. The raw data URL is stored as-is; a later
+                    -- downscale-then-replace pass is a future optimization.
+                    case Dict.get itemId as_.scanQueue of
+                        Nothing ->
+                            ( as_, NoEffect )
+
+                        Just item ->
+                            let
+                                deferredItem =
+                                    { item | imageUrl = dataUrl, status = ScanDeferred }
+
+                                updatedQueue =
+                                    Dict.insert itemId deferredItem as_.scanQueue
+                            in
+                            ( { as_ | scanQueue = updatedQueue }
+                            , Batch
+                                [ Effect.SaveScanItem (Scan.scanItemEncoder deferredItem)
+                                , exifEffect
+                                ]
+                            )
+
+                Manual ->
+                    -- No scannable path (free tier, no BYO key): land in
+                    -- `ScanReady` so the user fills the form by hand. Same
+                    -- as today's online `Unscannable` behavior; no OCR.
+                    let
+                        updatedQueue =
+                            Dict.update itemId (Maybe.map (\i -> { i | imageUrl = dataUrl, status = ScanReady })) as_.scanQueue
+                    in
+                    ( { as_ | scanQueue = updatedQueue }
+                    , exifEffect
+                    )
 
         OcrImagePrepared payload ->
             case Dict.get payload.id as_.scanQueue of
@@ -272,29 +322,6 @@ update msg as_ =
 
                 Just item ->
                     let
-                        ocr =
-                            Maybe.withDefault
-                                { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-                                item.ocrData
-
-                        newPending =
-                            { address = Maybe.withDefault "" ocr.address
-                            , amount =
-                                ocr.amount
-                                    |> Maybe.map Money.toDollarString
-                                    |> Maybe.withDefault ""
-                            , category = Maybe.withDefault Data.Category.Fuel ocr.category
-                            , date =
-                                ocr.date
-                                    |> Maybe.withDefault as_.today
-                                    |> DateField.toIso
-                            , locationState = Scan.effectiveLocation item
-                            , longNote = Maybe.withDefault "" ocr.longNote
-                            , merchant = Maybe.withDefault "" ocr.merchant
-                            , note = Maybe.withDefault "" ocr.note
-                            , paymentMethod = ocr.paymentMethod
-                            }
-
                         newRoute =
                             case Routing.routeTripId as_.route of
                                 Just tid ->
@@ -307,7 +334,7 @@ update msg as_ =
                         | activeScanItemId = Just (ScanItemId.fromString itemId)
                         , duplicateWarning = Nothing
                         , error = Nothing
-                        , form = FreshForm newPending
+                        , form = FreshForm (seedPending as_.today item)
                         , route = newRoute
                       }
                     , NoEffect
@@ -322,18 +349,48 @@ update msg as_ =
 
                         Nothing ->
                             as_.route
+
+                navEffect : Effect
+                navEffect =
+                    case Routing.routeTripId as_.route of
+                        Just tid ->
+                            Effect.Navigate (Routing.tabToPath as_.basePath tid ScanTab)
+
+                        Nothing ->
+                            NoEffect
+
+                -- Persist whatever the user typed onto the active item's
+                -- `draft` so it survives a reload (today this discarded the
+                -- form). Only fields the user actually set become a `Just`
+                -- in `DraftFields`; untouched fields stay `Nothing` so a
+                -- later OCR retry isn't clobbered by Fuel/today defaults.
+                persisted : Maybe ( Dict.Dict String ScanItem, Effect )
+                persisted =
+                    activeItem as_
+                        |> Maybe.map
+                            (\( itemId, item ) ->
+                                let
+                                    draft =
+                                        formToDraft as_.today (PendingEntry.formPending as_.form)
+
+                                    updatedItem =
+                                        { item | draft = Just draft }
+                                in
+                                ( Dict.insert itemId updatedItem as_.scanQueue
+                                , Effect.SaveScanItem (Scan.scanItemEncoder updatedItem)
+                                )
+                            )
+
+                ( newQueue, persistEffect ) =
+                    Maybe.withDefault ( as_.scanQueue, NoEffect ) persisted
             in
             ( { as_
                 | activeScanItemId = Nothing
                 , form = FreshForm (PendingEntry.defaultPendingEntry as_.today)
                 , route = newRoute
+                , scanQueue = newQueue
               }
-            , case Routing.routeTripId as_.route of
-                Just tid ->
-                    Effect.Navigate (Routing.tabToPath as_.basePath tid ScanTab)
-
-                Nothing ->
-                    NoEffect
+            , Batch [ persistEffect, navEffect ]
             )
 
         ClearDoneItems ->
@@ -362,6 +419,108 @@ freshScanItem id =
     , retryCount = 0
     , schemaVersion = Scan.currentSchemaVersion
     , status = ScanQueued
+    }
+
+
+{-| The queue item the user is currently reviewing, if any. Pairs the
+durable id (the `Dict` key) with the item, so write-back can re-insert.
+-}
+activeItem : Model -> Maybe ( String, ScanItem )
+activeItem as_ =
+    as_.activeScanItemId
+        |> Maybe.map ScanItemId.toString
+        |> Maybe.andThen (\id -> Dict.get id as_.scanQueue |> Maybe.map (Tuple.pair id))
+
+
+{-| Seed the Add-review form for a scan item, layering the user's typed
+`draft` over the OCR result over the bare defaults. A deferred item with
+no OCR seeds entirely from the draft (or defaults); a reviewed OCR item
+shows OCR values that any prior draft edits override.
+-}
+seedPending : DateField.DateField -> ScanItem -> PendingEntry.PendingEntry
+seedPending today item =
+    let
+        ocr =
+            item.ocrData
+
+        draft =
+            item.draft
+
+        fromOcr : (Scan.OcrData -> Maybe a) -> Maybe a
+        fromOcr get =
+            Maybe.andThen get ocr
+
+        fromDraft : (Scan.DraftFields -> Maybe a) -> Maybe a
+        fromDraft get =
+            Maybe.andThen get draft
+
+        layeredString : (Scan.DraftFields -> Maybe String) -> (Scan.OcrData -> Maybe String) -> String
+        layeredString getDraft getOcr =
+            Maybe.Extra.or (fromDraft getDraft) (fromOcr getOcr)
+                |> Maybe.withDefault ""
+    in
+    { address = layeredString .address .address
+    , amount =
+        Maybe.Extra.or
+            (fromDraft .amount)
+            (fromOcr .amount |> Maybe.map Money.toDollarString)
+            |> Maybe.withDefault ""
+    , category =
+        Maybe.Extra.or (fromDraft .category) (fromOcr .category)
+            |> Maybe.withDefault Data.Category.Fuel
+    , date =
+        Maybe.Extra.or (fromDraft .date) (fromOcr .date)
+            |> Maybe.withDefault today
+            |> DateField.toIso
+    , locationState =
+        case draft of
+            Just d ->
+                d.locationState
+
+            Nothing ->
+                Scan.effectiveLocation item
+    , longNote = layeredString .longNote .longNote
+    , merchant = layeredString .merchant .merchant
+    , note = layeredString .note .note
+    , paymentMethod = Maybe.Extra.or (fromDraft .paymentMethod) (fromOcr .paymentMethod)
+    }
+
+
+{-| Project the in-progress form back into a `DraftFields` for persistence.
+Empty strings and the bare Fuel / today defaults collapse to `Nothing`
+(the #93 sentinel rule): only fields the user actually set are captured,
+so a later OCR retry isn't clobbered by a defaulted value.
+-}
+formToDraft : DateField.DateField -> PendingEntry.PendingEntry -> Scan.DraftFields
+formToDraft today pending =
+    let
+        nonEmpty : String -> Maybe String
+        nonEmpty s =
+            if String.trim s == "" then
+                Nothing
+
+            else
+                Just s
+    in
+    { address = nonEmpty pending.address
+    , amount = nonEmpty pending.amount
+    , category =
+        if pending.category == Data.Category.Fuel then
+            Nothing
+
+        else
+            Just pending.category
+    , date =
+        if pending.date == DateField.toIso today then
+            Nothing
+
+        else
+            DateField.fromIso pending.date
+    , locationState = pending.locationState
+    , longNote = nonEmpty pending.longNote
+    , merchant = nonEmpty pending.merchant
+    , note = nonEmpty pending.note
+    , paymentMethod = pending.paymentMethod
     }
 
 

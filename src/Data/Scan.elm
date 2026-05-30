@@ -1,10 +1,12 @@
 module Data.Scan exposing
-    ( DraftFields
+    ( CaptureRoute(..)
+    , DraftFields
     , ExifPhase(..)
     , GeocodePhase(..)
     , OcrData
     , ScanItem
     , ScanStatus(..)
+    , captureRoute
     , childId
     , currentSchemaVersion
     , effectiveLocation
@@ -47,6 +49,7 @@ import Data.DateField as DateField exposing (DateField)
 import Data.GeoPoint as GeoPoint exposing (GeoPoint)
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money exposing (Money)
+import Data.OcrPath exposing (OcrPath(..))
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Data.ScanItemId exposing (ScanItemId)
 import Dict exposing (Dict)
@@ -388,6 +391,70 @@ items that need attention.
 needsReview : OcrData -> Bool
 needsReview ocr =
     ocr.amount == Nothing || ocr.merchant == Nothing || ocr.date == Nothing
+
+
+{-| What to do with a freshly-captured image, given connectivity and the
+OCR path. The Scan `update` branches on this in `GotFileUrl`.
+
+  - `Now` — fire OCR immediately (online, and a scannable path exists).
+  - `Deferred` — persist the image and park it as `ScanDeferred`; no OCR
+    yet. The user may type fields by hand and a later retry runs OCR.
+  - `Manual` — no scannable path at all (free tier, no BYO key): the
+    image lands in `ScanReady` so the user fills the form manually,
+    same as today's online `Unscannable` behavior.
+
+-}
+type CaptureRoute
+    = Deferred
+    | Manual
+    | Now
+
+
+{-| Decide the capture route from connectivity and the resolved OCR path.
+
+Offline (treating an `Unknown` network as offline-safe — see
+`Data.Sync.isOffline`) always defers _when there is a scannable path_,
+so the boot window can't fire a doomed OCR call. With no scannable path
+the route is always `Manual` regardless of connectivity: there is
+nothing to defer to, so we go straight to the manual-fill card.
+
+    import Data.OcrPath exposing (OcrPath(..))
+
+    -- Online + a hosted (paid) path → scan now.
+    captureRoute { offline = False } HostedPath
+    --> Now
+
+    -- Offline + a hosted (paid) path → defer; OCR runs on reconnect.
+    captureRoute { offline = True } HostedPath
+    --> Deferred
+
+    -- No scannable path → always manual, online or off.
+    captureRoute { offline = False } Unscannable
+    --> Manual
+
+    captureRoute { offline = True } Unscannable
+    --> Manual
+
+-}
+captureRoute : { offline : Bool } -> OcrPath -> CaptureRoute
+captureRoute { offline } ocrPath =
+    case ocrPath of
+        Unscannable ->
+            Manual
+
+        ByoPath _ ->
+            if offline then
+                Deferred
+
+            else
+                Now
+
+        HostedPath ->
+            if offline then
+                Deferred
+
+            else
+                Now
 
 
 {-| Decode one OCR JSON object into an `OcrData`. Every field is

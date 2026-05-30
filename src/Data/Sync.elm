@@ -1,4 +1,4 @@
-module Data.Sync exposing (SyncState(..))
+module Data.Sync exposing (NetworkState(..), SyncState(..), isOffline)
 
 {-| PouchDB → CouchDB live-sync health.
 
@@ -33,3 +33,50 @@ type SyncState
     | SyncError
     | Synced
     | Syncing
+
+
+{-| The browser's connectivity, as a tri-state.
+
+`navigator.onLine` is a `Bool`, but the value only arrives _after_ boot
+(via the `networkStatus` port). The window between boot and that first
+report is a real third state: we don't yet know whether we're online.
+Modelling it as `Unknown` — rather than defaulting `networkOffline` to
+`False` — lets the capture path treat "unknown" as offline-safe and
+defer OCR, so the boot window can't fire a doomed network call (#372).
+
+  - `Offline` — the browser reports no connection.
+  - `Online` — the browser reports a connection.
+  - `Unknown` — no `networkStatus` report has landed yet (boot window).
+
+-}
+type NetworkState
+    = Offline
+    | Online
+    | Unknown
+
+
+{-| Whether to treat the connection as offline. `Unknown` collapses to
+`True` (offline-safe): the capture path defers, the banner shows, until
+the first real `networkStatus` report proves we're `Online`.
+
+    isOffline Online
+    --> False
+
+    isOffline Offline
+    --> True
+
+    isOffline Unknown
+    --> True
+
+-}
+isOffline : NetworkState -> Bool
+isOffline state =
+    case state of
+        Offline ->
+            True
+
+        Online ->
+            False
+
+        Unknown ->
+            True

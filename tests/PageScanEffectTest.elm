@@ -23,6 +23,7 @@ import Data.PendingEntry as PendingEntry exposing (PendingForm(..))
 import Data.Scan exposing (ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrips
+import Data.Sync
 import Data.Tier as Tier
 import Data.TripId as TripId
 import Data.Trips exposing (TripsState(..))
@@ -108,6 +109,14 @@ simulate effect =
                     ]
                 )
 
+        SaveScanItem value ->
+            SimulatedEffect.Ports.send "saveScanItem" value
+
+        StampCapture files ->
+            SimulatedEffect.Task.perform
+                (\now -> scanMsg (Msg.Scan.FilesStamped now files))
+                (SimulatedEffect.Task.succeed (Time.millisToPosix 0))
+
 
 geocodeResponseDecoder : Json.Decode.Decoder { lat : Maybe Float, lon : Maybe Float }
 geocodeResponseDecoder =
@@ -192,10 +201,12 @@ seedModel =
     , duplicateWarning = Nothing
     , error = Nothing
     , form = FreshForm (PendingEntry.defaultPendingEntry seedDate)
+    , network = Data.Sync.Online
     , route = RouteScan (TripId.fromString "trip::2026-05-30::abc")
     , scanQueue = Dict.singleton "scan-0" processingItem
     , scanSeq = 0
     , sharedTrips = Data.SharedTrips.empty
+    , storageAvailable = True
     , tier = Tier.Tern
     , today = seedDate
     , trips = NoTripsYet

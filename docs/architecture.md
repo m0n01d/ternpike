@@ -141,7 +141,7 @@ type alias AuthState =
     , expenses      : Dict String Expense
     , loadingExpenses : Set String
     , loadingTrips  : Set String
-    , networkOffline : Bool
+    , network       : NetworkState
     , page          : Page
     , route         : Route
     , subscriptionStatus : Maybe SubscriptionStatus
@@ -166,11 +166,14 @@ and the wire decoder maps that to `Nothing`. `trailblazerNumber` is `Just n`
 go through PouchDB — a tier change made on Device A must not wait for sync to
 propagate.
 
-`networkOffline` is also tracked on `GuestState` so the disconnected-banner
-UI works before sign-in. Both fields are kept in sync via the `networkStatus`
-port (see below) which forwards `navigator.onLine` plus `online`/`offline`
-window events. The value is inverted so the field reads naturally
-(`if as_.networkOffline then ...`).
+`network : NetworkState` (`Data.Sync`) is also tracked on `GuestState` so the
+disconnected-banner UI works before sign-in. It's a tri-state — `Unknown`
+until the first `networkStatus` report, then `Online` / `Offline` from
+`navigator.onLine` plus `online`/`offline` window events. Reads go through
+`Data.Sync.isOffline`, which treats `Unknown` as offline-safe (the boot
+window defers OCR rather than firing a doomed call — see the Scan capture
+path). The `networkStatus` port forwards a `Bool`; `Main.networkStateFromOnline`
+maps it into the tri-state.
 
 `demoMode : Bool` is also on both states. Set to `True` by the
 `demoMode` flag when the app boots at `/demo` (see `src/main.js` and
@@ -189,7 +192,7 @@ type alias GuestState =
     , demoMode         : Bool
     , emailInput       : String
     , key              : Nav.Key
-    , networkOffline   : Bool
+    , network          : NetworkState
     , pendingJoinToken : Maybe String
     , pendingRef       : Maybe String
     , resendStatus     : RemoteData Http.Error ()
@@ -563,7 +566,9 @@ port canInstall    : (Bool -> msg) -> Sub msg               -- True = home-scree
 `networkStatus` is wired in `src/main.js`: it sends `navigator.onLine` once
 immediately after Elm init (so the model has the truth from frame zero) and
 then forwards `online`/`offline` window events. The `NetworkStatusChanged`
-message updates `networkOffline` on whichever model branch is active.
+message maps the `Bool` through `networkStateFromOnline` and updates
+`network : NetworkState` on whichever model branch is active. Before that
+first report lands, `network` is `Unknown` (offline-safe).
 
 `canInstall` / `triggerInstallPrompt` wire up the PWA home-screen install
 flow. JS listens for `beforeinstallprompt`, calls `preventDefault`, stashes
