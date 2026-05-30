@@ -520,7 +520,7 @@ viewScanCardBody ctx item =
                     Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
                         [ viewNeedsReviewBadge
                         , viewOcrSummary ocr
-                        , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+                        , Html.div [ Html.Attributes.class "flex items-center justify-between gap-2" ]
                             [ viewReviewButton item.id
                             , viewRemoveButton item.id
                             ]
@@ -545,7 +545,7 @@ viewScanCardBody ctx item =
             in
             Html.div [ Html.Attributes.class "flex flex-col gap-2" ]
                 [ viewOcrFailure item.retryCount errorReason
-                , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+                , Html.div [ Html.Attributes.class "flex items-center justify-between gap-2" ]
                     [ viewReviewButton item.id
                     , viewRemoveButton item.id
                     ]
@@ -576,7 +576,7 @@ viewScanCardBody ctx item =
                 Just ocr ->
                     Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
                         [ viewOcrSummary ocr
-                        , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+                        , Html.div [ Html.Attributes.class "flex items-center justify-between gap-2" ]
                             [ viewReviewButton item.id
                             , viewRemoveButton item.id
                             ]
@@ -621,7 +621,7 @@ viewDeferredCard item =
             , Html.span [] [ Html.text "will scan when back online" ]
             ]
         , viewDeferredDraftSummary item.draft
-        , Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+        , Html.div [ Html.Attributes.class "flex items-center justify-between gap-2" ]
             [ viewDeferredButton item.id
             , viewRemoveButton item.id
             ]
