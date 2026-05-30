@@ -9,11 +9,13 @@ module Data.Scan exposing
     , ScanStatus(..)
     , byoFailureKind
     , captureRoute
-    , childId
     , currentSchemaVersion
     , effectiveLocation
     , hostedFailureKind
+    , idsWithExpectedExpense
     , maxOcrRetries
+    , mergeHydratedQueue
+    , mergeOcrIntoDraft
     , mintId
     , needsReview
     , ocrDataDecoder
@@ -61,6 +63,7 @@ import Dict exposing (Dict)
 import Json.Decode
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
+import Maybe.Extra
 import Set exposing (Set)
 
 
@@ -263,13 +266,104 @@ currentSchemaVersion =
     1
 
 
+{-| Merge a user's typed `draft` over an OCR result, **blanks-only**: a
+field the user actually set (a `Just` in `DraftFields`) wins; an untouched
+field (`Nothing`) falls through to whatever OCR extracted. Every `OcrData`
+field is covered.
+
+This is the "fill blanks, never clobber user input" rule made pure. The
+`category` and `date` fields are `Maybe` in `DraftFields` precisely so that
+"untouched" is distinguishable from a real choice — an untouched `category`
+is `Nothing` here (NOT `Fuel`), so it can't overwrite an OCR-read category,
+and likewise an untouched `date` is `Nothing` (NOT today). The `amount`
+draft is the raw string the user is editing; it's parsed through
+`Money.fromDollarString` and only overrides when it parses to a real value.
+
+    import Data.Category exposing (Category(..))
+    import Data.DateField as DateField
+    import Data.Location exposing (LocationState(..))
+    import Data.Money as Money
+    import Data.PaymentMethod exposing (PaymentMethod(..))
+
+    -- An empty draft is the identity: OCR passes through untouched.
+    mergeOcrIntoDraft
+        { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, locationState = LocationIdle, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
+    --> { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
+
+    -- A set draft field wins over OCR; untouched fields keep OCR.
+    mergeOcrIntoDraft
+        { address = Just "9 Draft Rd", amount = Just "5.00", category = Just Lodging, date = DateField.fromIso "2024-01-02", locationState = LocationIdle, longNote = Just "draft ln", merchant = Just "My Merchant", note = Just "draft note", paymentMethod = Just Credit }
+        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Just "ocr ln", merchant = Just "Trader Joe's", note = Just "ocr note", paymentMethod = Just Cash }
+    --> { address = Just "9 Draft Rd", amount = Just (Money.fromCents 500), category = Just Lodging, date = DateField.fromIso "2024-01-02", longNote = Just "draft ln", merchant = Just "My Merchant", note = Just "draft note", paymentMethod = Just Credit }
+
+    -- Untouched category/date do NOT fall back to Fuel/today — they stay OCR.
+    mergeOcrIntoDraft
+        { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, locationState = LocationIdle, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+        { address = Nothing, amount = Nothing, category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+    --> { address = Nothing, amount = Nothing, category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+
+    -- An unparseable draft amount can't clobber a real OCR amount.
+    mergeOcrIntoDraft
+        { address = Nothing, amount = Just "abc", category = Nothing, date = Nothing, locationState = LocationIdle, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+        { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+    --> { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+
+-}
+mergeOcrIntoDraft : DraftFields -> OcrData -> OcrData
+mergeOcrIntoDraft draft ocr =
+    { address = Maybe.Extra.or draft.address ocr.address
+    , amount = Maybe.Extra.or (Maybe.andThen Money.fromDollarString draft.amount) ocr.amount
+    , category = Maybe.Extra.or draft.category ocr.category
+    , date = Maybe.Extra.or draft.date ocr.date
+    , longNote = Maybe.Extra.or draft.longNote ocr.longNote
+    , merchant = Maybe.Extra.or draft.merchant ocr.merchant
+    , note = Maybe.Extra.or draft.note ocr.note
+    , paymentMethod = Maybe.Extra.or draft.paymentMethod ocr.paymentMethod
+    }
+
+
 {-| Project the scan item's EXIF + geocode phases into the
-form-facing `LocationState`. This is the priority enforcement point —
-geocode wins over EXIF (see `Data.Location` for the rationale).
+form-facing `LocationState`. This is the priority enforcement point.
+
+The order of precedence (highest first), per `Data.Location`:
+
+1.  **A draft manual pin** — if the user dropped a map pin while reviewing
+    the item offline, it was persisted into `draft.locationState` (the
+    `BackToQueue` write-back, #372). The user's pin is their final say, so
+    it beats everything — even a geocode that only resolves on a late
+    reconnect can't clobber it across a reload.
+2.  **Geocode** — the receipt's printed address wins over EXIF (see
+    `Data.Location` for why).
+3.  **EXIF GPS** — falls through when geocode missed / wasn't attempted.
+
+Only a `ManualPin` draft is honored here; the form's other location
+sources (browser geo, skip, idle, resolving) are transient UI state that
+`syncScanLocationToForm` already guards, and surfacing them from a
+persisted draft would defeat a later geocode improving on them.
 
     import Data.GeoPoint as GeoPoint
     import Data.Location exposing (LocationSource(..), LocationState(..))
     import Data.ScanItemId
+
+    -- A draft manual pin beats a late geocode — the user's pin is final.
+    effectiveLocation
+        { draft = Just { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, locationState = LocationGot (GeoPoint.fromDegrees 61.2 -149.9) ManualPin, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+        , exif = ExifMissing
+        , exifDebug = ""
+        , expectedExpenseId = Nothing
+        , geocode = GeocodeResolved (GeoPoint.fromDegrees 48.8 2.3)
+        , id = Data.ScanItemId.fromString "scan::0::0"
+        , imageUrl = ""
+        , lastError = Nothing
+        , ocrData = Nothing
+        , ocrError = Nothing
+        , persistError = False
+        , retryCount = 0
+        , schemaVersion = 1
+        , status = ScanReady
+        }
+    --> LocationGot (GeoPoint.fromDegrees 61.2 -149.9) ManualPin
 
     -- Geocode resolved: receipt's printed address wins, even when EXIF
     -- has its own coords (the photo was taken at home).
@@ -353,18 +447,42 @@ geocode wins over EXIF (see `Data.Location` for the rationale).
 -}
 effectiveLocation : ScanItem -> LocationState
 effectiveLocation item =
-    case item.geocode of
-        GeocodeResolved point ->
-            LocationGot point Geocoded
+    case draftManualPin item.draft of
+        Just pinned ->
+            pinned
 
-        GeocodeRequested ->
-            LocationResolving
+        Nothing ->
+            case item.geocode of
+                GeocodeResolved point ->
+                    LocationGot point Geocoded
 
-        GeocodeMissed ->
-            fromExif item.exif
+                GeocodeRequested ->
+                    LocationResolving
 
-        GeocodeNotAttempted ->
-            fromExif item.exif
+                GeocodeMissed ->
+                    fromExif item.exif
+
+                GeocodeNotAttempted ->
+                    fromExif item.exif
+
+
+{-| The user's persisted manual map pin, if any. Only a `ManualPin`
+draft `locationState` counts — every other source is transient form state
+that must not override a later geocode (see `effectiveLocation`).
+-}
+draftManualPin : Maybe DraftFields -> Maybe LocationState
+draftManualPin maybeDraft =
+    case maybeDraft of
+        Just draft ->
+            case draft.locationState of
+                LocationGot point ManualPin ->
+                    Just (LocationGot point ManualPin)
+
+                _ ->
+                    Nothing
+
+        Nothing ->
+            Nothing
 
 
 fromExif : ExifPhase -> LocationState
@@ -397,6 +515,19 @@ items that need attention.
 needsReview : OcrData -> Bool
 needsReview ocr =
     ocr.amount == Nothing || ocr.merchant == Nothing || ocr.date == Nothing
+
+
+{-| The queue keys of every item whose `expectedExpenseId` matches the
+given expense id. Drives the change-feed echo delete: when an expense
+arrives over the change feed, the items that were stamped to produce it
+(at submit) are the ones to retire. Returns `[]` when nothing matches —
+the idempotency property that makes a re-delivered echo a no-op.
+-}
+idsWithExpectedExpense : String -> Dict String ScanItem -> List String
+idsWithExpectedExpense expenseId queue =
+    queue
+        |> Dict.filter (\_ item -> item.expectedExpenseId == Just expenseId)
+        |> Dict.keys
 
 
 {-| What to do with a freshly-captured image, given connectivity and the
@@ -748,18 +879,6 @@ because the counter advances per item.
 mintId : Int -> Int -> String
 mintId millis seq =
     "scan::" ++ String.fromInt millis ++ "::" ++ String.fromInt seq
-
-
-{-| Mint the id for the i-th child of a multi-receipt split, reusing the
-parent's id as the middle segment so siblings stay grouped under it.
-
-    childId "scan::1716200000000::7" 2
-    --> "scan::scan::1716200000000::7::2"
-
--}
-childId : String -> Int -> String
-childId parentId i =
-    "scan::" ++ parentId ++ "::" ++ String.fromInt i
 
 
 
@@ -1126,6 +1245,28 @@ PouchDB change echo owns that (a later issue).
 reconcileHydratedQueue : Dict String ScanItem -> Dict String ScanItem
 reconcileHydratedQueue queue =
     Dict.map (\_ item -> { item | status = reconcileStatus item.status }) queue
+
+
+{-| Merge a freshly-hydrated durable queue into the live in-memory queue
+at boot / re-login, respecting the hydration-window tombstones (#374).
+
+`Dict.union inMemory (hydrated minus tombstones)`:
+
+  - the in-memory item wins a key collision (a live capture / OCR result
+    is never overwritten by its stale persisted form), and
+  - any id tombstoned since the last load — a submit-cleared card (the
+    `ExpenseChanged` echo), a consumed multi-receipt split source, or a
+    `ClearDoneItems` removal — is dropped from the hydrated side, so a
+    `getAll` that completes after the delete can't resurrect it.
+
+`inMemory` is assumed already-normalized (live); only `hydrated` is
+filtered, since tombstones can only mask just-removed durable rows.
+
+-}
+mergeHydratedQueue : Set String -> Dict String ScanItem -> Dict String ScanItem -> Dict String ScanItem
+mergeHydratedQueue tombstones inMemory hydrated =
+    Dict.union inMemory
+        (Dict.filter (\key _ -> not (Set.member key tombstones)) hydrated)
 
 
 reconcileStatus : ScanStatus -> ScanStatus

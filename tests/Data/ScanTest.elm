@@ -23,6 +23,7 @@ import Data.ScanItemId as ScanItemId
 import Dict
 import Expect
 import Json.Decode
+import Set
 import Test exposing (Test, describe, test)
 import Time
 
@@ -33,6 +34,10 @@ suite =
         [ ocrDataDecoderSuite
         , scanItemCodecSuite
         , reconcileSuite
+        , effectiveLocationSuite
+        , mergeOcrIntoDraftSuite
+        , expectedExpenseSuite
+        , mergeHydratedQueueSuite
         ]
 
 
@@ -281,4 +286,170 @@ reconcileSuite =
                     |> Dict.get "k"
                     |> Maybe.map .ocrData
                     |> Expect.equal (Just (Just sampleOcr))
+        ]
+
+
+{-| Manual-pin precedence (#374): a user's offline manual pin (persisted
+into `draft.locationState`) beats a geocode that only resolves on a late
+reconnect — the user's pin is their final say. Pinned BOTH directly and
+after a codec round-trip, so a reload can't surface the geocode over the
+pin.
+-}
+effectiveLocationSuite : Test
+effectiveLocationSuite =
+    let
+        pinnedDraft : Scan.DraftFields
+        pinnedDraft =
+            { sampleDraft | locationState = LocationGot anchorage ManualPin }
+
+        pinnedOverGeocode : ScanItem
+        pinnedOverGeocode =
+            { baseItem
+                | draft = Just pinnedDraft
+                , geocode = GeocodeResolved paris
+            }
+    in
+    describe "effectiveLocation manual-pin precedence"
+        [ test "a draft manual pin beats a late geocode" <|
+            \_ ->
+                Scan.effectiveLocation pinnedOverGeocode
+                    |> Expect.equal (LocationGot anchorage ManualPin)
+        , test "the manual-pin precedence holds after a codec round-trip" <|
+            \_ ->
+                Scan.scanItemEncoder pinnedOverGeocode
+                    |> Json.Decode.decodeValue Scan.scanItemDecoder
+                    |> Result.map Scan.effectiveLocation
+                    |> Expect.equal (Ok (LocationGot anchorage ManualPin))
+        , test "a non-manual draft location (BrowserGeo) does NOT override geocode" <|
+            \_ ->
+                Scan.effectiveLocation
+                    { baseItem
+                        | draft = Just { pinnedDraft | locationState = LocationGot anchorage BrowserGeo }
+                        , geocode = GeocodeResolved paris
+                    }
+                    |> Expect.equal (LocationGot paris Geocoded)
+        ]
+
+
+{-| Blanks-only merge (#374): a set draft field wins; an untouched
+(`Nothing`) field falls through to OCR. Beyond the module doctests, this
+pins the whole-record behavior over the real `sampleOcr` / `sampleDraft`
+fixtures.
+-}
+mergeOcrIntoDraftSuite : Test
+mergeOcrIntoDraftSuite =
+    let
+        emptyDraft : Scan.DraftFields
+        emptyDraft =
+            { address = Nothing
+            , amount = Nothing
+            , category = Nothing
+            , date = Nothing
+            , locationState = LocationIdle
+            , longNote = Nothing
+            , merchant = Nothing
+            , note = Nothing
+            , paymentMethod = Nothing
+            }
+    in
+    describe "mergeOcrIntoDraft"
+        [ test "an empty draft is the identity over OCR" <|
+            \_ ->
+                Scan.mergeOcrIntoDraft emptyDraft sampleOcr
+                    |> Expect.equal sampleOcr
+        , test "set draft fields win; untouched fields keep OCR" <|
+            \_ ->
+                let
+                    merged =
+                        Scan.mergeOcrIntoDraft sampleDraft sampleOcr
+                in
+                Expect.all
+                    [ -- draft set these → draft wins
+                      \_ -> Expect.equal (Just "456 Elm St") merged.address
+                    , \_ -> Expect.equal (Just (Money.fromCents 1200)) merged.amount
+                    , \_ -> Expect.equal (Just Category.Fuel) merged.category
+                    , \_ -> Expect.equal (Just "Manual Merchant") merged.merchant
+                    , \_ -> Expect.equal (Just PaymentMethod.Cash) merged.paymentMethod
+
+                    -- draft left these untouched → OCR survives
+                    , \_ -> Expect.equal sampleOcr.longNote merged.longNote
+                    , \_ -> Expect.equal sampleOcr.note merged.note
+                    ]
+                    ()
+        ]
+
+
+{-| The change-feed echo match (#374): `idsWithExpectedExpense` returns
+the queue keys to retire when an expense arrives, and returns `[]` for a
+re-delivered echo — the idempotency that makes the change-feed delete a
+no-op the second time.
+-}
+expectedExpenseSuite : Test
+expectedExpenseSuite =
+    let
+        expenseId : String
+        expenseId =
+            "expense::2026-05-30T00:00:00.000Z::17162000"
+
+        tagged : ScanItem
+        tagged =
+            { baseItem | status = ScanSubmitted, expectedExpenseId = Just expenseId }
+
+        queue : Dict.Dict String ScanItem
+        queue =
+            Dict.fromList
+                [ ( "scan::1::0", tagged )
+                , ( "scan::2::0", { baseItem | expectedExpenseId = Nothing } )
+                ]
+    in
+    describe "idsWithExpectedExpense"
+        [ test "matches the item whose expectedExpenseId equals the arriving id" <|
+            \_ ->
+                Scan.idsWithExpectedExpense expenseId queue
+                    |> Expect.equal [ "scan::1::0" ]
+        , test "is a no-op (empty) once the matching item is gone — idempotent echo" <|
+            \_ ->
+                Scan.idsWithExpectedExpense expenseId (Dict.remove "scan::1::0" queue)
+                    |> Expect.equal []
+        , test "returns empty when no item expects the arriving id" <|
+            \_ ->
+                Scan.idsWithExpectedExpense "expense::other" queue
+                    |> Expect.equal []
+        ]
+
+
+{-| Hydration-window tombstones (#374): a `loadScanQueue` that lands AFTER
+a delete must not resurrect the deleted card.
+-}
+mergeHydratedQueueSuite : Test
+mergeHydratedQueueSuite =
+    let
+        inMemory : Dict.Dict String ScanItem
+        inMemory =
+            Dict.singleton "scan::live::0" { baseItem | status = ScanReady }
+
+        hydrated : Dict.Dict String ScanItem
+        hydrated =
+            Dict.fromList
+                [ ( "scan::live::0", { baseItem | status = ScanProcessing } )
+                , ( "scan::gone::0", { baseItem | status = ScanReady } )
+                ]
+    in
+    describe "mergeHydratedQueue"
+        [ test "a tombstoned id from the hydrated side is NOT resurrected" <|
+            \_ ->
+                Scan.mergeHydratedQueue (Set.fromList [ "scan::gone::0" ]) inMemory hydrated
+                    |> Dict.keys
+                    |> Expect.equal [ "scan::live::0" ]
+        , test "the in-memory item wins a key collision over its stale hydrated form" <|
+            \_ ->
+                Scan.mergeHydratedQueue Set.empty inMemory hydrated
+                    |> Dict.get "scan::live::0"
+                    |> Maybe.map .status
+                    |> Expect.equal (Just ScanReady)
+        , test "a non-tombstoned hydrated-only item IS brought in" <|
+            \_ ->
+                Scan.mergeHydratedQueue Set.empty inMemory hydrated
+                    |> Dict.member "scan::gone::0"
+                    |> Expect.equal True
         ]

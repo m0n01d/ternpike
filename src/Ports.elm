@@ -1,5 +1,5 @@
 port module Ports exposing
-    ( canInstall, clearAllStorage, clearStorage, downloadFile
+    ( canInstall, clearAllStorage, clearStorage, deleteScanItem, downloadFile
     , extractExifGps, gotExifResult, gotGpsCoords
     , loadScanQueue, nativeShare, nativeShareResult, networkStatus, notificationState
     , ocrImagePrepared, pouchIn, pouchOut, prepareOcrImage, pushSubscribeResult
@@ -14,7 +14,7 @@ so feature modules (e.g. `Page.Scan`) can call the ports they need
 without depending on `Main`. The set is unchanged from when these lived
 in `Main`; only their home moved (#368).
 
-@docs canInstall, clearAllStorage, clearStorage, downloadFile
+@docs canInstall, clearAllStorage, clearStorage, deleteScanItem, downloadFile
 @docs extractExifGps, gotExifResult, gotGpsCoords
 @docs loadScanQueue, nativeShare, nativeShareResult, networkStatus, notificationState
 @docs ocrImagePrepared, pouchIn, pouchOut, prepareOcrImage, pushSubscribeResult
@@ -128,10 +128,12 @@ port verifyResults : Json.Encode.Value -> Cmd msg
 -- (`scanQueue`) keyed by scan id. `loadScanQueue` asks JS to `getAll` the
 -- store and hand it back via `scanQueueLoaded`; `saveScanItem` persists one
 -- normalized item, acked through `scanItemSaved` (so a `QuotaExceededError`
--- surfaces as `persistError` instead of being silently swallowed). The
--- `deleteScanItem` port is deferred to #374/#375 (submit/clear), which add
--- the first Elm caller — see `src/main.js` for its JS handler. `storageStatus`
--- carries the boot probe + best-effort `navigator.storage.persist()` result.
+-- surfaces as `persistError` instead of being silently swallowed).
+-- `deleteScanItem` removes one item by id from the durable store — its
+-- first Elm callers (the change-feed-confirmed submit clear + `ClearDoneItems`)
+-- land in #374; the JS handler has been wired since #371 (see `src/main.js`).
+-- `storageStatus` carries the boot probe + best-effort
+-- `navigator.storage.persist()` result.
 
 
 {-| Ask JS to `getAll` the durable `scanQueue` store and reply via
@@ -152,6 +154,15 @@ port scanQueueLoaded : (Json.Decode.Value -> msg) -> Sub msg
 store. Acked through [`scanItemSaved`](#scanItemSaved).
 -}
 port saveScanItem : Json.Decode.Value -> Cmd msg
+
+
+{-| Remove one item (by its durable `scan::<millis>::<seq>` id) from the
+durable `scanQueue` store. Fire-and-forget — the JS handler swallows a
+failed `delete` (a `delete` on an absent key is a no-op, which is exactly
+the idempotency the change-feed echo relies on). First callers land in
+#374: the change-feed-confirmed submit clear and `ClearDoneItems`.
+-}
+port deleteScanItem : String -> Cmd msg
 
 
 {-| Save-ack for [`saveScanItem`](#saveScanItem). `ok` is `False` (with a

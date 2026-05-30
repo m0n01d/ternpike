@@ -22,8 +22,8 @@ needs none.
 
 Only the variants with a real construction site in `Page.Scan.update`
 live here (`NoUnused.CustomTypeConstructors` requires a caller per
-variant). Persistence/merge effects (`SaveScanItem`, `DeleteScanItem`,
-`MintIdsThen`) arrive with their callers in later issues.
+variant). `SaveScanItem`, `DeleteScanItem`, and `MintIdsThen` all have
+their first callers as of #374 (the merge / split / delete track).
 
 @docs Effect, perform
 
@@ -33,6 +33,7 @@ import Browser.Navigation as Nav
 import Data.AnthropicKey as AnthropicKey exposing (AnthropicKey)
 import Data.Auth exposing (Creds)
 import Data.OcrPath exposing (OcrPath(..))
+import Data.Scan
 import File exposing (File)
 import Http
 import Http.GeocodeApi
@@ -48,11 +49,19 @@ import Types
 {-| A description of the side effects `Page.Scan.update` wants performed.
 
   - `Batch` — run several effects (mirrors `Cmd.batch`).
+  - `DeleteScanItem` — outbound port: remove one item (by durable id) from
+    the durable offline store. Used when a multi-receipt split consumes its
+    source row, and (in `Page.Scan`) when `ClearDoneItems` drops a submitted
+    item. Idempotent — a `delete` on an absent key is a no-op.
   - `ExtractExifGps` — outbound port: pull EXIF GPS for a queued image.
   - `FetchFileUrl` — `File.toUrl` task, tagged back as `GotFileUrl`.
   - `Geocode` — `POST /geocode` for an OCR-extracted address.
   - `MakeOcrCall` — the OCR request: direct Anthropic HTTP (`ByoPath`),
     the hosted proxy port (`HostedPath`), or nothing (`Unscannable`).
+  - `MintIdsThen` — run `Time.now` so a multi-receipt split can mint durable
+    child ids from real capture millis, tagging the result back as
+    `GotMintedScanIds` with the source id and the parsed receipts. Keeps the
+    split out of the pure `applyOcrOutcome` (which can't reach `Time.now`).
   - `Navigate` — `Nav.pushUrl` to a new route (the `BackToQueue` path).
   - `NoEffect` — do nothing (mirrors `Cmd.none`).
   - `PrepareOcrImage` — outbound port: downscale an image before OCR.
@@ -66,10 +75,12 @@ import Types
 -}
 type Effect
     = Batch (List Effect)
+    | DeleteScanItem String
     | ExtractExifGps { dataUrl : String, id : String }
     | FetchFileUrl String File
     | Geocode Creds String String
     | MakeOcrCall { backendUrl : String, body : Json.Encode.Value, itemId : String, path : OcrPath }
+    | MintIdsThen String (List Data.Scan.OcrData)
     | Navigate String
     | NoEffect
     | PrepareOcrImage { dataUrl : String, id : String, maxBytes : Int }
@@ -86,6 +97,9 @@ perform key effect =
     case effect of
         Batch effects ->
             Cmd.batch (List.map (perform key) effects)
+
+        DeleteScanItem itemId ->
+            Ports.deleteScanItem itemId
 
         ExtractExifGps payload ->
             Ports.extractExifGps payload
@@ -114,6 +128,11 @@ perform key effect =
 
                 Unscannable ->
                     Cmd.none
+
+        MintIdsThen itemId results ->
+            Task.perform
+                (\now -> scanMsg (Msg.Scan.GotMintedScanIds itemId results now))
+                Time.now
 
         Navigate url ->
             Nav.pushUrl key url

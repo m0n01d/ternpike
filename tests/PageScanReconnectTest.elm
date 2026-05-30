@@ -6,7 +6,6 @@ tier concurrency gate, the transient-vs-terminal failure split, and the
 directly (no `ProgramTest` harness needed — we assert on the returned
 `Model` queue and the `Effect` it emits) and the pure
 `Data.Scan` reconnect helpers.
-
 -}
 
 import Data.Category
@@ -70,6 +69,7 @@ ternModel =
     , route = RouteScan (TripId.fromString "trip::2026-05-30::abc")
     , scanQueue = Dict.empty
     , scanSeq = 0
+    , scanTombstones = Set.empty
     , sharedTrips = Data.SharedTrips.empty
     , storageAvailable = True
     , tier = Tier.Tern

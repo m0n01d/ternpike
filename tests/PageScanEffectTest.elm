@@ -64,6 +64,9 @@ simulate effect =
         Batch effects ->
             SimulatedEffect.Cmd.batch (List.map simulate effects)
 
+        DeleteScanItem itemId ->
+            SimulatedEffect.Ports.send "deleteScanItem" (Json.Encode.string itemId)
+
         ExtractExifGps payload ->
             SimulatedEffect.Ports.send "extractExifGps"
                 (Json.Encode.object
@@ -94,6 +97,11 @@ simulate effect =
                     SimulatedEffect.Http.expectString
                         (scanMsg << Msg.Scan.GotOcrResult itemId << Result.mapError (always "network"))
                 }
+
+        MintIdsThen itemId results ->
+            SimulatedEffect.Task.perform
+                (\now -> scanMsg (Msg.Scan.GotMintedScanIds itemId results now))
+                (SimulatedEffect.Task.succeed (Time.millisToPosix 0))
 
         Navigate url ->
             SimulatedEffect.Navigation.pushUrl url
@@ -207,6 +215,7 @@ seedModel =
     , route = RouteScan (TripId.fromString "trip::2026-05-30::abc")
     , scanQueue = Dict.singleton "scan-0" processingItem
     , scanSeq = 0
+    , scanTombstones = Set.empty
     , sharedTrips = Data.SharedTrips.empty
     , storageAvailable = True
     , tier = Tier.Tern

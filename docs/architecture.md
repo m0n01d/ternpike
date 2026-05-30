@@ -312,8 +312,8 @@ to `… -> Page.Scan.Model -> ( Page.Scan.Model, Effect )`. Two changes, one pur
   `Page.Scan.Model` is the subset of `AuthState` fields the Scan flows actually
   touch (`activeScanItemId`, `basePath`, `config`, `creds`, `currentUser`,
   `duplicateWarning`, `error`, `form`, `network`, `ocrInFlight`, `route`,
-  `scanQueue`, `scanSeq`, `sharedTrips`, `storageAvailable`, `tier`, `today`,
-  `trips`) — no `Nav.Key`, so it's fully constructible in a
+  `scanQueue`, `scanSeq`, `scanTombstones`, `sharedTrips`, `storageAvailable`,
+  `tier`, `today`, `trips`) — no `Nav.Key`, so it's fully constructible in a
   test. `Main.scanModelFromAuth` / `mergeScanModel` project and merge. The
   `currentUser` / `sharedTrips` / `tier` trio is carried because
   `geocodeDispatch` needs them to satisfy `Data.Trip.TierContext`.
@@ -330,14 +330,17 @@ to `… -> Page.Scan.Model -> ( Page.Scan.Model, Effect )`. Two changes, one pur
 
   Variants (one per construction site in `Page.Scan.update`, as
   `NoUnused.CustomTypeConstructors` requires): `Batch (List Effect)`,
-  `ExtractExifGps`, `FetchFileUrl File`, `Geocode Creds itemId address`,
-  `MakeOcrCall { backendUrl, body, itemId, path }`, `Navigate String` (the
-  `BackToQueue` `Nav.pushUrl`), `NoEffect`, `PrepareOcrImage`,
-  `SaveScanItem Json.Encode.Value` (offline-capture persist #372 + the
-  reconnect status-flip persist #373), `StampCapture (List File)` (the
-  `FilesSelected` → `Time.now` capture-millis stamp #372). The remaining
-  persistence/merge effects (`DeleteScanItem` / `MintIdsThen`) are deferred to
-  the issues that supply their callers.
+  `DeleteScanItem String` (remove one durable row — multi-receipt split source
+  + `ClearDoneItems`, #374), `ExtractExifGps`, `FetchFileUrl File`,
+  `Geocode Creds itemId address`,
+  `MakeOcrCall { backendUrl, body, itemId, path }`,
+  `MintIdsThen String (List OcrData)` (run `Time.now` so a multi-receipt split
+  can mint durable child ids from real capture millis → `GotMintedScanIds`,
+  #374), `Navigate String` (the `BackToQueue` `Nav.pushUrl`), `NoEffect`,
+  `PrepareOcrImage`, `SaveScanItem Json.Encode.Value` (offline-capture persist
+  #372 + the reconnect status-flip persist #373 + every queue-mutating handler
+  #374), `StampCapture (List File)` (the `FilesSelected` → `Time.now`
+  capture-millis stamp #372).
 
 `Effect.perform` reconstructs exactly the Cmds #368 moved, so behavior is
 identical — `npm test` stays green and the wire traffic is unchanged. The win:
@@ -628,14 +631,27 @@ ports (declared in `src/Ports.elm`, handled in `src/main.js`):
 | Direction | Port | Payload | What it does |
 |---|---|---|---|
 | Elm → JS | `loadScanQueue` | — | `getAll` the `scanQueue` store; reply via `scanQueueLoaded`. Fired from `init`'s authed branch + the `VerifyCodeResult`/`MagicVerifyResult` re-login arms. |
-| JS → Elm | `scanQueueLoaded` | array of `scanItemEncoder` docs | Decoded item-by-item (bad docs quarantined) → `reconcileHydratedQueue` → `Dict.union` into the live queue. |
+| JS → Elm | `scanQueueLoaded` | array of `scanItemEncoder` docs | Decoded item-by-item (bad docs quarantined) → `reconcileHydratedQueue` → `Data.Scan.mergeHydratedQueue` (`Dict.union inMemory (hydrated minus tombstones)`) into the live queue. |
 | Elm → JS | `saveScanItem` | one `scanItemEncoder` doc | `put` it; ack via `scanItemSaved`. Surfaces `QuotaExceededError` (unlike `idbSet`). |
 | JS → Elm | `scanItemSaved` | `{ id, ok, error }` | `ok:false` flips `persistError` on the item. |
+| Elm → JS | `deleteScanItem` | the durable `scan::…` id (String) | `delete` one row; fire-and-forget, idempotent (absent-key delete is a no-op). Callers: the `ExpenseChanged` submit-clear echo, the multi-receipt split source, and `ClearDoneItems` (#374). |
 | JS → Elm | `storageStatus` | `{ available, persisted }` | Boot probe + best-effort `navigator.storage.persist()`; `available` lands on `AuthState.storageAvailable`. |
 
-The `deleteScanItem` port (submit/clear) is deferred to #374/#375 — the JS
-handler exists in `main.js`, but no Elm `port` is declared until those issues
-add the first caller (per `NoUnused`).
+**Delete semantics (#374).** Every delete is really "absence," and a re-delivered
+change-feed echo or a late `getAll` could otherwise resurrect a deleted receipt.
+The `ExpenseChanged` change-feed echo OWNS all submit-clears, idempotently: at
+`GotSubmitTime`'s `FreshForm` branch the just-submitted scan item is tagged with
+the deterministic `expectedExpenseId` (`expense::<iso>::<8-of-millis>` — only
+computable from the `posix` that exists there); when an expense arrives over the
+change feed (the local save's echo, or a later sync pull) whose `_id` matches,
+`Main.clearSubmittedScanItem` (`Data.Scan.idsWithExpectedExpense`) removes the
+item from the queue, deletes its durable row, and tombstones its id. The
+`EditForm` path emits `SaveAmend` (no `ExpenseChanged`) and is out of scope for
+echo-delete. `scanTombstones : Set String` on `AuthState` holds ids deleted
+since the last `loadScanQueue`; `mergeHydratedQueue` subtracts them so a
+hydration-window race can't resurrect a just-removed card. Tombstones are
+in-memory only (never persisted) — a fresh boot starts empty because the durable
+store no longer holds the deleted docs.
 
 ---
 
@@ -654,7 +670,8 @@ Browser loads
             │       from the server, re-persists Creds to IndexedDB
             ├─ loadScanQueue port fires immediately (#371)
             │    └─ JS getAll's the scanQueue store → scanQueueLoaded →
-            │       decode + reconcileHydratedQueue → as_.scanQueue.
+            │       decode + reconcileHydratedQueue + mergeHydratedQueue
+            │       (tombstone-aware union) → as_.scanQueue.
             │       Device-local, no PouchDB race, so it's safe on the
             │       critical path. Also re-fired from the in-SPA re-login
             │       arms (VerifyCodeResult / MagicVerifyResult), since

@@ -160,9 +160,10 @@ import './elements/tp-amount.js'
     })
   }
 
-  // Deferred caller (#374/#375): no Elm `deleteScanItem` port exists yet, but
-  // the JS handler is wired so submit/clear can flip it on without touching
-  // main.js's IDB plumbing.
+  // First Elm callers landed in #374 (the `ExpenseChanged` submit-clear echo,
+  // the multi-receipt split source, and `ClearDoneItems`). The JS handler was
+  // wired in #371 so those callers flipped it on without touching main.js's
+  // IDB plumbing.
   async function scanQueueDelete(id) {
     const db = await openDB()
     return new Promise((resolve, reject) => {
@@ -472,9 +473,9 @@ import './elements/tp-amount.js'
       })
     }
 
-    // deleteScanItem: NO Elm port yet — #374/#375 (submit/clear) add the Elm
-    // declaration + caller. The JS handler is wired here so those issues only
-    // touch Elm. Guarded so the absent port can't throw.
+    // deleteScanItem: Elm port + callers landed in #374 (submit-clear echo,
+    // split source, ClearDoneItems). Guarded so an older bundle without the
+    // port can't throw.
     if (app.ports.deleteScanItem) {
       app.ports.deleteScanItem.subscribe(async (id) => {
         try {

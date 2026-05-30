@@ -71,6 +71,7 @@ type alias Model =
     , route : Route
     , scanQueue : Dict.Dict String ScanItem
     , scanSeq : Int
+    , scanTombstones : Set.Set String
     , sharedTrips : SharedTrips
     , storageAvailable : Bool
     , tier : Tier.Tier
@@ -209,7 +210,9 @@ update msg as_ =
                                     )
                                     as_.scanQueue
                         in
-                        ( { as_ | scanQueue = updatedQueue }, NoEffect )
+                        -- Terminal `ScanReady` (resize failed) — persist so a
+                        -- reload doesn't drop the item back to processing.
+                        ( { as_ | scanQueue = updatedQueue }, persistItem payload.id updatedQueue )
 
                     else
                         let
@@ -218,13 +221,18 @@ update msg as_ =
                                     (Maybe.map (\i -> { i | imageUrl = payload.dataUrl }))
                                     as_.scanQueue
                         in
+                        -- Persist the downscaled image alongside firing OCR so
+                        -- a background-kill mid-call keeps the smaller bytes.
                         ( { as_ | scanQueue = updatedQueue }
-                        , Effect.MakeOcrCall
-                            { backendUrl = as_.config.backendUrl
-                            , body = ocrRequestBody (extractBase64 payload.dataUrl) (getMimeType payload.dataUrl)
-                            , itemId = payload.id
-                            , path = OcrPath.resolve as_.config.anthropicKey as_.tier
-                            }
+                        , Batch
+                            [ persistItem payload.id updatedQueue
+                            , Effect.MakeOcrCall
+                                { backendUrl = as_.config.backendUrl
+                                , body = ocrRequestBody (extractBase64 payload.dataUrl) (getMimeType payload.dataUrl)
+                                , itemId = payload.id
+                                , path = OcrPath.resolve as_.config.anthropicKey as_.tier
+                                }
+                            ]
                         )
 
         GotOcrResult itemId result ->
@@ -289,7 +297,7 @@ update msg as_ =
                     Dict.update itemId (Maybe.map (\i -> { i | exif = ExifFound point })) as_.scanQueue
             in
             ( syncScanLocationToForm itemId { as_ | scanQueue = newQueue }
-            , NoEffect
+            , persistItem itemId newQueue
             )
 
         GotExifCoords itemId _ _ debug ->
@@ -298,7 +306,7 @@ update msg as_ =
                     Dict.update itemId (Maybe.map (\i -> { i | exif = ExifMissing, exifDebug = debug })) as_.scanQueue
             in
             ( syncScanLocationToForm itemId { as_ | scanQueue = newQueue }
-            , NoEffect
+            , persistItem itemId newQueue
             )
 
         GotGeocodeResult itemId result ->
@@ -320,8 +328,94 @@ update msg as_ =
                     Dict.update itemId (Maybe.map (\i -> { i | geocode = newPhase })) as_.scanQueue
             in
             ( syncScanLocationToForm itemId { as_ | scanQueue = newQueue }
-            , NoEffect
+            , persistItem itemId newQueue
             )
+
+        GotMintedScanIds itemId results now ->
+            -- The deferred split for a multi-receipt OCR success. The
+            -- `Time.now` resolved, so mint durable `scan::<millis>::<seq>`
+            -- ids (fresh capture millis, the per-session `scanSeq` as the
+            -- collision suffix) for each parsed receipt and fan them out as
+            -- `ScanReady` children. The source item's typed `draft` is merged
+            -- into CHILD 0 ONLY (an offline draft describes one receipt, not
+            -- N) — the rest carry no draft. Every child is persisted; the
+            -- consumed source row is deleted from the durable store so a late
+            -- `getAll` can't rehydrate it as a phantom.
+            case Dict.get itemId as_.scanQueue of
+                Nothing ->
+                    -- Source cleared / submitted while `Time.now` was in
+                    -- flight — nothing to split. Drop the source row anyway
+                    -- (idempotent delete) so no orphan can resurface.
+                    ( as_, Effect.DeleteScanItem itemId )
+
+                Just source ->
+                    let
+                        millis : Int
+                        millis =
+                            Time.posixToMillis now
+
+                        indexed : List ( String, Scan.ScanItem )
+                        indexed =
+                            List.indexedMap
+                                (\i data ->
+                                    let
+                                        rawId : String
+                                        rawId =
+                                            Scan.mintId millis (as_.scanSeq + i)
+
+                                        mergedData : Scan.OcrData
+                                        mergedData =
+                                            case ( i, source.draft ) of
+                                                ( 0, Just draft ) ->
+                                                    Scan.mergeOcrIntoDraft draft data
+
+                                                _ ->
+                                                    data
+                                    in
+                                    ( rawId
+                                    , { draft =
+                                            if i == 0 then
+                                                source.draft
+
+                                            else
+                                                Nothing
+                                      , exif = source.exif
+                                      , exifDebug = source.exifDebug
+                                      , expectedExpenseId = Nothing
+                                      , geocode = source.geocode
+                                      , id = ScanItemId.fromString rawId
+                                      , imageUrl = source.imageUrl
+                                      , lastError = Nothing
+                                      , ocrData = Just mergedData
+                                      , ocrError = Nothing
+                                      , persistError = False
+                                      , retryCount = source.retryCount
+                                      , schemaVersion = Scan.currentSchemaVersion
+                                      , status = ScanReady
+                                      }
+                                    )
+                                )
+                                results
+
+                        newQueue : Dict.Dict String Scan.ScanItem
+                        newQueue =
+                            List.foldl
+                                (\( id, item ) d -> Dict.insert id item d)
+                                (Dict.remove itemId as_.scanQueue)
+                                indexed
+
+                        persistEffects : List Effect
+                        persistEffects =
+                            List.map
+                                (\( _, item ) -> Effect.SaveScanItem (Scan.scanItemEncoder item))
+                                indexed
+                    in
+                    ( { as_
+                        | scanQueue = newQueue
+                        , scanSeq = as_.scanSeq + List.length results
+                      }
+                    , Batch (Effect.DeleteScanItem itemId :: persistEffects)
+                    )
 
         ReviewScanItem itemId ->
             case Dict.get itemId as_.scanQueue of
@@ -402,8 +496,27 @@ update msg as_ =
             )
 
         ClearDoneItems ->
-            ( { as_ | scanQueue = Dict.filter (\_ i -> i.status /= ScanSubmitted) as_.scanQueue }
-            , NoEffect
+            -- Drop every `ScanSubmitted` card. Each removed id is deleted
+            -- from the durable store AND tombstoned, so a `loadScanQueue`
+            -- that completes after this clear (a hydration-window race)
+            -- can't resurrect a card the user just dismissed. The delete is
+            -- idempotent (absent-key `delete` is a no-op).
+            let
+                clearedIds : List String
+                clearedIds =
+                    as_.scanQueue
+                        |> Dict.filter (\_ i -> i.status == ScanSubmitted)
+                        |> Dict.keys
+
+                newQueue : Dict.Dict String ScanItem
+                newQueue =
+                    Dict.filter (\_ i -> i.status /= ScanSubmitted) as_.scanQueue
+            in
+            ( { as_
+                | scanQueue = newQueue
+                , scanTombstones = List.foldl Set.insert as_.scanTombstones clearedIds
+              }
+            , Batch (List.map Effect.DeleteScanItem clearedIds)
             )
 
 
@@ -438,6 +551,18 @@ activeItem as_ =
     as_.activeScanItemId
         |> Maybe.map ScanItemId.toString
         |> Maybe.andThen (\id -> Dict.get id as_.scanQueue |> Maybe.map (Tuple.pair id))
+
+
+{-| Persist the item at `id` in `queue` to the durable store, if it's
+present. A missing id (the item was cleared mid-flight) is a no-op. Every
+queue-mutating handler routes through this so the durable store tracks the
+in-memory queue and a reload can't lose a status / location / OCR change.
+-}
+persistItem : String -> Dict.Dict String ScanItem -> Effect
+persistItem id queue =
+    Dict.get id queue
+        |> Maybe.map (Scan.scanItemEncoder >> Effect.SaveScanItem)
+        |> Maybe.withDefault NoEffect
 
 
 {-| Seed the Add-review form for a scan item, layering the user's typed
@@ -847,11 +972,19 @@ outcomeFromBody body =
 
 
 {-| Apply a terminal OCR outcome for one item: drop it from the
-in-flight set, write the result into the queue, then run geocode
-dispatch for any touched items AND refill the freed concurrency slot(s)
-from the remaining `ScanDeferred` backlog (`dispatchOnReconnect`). This
-is the single dispatch-next point both terminal OCR handlers funnel
-through.
+in-flight set, write the result into the queue, persist every touched
+item, then run geocode dispatch for any touched items AND refill the
+freed concurrency slot(s) from the remaining `ScanDeferred` backlog
+(`dispatchOnReconnect`). This is the single dispatch-next point both
+terminal OCR handlers funnel through.
+
+A multi-receipt success (two-or-more parsed receipts) is special: the
+split mints durable child ids from real capture millis, which a pure
+function can't reach. So the multi case clears the item from the in-flight
+set and fires `Effect.MintIdsThen` — the actual split + persist + source
+delete happens in the `GotMintedScanIds` arm. The single / empty / failure
+cases stay inline here.
+
 -}
 finishOcr : String -> OcrOutcome -> Model -> ( Model, Effect )
 finishOcr itemId outcome as_ =
@@ -859,28 +992,49 @@ finishOcr itemId outcome as_ =
         inFlightCleared : Set.Set String
         inFlightCleared =
             Set.remove itemId as_.ocrInFlight
-
-        ( afterOcr, touchedIds ) =
-            applyOcrOutcome itemId outcome as_.scanQueue
-
-        ( afterGeocodeFlip, geocodeEffects ) =
-            geocodeDispatch touchedIds afterOcr as_
-
-        -- Exclude the just-handled id from dispatch-next: if a Transient /
-        -- under-cap Retryable failure bounced it back to `ScanDeferred`,
-        -- it must wait for the next `Synced` edge rather than busy-retry
-        -- in the same tick (the network is likely still flapping).
-        ( afterDispatch, nextInFlight, dispatchEffects ) =
-            dispatchOnReconnect (Set.singleton itemId) { as_ | ocrInFlight = inFlightCleared, scanQueue = afterGeocodeFlip }
     in
-    ( { as_ | ocrInFlight = nextInFlight, scanQueue = afterDispatch }
-    , Batch (geocodeEffects ++ dispatchEffects)
-    )
+    case outcome of
+        OcrSucceeded ((_ :: _ :: _) as multi) ->
+            -- Defer the split to `GotMintedScanIds` (needs `Time.now`).
+            ( { as_ | ocrInFlight = inFlightCleared }
+            , Effect.MintIdsThen itemId multi
+            )
+
+        _ ->
+            let
+                ( afterOcr, touchedIds ) =
+                    applyOcrOutcome itemId outcome as_.scanQueue
+
+                ( afterGeocodeFlip, geocodeEffects ) =
+                    geocodeDispatch touchedIds afterOcr as_
+
+                -- Persist every item whose status / data the outcome touched
+                -- so the durable store matches the in-memory queue (a reload
+                -- mustn't lose an OCR result or a failure's `lastError`).
+                persistEffects : List Effect
+                persistEffects =
+                    touchedIds
+                        |> List.filterMap
+                            (\id ->
+                                Dict.get id afterGeocodeFlip
+                                    |> Maybe.map (Scan.scanItemEncoder >> Effect.SaveScanItem)
+                            )
+
+                -- Exclude the just-handled id from dispatch-next: if a Transient /
+                -- under-cap Retryable failure bounced it back to `ScanDeferred`,
+                -- it must wait for the next `Synced` edge rather than busy-retry
+                -- in the same tick (the network is likely still flapping).
+                ( afterDispatch, nextInFlight, dispatchEffects ) =
+                    dispatchOnReconnect (Set.singleton itemId) { as_ | ocrInFlight = inFlightCleared, scanQueue = afterGeocodeFlip }
+            in
+            ( { as_ | ocrInFlight = nextInFlight, scanQueue = afterDispatch }
+            , Batch (persistEffects ++ geocodeEffects ++ dispatchEffects)
+            )
 
 
 {-| Write a terminal OCR outcome into the queue for one item, returning
-the updated queue and the touched ids (for geocode dispatch). The
-failure branch consults `Scan.OcrFailureKind`:
+the updated queue and the touched ids (for geocode dispatch + persist).
+The failure branch consults `Scan.OcrFailureKind`:
 
   - `Transient` — connectivity flap: return the item to `ScanDeferred`
     WITHOUT bumping `retryCount`, so the next reconnect retries it for
@@ -889,6 +1043,14 @@ failure branch consults `Scan.OcrFailureKind`:
     Still under `Scan.maxOcrRetries` → back to `ScanDeferred` to retry
     next reconnect; at the cap → terminal `ScanReady` with `ocrError`.
   - `Permanent` — terminal `ScanReady` with `ocrError` immediately.
+
+A single-receipt success folds the item's typed `draft` over the OCR
+result (`Scan.mergeOcrIntoDraft`) so the user's offline edits aren't
+clobbered (blanks-only merge; `draft == Nothing` is the identity). The
+multi-receipt success is handled out-of-band in `finishOcr` /
+`GotMintedScanIds` (it needs `Time.now`), so the multi branch here is a
+defensive no-op — `finishOcr` never routes a multi outcome through this
+function.
 
 -}
 applyOcrOutcome :
@@ -906,6 +1068,30 @@ applyOcrOutcome itemId outcome queue =
                         { i
                             | ocrData = ocrData
                             , ocrError = ocrError
+                            , status = ScanReady
+                        }
+                    )
+                )
+                queue
+
+        -- A single-receipt success: lay the typed draft over the OCR data
+        -- per item, so the blanks-only merge sees this item's own draft.
+        markReadyMerged : Scan.OcrData -> Dict.Dict String Scan.ScanItem
+        markReadyMerged data =
+            Dict.update itemId
+                (Maybe.map
+                    (\i ->
+                        { i
+                            | ocrData =
+                                Just
+                                    (case i.draft of
+                                        Just draft ->
+                                            Scan.mergeOcrIntoDraft draft data
+
+                                        Nothing ->
+                                            data
+                                    )
+                            , ocrError = Nothing
                             , status = ScanReady
                         }
                     )
@@ -954,49 +1140,12 @@ applyOcrOutcome itemId outcome queue =
             )
 
         OcrSucceeded [ single ] ->
-            ( markReady (Just single) Nothing, [ itemId ] )
+            ( markReadyMerged single, [ itemId ] )
 
-        OcrSucceeded ((_ :: _ :: _) as multi) ->
-            case Dict.get itemId queue of
-                Nothing ->
-                    -- item disappeared mid-flight (cleared/submitted) — no-op
-                    ( queue, [] )
-
-                Just source ->
-                    let
-                        queueWithoutSource =
-                            Dict.remove itemId queue
-
-                        indexed =
-                            List.indexedMap
-                                (\i data ->
-                                    let
-                                        rawId =
-                                            Scan.childId itemId i
-                                    in
-                                    ( rawId
-                                    , { draft = source.draft
-                                      , exif = source.exif
-                                      , exifDebug = source.exifDebug
-                                      , expectedExpenseId = Nothing
-                                      , geocode = source.geocode
-                                      , id = ScanItemId.fromString rawId
-                                      , imageUrl = source.imageUrl
-                                      , lastError = Nothing
-                                      , ocrData = Just data
-                                      , ocrError = Nothing
-                                      , persistError = False
-                                      , retryCount = source.retryCount
-                                      , schemaVersion = Scan.currentSchemaVersion
-                                      , status = ScanReady
-                                      }
-                                    )
-                                )
-                                multi
-                    in
-                    ( List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
-                    , List.map Tuple.first indexed
-                    )
+        OcrSucceeded (_ :: _ :: _) ->
+            -- Multi-receipt: handled in `finishOcr` → `GotMintedScanIds`
+            -- (needs `Time.now`); never routed here. No-op defensively.
+            ( queue, [] )
 
 
 {-| The current `retryCount` for an item, or `0` if it's gone.
@@ -1127,26 +1276,14 @@ the `Unscannable`-on-reconnect keep-draft path.
 -}
 draftIntoOcrData : Maybe Scan.DraftFields -> Maybe Scan.OcrData -> Maybe Scan.OcrData
 draftIntoOcrData maybeDraft maybeOcr =
-    case ( maybeDraft, maybeOcr ) of
-        ( Nothing, _ ) ->
+    case maybeDraft of
+        Nothing ->
             maybeOcr
 
-        ( Just draft, _ ) ->
-            let
-                base : Scan.OcrData
-                base =
-                    Maybe.withDefault emptyOcrData maybeOcr
-            in
-            Just
-                { address = Maybe.Extra.or draft.address base.address
-                , amount = Maybe.Extra.or (Maybe.andThen Money.fromDollarString draft.amount) base.amount
-                , category = Maybe.Extra.or draft.category base.category
-                , date = Maybe.Extra.or draft.date base.date
-                , longNote = Maybe.Extra.or draft.longNote base.longNote
-                , merchant = Maybe.Extra.or draft.merchant base.merchant
-                , note = Maybe.Extra.or draft.note base.note
-                , paymentMethod = Maybe.Extra.or draft.paymentMethod base.paymentMethod
-                }
+        Just draft ->
+            -- Reuse the pure blanks-only merge over an `emptyOcrData` base so
+            -- the per-field precedence lives in ONE place (`mergeOcrIntoDraft`).
+            Just (Scan.mergeOcrIntoDraft draft (Maybe.withDefault emptyOcrData maybeOcr))
 
 
 {-| An all-`Nothing` `OcrData`, used as the merge base when folding a
