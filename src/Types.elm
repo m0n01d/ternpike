@@ -196,6 +196,13 @@ Ephemeral UI:
   - `activeScanItemId` — set while the user is reviewing one scan-queue
     item on the Add tab; flipping the effective route to
     `RouteAddReviewScan`.
+  - `scanTombstones` — in-memory set of scan-item ids deleted since the
+    last `loadScanQueue` (submit-cleared via the `ExpenseChanged` echo,
+    multi-receipt split sources, or `ClearDoneItems`). The
+    `scanQueueLoaded` merge subtracts these from the hydrated queue so a
+    late `getAll` can't resurrect a just-removed item. Never persisted —
+    a fresh boot starts with an empty set because the durable store no
+    longer holds the deleted docs.
   - `error`, `toast`, `submitting` — banner, transient toast, submit
     spinner.
   - `network` — connectivity as a tri-state (`Unknown` until the first
@@ -254,6 +261,7 @@ type alias AuthState =
     , route : Route
     , scanQueue : Dict String ScanItem
     , scanSeq : Int
+    , scanTombstones : Set String
     , showByoKeyInput : Bool
     , showDayIntensity : Bool
     , showInstallPrompt : Bool

@@ -215,6 +215,7 @@ toAuthState creds initialRoute gs =
     , route = initialRoute
     , scanQueue = Dict.empty
     , scanSeq = 0
+    , scanTombstones = Set.empty
     , showByoKeyInput = gs.session.config.anthropicKey /= Nothing
     , showDayIntensity = True
     , showInstallPrompt = False
@@ -815,26 +816,66 @@ Expenses are routed into the right inner `Dict` by `expense.tripId`.
 handleDbChange : DocChange -> AuthState -> ( Model, Cmd Msg )
 handleDbChange change as_ =
     let
-        as1 =
+        ( as1, dbCmd ) =
             case change of
                 AmendChanged a ->
-                    { as_ | amendments = Dict.insert (AmendmentId.toString a.id) a as_.amendments }
+                    ( { as_ | amendments = Dict.insert (AmendmentId.toString a.id) a as_.amendments }
+                    , Cmd.none
+                    )
 
                 ExpenseChanged e ->
-                    { as_
-                        | expenses =
-                            Dict.update (TripId.toString e.tripId)
-                                (Just << Dict.insert (ExpenseId.toString e.id) e << Maybe.withDefault Dict.empty)
-                                as_.expenses
-                    }
+                    let
+                        withExpense =
+                            { as_
+                                | expenses =
+                                    Dict.update (TripId.toString e.tripId)
+                                        (Just << Dict.insert (ExpenseId.toString e.id) e << Maybe.withDefault Dict.empty)
+                                        as_.expenses
+                            }
+                    in
+                    clearSubmittedScanItem (ExpenseId.toString e.id) withExpense
 
                 TripChanged t ->
-                    { as_ | trips = upsertTripIntoState t as_.trips }
+                    ( { as_ | trips = upsertTripIntoState t as_.trips }, Cmd.none )
 
                 VoidChanged v ->
-                    { as_ | voids = Dict.insert v.id v as_.voids }
+                    ( { as_ | voids = Dict.insert v.id v as_.voids }, Cmd.none )
     in
-    ( AuthModel (hydrateFormForRoute as1), Cmd.none )
+    ( AuthModel (hydrateFormForRoute as1), dbCmd )
+
+
+{-| The change-feed echo OWNS every submit-clear delete, idempotently.
+
+When an expense arrives over the PouchDB change feed (the local save's own
+echo, or a later CouchDB sync pull), match its `_id` against every scan
+item's `expectedExpenseId` (stamped at `GotSubmitTime`). A match means the
+expense the scan card produced has durably committed, so the card can be
+retired: drop it from the in-memory queue, delete its durable row, and
+tombstone its id (so a `loadScanQueue` mid-flight can't resurrect it).
+
+Idempotent: a re-delivered echo finds no matching item (it was already
+removed), so it's a clean no-op — `Dict.remove` and the IDB `delete` are
+both no-ops on an absent key, and the id is harmlessly re-tombstoned.
+
+-}
+clearSubmittedScanItem : String -> AuthState -> ( AuthState, Cmd Msg )
+clearSubmittedScanItem expenseId as_ =
+    let
+        matchingIds : List String
+        matchingIds =
+            Data.Scan.idsWithExpectedExpense expenseId as_.scanQueue
+    in
+    case matchingIds of
+        [] ->
+            ( as_, Cmd.none )
+
+        _ ->
+            ( { as_
+                | scanQueue = List.foldl Dict.remove as_.scanQueue matchingIds
+                , scanTombstones = List.foldl Set.insert as_.scanTombstones matchingIds
+              }
+            , Cmd.batch (List.map Ports.deleteScanItem matchingIds)
+            )
 
 
 {-| Remove a document from every cache it might live in.
@@ -2190,10 +2231,13 @@ updateAuth msg as_ =
             -- queue (bad docs are quarantined — dropped), normalize in-flight
             -- statuses via `reconcileHydratedQueue` (a reload can't keep an
             -- OCR request alive, so `ScanProcessing` parks back to
-            -- `ScanDeferred`), then merge into the live queue. `Dict.union`
-            -- keeps the in-memory item on a key collision — there are no
-            -- deletes yet, so nothing can be resurrected; tombstones for the
-            -- submit/clear resurrect race are #374/#375's concern.
+            -- `ScanDeferred`), then merge into the live queue.
+            --
+            -- The merge is `Dict.union inMemory (hydrated minus tombstones)`
+            -- (#374): the in-memory item wins a key collision, AND any id
+            -- tombstoned since the last load (submit-cleared, split source,
+            -- or `ClearDoneItems`) is dropped from the hydrated side so a
+            -- late `getAll` can't resurrect a just-removed card.
             let
                 hydrated : Dict.Dict String Data.Scan.ScanItem
                 hydrated =
@@ -2205,28 +2249,34 @@ updateAuth msg as_ =
 
                 mergedQueue : Dict.Dict String Data.Scan.ScanItem
                 mergedQueue =
-                    Dict.union as_.scanQueue reconciled
+                    Data.Scan.mergeHydratedQueue as_.scanTombstones as_.scanQueue reconciled
 
                 -- Persist back any item whose status the reconcile flipped
                 -- (`ScanProcessing` → `ScanDeferred`) so the durable store
                 -- matches the normalized in-memory queue. This is the in-PR
-                -- caller for `saveScanItem` / `scanItemSaved`.
+                -- caller for `saveScanItem` / `scanItemSaved`. Tombstoned
+                -- ids are skipped — re-persisting one would resurrect the
+                -- durable row we just deleted.
                 persistCmds : List (Cmd Msg)
                 persistCmds =
                     reconciled
                         |> Dict.toList
                         |> List.filterMap
                             (\( key, item ) ->
-                                case Dict.get key hydrated of
-                                    Just before ->
-                                        if before.status == item.status then
+                                if Set.member key as_.scanTombstones then
+                                    Nothing
+
+                                else
+                                    case Dict.get key hydrated of
+                                        Just before ->
+                                            if before.status == item.status then
+                                                Nothing
+
+                                            else
+                                                Just (Ports.saveScanItem (Data.Scan.scanItemEncoder item))
+
+                                        Nothing ->
                                             Nothing
-
-                                        else
-                                            Just (Ports.saveScanItem (Data.Scan.scanItemEncoder item))
-
-                                    Nothing ->
-                                        Nothing
                             )
             in
             ( AuthModel { as_ | scanQueue = mergedQueue }
@@ -2501,6 +2551,40 @@ updateAuth msg as_ =
                                     , paymentMethod = parsed.paymentMethod
                                     }
 
+                                -- Tag the just-submitted scan item with the
+                                -- deterministic expense id it will write, so
+                                -- the PouchDB `ExpenseChanged` change-feed echo
+                                -- can match the saved expense back to its queue
+                                -- card and clear it (the echo OWNS the delete —
+                                -- see `handleDbChange`). The id is only
+                                -- computable here (it needs `posix`), so the
+                                -- tag is stamped at `GotSubmitTime`, not
+                                -- `SubmitEntry`. Only the `FreshForm` path
+                                -- produces an `ExpenseChanged`; the `EditForm`
+                                -- path emits `SaveAmend` (no new expense doc),
+                                -- so it is intentionally OUT of scope for the
+                                -- echo-delete and never tags `expectedExpenseId`.
+                                taggedQueue =
+                                    case as_.activeScanItemId of
+                                        Just id ->
+                                            Dict.update (ScanItemId.toString id)
+                                                (Maybe.map (\i -> { i | expectedExpenseId = Just expenseId }))
+                                                updatedQueue
+
+                                        Nothing ->
+                                            updatedQueue
+
+                                persistTagCmd : Cmd Msg
+                                persistTagCmd =
+                                    case as_.activeScanItemId of
+                                        Just id ->
+                                            Dict.get (ScanItemId.toString id) taggedQueue
+                                                |> Maybe.map (Ports.saveScanItem << Data.Scan.scanItemEncoder)
+                                                |> Maybe.withDefault Cmd.none
+
+                                        Nothing ->
+                                            Cmd.none
+
                                 nextRoute =
                                     routeForTab nextTab tripId
 
@@ -2516,11 +2600,12 @@ updateAuth msg as_ =
                                     , duplicateWarning = Nothing
                                     , form = FreshForm (PendingEntry.defaultPendingEntry as_.today)
                                     , route = nextRoute
-                                    , scanQueue = updatedQueue
+                                    , scanQueue = taggedQueue
                                     , submitting = False
                                 }
                             , Cmd.batch
                                 [ sendPouch (SaveExpense addTarget (Expense.encoder expense))
+                                , persistTagCmd
                                 , notifySharedTripActivity as_.creds
                                     addTarget
                                     { action = "add"
@@ -4245,6 +4330,7 @@ scanModelFromAuth as_ =
     , route = as_.route
     , scanQueue = as_.scanQueue
     , scanSeq = as_.scanSeq
+    , scanTombstones = as_.scanTombstones
     , sharedTrips = as_.sharedTrips
     , storageAvailable = as_.storageAvailable
     , tier = as_.tier
@@ -4267,6 +4353,7 @@ mergeScanModel scan as_ =
         , route = scan.route
         , scanQueue = scan.scanQueue
         , scanSeq = scan.scanSeq
+        , scanTombstones = scan.scanTombstones
     }
 
 
