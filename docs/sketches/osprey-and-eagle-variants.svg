@@ -1,0 +1,257 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 760" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <style>
+      .bg     { fill: #faf7f0; }
+      .panel  { fill: #cc7050; }
+      .tile   { fill: #f2ede3; }
+      .ink    { fill: #1e2818; }
+      .label  { fill: #1e2818; font-size: 20px; font-weight: 700; text-anchor: middle; }
+      .sub    { fill: #6b7c58; font-size: 12px; text-anchor: middle; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
+      .title  { fill: #1e2818; font-size: 18px; font-weight: 700; }
+      .row    { fill: #2d3a22; font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+      .note   { fill: #6b7c58; font-size: 12px; }
+    </style>
+
+    <!-- ====== OSPREY 1 — Plunge dive (front view, wings spread, talons down) ====== -->
+    <symbol id="osprey-dive" viewBox="0 0 120 140">
+      <!-- Wings spread wide as single horizontal sweep -->
+      <path class="tile" d="
+        M60 40
+        C44 30, 22 28, 4 36
+        C12 42, 26 46, 42 48
+        C50 50, 56 50, 60 52
+        C64 50, 70 50, 78 48
+        C94 46, 108 42, 116 36
+        C98 28, 76 30, 60 40 Z"/>
+      <!-- Tail at top (because diving head-down) -->
+      <path class="tile" d="M52 38 L46 26 L60 34 L74 26 L68 38 Z"/>
+      <!-- Body (vertical) -->
+      <ellipse class="tile" cx="60" cy="64" rx="9" ry="18"/>
+      <!-- Head at bottom -->
+      <circle class="ink" cx="60" cy="86" r="9"/>
+      <!-- Beak pointing down -->
+      <path class="ink" d="M57 93 L60 104 L63 93 Z"/>
+      <!-- Light face/mask -->
+      <path class="tile" d="M53 84 Q60 80 67 84 L65 89 Q60 86 55 89 Z"/>
+      <circle class="tile" cx="56" cy="83" r="1.4"/>
+      <!-- Legs + talons extended down -->
+      <path stroke="#f2ede3" stroke-width="2.5" stroke-linecap="round" fill="none" d="M54 92 L48 116"/>
+      <path stroke="#f2ede3" stroke-width="2.5" stroke-linecap="round" fill="none" d="M66 92 L72 116"/>
+      <!-- Claw spikes -->
+      <path stroke="#f2ede3" stroke-width="2" stroke-linecap="round" fill="none" d="
+        M48 116 L44 124 M48 116 L48 126 M48 116 L52 124
+        M72 116 L68 124 M72 116 L72 126 M72 116 L76 124"/>
+      <!-- Splash hint -->
+      <path stroke="#f2ede3" stroke-width="2" stroke-linecap="round" fill="none" d="M38 132 L34 136 M60 134 L60 138 M82 132 L86 136"/>
+    </symbol>
+
+    <!-- ====== OSPREY 2 — Carrying fish (side view, in flight, wings back) ====== -->
+    <symbol id="osprey-carry" viewBox="0 0 120 80">
+      <!-- Wings: single arched M with crook (anatomical) -->
+      <path class="tile" d="
+        M60 38
+        C50 24, 40 22, 30 30
+        C26 22, 14 18, 4 22
+        C14 26, 26 32, 38 36
+        C46 38, 54 40, 60 44
+        C66 40, 74 38, 82 36
+        C94 32, 106 26, 116 22
+        C106 18, 94 22, 90 30
+        C80 22, 70 24, 60 38 Z"/>
+      <!-- Body -->
+      <ellipse class="tile" cx="60" cy="46" rx="18" ry="6"/>
+      <!-- Tail short fan -->
+      <path class="tile" d="M42 46 L32 43 L32 49 L44 48 Z"/>
+      <!-- Head (dark, looking forward) -->
+      <ellipse class="ink" cx="78" cy="44" rx="7" ry="6"/>
+      <!-- Hooked beak -->
+      <path class="ink" d="M85 44 L96 44 L96 48 L85 48 Z"/>
+      <path class="ink" d="M94 47 L100 51 L92 50 Z"/>
+      <!-- Light face stripe -->
+      <path class="tile" d="M72 41 Q78 38 84 41 L82 44 Q78 42 74 44 Z"/>
+      <circle class="tile" cx="80" cy="42" r="1.3"/>
+      <!-- Fish in talons (held head-first along body) -->
+      <ellipse class="tile" cx="58" cy="62" rx="20" ry="4"/>
+      <path class="tile" d="M38 62 L30 58 L30 66 Z"/>
+      <circle class="ink" cx="70" cy="61" r="1"/>
+      <!-- Legs from body to fish -->
+      <path stroke="#f2ede3" stroke-width="2" stroke-linecap="round" fill="none" d="M54 52 L55 58 M64 52 L62 58"/>
+    </symbol>
+
+    <!-- ====== OSPREY 3 — Head portrait (badge mark, side view) ====== -->
+    <symbol id="osprey-head" viewBox="0 0 120 120">
+      <!-- Neck base -->
+      <path class="ink" d="
+        M22 102
+        Q60 88 98 102
+        L100 118
+        Q60 108 20 118 Z"/>
+      <!-- Head (mostly cream, large round) -->
+      <circle class="tile" cx="56" cy="58" r="34"/>
+      <!-- Dark eye stripe (the osprey signature — single horizontal band through the eye) -->
+      <path class="ink" d="
+        M24 56
+        Q44 68 86 58
+        L88 66
+        Q44 74 26 66 Z"/>
+      <!-- Eye (white dot in stripe) -->
+      <circle class="tile" cx="72" cy="62" r="3.2"/>
+      <circle class="ink" cx="72" cy="62" r="1.6"/>
+      <!-- Hooked beak protruding to the right -->
+      <path class="ink" d="
+        M82 68
+        L108 70
+        L110 78
+        L92 80
+        L82 76 Z"/>
+      <path class="ink" d="M108 76 L114 84 L102 82 Z"/>
+    </symbol>
+
+    <!-- ====== EAGLE 1 — Side-profile soaring ====== -->
+    <symbol id="eagle-side" viewBox="0 0 120 80">
+      <!-- Far wing (back) -->
+      <path class="tile" d="
+        M58 36
+        C44 20, 24 14, 6 20
+        C20 26, 36 32, 50 38 Z"/>
+      <!-- Near wing (front) -->
+      <path class="tile" d="
+        M62 36
+        C76 20, 96 14, 114 20
+        C100 26, 84 32, 70 38 Z"/>
+      <!-- Body -->
+      <ellipse class="tile" cx="60" cy="42" rx="20" ry="7"/>
+      <!-- Fanned tail -->
+      <path class="tile" d="M40 42 L26 38 L24 46 L40 46 Z"/>
+      <!-- Head + beak (dark) -->
+      <ellipse class="ink" cx="78" cy="40" rx="8" ry="6"/>
+      <path class="ink" d="M86 38 L100 38 L94 44 L86 44 Z"/>
+      <!-- White head cap (bald eagle cue) -->
+      <path class="tile" d="M72 36 Q78 32 86 36 L84 40 Q78 38 74 40 Z"/>
+      <circle class="ink" cx="82" cy="37" r="1.3"/>
+    </symbol>
+
+    <!-- ====== EAGLE 2 — Head portrait (badge mark) ====== -->
+    <symbol id="eagle-head" viewBox="0 0 120 120">
+      <!-- Neck/shoulder -->
+      <path class="ink" d="
+        M22 100
+        Q60 80 98 100
+        L100 116
+        Q60 104 20 116 Z"/>
+      <!-- White head -->
+      <ellipse class="tile" cx="62" cy="56" rx="34" ry="30"/>
+      <!-- Brow ridge (dark over eye) -->
+      <path class="ink" d="
+        M36 50
+        Q50 36 70 38
+        Q86 42 90 52
+        L84 56
+        Q72 46 60 48
+        Q48 52 42 58 Z"/>
+      <!-- Eye -->
+      <circle class="tile" cx="72" cy="56" r="3.5"/>
+      <circle class="ink" cx="72" cy="56" r="1.8"/>
+      <!-- Yellow hooked beak (using ink — palette doesn't include yellow) -->
+      <path class="ink" d="
+        M88 60
+        L114 64
+        L116 74
+        L100 78
+        L88 72 Z"/>
+      <path class="ink" d="M112 74 L118 82 L106 80 Z"/>
+      <!-- Nostril hint -->
+      <circle class="tile" cx="98" cy="68" r="1.2"/>
+    </symbol>
+
+    <!-- ====== EAGLE 3 — Striking (front view, talons forward) ====== -->
+    <symbol id="eagle-strike" viewBox="0 0 120 130">
+      <!-- Wings spread + back -->
+      <path class="tile" d="
+        M60 50
+        C42 24, 18 16, 4 24
+        C18 36, 36 50, 54 56 Z"/>
+      <path class="tile" d="
+        M60 50
+        C78 24, 102 16, 116 24
+        C102 36, 84 50, 66 56 Z"/>
+      <!-- Body -->
+      <ellipse class="tile" cx="60" cy="62" rx="12" ry="14"/>
+      <!-- Fanned tail behind/below body -->
+      <path class="tile" d="M50 72 L42 88 L60 84 L78 88 L70 72 Z"/>
+      <!-- Head (cream, slightly tilted forward) -->
+      <circle class="tile" cx="60" cy="44" r="10"/>
+      <!-- Brow (dark) -->
+      <path class="ink" d="
+        M50 42
+        Q60 32 70 42
+        L67 47
+        Q60 42 53 47 Z"/>
+      <!-- Hooked beak pointing down/forward -->
+      <path class="ink" d="M57 49 L63 49 L60 58 Z"/>
+      <!-- Eyes -->
+      <circle class="ink" cx="56" cy="44" r="1.5"/>
+      <circle class="ink" cx="64" cy="44" r="1.5"/>
+      <!-- Legs (sturdier, stick form) -->
+      <path stroke="#f2ede3" stroke-width="3.5" stroke-linecap="round" fill="none" d="M54 76 L48 100"/>
+      <path stroke="#f2ede3" stroke-width="3.5" stroke-linecap="round" fill="none" d="M66 76 L72 100"/>
+      <!-- Claws (3 spreading from each foot) -->
+      <path stroke="#f2ede3" stroke-width="2.5" stroke-linecap="round" fill="none" d="
+        M48 100 L38 112 M48 100 L46 116 M48 100 L54 114
+        M72 100 L82 112 M72 100 L74 116 M72 100 L66 114"/>
+    </symbol>
+  </defs>
+
+  <rect class="bg" width="1100" height="760"/>
+
+  <text class="title" x="40" y="40">More variants — three Osprey, three Eagle</text>
+  <text class="note"  x="40" y="62">Same cream-on-rust vocabulary as the locked Tern. Pick a favorite Osprey pose and a favorite Eagle pose, or mix.</text>
+
+  <!-- Row 1: OSPREY -->
+  <text class="row" x="40" y="98">Osprey</text>
+
+  <g transform="translate(80,110)">
+    <rect class="panel" x="0" y="0" width="220" height="220" rx="16"/>
+    <use href="#osprey-dive" x="30" y="20" width="160" height="180"/>
+    <text class="label" x="110" y="252">Plunge dive</text>
+    <text class="sub"   x="110" y="272">action · feet-forward strike</text>
+  </g>
+
+  <g transform="translate(390,110)">
+    <rect class="panel" x="0" y="0" width="220" height="220" rx="16"/>
+    <use href="#osprey-carry" x="20" y="60" width="180" height="120"/>
+    <text class="label" x="110" y="252">Carrying fish</text>
+    <text class="sub"   x="110" y="272">side flight · brand cue</text>
+  </g>
+
+  <g transform="translate(700,110)">
+    <rect class="panel" x="0" y="0" width="220" height="220" rx="16"/>
+    <use href="#osprey-head" x="30" y="30" width="160" height="160"/>
+    <text class="label" x="110" y="252">Head portrait</text>
+    <text class="sub"   x="110" y="272">badge · logo mark</text>
+  </g>
+
+  <!-- Row 2: EAGLE -->
+  <text class="row" x="40" y="418">Eagle</text>
+
+  <g transform="translate(80,430)">
+    <rect class="panel" x="0" y="0" width="220" height="220" rx="16"/>
+    <use href="#eagle-side" x="30" y="80" width="160" height="100"/>
+    <text class="label" x="110" y="252">Side-profile</text>
+    <text class="sub"   x="110" y="272">matches the tern pose</text>
+  </g>
+
+  <g transform="translate(390,430)">
+    <rect class="panel" x="0" y="0" width="220" height="220" rx="16"/>
+    <use href="#eagle-head" x="30" y="40" width="160" height="160"/>
+    <text class="label" x="110" y="252">Head portrait</text>
+    <text class="sub"   x="110" y="272">badge · logo mark</text>
+  </g>
+
+  <g transform="translate(700,430)">
+    <rect class="panel" x="0" y="0" width="220" height="220" rx="16"/>
+    <use href="#eagle-strike" x="30" y="30" width="160" height="170"/>
+    <text class="label" x="110" y="252">Striking</text>
+    <text class="sub"   x="110" y="272">action · talons forward</text>
+  </g>
+</svg>

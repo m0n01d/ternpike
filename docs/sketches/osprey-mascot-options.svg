@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <style>
+      .bg     { fill: #faf7f0; }
+      .panel  { fill: #cc7050; }
+      .tile   { fill: #f2ede3; }
+      .ink    { fill: #1e2818; }
+      .label  { fill: #1e2818; font-size: 22px; font-weight: 700; text-anchor: middle; }
+      .sub    { fill: #6b7c58; font-size: 13px; text-anchor: middle; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
+      .title  { fill: #1e2818; font-size: 18px; font-weight: 700; }
+      .note   { fill: #6b7c58; font-size: 12px; }
+    </style>
+
+    <!-- ====== TERN — exact copy of public/favicon.svg ====== -->
+    <symbol id="tern" viewBox="0 0 120 60">
+      <path d="M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z" class="tile"/>
+      <path d="M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z" class="tile"/>
+      <ellipse cx="60" cy="43" rx="20" ry="7" class="tile"/>
+      <g transform="rotate(-12 42 43)">
+        <path d="M42 43 L18 38" stroke="#f2ede3" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M42 43 L18 48" stroke="#f2ede3" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </g>
+      <ellipse cx="76" cy="40" rx="9" ry="7" class="ink"/>
+      <path d="M84 40 L96 38.5 L84 42Z" class="ink"/>
+      <circle cx="79" cy="38.5" r="1.6" class="tile"/>
+    </symbol>
+
+    <!-- ====== OSPREY — Tern + fish in talons ====== -->
+    <symbol id="osprey" viewBox="0 0 120 70">
+      <!-- Tern vocabulary, unchanged -->
+      <path d="M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z" class="tile"/>
+      <path d="M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z" class="tile"/>
+      <ellipse cx="60" cy="43" rx="20" ry="7" class="tile"/>
+      <g transform="rotate(-12 42 43)">
+        <path d="M42 43 L18 38" stroke="#f2ede3" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        <path d="M42 43 L18 48" stroke="#f2ede3" stroke-width="2" stroke-linecap="round" fill="none"/>
+      </g>
+      <ellipse cx="76" cy="40" rx="9" ry="7" class="ink"/>
+      <path d="M84 40 L96 38.5 L84 42Z" class="ink"/>
+      <circle cx="79" cy="38.5" r="1.6" class="tile"/>
+      <!-- Legs dangling -->
+      <path d="M56 49 L55 55" stroke="#f2ede3" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <path d="M64 49 L63 55" stroke="#f2ede3" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      <!-- Fish (held head-forward along body axis, head pointing same way as tern's head — right) -->
+      <ellipse class="tile" cx="62" cy="58" rx="14" ry="3"/>
+      <path class="tile" d="M48 58 L42 55 L42 61 Z"/>
+      <circle class="ink" cx="70" cy="57.5" r="0.9"/>
+    </symbol>
+
+    <!-- ====== EAGLE — Tern vocabulary, bigger wings + fanned tail + flatter soar ====== -->
+    <symbol id="eagle" viewBox="-10 0 140 70">
+      <!-- Wings: same M language but broader sweep, less peak, held more horizontal -->
+      <path class="tile" d="M60 40 C40 22, 0 16, -10 30 C8 30, 36 36, 60 44 Z"/>
+      <path class="tile" d="M60 40 C80 22, 120 16, 130 30 C112 30, 84 36, 60 44 Z"/>
+      <!-- Larger body -->
+      <ellipse class="tile" cx="60" cy="44" rx="26" ry="8"/>
+      <!-- Fanned wedge tail (replaces forked tern tail) -->
+      <path class="tile" d="M38 42 L14 36 L10 44 L14 52 L38 48 Z"/>
+      <!-- Head (dark, slightly larger than tern's) -->
+      <ellipse cx="80" cy="40" rx="11" ry="8" class="ink"/>
+      <!-- Hooked eagle beak: angular wedge with sharp hook tip below mouth line -->
+      <path class="ink" d="
+        M 88 35
+        L 103 36
+        Q 111 38 111 43
+        L 109 49
+        L 105 53
+        L 101 51
+        L 102 47
+        Q 100 45 96 44
+        L 88 44
+        Z"/>
+      <!-- Light face mask (bald eagle cue — white head) -->
+      <path class="tile" d="M72 36 Q80 32 88 36 L86 40 Q80 38 74 40 Z"/>
+      <circle cx="84" cy="38" r="1.7" class="ink"/>
+    </symbol>
+  </defs>
+
+  <rect class="bg" width="900" height="600"/>
+
+  <text class="title" x="40" y="40">Final mascot set — three birds, one drawing vocabulary</text>
+  <text class="note"  x="40" y="62">Same Tern silhouette is the basis for all three. Osprey adds a fish; Eagle keeps the side profile but with broader wings, a fanned tail, and a larger head.</text>
+
+  <!-- ============ TERN ============ -->
+  <g transform="translate(60,110)">
+    <rect class="panel" x="0" y="0" width="240" height="240" rx="16"/>
+    <use href="#tern" x="20" y="80" width="200" height="100"/>
+    <text class="label" x="120" y="272">Tern</text>
+    <text class="sub"   x="120" y="292">Free · existing</text>
+  </g>
+
+  <!-- ============ OSPREY ============ -->
+  <g transform="translate(330,110)">
+    <rect class="panel" x="0" y="0" width="240" height="240" rx="16"/>
+    <use href="#osprey" x="20" y="60" width="200" height="120"/>
+    <text class="label" x="120" y="272">Osprey</text>
+    <text class="sub"   x="120" y="292">Paid · tern with a fish</text>
+  </g>
+
+  <!-- ============ EAGLE ============ -->
+  <g transform="translate(600,110)">
+    <rect class="panel" x="0" y="0" width="240" height="240" rx="16"/>
+    <use href="#eagle" x="0" y="70" width="240" height="120"/>
+    <text class="label" x="120" y="272">Eagle</text>
+    <text class="sub"   x="120" y="292">Trailblazer · broader, fanned tail</text>
+  </g>
+
+  <!-- Footer -->
+  <g transform="translate(60,470)">
+    <text class="title" x="0" y="0">What changed</text>
+    <text class="note" x="0" y="24"><tspan font-weight="700" fill="#2d3a22">Osprey</tspan> = Tern silhouette + fish held in talons + two short leg lines connecting body to fish. Everything else identical to the existing favicon.</text>
+    <text class="note" x="0" y="44"><tspan font-weight="700" fill="#2d3a22">Eagle</tspan> = same M-wing language but wider sweep + flatter curve (soaring, not flapping). Body bigger. Forked tern tail replaced by a fanned wedge. Head bigger with hooked beak + bald-eagle white face mask.</text>
+    <text class="note" x="0" y="74" font-style="italic">If this lands, the foundation issue is: ship these three as flat SVGs and use them as the hero on each plan card on the billing screen.</text>
+  </g>
+</svg>
