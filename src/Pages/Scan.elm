@@ -5,7 +5,7 @@ import Data.Category as Category
 import Data.Money as Money
 import Data.Navigation exposing (Tab(..))
 import Data.OcrPath as OcrPath exposing (OcrPath(..))
-import Data.Scan exposing (DraftFields, OcrData, ScanItem, ScanStatus(..), needsReview)
+import Data.Scan exposing (DraftFields, OcrData, ScanCardState(..), ScanItem, ScanStatus(..), cardState, needsReview)
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip exposing (SharedTrip)
 import Data.SharedTrips
@@ -29,6 +29,8 @@ import UI.Gate
 import UI.Icons
 import UI.MoneyView
 import UI.SharedTripBadge
+import Verify.Contract
+import Verify.Specs.ScanQueueCard
 
 
 viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
@@ -473,7 +475,17 @@ viewScanCard ctx item =
     Html.div
         [ Html.Attributes.class "flex bg-cream rounded-xl overflow-hidden shadow-card" ]
         [ viewScanThumbnail item
-        , Html.div [ Html.Attributes.class "flex-1 min-w-0 p-3" ]
+        , Html.div
+            (Html.Attributes.class "flex-1 min-w-0 p-3"
+                :: Verify.Contract.verifyAttrs "ScanQueueCard"
+                    (Verify.Specs.ScanQueueCard.surface
+                        { corrupt = False
+                        , item = item
+                        , ocrPath = ctx.ocrPath
+                        , storageAvailable = ctx.storageAvailable
+                        }
+                    )
+            )
             [ viewScanCardBody ctx item ]
         ]
 
@@ -495,73 +507,78 @@ viewScanThumbnail item =
 
 viewScanCardBody : { ocrPath : OcrPath, storageAvailable : Bool } -> ScanItem -> Html Msg
 viewScanCardBody ctx item =
-    case item.status of
-        ScanDeferred ->
-            -- Captured offline (or during the boot window). Split into four
-            -- sub-cases in order of severity:
-            -- 1. persist-error: the image may not be durably saved — warn.
-            -- 2. storage unavailable: same durability concern — warn.
-            -- 3. OCR now unavailable (tier/key lapsed): the receipt is saved
-            --    but can't be scanned automatically — tell the user to fill manually.
-            -- 4. Normal deferred: durably saved, OCR will run on reconnect.
-            if item.persistError || not ctx.storageAvailable then
-                viewPersistErrorCard item
+    case cardState { storageAvailable = ctx.storageAvailable } item ctx.ocrPath of
+        CardDeferred ->
+            viewDeferredCard item
 
-            else
-                case ctx.ocrPath of
-                    Unscannable ->
-                        viewOcrUnavailableCard item
-
-                    ByoPath _ ->
-                        viewDeferredCard item
-
-                    HostedPath ->
-                        viewDeferredCard item
-
-        ScanQueued ->
-            Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
-                [ Html.div [ Html.Attributes.class "text-moss text-xs" ] [ Html.text "Queued…" ]
-                , viewProgressBar "w-1/4"
-                ]
-
-        ScanProcessing ->
-            -- "Reading…" — appears both on a freshly queued item and on
-            -- reconnect-retried deferred items. `retryCount > 0` means this
-            -- is a reconnect attempt; show that context to the user.
-            viewProcessingCard item
-
-        ScanReady ->
+        CardNeedsReview ->
+            -- OCR returned but a structural field is missing; badge prompts the
+            -- user to fill before filing.
             case item.ocrData of
                 Just ocr ->
                     Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
-                        [ Html.Extra.viewIf (needsReview ocr) viewNeedsReviewBadge
+                        [ viewNeedsReviewBadge
                         , viewOcrSummary ocr
                         , viewReviewButton item.id
                         ]
 
                 Nothing ->
-                    -- OCR ran (or was retried after reconnect) but produced no
-                    -- usable data. `lastError` carries the reason from the most
-                    -- recent attempt; fall back to `ocrError` (legacy field).
-                    let
-                        errorReason : Maybe String
-                        errorReason =
-                            case item.lastError of
-                                Just _ ->
-                                    item.lastError
+                    viewDeferredCard item
 
-                                Nothing ->
-                                    item.ocrError
-                    in
-                    Html.div [ Html.Attributes.class "flex flex-col gap-2" ]
-                        [ viewOcrFailure item.retryCount errorReason
+        CardOcrFailed ->
+            -- OCR ran (or was retried after reconnect) but produced no usable
+            -- data. `lastError` carries the reason from the most recent attempt;
+            -- fall back to `ocrError` (legacy field).
+            let
+                errorReason : Maybe String
+                errorReason =
+                    case item.lastError of
+                        Just _ ->
+                            item.lastError
+
+                        Nothing ->
+                            item.ocrError
+            in
+            Html.div [ Html.Attributes.class "flex flex-col gap-2" ]
+                [ viewOcrFailure item.retryCount errorReason
+                , viewReviewButton item.id
+                ]
+
+        CardPersistError ->
+            -- persist-error: the image may not be durably saved — warn the user
+            -- before they navigate away.
+            viewPersistErrorCard item
+
+        CardProcessing ->
+            -- "Reading…" / "Queued…" — appears on a freshly queued item
+            -- (ScanQueued) and on reconnect-retried deferred items (ScanProcessing).
+            -- `retryCount > 0` means a reconnect attempt; show that context.
+            case item.status of
+                ScanQueued ->
+                    Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
+                        [ Html.div [ Html.Attributes.class "text-moss text-xs" ] [ Html.text "Queued…" ]
+                        , viewProgressBar "w-1/4"
+                        ]
+
+                _ ->
+                    viewProcessingCard item
+
+        CardReady ->
+            -- OCR returned with all structural fields present; no badge needed.
+            case item.ocrData of
+                Just ocr ->
+                    Html.div [ Html.Attributes.class "flex flex-col gap-1.5" ]
+                        [ viewOcrSummary ocr
                         , viewReviewButton item.id
                         ]
 
-        ScanSubmitted ->
-            -- Terminal state — a checkmark card. NOT a spinner. Visible
-            -- during the pre-sync boot window when we know the expense was
-            -- filed but the Ledger hasn't loaded yet.
+                Nothing ->
+                    viewDeferredCard item
+
+        CardSubmitted ->
+            -- Terminal state — a checkmark card. NOT a spinner. Visible during
+            -- the pre-sync boot window when we know the expense was filed but the
+            -- Ledger hasn't loaded yet.
             Html.div
                 [ Html.Attributes.class "flex items-center gap-2 h-full" ]
                 [ Html.span [ Html.Attributes.class "text-moss text-sm font-semibold" ]
@@ -576,6 +593,9 @@ viewScanCardBody ctx item =
                     )
                     (Maybe.andThen .date item.ocrData)
                 ]
+
+        CardUnavailable ->
+            viewOcrUnavailableCard item
 
 
 {-| Normal deferred card — the receipt is durably saved and OCR will run
