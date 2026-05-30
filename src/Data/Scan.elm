@@ -785,9 +785,27 @@ type OcrFailureKind
 `0` is the "connection died, never got a response" sentinel the proxy
 port reports for a network drop — treat it as a flap (`Transient`).
 `429` and the retryable `5xx` family are real server responses worth a
-bounded retry. Everything else is `Permanent`.
+bounded retry.
+
+`401` / `403` are also `Transient`. The proxy auth rides on the same
+CouchDB session that re-handshakes on reconnect, so a scan fired the
+instant the network returns — before the token is accepted again — gets
+a 401/403 that is NOT a permanent auth failure, it's the reconnect
+window (#400). Requeuing transiently (no `retryCount` burn, no terminal
+`ScanReady` error) lets the next retry succeed instead of permanently
+stranding the receipt. A genuinely-expired session is handled
+out-of-band: sync reports `AuthExpired` and the app drops to the guest
+screen, leaving the scan flow entirely.
+
+Everything else is `Permanent`.
 
     hostedFailureKind 0
+    --> Transient
+
+    hostedFailureKind 401
+    --> Transient
+
+    hostedFailureKind 403
     --> Transient
 
     hostedFailureKind 503
@@ -799,7 +817,7 @@ bounded retry. Everything else is `Permanent`.
 -}
 hostedFailureKind : Int -> OcrFailureKind
 hostedFailureKind status =
-    if status == 0 then
+    if status == 0 || status == 401 || status == 403 then
         Transient
 
     else if status == 429 || status == 500 || status == 502 || status == 503 then

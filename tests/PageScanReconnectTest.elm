@@ -346,6 +346,63 @@ suite =
                         , \_ -> Expect.equal (Just 0) (retryOf "scan::1::0" newModel)
                         ]
                         ()
+            , test "early reconnect 401 (auth re-handshake window) is transient — requeue, no bump, not terminal (#400)" <|
+                \() ->
+                    -- A hosted scan fired the instant the network returns can
+                    -- land a 401/403 while the CouchDB session is still
+                    -- re-handshaking. That MUST requeue (no `retryCount` burn,
+                    -- not a terminal `ScanReady` error) so the next reconnect
+                    -- retries it — otherwise an early attempt permanently
+                    -- strands the receipt.
+                    let
+                        model =
+                            { paidModel
+                                | ocrInFlight = Set.singleton "scan::1::0"
+                                , scanQueue = queueOf [ processingItem "scan::1::0" ]
+                            }
+
+                        ( newModel, _ ) =
+                            Page.Scan.update (ScanProxyResult { body = "", itemId = "scan::1::0", ok = False, status = 401 }) model
+                    in
+                    Expect.all
+                        [ \_ -> Expect.equal (Just ScanDeferred) (statusOf "scan::1::0" newModel)
+                        , \_ -> Expect.equal (Just 0) (retryOf "scan::1::0" newModel)
+                        , \_ -> Expect.equal False (Set.member "scan::1::0" newModel.ocrInFlight)
+                        ]
+                        ()
+            , test "early reconnect 403 is transient too (member-not-yet-restored)" <|
+                \() ->
+                    let
+                        model =
+                            { paidModel
+                                | ocrInFlight = Set.singleton "scan::1::0"
+                                , scanQueue = queueOf [ processingItem "scan::1::0" ]
+                            }
+
+                        ( newModel, _ ) =
+                            Page.Scan.update (ScanProxyResult { body = "", itemId = "scan::1::0", ok = False, status = 403 }) model
+                    in
+                    Expect.all
+                        [ \_ -> Expect.equal (Just ScanDeferred) (statusOf "scan::1::0" newModel)
+                        , \_ -> Expect.equal (Just 0) (retryOf "scan::1::0" newModel)
+                        ]
+                        ()
+            ]
+        , describe "network-online reconnect edge (#400)"
+            [ test "Offline -> Online is an edge: dispatches the retry" <|
+                \() ->
+                    -- `Main.updateShared`'s NetworkStatusChanged branch guards
+                    -- the in-session deferred-OCR retry on this pure predicate.
+                    Expect.equal True (Data.Sync.becameOnline Data.Sync.Offline True)
+            , test "Unknown (boot window) -> Online is also an edge" <|
+                \() ->
+                    Expect.equal True (Data.Sync.becameOnline Data.Sync.Unknown True)
+            , test "a redundant Online report is NOT an edge — no double-dispatch" <|
+                \() ->
+                    Expect.equal False (Data.Sync.becameOnline Data.Sync.Online True)
+            , test "an offline report is never an edge" <|
+                \() ->
+                    Expect.equal False (Data.Sync.becameOnline Data.Sync.Offline False)
             ]
         ]
 

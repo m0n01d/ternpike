@@ -1672,7 +1672,29 @@ updateShared msg model =
                     ( GuestModel { gs | network = networkStateFromOnline isOnline }, Cmd.none )
 
                 AuthModel as_ ->
-                    ( AuthModel { as_ | network = networkStateFromOnline isOnline }, Cmd.none )
+                    -- When the network comes back online in-session, kick the
+                    -- deferred-scan retry so receipts OCR without an app
+                    -- restart (#400). The live PouchDB sync doesn't reliably
+                    -- re-emit a fresh `Synced` edge on an Airplane-mode flip,
+                    -- so the `Synced`-edge trigger in `SyncStateMsg` alone
+                    -- misses the in-session reconnect; the `navigator.onLine`
+                    -- port drives the retry directly. Fired only on the
+                    -- offline→online EDGE (`Data.Sync.becameOnline`) so a
+                    -- redundant online report can't double-dispatch. Safe to
+                    -- fire eagerly: `RetryDeferredScans` is idempotent and
+                    -- tier-capped, and a reconnect-window transport/auth
+                    -- failure requeues transiently (see
+                    -- `Data.Scan.hostedFailureKind` / `byoFailureKind`), so a
+                    -- premature attempt never strands a receipt.
+                    ( AuthModel { as_ | network = networkStateFromOnline isOnline }
+                    , if Data.Sync.becameOnline as_.network isOnline then
+                        Task.perform
+                            (\_ -> AuthMsg (ScanMsg Msg.Scan.RetryDeferredScans))
+                            (Task.succeed ())
+
+                      else
+                        Cmd.none
+                    )
 
         ResetSettingsClicked ->
             case model of

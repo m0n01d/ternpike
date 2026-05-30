@@ -1,4 +1,4 @@
-module Data.Sync exposing (NetworkState(..), SyncState(..), isOffline)
+module Data.Sync exposing (NetworkState(..), SyncState(..), becameOnline, isOffline)
 
 {-| PouchDB → CouchDB live-sync health.
 
@@ -80,3 +80,31 @@ isOffline state =
 
         Unknown ->
             True
+
+
+{-| True on the connectivity EDGE into online: the previous tri-state was
+treated as offline (`Offline` or the boot-window `Unknown`) and the fresh
+`navigator.onLine` report is `True`. This is the trigger for re-running
+deferred OCR in-session (#400) — a `navigator.onLine` flip the live
+PouchDB sync may not observe as a fresh `Synced` edge, so the
+connectivity port drives the retry directly.
+
+Returns `False` for a redundant online report (already `Online`), so a
+duplicate `networkStatus True` can't double-dispatch.
+
+    becameOnline Offline True
+    --> True
+
+    becameOnline Unknown True
+    --> True
+
+    becameOnline Online True
+    --> False
+
+    becameOnline Offline False
+    --> False
+
+-}
+becameOnline : NetworkState -> Bool -> Bool
+becameOnline previous isOnline =
+    isOnline && isOffline previous
