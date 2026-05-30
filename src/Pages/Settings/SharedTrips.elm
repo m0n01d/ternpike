@@ -66,11 +66,11 @@ viewCreateRow : Tier.Tier -> Html Msg
 viewCreateRow tier =
     UI.Card.subCard
         [ Html.div
-            (Html.Attributes.class "flex items-start justify-between gap-3"
+            (Html.Attributes.class "flex flex-col items-start gap-3"
                 :: Verify.Contract.verifyAttrs "TierGating"
                     (Verify.Specs.TierGating.surface (Verify.Specs.TierGating.honest tier))
             )
-            [ Html.p [ Html.Attributes.class "text-xs text-muted flex-1" ]
+            [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
                 [ Html.text
                     (if Tier.isPaid tier then
                         "Start a brand-new shared trip to log expenses together with a partner or household. (To share a trip you already have, use Share from the Trips list.)"
