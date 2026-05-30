@@ -27,6 +27,8 @@ import Json.Decode
 import RemoteData
 import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Layout
+import Verify.Contract
+import Verify.Specs.TierGating
 
 
 view : AuthState -> Html Msg
@@ -210,7 +212,10 @@ viewTargetPicker as_ form ownedFlocks =
                 }
     in
     UI.Layout.formField "WHO'S ON THIS TRIP?"
-        (Html.div []
+        (Html.div
+            (Verify.Contract.verifyAttrs "TierGating"
+                (Verify.Specs.TierGating.surface (Verify.Specs.TierGating.honest as_.tier))
+            )
             [ Html.div [ Html.Attributes.class "flex gap-2 flex-wrap" ]
                 (personalTile :: flockTiles ++ [ newSharedTile ])
             , viewNewFlockInline as_ form

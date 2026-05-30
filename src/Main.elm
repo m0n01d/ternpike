@@ -2071,6 +2071,31 @@ applyUnitSeed unit fixture as_ =
         "SharedTripCard" ->
             { as_ | sharedTrips = Verify.Specs.SharedTripCard.seededTrips fixture }
 
+        "TierGating" ->
+            -- The tier gate on shared-trip CREATION now lives in the new-trip
+            -- form's "+ New shared trip" target (UI.TripFormModal), not in
+            -- Settings. Seed the form open on that target so the gated panel
+            -- (invitee fields for paid, upgrade prompt for Tern) renders and
+            -- carries the `TierGating` verify attrs.
+            { as_
+                | tier = verifyFixtureTier fixture
+                , tripForm =
+                    Just
+                        { budget = ""
+                        , coverPhotoUrl = ""
+                        , description = ""
+                        , editing = Nothing
+                        , endDate = ""
+                        , errors = []
+                        , groupNameOverridden = False
+                        , name = ""
+                        , sharedTripRequest = RemoteData.NotAsked
+                        , startDate = DateField.toIso as_.today
+                        , submitting = False
+                        , target = Trip.ToNewFlock Trip.defaultNewFlockDraft
+                        }
+            }
+
         _ ->
             { as_ | tier = verifyFixtureTier fixture }
 
@@ -4143,96 +4168,6 @@ updateAuth msg as_ =
             ( AuthModel { as_ | sharedTripUi = SharedTripUi.toggleExpanded flockId ui }
             , Cmd.none
             )
-
-        OpenCreateSharedTripModal ->
-            ( AuthModel (setSharedTripModal (SharedTripUi.CreateModal { name = "", request = RemoteData.NotAsked }) as_)
-            , Cmd.none
-            )
-
-        CreateSharedTripNameChanged name ->
-            let
-                ui =
-                    as_.sharedTripUi
-            in
-            case ui.modal of
-                SharedTripUi.CreateModal m ->
-                    ( AuthModel { as_ | sharedTripUi = { ui | modal = SharedTripUi.CreateModal { m | name = name } } }
-                    , Cmd.none
-                    )
-
-                _ ->
-                    ( AuthModel as_, Cmd.none )
-
-        SubmitCreateSharedTrip ->
-            case as_.sharedTripUi.modal of
-                SharedTripUi.CreateModal { name } ->
-                    let
-                        trimmed =
-                            String.trim name
-                    in
-                    if trimmed == "" then
-                        ( AuthModel
-                            (updateModalRequest
-                                (\m ->
-                                    case m of
-                                        SharedTripUi.CreateModal data ->
-                                            Just
-                                                (SharedTripUi.CreateModal
-                                                    { data | request = RemoteData.Failure (Http.BadBody "Name is required.") }
-                                                )
-
-                                        _ ->
-                                            Nothing
-                                )
-                                as_
-                            )
-                        , Cmd.none
-                        )
-
-                    else
-                        ( AuthModel
-                            (updateModalRequest
-                                (\m ->
-                                    case m of
-                                        SharedTripUi.CreateModal data ->
-                                            Just (SharedTripUi.CreateModal { data | request = RemoteData.Loading })
-
-                                        _ ->
-                                            Nothing
-                                )
-                                as_
-                            )
-                        , Http.SharedTripApi.createSharedTrip as_.creds { name = trimmed } (AuthMsg << CreateSharedTripResult)
-                        )
-
-                _ ->
-                    ( AuthModel as_, Cmd.none )
-
-        CreateSharedTripResult result ->
-            case RemoteData.fromResult result of
-                RemoteData.Success _ ->
-                    ( AuthModel
-                        (setSharedTripModal SharedTripUi.NoModal
-                            { as_ | toast = Just "Shared trip created. It'll show up here once sync settles." }
-                        )
-                    , toastFor
-                    )
-
-                remote ->
-                    ( AuthModel
-                        (updateModalRequest
-                            (\m ->
-                                case m of
-                                    SharedTripUi.CreateModal data ->
-                                        Just (SharedTripUi.CreateModal { data | request = remote })
-
-                                    _ ->
-                                        Nothing
-                            )
-                            as_
-                        )
-                    , Cmd.none
-                    )
 
         OpenShareTripModal trip ->
             ( AuthModel { as_ | sharedTripUi = SharedTripUi.openShareTrip trip.id trip.name as_.sharedTripUi }

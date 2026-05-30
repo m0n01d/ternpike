@@ -1,19 +1,21 @@
 module Pages.Settings.SharedTrips exposing (view, viewModal)
 
-{-| The "Flocks" subsection of the Settings page (#62).
+{-| The "Shared trips" subsection of the Settings page (#62).
 
-Renders one card per shared trip the user belongs to plus a "Create flock"
-button at the top with a Tern-friendly upgrade hint. Owner cards
-get Invite / Transfer-ownership / Leave buttons; member cards only
-get Leave. A "View members" toggle expands the inline avatar stack
-into a full email list.
+This section MANAGES shared trips the user is already in — it does not
+create them. Creation lives where the trip does: the new-trip form's
+"+ New shared trip" target, and the Trips-page "Share this trip" action.
+Renders one card per shared trip the user belongs to (an empty state with
+those two pointers when there are none). Owner cards get Invite /
+Transfer-ownership / Leave buttons; member cards only get Leave. A "View
+members" toggle expands the inline avatar stack into a full email list.
 
-Modals (create / invite / transfer / leave-confirm) are rendered
-separately by `viewModal` — they sit at the page root rather than
-inside the card so they overlay everything. Each modal carries its
-own `request : RemoteData Http.Error _` so the button busy state +
-error chip are derived from one exhaustive `case` per CLAUDE.md's
-RemoteData rule.
+Modals (invite / transfer / leave-confirm, plus the Trips-page-driven
+ShareTripModal) are rendered separately by `viewModal` — they sit at the
+page root rather than inside the card so they overlay everything. Each
+modal carries its own `request : RemoteData Http.Error _` so the button
+busy state + error chip are derived from one exhaustive `case` per
+CLAUDE.md's RemoteData rule.
 
 -}
 
@@ -39,7 +41,6 @@ import UI.Rule
 import UI.SharedTripBadge
 import Verify.Contract
 import Verify.Specs.SharedTripCard
-import Verify.Specs.TierGating
 
 
 view : AuthState -> Html Msg
@@ -53,7 +54,6 @@ view as_ =
     in
     Html.div []
         [ UI.Rule.kicker "SHARED TRIPS"
-        , viewCreateRow as_.tier
         , if List.isEmpty joined then
             viewEmptyState
 
@@ -62,42 +62,11 @@ view as_ =
         ]
 
 
-viewCreateRow : Tier.Tier -> Html Msg
-viewCreateRow tier =
-    UI.Card.subCard
-        [ Html.div
-            (Html.Attributes.class "flex flex-col items-start gap-3"
-                :: Verify.Contract.verifyAttrs "TierGating"
-                    (Verify.Specs.TierGating.surface (Verify.Specs.TierGating.honest tier))
-            )
-            [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-                [ Html.text
-                    (if Tier.isPaid tier then
-                        "Start a brand-new shared trip to log expenses together with a partner or household. (To share a trip you already have, use \"Share this trip\" from the Trips list.)"
-
-                     else
-                        "Start a new shared trip with a partner or household so you can log expenses together. Upgrade to Osprey to start one."
-                    )
-                ]
-            , if Tier.isPaid tier then
-                UI.Button.primary { label = "New shared trip", onClick = AuthMsg OpenCreateSharedTripModal }
-
-              else
-                Html.button
-                    [ Html.Attributes.type_ "button"
-                    , Html.Attributes.disabled True
-                    , Html.Attributes.class "shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg bg-cream-deep text-muted border border-tan cursor-not-allowed"
-                    ]
-                    [ Html.text "New shared trip" ]
-            ]
-        ]
-
-
 viewEmptyState : Html Msg
 viewEmptyState =
     UI.Card.subCard
         [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-            [ Html.text "You're not in any shared trips yet. Use \"New shared trip\" above to start a fresh one, share a trip you already have from the "
+            [ Html.text "You're not in any shared trips yet. Start a new trip and pick \"+ New shared trip\" to invite people as you create it, share a trip you already have with \"Share this trip\" from the "
             , Html.a
                 [ Html.Attributes.href "/trips"
                 , Html.Attributes.class "text-rust-deep underline"
@@ -213,28 +182,6 @@ viewModal as_ =
     case as_.sharedTripUi.modal of
         SharedTripUi.NoModal ->
             Html.Extra.nothing
-
-        SharedTripUi.CreateModal { name, request } ->
-            modalShell "New shared trip"
-                [ Html.p [ Html.Attributes.class "text-sm text-muted mb-3" ]
-                    [ Html.text "Give your shared trip a name. You can invite people once it's created." ]
-                , formField "NAME"
-                    (Html.input
-                        [ Html.Attributes.type_ "text"
-                        , Html.Attributes.value name
-                        , Html.Events.onInput (AuthMsg << CreateSharedTripNameChanged)
-                        , Html.Attributes.placeholder "Honeymoon"
-                        , textInputStyle
-                        ]
-                        []
-                    )
-                , viewModalActions
-                    { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
-                    , confirmLabel = "Create trip"
-                    , confirmMsg = AuthMsg SubmitCreateSharedTrip
-                    , request = RemoteData.map (\_ -> ()) request
-                    }
-                ]
 
         SharedTripUi.InviteCrewModal flockId { request } ->
             modalShell "Invite crew"

@@ -66,11 +66,7 @@ modal.
 
 -}
 type SharedTripModal
-    = CreateModal
-        { name : String
-        , request : RemoteData Http.Error Http.SharedTripApi.CreateSharedTripResponse
-        }
-    | InviteModal
+    = InviteModal
         SharedTripId
         { email : String
         , request : RemoteData Http.Error ()
