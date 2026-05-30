@@ -267,39 +267,50 @@ viewOfflineHero storageAvailable =
 
 viewBody : AuthState -> Html Msg
 viewBody model =
+    let
+        ocrPath : OcrPath
+        ocrPath =
+            OcrPath.resolve model.config.anthropicKey model.tier
+
+        ctx : { ocrPath : OcrPath, storageAvailable : Bool }
+        ctx =
+            { ocrPath = ocrPath
+            , storageAvailable = model.storageAvailable
+            }
+    in
     if Dict.isEmpty model.scanQueue then
-        Html.div [ Html.Attributes.class "py-8 text-center" ]
-            [ Html.p [ Html.Attributes.class "font-display italic text-lg text-moss" ]
-                [ Html.text "Stack's empty." ]
-            , Html.p [ Html.Attributes.class "mt-1 text-sm text-muted" ]
-                [ Html.text "Snap a receipt to begin." ]
-            , Html.a
-                [ Html.Attributes.href (Routing.pathForCurrentTab model AddTab)
-                , Html.Attributes.class "mt-4 inline-block py-2 px-4 rounded-lg border border-tan text-muted text-sm cursor-pointer"
-                ]
-                [ Html.text "Fill in manually →" ]
-            ]
+        viewEmptyState model
 
     else
         let
+            items : List ScanItem
             items =
                 Dict.values model.scanQueue
 
+            needsReviewItem : ScanItem -> Bool
             needsReviewItem i =
                 i.status == ScanReady && Maybe.map needsReview i.ocrData == Just True
 
+            sortedItems : List ScanItem
             sortedItems =
                 List.filter needsReviewItem items ++ List.Extra.removeWhen needsReviewItem items
 
+            hasSubmitted : Bool
             hasSubmitted =
                 List.any (\i -> i.status == ScanSubmitted) items
 
+            deferredCount : Int
+            deferredCount =
+                List.length (List.filter (\i -> i.status == ScanDeferred) items)
+
+            debugItems : List ScanItem
             debugItems =
                 List.filter (\i -> i.exifDebug /= "") items
         in
         Html.div []
-            [ Html.div [ Html.Attributes.class "flex flex-col gap-3 mb-4" ]
-                (List.map viewScanCard sortedItems)
+            [ viewDeferredBadge deferredCount model.network
+            , Html.div [ Html.Attributes.class "flex flex-col gap-3 mb-4" ]
+                (List.map (viewScanCard ctx) sortedItems)
             , Html.Extra.viewIf hasSubmitted <|
                 Html.div [ Html.Attributes.class "mb-4 flex justify-center" ]
                     [ UI.Button.ghost { label = "Clear submitted", onClick = AuthMsg (ScanMsg Msg.Scan.ClearDoneItems) } ]
@@ -314,6 +325,70 @@ viewBody model =
             ]
 
 
+{-| Offline-aware empty state. When the user is offline, reassure them
+they can still capture receipts (if storage is available). When online
+and the queue is empty, direct them to scan or add manually.
+-}
+viewEmptyState : AuthState -> Html Msg
+viewEmptyState model =
+    if Data.Sync.isOffline model.network then
+        Html.div [ Html.Attributes.class "py-8 text-center" ]
+            [ Html.p [ Html.Attributes.class "font-display italic text-lg text-moss" ]
+                [ Html.text "Nothing queued yet." ]
+            , Html.p [ Html.Attributes.class "mt-1 text-sm text-muted" ]
+                [ Html.text "Offline? No problem — snap a receipt above. It'll be read when you reconnect." ]
+            ]
+
+    else
+        Html.div [ Html.Attributes.class "py-8 text-center" ]
+            [ Html.p [ Html.Attributes.class "font-display italic text-lg text-moss" ]
+                [ Html.text "Stack's empty." ]
+            , Html.p [ Html.Attributes.class "mt-1 text-sm text-muted" ]
+                [ Html.text "Snap a receipt to begin." ]
+            , Html.a
+                [ Html.Attributes.href (Routing.pathForCurrentTab model AddTab)
+                , Html.Attributes.class "mt-4 inline-block py-2 px-4 rounded-lg border border-tan text-muted text-sm cursor-pointer"
+                ]
+                [ Html.text "Fill in manually →" ]
+            ]
+
+
+{-| Confidence affordance — shows the count of durably-saved deferred
+receipts so the user knows they are safe when offline. Visible only
+when there is at least one deferred item. Online: "will scan shortly".
+Offline: "will scan when you're back online".
+-}
+viewDeferredBadge : Int -> Data.Sync.NetworkState -> Html Msg
+viewDeferredBadge count networkState =
+    if count == 0 then
+        Html.Extra.nothing
+
+    else
+        let
+            noun : String
+            noun =
+                if count == 1 then
+                    "receipt"
+
+                else
+                    "receipts"
+
+            suffix : String
+            suffix =
+                if Data.Sync.isOffline networkState then
+                    "will scan when you're back online"
+
+                else
+                    "will scan shortly"
+        in
+        Html.div
+            [ Html.Attributes.class "mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cream-deep border border-tan" ]
+            [ Html.span [ Html.Attributes.class "text-moss" ] [ UI.Icons.camera "w-4 h-4" ]
+            , Html.span [ Html.Attributes.class "text-sm text-forest font-semibold" ]
+                [ Html.text (String.fromInt count ++ " " ++ noun ++ " saved · " ++ suffix) ]
+            ]
+
+
 viewExifDebugBlock : Int -> ScanItem -> Html Msg
 viewExifDebugBlock idx item =
     Html.div [ Html.Attributes.class "mb-3 mt-2 rounded-lg bg-cream p-3" ]
@@ -325,13 +400,13 @@ viewExifDebugBlock idx item =
         ]
 
 
-viewScanCard : ScanItem -> Html Msg
-viewScanCard item =
+viewScanCard : { ocrPath : OcrPath, storageAvailable : Bool } -> ScanItem -> Html Msg
+viewScanCard ctx item =
     Html.div
         [ Html.Attributes.class "flex bg-cream rounded-xl overflow-hidden shadow-card" ]
         [ viewScanThumbnail item
         , Html.div [ Html.Attributes.class "flex-1 min-w-0 p-3" ]
-            [ viewScanCardBody item ]
+            [ viewScanCardBody ctx item ]
         ]
 
 
@@ -350,19 +425,30 @@ viewScanThumbnail item =
             [ UI.Icons.camera "w-8 h-8" ]
 
 
-viewScanCardBody : ScanItem -> Html Msg
-viewScanCardBody item =
+viewScanCardBody : { ocrPath : OcrPath, storageAvailable : Bool } -> ScanItem -> Html Msg
+viewScanCardBody ctx item =
     case item.status of
         ScanDeferred ->
-            -- Captured offline; no OCR has run yet. The user can fill the
-            -- fields by hand now via "Add details" (#372) — those edits
-            -- persist to the item's draft and survive a reload. A draft
-            -- summary shows when one exists so the card isn't blank.
-            Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
-                [ Html.div [ Html.Attributes.class "text-moss text-xs" ] [ Html.text "Saved offline" ]
-                , viewDeferredDraftSummary item.draft
-                , viewDeferredButton item.id
-                ]
+            -- Captured offline (or during the boot window). Split into four
+            -- sub-cases in order of severity:
+            -- 1. persist-error: the image may not be durably saved — warn.
+            -- 2. storage unavailable: same durability concern — warn.
+            -- 3. OCR now unavailable (tier/key lapsed): the receipt is saved
+            --    but can't be scanned automatically — tell the user to fill manually.
+            -- 4. Normal deferred: durably saved, OCR will run on reconnect.
+            if item.persistError || not ctx.storageAvailable then
+                viewPersistErrorCard item
+
+            else
+                case ctx.ocrPath of
+                    Unscannable ->
+                        viewOcrUnavailableCard item
+
+                    ByoPath _ ->
+                        viewDeferredCard item
+
+                    HostedPath ->
+                        viewDeferredCard item
 
         ScanQueued ->
             Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
@@ -371,11 +457,10 @@ viewScanCardBody item =
                 ]
 
         ScanProcessing ->
-            Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
-                [ Html.div [ Html.Attributes.class "text-rust text-xs" ] [ Html.text "Reading…" ]
-                , viewSkeletonBars
-                , viewProgressBar "w-2/3"
-                ]
+            -- "Reading…" — appears both on a freshly queued item and on
+            -- reconnect-retried deferred items. `retryCount > 0` means this
+            -- is a reconnect attempt; show that context to the user.
+            viewProcessingCard item
 
         ScanReady ->
             case item.ocrData of
@@ -387,24 +472,114 @@ viewScanCardBody item =
                         ]
 
                 Nothing ->
+                    -- OCR ran (or was retried after reconnect) but produced no
+                    -- usable data. `lastError` carries the reason from the most
+                    -- recent attempt; fall back to `ocrError` (legacy field).
+                    let
+                        errorReason : Maybe String
+                        errorReason =
+                            case item.lastError of
+                                Just _ ->
+                                    item.lastError
+
+                                Nothing ->
+                                    item.ocrError
+                    in
                     Html.div [ Html.Attributes.class "flex flex-col gap-2" ]
-                        [ viewOcrFailure item.ocrError
+                        [ viewOcrFailure item.retryCount errorReason
                         , viewReviewButton item.id
                         ]
 
         ScanSubmitted ->
-            Html.div [ Html.Attributes.class "flex items-center h-full text-moss text-xs" ]
-                [ Html.text "✓ Submitted"
+            -- Terminal state — a checkmark card. NOT a spinner. Visible
+            -- during the pre-sync boot window when we know the expense was
+            -- filed but the Ledger hasn't loaded yet.
+            Html.div
+                [ Html.Attributes.class "flex items-center gap-2 h-full" ]
+                [ Html.span [ Html.Attributes.class "text-moss text-sm font-semibold" ]
+                    [ Html.text "✓ Submitted" ]
                 , Html.Extra.viewMaybe
                     (\date ->
                         Html.span
-                            [ Html.Attributes.class "ml-2 text-muted" ]
+                            [ Html.Attributes.class "text-muted text-xs" ]
                             [ Html.text "· "
                             , UI.DateView.monthDay date
                             ]
                     )
                     (Maybe.andThen .date item.ocrData)
                 ]
+
+
+{-| Normal deferred card — the receipt is durably saved and OCR will run
+on reconnect. Shows "Saved · will scan when back online" plus any typed
+draft fields the user has already filled in.
+-}
+viewDeferredCard : ScanItem -> Html Msg
+viewDeferredCard item =
+    Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
+        [ Html.div [ Html.Attributes.class "flex items-center gap-1.5 text-moss text-xs font-mono uppercase tracking-wider" ]
+            [ Html.span [] [ Html.text "Saved" ]
+            , Html.span [ Html.Attributes.class "text-tan" ] [ Html.text "·" ]
+            , Html.span [] [ Html.text "will scan when back online" ]
+            ]
+        , viewDeferredDraftSummary item.draft
+        , viewDeferredButton item.id
+        ]
+
+
+{-| Processing card shown when OCR is in flight. Adds a reconnect-retry
+note when `retryCount > 0` so the user knows this is a deferred item
+being processed, not a fresh capture.
+-}
+viewProcessingCard : ScanItem -> Html Msg
+viewProcessingCard item =
+    Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
+        [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+            [ Html.div [ Html.Attributes.class "text-rust text-xs font-semibold" ]
+                [ Html.text "Reading…" ]
+            , Html.Extra.viewIf (item.retryCount > 0) <|
+                Html.span
+                    [ Html.Attributes.class "text-[10px] font-mono text-muted uppercase tracking-wider" ]
+                    [ Html.text ("retry " ++ String.fromInt item.retryCount) ]
+            ]
+        , viewSkeletonBars
+        , viewProgressBar "w-2/3"
+        ]
+
+
+{-| Shown on a deferred card when the user's tier or API key has lapsed
+since capture — the receipt is still durably saved, but automatic OCR
+can't run. Prompt to add a key / upgrade, or fill the form manually.
+-}
+viewOcrUnavailableCard : ScanItem -> Html Msg
+viewOcrUnavailableCard item =
+    Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
+        [ Html.div [ Html.Attributes.class "flex flex-col gap-0.5" ]
+            [ Html.div [ Html.Attributes.class "text-rust text-xs font-semibold" ]
+                [ Html.text "Receipt saved — scanning unavailable" ]
+            , Html.div [ Html.Attributes.class "text-muted text-xs" ]
+                [ Html.text "Add an API key or upgrade to scan automatically, or fill in manually." ]
+            ]
+        , viewDeferredDraftSummary item.draft
+        , viewDeferredButton item.id
+        ]
+
+
+{-| Shown when the durable-store write failed (`persistError == True`) or
+IndexedDB is unavailable (Private Browsing). The receipt is NOT
+guaranteed durable — warn the user before they navigate away.
+-}
+viewPersistErrorCard : ScanItem -> Html Msg
+viewPersistErrorCard item =
+    Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
+        [ Html.div [ Html.Attributes.class "flex flex-col gap-0.5" ]
+            [ Html.div [ Html.Attributes.class "text-rust text-xs font-semibold" ]
+                [ Html.text "⚠ Not saved to device" ]
+            , Html.div [ Html.Attributes.class "text-muted text-xs" ]
+                [ Html.text "This receipt may not survive a reload. Fill in the details now, or reconnect and re-capture." ]
+            ]
+        , viewDeferredButton item.id
+        ]
 
 
 {-| Badge shown on cards where the OCR result is missing amount,
@@ -423,21 +598,35 @@ Shows the captured failure reason when we have one (HTTP error,
 unparseable model output, no receipts detected, etc.) so the user can
 tell why they're being asked to fill the form manually instead of
 guessing. Falls back to the generic message if no reason was captured.
+
+`retryCount > 0` means the failure happened after a reconnect retry
+(item was previously deferred) — surface that context so the user
+understands the receipt WAS saved offline and the error is from OCR.
+
 -}
-viewOcrFailure : Maybe String -> Html Msg
-viewOcrFailure maybeReason =
+viewOcrFailure : Int -> Maybe String -> Html Msg
+viewOcrFailure retryCount maybeReason =
+    let
+        headline : String
+        headline =
+            if retryCount > 0 then
+                "OCR failed after reconnect — fill manually"
+
+            else
+                "OCR failed — fill manually"
+    in
     case maybeReason of
         Just reason ->
             Html.div [ Html.Attributes.class "flex flex-col gap-1" ]
                 [ Html.div [ Html.Attributes.class "text-rust text-xs font-bold" ]
-                    [ Html.text "OCR failed — fill manually" ]
+                    [ Html.text headline ]
                 , Html.div [ Html.Attributes.class "text-muted text-xs italic whitespace-pre-wrap break-words" ]
                     [ Html.text reason ]
                 ]
 
         Nothing ->
             Html.div [ Html.Attributes.class "text-rust text-xs italic" ]
-                [ Html.text "OCR failed — fill manually" ]
+                [ Html.text headline ]
 
 
 viewReviewButton : ScanItemId.ScanItemId -> Html Msg
