@@ -4,9 +4,9 @@ module Verify.Specs.TierGating exposing (Input, surface, honest, results)
 `Pages.Settings.SharedTrips.viewCreateRow`.
 
 This mirrors the only live (non-screenshot) assertions in the retired
-`e2e/specs/tier-gating.spec.ts`: a free (`Tern`) user sees a _disabled_ "Share
-a trip" button plus the "Upgrade to Osprey to start one" copy, while paid tiers
-get an enabled control. The gate is driven by `Data.Tier.isPaid`, which the
+`e2e/specs/tier-gating.spec.ts`: a free (`Tern`) user sees a _disabled_ "New
+shared trip" button plus the "Upgrade to Osprey to start one" copy, while paid
+tiers get an enabled control. The gate is driven by `Data.Tier.isPaid`, which the
 surface reuses — no gating logic is re-derived here.
 
 The input is just the tier (plus a `corrupt` knob used only by the adversarial

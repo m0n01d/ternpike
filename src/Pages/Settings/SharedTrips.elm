@@ -73,14 +73,14 @@ viewCreateRow tier =
             [ Html.p [ Html.Attributes.class "text-xs text-muted flex-1" ]
                 [ Html.text
                     (if Tier.isPaid tier then
-                        "Log expenses together with a partner or household."
+                        "Start a brand-new shared trip to log expenses together with a partner or household. (To share a trip you already have, use Share from the Trips list.)"
 
                      else
-                        "Share a trip with a partner or household so you can log expenses together. Upgrade to Osprey to start one."
+                        "Start a new shared trip with a partner or household so you can log expenses together. Upgrade to Osprey to start one."
                     )
                 ]
             , if Tier.isPaid tier then
-                UI.Button.primary { label = "Share a trip", onClick = AuthMsg OpenCreateSharedTripModal }
+                UI.Button.primary { label = "New shared trip", onClick = AuthMsg OpenCreateSharedTripModal }
 
               else
                 Html.button
@@ -88,7 +88,7 @@ viewCreateRow tier =
                     , Html.Attributes.disabled True
                     , Html.Attributes.class "shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg bg-cream-deep text-muted border border-tan cursor-not-allowed"
                     ]
-                    [ Html.text "Share a trip" ]
+                    [ Html.text "New shared trip" ]
             ]
         ]
 
@@ -230,7 +230,7 @@ viewModal as_ =
                     )
                 , viewModalActions
                     { cancel = ( "Cancel", AuthMsg CloseSharedTripModal )
-                    , confirmLabel = "Share a trip"
+                    , confirmLabel = "Create trip"
                     , confirmMsg = AuthMsg SubmitCreateSharedTrip
                     , request = RemoteData.map (\_ -> ()) request
                     }
