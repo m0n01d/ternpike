@@ -222,6 +222,7 @@ toAuthState creds initialRoute gs =
     , standalone = Notifications.InBrowser
     , statsGranularity = Nothing
     , statsHover = StatsHover.empty
+    , storageAvailable = True
     , submitting = False
     , subscriptionStatus = creds.subscriptionStatus
     , syncState = NotEnabled
@@ -1335,7 +1336,13 @@ init flagsJson url key =
             -- refresh path for tier + billing state, runs independently
             -- of PouchDB, and a stale tier from cached `Creds` would
             -- silently mis-gate paid features until the next login.
-            ( AuthModel bootedFinal, Cmd.batch [ fetchMe bootedFinal, checkoutCmd ] )
+            -- `loadScanQueue` hydrates the durable offline scan queue from
+            -- IndexedDB (#371). It runs independently of PouchDB sync — the
+            -- queue is device-local, not synced — so it's safe to fire on the
+            -- boot critical path alongside `/me`.
+            ( AuthModel bootedFinal
+            , Cmd.batch [ fetchMe bootedFinal, checkoutCmd, Ports.loadScanQueue () ]
+            )
 
 
 {-| Build the seeded `AuthState` for a `/verify/:unit/:fixture` route. The
@@ -1851,6 +1858,11 @@ updateGuest msg gs =
                 , Ports.startSync (Codec.encodeCreds creds)
                 , Nav.replaceUrl gs.key landingUrl
                 , fetchMe as_
+
+                -- `toAuthState` resets `scanQueue` to empty and `init` never
+                -- re-runs after in-SPA re-login (token expired while the tab
+                -- stayed open) — re-hydrate the durable queue here (#371).
+                , Ports.loadScanQueue ()
                 ]
             )
 
@@ -1961,6 +1973,11 @@ updateGuest msg gs =
                         , Ports.startSync (Codec.encodeCreds creds)
                         , Nav.replaceUrl gs.key landingUrl
                         , fetchMe as_
+
+                        -- See `MagicVerifyResult` above: re-hydrate the durable
+                        -- scan queue on in-SPA re-login since `toAuthState`
+                        -- cleared it and `init` won't re-run (#371).
+                        , Ports.loadScanQueue ()
                         ]
                     )
 
@@ -2138,6 +2155,81 @@ updateAuth msg as_ =
             in
             ( AuthModel (mergeScanModel scanModel as_)
             , Effect.perform as_.key effect
+            )
+
+        ScanQueueLoaded raw ->
+            -- Hydrate the durable offline scan queue (#371). Decode the JSON
+            -- array item-by-item so one corrupt doc can't sink the whole
+            -- queue (bad docs are quarantined — dropped), normalize in-flight
+            -- statuses via `reconcileHydratedQueue` (a reload can't keep an
+            -- OCR request alive, so `ScanProcessing` parks back to
+            -- `ScanDeferred`), then merge into the live queue. `Dict.union`
+            -- keeps the in-memory item on a key collision — there are no
+            -- deletes yet, so nothing can be resurrected; tombstones for the
+            -- submit/clear resurrect race are #374/#375's concern.
+            let
+                hydrated : Dict.Dict String Data.Scan.ScanItem
+                hydrated =
+                    decodeHydratedQueue raw
+
+                reconciled : Dict.Dict String Data.Scan.ScanItem
+                reconciled =
+                    Data.Scan.reconcileHydratedQueue hydrated
+
+                mergedQueue : Dict.Dict String Data.Scan.ScanItem
+                mergedQueue =
+                    Dict.union as_.scanQueue reconciled
+
+                -- Persist back any item whose status the reconcile flipped
+                -- (`ScanProcessing` → `ScanDeferred`) so the durable store
+                -- matches the normalized in-memory queue. This is the in-PR
+                -- caller for `saveScanItem` / `scanItemSaved`.
+                persistCmds : List (Cmd Msg)
+                persistCmds =
+                    reconciled
+                        |> Dict.toList
+                        |> List.filterMap
+                            (\( key, item ) ->
+                                case Dict.get key hydrated of
+                                    Just before ->
+                                        if before.status == item.status then
+                                            Nothing
+
+                                        else
+                                            Just (Ports.saveScanItem (Data.Scan.scanItemEncoder item))
+
+                                    Nothing ->
+                                        Nothing
+                            )
+            in
+            ( AuthModel { as_ | scanQueue = mergedQueue }
+            , Cmd.batch persistCmds
+            )
+
+        ScanItemSaved ack ->
+            -- Save-ack for `saveScanItem`. On failure (e.g. the JS `put` threw
+            -- `QuotaExceededError`) flip `persistError` on the matching item so
+            -- the capture UI never claims durability it didn't get (#371). The
+            -- `id` keys off the current model, so a late ack can't act on a
+            -- stale closure. A clean save clears any prior error. The `error`
+            -- string is logged JS-side; Elm only needs the `ok` boolean.
+            let
+                updatedQueue : Dict.Dict String Data.Scan.ScanItem
+                updatedQueue =
+                    Dict.update ack.id
+                        (Maybe.map (\item -> { item | persistError = not ack.ok }))
+                        as_.scanQueue
+            in
+            ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
+
+        StorageStatusReceived status ->
+            -- Boot storage probe + best-effort persistence result (#371). Land
+            -- `available` on `AuthState.storageAvailable` so the capture hero
+            -- can refuse the durability promise under Private Browsing /
+            -- Lockdown Mode (the hero copy that reads it ships in #372/#373).
+            -- `persisted` is best-effort telemetry with no consumer yet.
+            ( AuthModel { as_ | storageAvailable = status.available }
+            , Cmd.none
             )
 
         AddressChanged s ->
@@ -4134,6 +4226,30 @@ mergeScanModel scan as_ =
     }
 
 
+{-| Decode the `scanQueueLoaded` payload (a JSON array of
+`scanItemEncoder`-shaped docs) into a `Dict String ScanItem` keyed by the
+item's durable id, quarantining any doc that fails `scanItemDecoder` rather
+than failing the whole hydration. A non-array payload (or a totally
+undecodable one) yields an empty queue — boot/login then proceeds with no
+hydrated items rather than erroring out (#371).
+-}
+decodeHydratedQueue : D.Value -> Dict.Dict String Data.Scan.ScanItem
+decodeHydratedQueue raw =
+    raw
+        |> D.decodeValue (D.list D.value)
+        |> Result.withDefault []
+        |> List.filterMap
+            (\itemValue ->
+                case D.decodeValue Data.Scan.scanItemDecoder itemValue of
+                    Ok item ->
+                        Just ( ScanItemId.toString item.id, item )
+
+                    Err _ ->
+                        Nothing
+            )
+        |> Dict.fromList
+
+
 setSharedTripModal : SharedTripUi.SharedTripModal -> AuthState -> AuthState
 setSharedTripModal modal as_ =
     let
@@ -4412,6 +4528,9 @@ main =
                     , Ports.notificationState (AuthMsg << NotificationStateChanged)
                     , Ports.pushSubscribeResult (AuthMsg << PushSubscribeReceived)
                     , Ports.scanProxyIn (AuthMsg << ScanMsg << Msg.Scan.ScanProxyResult)
+                    , Ports.scanQueueLoaded (AuthMsg << ScanQueueLoaded)
+                    , Ports.scanItemSaved (AuthMsg << ScanItemSaved)
+                    , Ports.storageStatus (AuthMsg << StorageStatusReceived)
                     , Ports.nativeShareResult (AuthMsg << ShareResultReceived)
                     ]
         , update = update
