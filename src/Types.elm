@@ -415,8 +415,6 @@ type AuthMsg_
     | CloseSharedTripModal
     | CloseTripForm
     | ConfirmDeleteTrip Trip
-    | CreateSharedTripNameChanged String
-    | CreateSharedTripResult (Result Http.Error Http.SharedTripApi.CreateSharedTripResponse)
     | DateChanged String
     | DeleteTrip Trip
     | DismissError
@@ -459,7 +457,6 @@ type AuthMsg_
     | NoteChanged String
     | NotificationStateChanged { permission : String, prefs : Json.Decode.Value, standalone : Bool, subscribed : Bool }
     | OcrImagePrepared { dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int }
-    | OpenCreateSharedTripModal
     | OpenEditTripForm Trip
     | OpenInviteCrewModal SharedTripId
     | OpenInviteModal SharedTripId
@@ -493,7 +490,6 @@ type AuthMsg_
     | SharedTripActivityNotified
     | SignOutClicked
     | SkipLocation
-    | SubmitCreateSharedTrip
     | SubmitEntry
     | SubmitInvite
     | SubmitShareTrip

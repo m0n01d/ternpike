@@ -1,13 +1,15 @@
 module Verify.Specs.TierGating exposing (Input, surface, honest, results)
 
-{-| Pilot verification unit: the "Share a trip" create-row gate in
-`Pages.Settings.SharedTrips.viewCreateRow`.
+{-| Verification unit: the tier gate on shared-trip CREATION, anchored to the
+new-trip form's "+ New shared trip" target panel in `UI.TripFormModal`.
 
-This mirrors the only live (non-screenshot) assertions in the retired
-`e2e/specs/tier-gating.spec.ts`: a free (`Tern`) user sees a _disabled_ "Share
-a trip" button plus the "Upgrade to Osprey to start one" copy, while paid tiers
-get an enabled control. The gate is driven by `Data.Tier.isPaid`, which the
-surface reuses — no gating logic is re-derived here.
+A free (`Tern`) user who selects "+ New shared trip" sees the "Sharing requires
+Osprey" upgrade prompt and a blocked submit; paid tiers get the invitee-chip
+fields. The gate is driven by `Data.Tier.isPaid`, which the surface reuses — no
+gating logic is re-derived here. (Originally this unit covered a now-removed
+"New shared trip" button in Settings; creation moved entirely to the trip form
+and the Trips-page "Share this trip" action, so the verify anchor moved with
+it.)
 
 The input is just the tier (plus a `corrupt` knob used only by the adversarial
 probe), so the pure tier builds it directly — no `Browser.Navigation.Key`
