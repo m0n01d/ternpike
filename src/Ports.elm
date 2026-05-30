@@ -173,9 +173,14 @@ capture UI never promises durability it didn't get.
 port scanItemSaved : ({ error : String, id : String, ok : Bool } -> msg) -> Sub msg
 
 
-{-| Device storage availability + persistence. `available` is `False` when
-the boot probe of the `scanQueue` store failed (Private Browsing / Lockdown
-Mode); `persisted` reflects `navigator.storage.persisted()` /
-`persist()` (best-effort, resolves `False` when the UA declines).
+{-| Device storage availability, persistence, and installed-PWA mode.
+`available` is `False` when the boot probe of the `scanQueue` store failed
+(Private Browsing / Lockdown Mode); `persisted` reflects
+`navigator.storage.persisted()` / `persist()` (best-effort, resolves `False`
+when the UA declines); `installed` is `True` when the app is running in
+standalone (installed-PWA) mode — `navigator.standalone === true` or
+`matchMedia('(display-mode: standalone)').matches`; `isIos` is `True` when the
+UA is iOS/iPadOS — used to gate the manual Add-to-Home-Screen nudge since iOS
+never fires `beforeinstallprompt` (#377).
 -}
-port storageStatus : ({ available : Bool, persisted : Bool } -> msg) -> Sub msg
+port storageStatus : ({ available : Bool, installed : Bool, isIos : Bool, persisted : Bool } -> msg) -> Sub msg

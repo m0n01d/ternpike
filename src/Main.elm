@@ -198,6 +198,7 @@ toAuthState creds initialRoute gs =
     , sharedTrips = SharedTrips.empty
     , form = FreshForm (PendingEntry.defaultPendingEntry gs.today)
     , geoBlocked = False
+    , isIosDevice = False
     , joinSharedTripRequest = RemoteData.NotAsked
     , key = gs.key
     , lastSyncedAt = Nothing
@@ -211,6 +212,7 @@ toAuthState creds initialRoute gs =
     , ocrInFlight = Set.empty
     , openLedgerMenu = Nothing
     , postJoinPrompt = False
+    , pwaInstalled = False
     , pushSubscribed = False
     , route = initialRoute
     , scanQueue = Dict.empty
@@ -225,6 +227,7 @@ toAuthState creds initialRoute gs =
     , statsGranularity = Nothing
     , statsHover = StatsHover.empty
     , storageAvailable = True
+    , storagePersisted = False
     , submitting = False
     , subscriptionStatus = creds.subscriptionStatus
     , syncState = NotEnabled
@@ -2300,12 +2303,20 @@ updateAuth msg as_ =
             ( AuthModel { as_ | scanQueue = updatedQueue }, Cmd.none )
 
         StorageStatusReceived status ->
-            -- Boot storage probe + best-effort persistence result (#371). Land
-            -- `available` on `AuthState.storageAvailable` so the capture hero
-            -- can refuse the durability promise under Private Browsing /
-            -- Lockdown Mode (the hero copy that reads it ships in #372/#373).
-            -- `persisted` is best-effort telemetry with no consumer yet.
-            ( AuthModel { as_ | storageAvailable = status.available }
+            -- Boot storage probe + best-effort persistence result (#371/#377).
+            -- `available` gates the durability promise under Private Browsing /
+            -- Lockdown Mode. `persisted` is `navigator.storage.persist()` result
+            -- — `True` only when the UA actually granted persistent storage
+            -- (typically requires the installed-app heuristic on iOS/Safari).
+            -- `installed` is `True` when running as a standalone PWA.
+            -- `isIos` gates the manual Add-to-Home-Screen nudge (#377).
+            ( AuthModel
+                { as_
+                    | isIosDevice = status.isIos
+                    , pwaInstalled = status.installed
+                    , storageAvailable = status.available
+                    , storagePersisted = status.persisted
+                }
             , Cmd.none
             )
 
