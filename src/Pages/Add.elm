@@ -379,11 +379,11 @@ viewScanPreview model =
         (\id ->
             Html.Extra.viewMaybe
                 (\item ->
-                    Html.div [ Html.Attributes.class "sticky top-0 z-10 mb-4" ]
+                    Html.div [ Html.Attributes.class "mb-4" ]
                         [ UI.Card.subCard
                             [ Html.img
                                 [ Html.Attributes.src item.imageUrl
-                                , Html.Attributes.class "w-full rounded-xl object-contain max-h-60 bg-cream"
+                                , Html.Attributes.class "w-full rounded-xl bg-cream"
                                 ]
                                 []
                             ]
