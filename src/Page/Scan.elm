@@ -44,6 +44,7 @@ import List.Extra
 import Maybe.Extra
 import Msg.Scan exposing (Msg(..))
 import Routing
+import Set
 import Time
 
 
@@ -66,6 +67,7 @@ type alias Model =
     , error : Maybe String
     , form : PendingForm
     , network : NetworkState
+    , ocrInFlight : Set.Set String
     , route : Route
     , scanQueue : Dict.Dict String ScanItem
     , scanSeq : Int
@@ -226,50 +228,56 @@ update msg as_ =
                         )
 
         GotOcrResult itemId result ->
+            -- Direct (BYO-key) Anthropic response. `Effect.ocrResponseToResult`
+            -- has already collapsed the `Http.Error` to a string, so a
+            -- transient flap (network drop / timeout) is recovered from the
+            -- sentinel substring via `Scan.byoFailureKind`.
             let
-                parsed : Result String (List Scan.OcrData)
-                parsed =
+                outcome : OcrOutcome
+                outcome =
                     case result of
                         Err httpErr ->
-                            Err httpErr
+                            OcrFailed (Scan.byoFailureKind httpErr) httpErr
 
                         Ok responseBody ->
-                            parseOcrResponseBody responseBody
-
-                ( afterOcr, touchedIds ) =
-                    applyOcrResult itemId parsed as_.scanQueue
-
-                ( afterGeocodeFlip, geocodeEffects ) =
-                    geocodeDispatch touchedIds afterOcr as_
+                            outcomeFromBody responseBody
             in
-            ( { as_ | scanQueue = afterGeocodeFlip }
-            , Batch geocodeEffects
-            )
+            finishOcr itemId outcome as_
 
         ScanProxyResult { body, itemId, ok, status } ->
+            -- Hosted-proxy response. The raw `status` is intact here, so the
+            -- transient-vs-terminal split goes through `Scan.hostedFailureKind`
+            -- (status 0 = connection died = flap).
             let
-                result : Result String (List Scan.OcrData)
-                result =
+                outcome : OcrOutcome
+                outcome =
                     if ok then
-                        parseOcrResponseBody body
+                        outcomeFromBody body
 
                     else if status == 402 then
-                        Err "Hosted scanning requires an Osprey or Trailblazer subscription."
+                        OcrFailed Scan.Permanent "Hosted scanning requires an Osprey or Trailblazer subscription."
 
                     else if status == 401 then
-                        Err "Sign in again to continue scanning."
+                        OcrFailed Scan.Permanent "Sign in again to continue scanning."
 
                     else
-                        Err ("Hosted scan failed (HTTP " ++ String.fromInt status ++ "): " ++ body)
-
-                ( afterOcr, touchedIds ) =
-                    applyOcrResult itemId result as_.scanQueue
-
-                ( afterGeocodeFlip, geocodeEffects ) =
-                    geocodeDispatch touchedIds afterOcr as_
+                        OcrFailed (Scan.hostedFailureKind status)
+                            ("Hosted scan failed (HTTP " ++ String.fromInt status ++ "): " ++ body)
             in
-            ( { as_ | scanQueue = afterGeocodeFlip }
-            , Batch geocodeEffects
+            finishOcr itemId outcome as_
+
+        RetryDeferredScans ->
+            -- Connectivity returned (the proven `Synced` sync edge, dispatched
+            -- from `Main.SyncStateMsg`). Fire OCR for as many `ScanDeferred`
+            -- items as the tier concurrency cap allows. Idempotent: with the
+            -- in-flight set already at the cap, `dispatchOnReconnect` returns
+            -- no candidates and emits no effects.
+            let
+                ( newQueue, newInFlight, effects ) =
+                    dispatchOnReconnect Set.empty as_
+            in
+            ( { as_ | ocrInFlight = newInFlight, scanQueue = newQueue }
+            , Batch effects
             )
 
         GotExifCoords itemId (Just lat) (Just lon) _ ->
@@ -809,16 +817,86 @@ parseOcrResponseBody responseBody =
                         )
 
 
-{-| Apply a parsed OCR result (or error) to the scan queue, returning the
-updated queue and the list of touched item ids (for geocode dispatch).
-Shared by `GotOcrResult` and `ScanProxyResult`.
+{-| A terminal OCR result for one item, normalized so the success and
+failure paths can be applied uniformly across the BYO (`GotOcrResult`)
+and hosted (`ScanProxyResult`) callers.
+
+  - `OcrSucceeded list` — Anthropic returned a (possibly empty,
+    possibly multi-receipt) list of parsed receipts.
+  - `OcrFailed kind message` — the call failed; `kind` decides whether
+    to spend the retry budget (see `Scan.OcrFailureKind`).
+
 -}
-applyOcrResult :
+type OcrOutcome
+    = OcrFailed Scan.OcrFailureKind String
+    | OcrSucceeded (List Scan.OcrData)
+
+
+{-| Parse a raw OCR response body into an `OcrOutcome`. A body that the
+parser can't read is a `Permanent` failure — retrying won't fix bad JSON
+or a model refusal.
+-}
+outcomeFromBody : String -> OcrOutcome
+outcomeFromBody body =
+    case parseOcrResponseBody body of
+        Ok list ->
+            OcrSucceeded list
+
+        Err errMsg ->
+            OcrFailed Scan.Permanent errMsg
+
+
+{-| Apply a terminal OCR outcome for one item: drop it from the
+in-flight set, write the result into the queue, then run geocode
+dispatch for any touched items AND refill the freed concurrency slot(s)
+from the remaining `ScanDeferred` backlog (`dispatchOnReconnect`). This
+is the single dispatch-next point both terminal OCR handlers funnel
+through.
+-}
+finishOcr : String -> OcrOutcome -> Model -> ( Model, Effect )
+finishOcr itemId outcome as_ =
+    let
+        inFlightCleared : Set.Set String
+        inFlightCleared =
+            Set.remove itemId as_.ocrInFlight
+
+        ( afterOcr, touchedIds ) =
+            applyOcrOutcome itemId outcome as_.scanQueue
+
+        ( afterGeocodeFlip, geocodeEffects ) =
+            geocodeDispatch touchedIds afterOcr as_
+
+        -- Exclude the just-handled id from dispatch-next: if a Transient /
+        -- under-cap Retryable failure bounced it back to `ScanDeferred`,
+        -- it must wait for the next `Synced` edge rather than busy-retry
+        -- in the same tick (the network is likely still flapping).
+        ( afterDispatch, nextInFlight, dispatchEffects ) =
+            dispatchOnReconnect (Set.singleton itemId) { as_ | ocrInFlight = inFlightCleared, scanQueue = afterGeocodeFlip }
+    in
+    ( { as_ | ocrInFlight = nextInFlight, scanQueue = afterDispatch }
+    , Batch (geocodeEffects ++ dispatchEffects)
+    )
+
+
+{-| Write a terminal OCR outcome into the queue for one item, returning
+the updated queue and the touched ids (for geocode dispatch). The
+failure branch consults `Scan.OcrFailureKind`:
+
+  - `Transient` — connectivity flap: return the item to `ScanDeferred`
+    WITHOUT bumping `retryCount`, so the next reconnect retries it for
+    free. Record the reason on `lastError`.
+  - `Retryable` — a real retryable server response: bump `retryCount`.
+    Still under `Scan.maxOcrRetries` → back to `ScanDeferred` to retry
+    next reconnect; at the cap → terminal `ScanReady` with `ocrError`.
+  - `Permanent` — terminal `ScanReady` with `ocrError` immediately.
+
+-}
+applyOcrOutcome :
     String
-    -> Result String (List Scan.OcrData)
+    -> OcrOutcome
     -> Dict.Dict String Scan.ScanItem
     -> ( Dict.Dict String Scan.ScanItem, List String )
-applyOcrResult itemId parsed queue =
+applyOcrOutcome itemId outcome queue =
     let
         markReady : Maybe Scan.OcrData -> Maybe String -> Dict.Dict String Scan.ScanItem
         markReady ocrData ocrError =
@@ -833,20 +911,52 @@ applyOcrResult itemId parsed queue =
                     )
                 )
                 queue
-    in
-    case parsed of
-        Err errMsg ->
-            ( markReady Nothing (Just errMsg), [ itemId ] )
 
-        Ok [] ->
+        defer : Maybe String -> Int -> Dict.Dict String Scan.ScanItem
+        defer lastError retryCount =
+            Dict.update itemId
+                (Maybe.map
+                    (\i ->
+                        { i
+                            | lastError = lastError
+                            , ocrError = Nothing
+                            , retryCount = retryCount
+                            , status = ScanDeferred
+                        }
+                    )
+                )
+                queue
+    in
+    case outcome of
+        OcrFailed kind errMsg ->
+            case kind of
+                Scan.Transient ->
+                    -- A flap must not burn the budget: requeue, count unchanged.
+                    ( defer (Just errMsg) (currentRetryCount itemId queue), [] )
+
+                Scan.Retryable ->
+                    let
+                        bumped =
+                            currentRetryCount itemId queue + 1
+                    in
+                    if bumped >= Scan.maxOcrRetries then
+                        ( markReady Nothing (Just errMsg), [ itemId ] )
+
+                    else
+                        ( defer (Just errMsg) bumped, [] )
+
+                Scan.Permanent ->
+                    ( markReady Nothing (Just errMsg), [ itemId ] )
+
+        OcrSucceeded [] ->
             ( markReady Nothing (Just "No receipts detected in the image — try a clearer photo or a tighter crop")
             , [ itemId ]
             )
 
-        Ok [ single ] ->
+        OcrSucceeded [ single ] ->
             ( markReady (Just single) Nothing, [ itemId ] )
 
-        Ok ((_ :: _ :: _) as multi) ->
+        OcrSucceeded ((_ :: _ :: _) as multi) ->
             case Dict.get itemId queue of
                 Nothing ->
                     -- item disappeared mid-flight (cleared/submitted) — no-op
@@ -887,3 +997,169 @@ applyOcrResult itemId parsed queue =
                     ( List.foldl (\( id, item ) d -> Dict.insert id item d) queueWithoutSource indexed
                     , List.map Tuple.first indexed
                     )
+
+
+{-| The current `retryCount` for an item, or `0` if it's gone.
+-}
+currentRetryCount : String -> Dict.Dict String Scan.ScanItem -> Int
+currentRetryCount itemId queue =
+    Dict.get itemId queue
+        |> Maybe.map .retryCount
+        |> Maybe.withDefault 0
+
+
+
+-- RECONNECT ORCHESTRATION (#373)
+
+
+{-| The concurrency cap for reconnect OCR retries: free `Tern` runs one
+scan at a time, paid tiers run up to three. Resolved from the active
+trip's effective tier when there is one (a shared trip can grant paid via
+its owner), falling back to the user's own tier — mirroring how
+`geocodeDispatch` resolves eligibility.
+-}
+reconnectTierCap : Model -> Int
+reconnectTierCap as_ =
+    let
+        paid : Bool
+        paid =
+            case activeTripForGeocode as_ of
+                Just trip ->
+                    Tier.isPaid (Trip.effectiveTier trip as_)
+
+                Nothing ->
+                    Tier.isPaid as_.tier
+    in
+    if paid then
+        3
+
+    else
+        1
+
+
+{-| Orchestrate a reconnect retry: for each `ScanDeferred` candidate the
+tier cap leaves room for (`Scan.reconnectCandidates`), resolve the OCR
+path and either:
+
+  - `Unscannable` (tier lapsed / BYO key removed since capture) — DON'T
+    spend a slot. Flip the item to `ScanReady` and fold its offline-typed
+    `draft` into `ocrData` so the review form still shows what the user
+    entered. Never strand the receipt.
+  - scannable (`ByoPath` / `HostedPath`) — flip `ScanDeferred →
+    ScanProcessing`, add the id to the in-flight set, persist the status
+    change, and fire the OCR pipeline (`PrepareOcrImage` → `MakeOcrCall`).
+
+Returns the updated queue, the updated in-flight set, and the effects to
+run. Idempotent: with the in-flight set at the cap there are no
+candidates, so it returns the inputs unchanged with no effects — the
+oscillating `Synced` edge can fire it freely. `excluded` keeps a
+just-failed item that bounced back to `ScanDeferred` from being retried
+in the same dispatch-next tick (it waits for the next `Synced` edge).
+
+-}
+dispatchOnReconnect : Set.Set String -> Model -> ( Dict.Dict String Scan.ScanItem, Set.Set String, List Effect )
+dispatchOnReconnect excluded as_ =
+    let
+        ocrPath : OcrPath.OcrPath
+        ocrPath =
+            OcrPath.resolve as_.config.anthropicKey as_.tier
+
+        candidates : List String
+        candidates =
+            Scan.reconnectCandidates (reconnectTierCap as_) (Set.size as_.ocrInFlight) excluded as_.scanQueue
+    in
+    List.foldl (dispatchOne ocrPath) ( as_.scanQueue, as_.ocrInFlight, [] ) candidates
+
+
+{-| Process one reconnect candidate: either keep-draft (`Unscannable`) or
+start OCR (scannable). See `dispatchOnReconnect`.
+-}
+dispatchOne :
+    OcrPath.OcrPath
+    -> String
+    -> ( Dict.Dict String Scan.ScanItem, Set.Set String, List Effect )
+    -> ( Dict.Dict String Scan.ScanItem, Set.Set String, List Effect )
+dispatchOne ocrPath itemId ( queue, inFlight, effects ) =
+    case Dict.get itemId queue of
+        Nothing ->
+            ( queue, inFlight, effects )
+
+        Just item ->
+            case ocrPath of
+                OcrPath.Unscannable ->
+                    let
+                        readied : Scan.ScanItem
+                        readied =
+                            { item
+                                | ocrData = draftIntoOcrData item.draft item.ocrData
+                                , status = ScanReady
+                            }
+                    in
+                    ( Dict.insert itemId readied queue
+                    , inFlight
+                    , Effect.SaveScanItem (Scan.scanItemEncoder readied) :: effects
+                    )
+
+                _ ->
+                    let
+                        processing : Scan.ScanItem
+                        processing =
+                            { item | status = ScanProcessing }
+                    in
+                    ( Dict.insert itemId processing queue
+                    , Set.insert itemId inFlight
+                    , Effect.PrepareOcrImage { dataUrl = item.imageUrl, id = itemId, maxBytes = ocrMaxBase64Bytes }
+                        :: Effect.SaveScanItem (Scan.scanItemEncoder processing)
+                        :: effects
+                    )
+
+
+{-| Fold the user's offline-typed `draft` into the item's `ocrData` for
+the `Unscannable`-on-reconnect keep-draft path.
+
+  - No draft → leave `ocrData` untouched (merge-with-`Nothing` = identity).
+  - A draft over existing OCR → only the fields the user actually set
+    (a `Just` in `DraftFields`) override.
+  - A draft over no OCR → build an `OcrData` from the draft so the review
+    form shows the typed fields; an empty draft over no OCR stays
+    `Nothing` and falls through to the form defaults (the manual path).
+
+-}
+draftIntoOcrData : Maybe Scan.DraftFields -> Maybe Scan.OcrData -> Maybe Scan.OcrData
+draftIntoOcrData maybeDraft maybeOcr =
+    case ( maybeDraft, maybeOcr ) of
+        ( Nothing, _ ) ->
+            maybeOcr
+
+        ( Just draft, _ ) ->
+            let
+                base : Scan.OcrData
+                base =
+                    Maybe.withDefault emptyOcrData maybeOcr
+            in
+            Just
+                { address = Maybe.Extra.or draft.address base.address
+                , amount = Maybe.Extra.or (Maybe.andThen Money.fromDollarString draft.amount) base.amount
+                , category = Maybe.Extra.or draft.category base.category
+                , date = Maybe.Extra.or draft.date base.date
+                , longNote = Maybe.Extra.or draft.longNote base.longNote
+                , merchant = Maybe.Extra.or draft.merchant base.merchant
+                , note = Maybe.Extra.or draft.note base.note
+                , paymentMethod = Maybe.Extra.or draft.paymentMethod base.paymentMethod
+                }
+
+
+{-| An all-`Nothing` `OcrData`, used as the merge base when folding a
+draft into an item that never got an OCR result.
+-}
+emptyOcrData : Scan.OcrData
+emptyOcrData =
+    { address = Nothing
+    , amount = Nothing
+    , category = Nothing
+    , date = Nothing
+    , longNote = Nothing
+    , merchant = Nothing
+    , note = Nothing
+    , paymentMethod = Nothing
+    }

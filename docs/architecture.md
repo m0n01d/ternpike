@@ -311,9 +311,9 @@ to `… -> Page.Scan.Model -> ( Page.Scan.Model, Effect )`. Two changes, one pur
   cannot be hand-constructed — so a test can't build a seed `AuthState`.
   `Page.Scan.Model` is the subset of `AuthState` fields the Scan flows actually
   touch (`activeScanItemId`, `basePath`, `config`, `creds`, `currentUser`,
-  `duplicateWarning`, `error`, `form`, `route`, `scanQueue`, `scanSeq`,
-  `sharedTrips`, `tier`, `today`, `trips`) — no `Nav.Key`, so it's fully
-  constructible in a
+  `duplicateWarning`, `error`, `form`, `network`, `ocrInFlight`, `route`,
+  `scanQueue`, `scanSeq`, `sharedTrips`, `storageAvailable`, `tier`, `today`,
+  `trips`) — no `Nav.Key`, so it's fully constructible in a
   test. `Main.scanModelFromAuth` / `mergeScanModel` project and merge. The
   `currentUser` / `sharedTrips` / `tier` trio is carried because
   `geocodeDispatch` needs them to satisfy `Data.Trip.TierContext`.
@@ -332,8 +332,11 @@ to `… -> Page.Scan.Model -> ( Page.Scan.Model, Effect )`. Two changes, one pur
   `NoUnused.CustomTypeConstructors` requires): `Batch (List Effect)`,
   `ExtractExifGps`, `FetchFileUrl File`, `Geocode Creds itemId address`,
   `MakeOcrCall { backendUrl, body, itemId, path }`, `Navigate String` (the
-  `BackToQueue` `Nav.pushUrl`), `NoEffect`, `PrepareOcrImage`. Persistence/merge
-  effects (`SaveScanItem` / `DeleteScanItem` / `MintIdsThen`) are deferred to
+  `BackToQueue` `Nav.pushUrl`), `NoEffect`, `PrepareOcrImage`,
+  `SaveScanItem Json.Encode.Value` (offline-capture persist #372 + the
+  reconnect status-flip persist #373), `StampCapture (List File)` (the
+  `FilesSelected` → `Time.now` capture-millis stamp #372). The remaining
+  persistence/merge effects (`DeleteScanItem` / `MintIdsThen`) are deferred to
   the issues that supply their callers.
 
 `Effect.perform` reconstructs exactly the Cmds #368 moved, so behavior is
@@ -785,8 +788,10 @@ right days before you tap Review on each one.
 #### Durable scan queue (#370 foundation)
 
 The `ScanItem` type/codec layer is built to survive a reload so an
-offline capture isn't lost. The data-model pieces (no offline *behavior*
-is wired yet — that lands in #371–#374):
+offline capture isn't lost. The data-model pieces (the offline *behavior*
+that builds on them — IndexedDB store + hydration #371, offline capture
+#372, reconnect orchestration #373 — is documented under "Reconnect
+orchestration" below and the `scanQueue` IndexedDB store section):
 
 - **`ScanStatus` adds `ScanDeferred`** (alphabetized:
   `ScanDeferred | ScanProcessing | ScanQueued | ScanReady | ScanSubmitted`)
@@ -839,6 +844,62 @@ fits `ocrMaxBase64Bytes` (4 MiB — comfortably under the 5 MiB cap).
 The resized data URL replaces `ScanItem.imageUrl` and feeds the OCR
 call; EXIF GPS extraction runs on the *original* data URL in parallel
 (exifr needs the unmodified bytes).
+
+#### Reconnect orchestration (#373)
+
+Offline-deferred captures (`ScanStatus.ScanDeferred`, parked by the
+offline-capture path in `Page.Scan` `GotFileUrl` / `Data.Scan.captureRoute`)
+get OCR'd when connectivity returns — driven off the **proven `Synced`
+sync edge, not `navigator.onLine`**:
+
+- **Trigger.** `Main.updateAuth`'s `SyncStateMsg` handler computes
+  `syncedEdge = state == Synced && as_.syncState /= Synced` — a genuine
+  transition INTO `Synced`, which proves a real CouchDB round-trip and
+  lets the `AuthExpired` logout win the race. On that edge it dispatches
+  `Msg.Scan.RetryDeferredScans` through the normal `ScanMsg` path (via a
+  `Task.succeed ()` self-message). `Synced` oscillates
+  (Synced → Syncing → Synced each replication cycle) so this fires
+  repeatedly; the handler is **idempotent** (see the gate below).
+- **Concurrency gate.** `AuthState.ocrInFlight : Set String` (projected
+  into the `Page.Scan.Model` slice, **in-memory only — never persisted,
+  never in the codec**) is the set of ids whose OCR is in flight.
+  `Page.Scan.dispatchOnReconnect` picks candidates via the pure
+  `Data.Scan.reconnectCandidates tierCap inFlightCount excluded queue`:
+  `slots = max 0 (tierCap − inFlightCount)`, candidates are **`ScanDeferred`
+  only** (never processing/ready/submitted), excluding ids in
+  `ocrInFlight`-equivalent `excluded`, excluding `persistError` items, take
+  `slots`. `tierCap` is **1 for free `Tern`, 3 for paid** (resolved from the
+  active trip's effective tier, falling back to the user's tier — same
+  pattern as `geocodeDispatch`). For each chosen item: flip
+  `ScanDeferred → ScanProcessing`, add the id to `ocrInFlight`, persist via
+  `Effect.SaveScanItem`, and fire the OCR pipeline (`Effect.PrepareOcrImage`
+  → `MakeOcrCall`). With `ocrInFlight` already at the cap, `slots == 0` →
+  no candidates → no effects, which is what makes the oscillating edge safe.
+- **Dispatch-next.** Both terminal OCR handlers (`GotOcrResult` BYO and
+  `ScanProxyResult` hosted) funnel through `Page.Scan.finishOcr`: remove the
+  id from `ocrInFlight`, write the result, then re-run the gate to fill the
+  freed slot from the remaining `ScanDeferred` backlog. The just-handled id
+  is `excluded` from that same-tick refill so a flap-requeued item waits for
+  the next `Synced` edge instead of busy-retrying.
+- **Transient vs terminal failure.** `Data.Scan.OcrFailureKind`
+  (`Transient | Retryable | Permanent`) decides whether to spend the retry
+  budget (`Data.Scan.maxOcrRetries == 3`). `Data.Scan.hostedFailureKind`
+  (raw status: `0` = connection died = `Transient`; `429`/`500`/`502`/`503` =
+  `Retryable`; else `Permanent`) and `Data.Scan.byoFailureKind` (recovers the
+  class from the sentinel substrings `Effect.ocrResponseToResult` already
+  collapsed the BYO `Http.Error` into) classify each path. **Only a
+  `Retryable` real server response bumps `retryCount`;** a `Transient` flap
+  (`NetworkError_` / `Timeout_` / status 0) returns the item to
+  `ScanDeferred` WITHOUT incrementing (a flap must not burn the budget,
+  recorded on `lastError`). At `maxOcrRetries` a `Retryable` goes terminal
+  (`ScanReady` + `ocrError`); a `Permanent` failure goes terminal immediately.
+- **Unscannable-on-reconnect keeps the draft.** If on reconnect the item
+  re-resolves to `OcrPath.Unscannable` (tier lapsed / BYO key removed since
+  capture), `dispatchOne` does NOT spend a slot: it flips the item to
+  `ScanReady` and folds `item.draft` into `item.ocrData`
+  (`draftIntoOcrData` — merge-with-`Nothing`-OCR is identity; only fields the
+  user actually set override) so the review form still shows the
+  offline-typed fields. The receipt is never stranded.
 
 ### Location precedence
 
