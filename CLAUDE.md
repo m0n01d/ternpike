@@ -447,6 +447,27 @@ The snapshot-regen agent reported a `billing-lapse.spec.ts` failure as "pre-exis
 
 Default: when an agent reports "pre-existing flake" on a test it didn't touch, **wait for CI on the actual PR head** before believing it. CI on a fresh runner is the authority — agent worktrees accumulate enough environmental state that "passed locally" or "failed locally" are weaker signals than the harness suggests.
 
+### Field notes: the offline-scan conductor track (#368–#377)
+
+A 10-issue track (a two-part refactor foundation + data/persistence/behavior/UI/tests/docs), run as a worktree-agent-per-issue conductor loop. Lessons so future-you doesn't re-derive them from scar tissue:
+
+**What worked**
+- **Adversarial review waves BEFORE coding.** Two rounds of parallel `Plan`-agent reviews (correctness, concurrency, platform, feasibility) on the *plan* caught issues that would have been expensive mid-build: iOS's ~7-day IndexedDB eviction (the headline "days later" scenario was quietly broken on un-installed Safari), the `Nav.Key`-in-`AuthState` test-seam blocker, geo `Msg`s shared with the Add page, the deterministic expense id not existing until `GotSubmitTime`, and the IDB `createObjectStore('kv')` `ConstraintError` on a v1→v2 re-run. Pay the review cost up front.
+- **Split the foundation: mechanical move first, abstraction second.** `#F1` (extract `Page.Scan`, Cmd-based, behavior-preserving) then `#F2` (introduce the `Effect` seam) kept each diff reviewable. Bundling them makes "is this a relocation bug or a translation bug?" unanswerable.
+- **The narrow-`Model`-slice test seam.** `AuthState` embeds a `Nav.Key` (un-constructable in tests), so `Page.Scan.update` was retyped to take a `Nav.Key`-free record slice — that one decision is what made the stateful flows PR-gateable under `elm-program-test` instead of nightly-only.
+- **Serial spine + parallel tail, grouped by file-conflict surface.** #F1→#F2→#1→#2→(#3→#4→#5) ran serial because they all edit `Page.Scan.update`/`Main.elm`; #6/#7/#8 fanned out only once disjoint (`Pages/Scan.elm` views vs `tests/`+`src/Verify/` vs badge/docs). Group waves by the files they touch, not by topic.
+
+**What bit (don't repeat)**
+- **Don't wait for CI webhook events — poll.** `subscribe_pr_activity` CI events are slow/unreliable; the loop that actually moved was polling `pull_request_read get_check_runs`. Default to polling for CI.
+- **Orchestrator commit signing is broken here** (`/tmp/code-sign` → `400: missing source`): the conductor can't `git commit` at all, not even `--allow-empty`. So (a) any conductor-side commit must be done by a dispatched worktree agent (their git config skips signing), and (b) to **re-trigger CI without a commit, close+reopen the PR** (`update_pull_request` state closed→open fires `reopened`).
+- **Same-commit cross-tier signal beats local repro for diagnosing a CI flake.** #374's Pure tier failed while DOM + Server passed *on the identical SHA*, and clean-room `npm ci` was green — infra flake, not a code bug. When one CI tier fails alone on a SHA its siblings pass, suspect that tier's infra; re-trigger, don't chase the code.
+- **An early structural refactor instantly stales every downstream issue's line numbers.** #368/#369 moved scan code out of `Main.elm`, so every later issue body's `Main.elm:NNNN` was wrong. Write issue bodies with **symbol names, not line numbers**, and tell agents to locate by `grep`/`elmq`.
+- **Projects-v2 board can't be driven from an MCP-only / web session** (no projects-mutation tool, no `gh`). Keep dependency state in issue bodies ("Depends on #N") as the source of truth and ask the user to slide the cards.
+- **Merging on Pure+DOM green is safe for Elm-only changes** here: checks aren't branch-protection-required, and the Server suite (disposable CouchDB) is unrelated when no `server/` files change. Confirm "no `server/` in the diff" before skipping the Server-suite wait.
+- **`NoUnused` forces a declare-vs-defer call for ports/constructors.** A port with no in-PR Elm caller (`deleteScanItem`) must defer its Elm `port` declaration to the consumer issue (write the harmless JS handler early); same for `Effect`/`Msg` constructors needing a construction site.
+
+**Conductor verification that paid off:** a few targeted structural `grep`s on every PR before merging — "is `Msg.Scan` a leaf module (no `Types` import)?", "does `effectiveLocation` check the manual pin first?", "is this changed test a weakening or a real semantics change?", "is the deleted file genuinely dead?" — were cheaper than trusting the agent's self-report and caught the real questions on #2 and #4. Trust the diff, not the report.
+
 ## Model architecture (GuestModel / AuthModel split)
 
 See `docs/architecture.md` for the full structural description. Key behavioral conventions:
