@@ -73,9 +73,9 @@ import Dict exposing (Dict)
 import File exposing (File)
 import Http
 import Http.Billing
-import Http.GeocodeApi
 import Http.SharedTripApi
 import Json.Decode
+import Msg.Scan
 import RemoteData exposing (RemoteData)
 import Set exposing (Set)
 import Time
@@ -400,7 +400,6 @@ handles them without any per-state no-ops leaking into `updateGuest`.
 type AuthMsg_
     = AddressChanged String
     | AmountChanged String
-    | BackToQueue
     | BillingCheckoutClicked String
     | BillingCheckoutResult (Result Http.Billing.CheckoutFailure Http.Billing.CheckoutOk)
     | BillingPortalClicked
@@ -408,7 +407,6 @@ type AuthMsg_
     | CanInstall Bool
     | CancelDeleteTrip
     | CategorySelected Category
-    | ClearDoneItems
     | CloseLedgerMenu
     | CloseMovePicker
     | CloseShareModal
@@ -423,16 +421,11 @@ type AuthMsg_
     | DuplicateEntry Expense
     | EnableCrewPush
     | ExportCsv Data.TripId.TripId
-    | FilesSelected (List File)
     | GeolocationDenied
     | GotDeleteTripTime Trip Time.Posix
     | GotDuplicateTime Expense Time.Posix
-    | GotExifCoords String (Maybe Float) (Maybe Float) String
-    | GotFileUrl String String
-    | GotGeocodeResult String (Result Http.Error Http.GeocodeApi.GeocodeResponse)
     | GotGpsCoords Float Float
     | GotMoveTime Expense TripId Time.Posix
-    | GotOcrResult String (Result String String)
     | GotPouchMsg Json.Decode.Value
     | GotSaveTripTime Time.Posix
     | GotSubmitTime ParsedEntry Time.Posix
@@ -456,7 +449,6 @@ type AuthMsg_
     | MoveEntry Expense TripId
     | NoteChanged String
     | NotificationStateChanged { permission : String, prefs : Json.Decode.Value, standalone : Bool, subscribed : Bool }
-    | OcrImagePrepared { dataUrl : String, error : String, finalBytes : Int, id : String, originalBytes : Int }
     | OpenEditTripForm Trip
     | OpenInviteCrewModal SharedTripId
     | OpenInviteModal SharedTripId
@@ -475,9 +467,8 @@ type AuthMsg_
     | ResetLinksClicked SharedTripId
     | ResetLinksConfirmed SharedTripId
     | ResetLinksResult (Result Http.Error ())
-    | ReviewScanItem String
     | SaveTripForm
-    | ScanProxyResult { body : String, itemId : String, ok : Bool, status : Int }
+    | ScanMsg Msg.Scan.Msg
     | SetStatsGranularity Granularity
     | ShareResultReceived { ok : Bool, reason : String }
     | ShareTripAdoptResult (Result Http.Error ())

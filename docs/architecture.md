@@ -24,10 +24,16 @@
 
 ```
 src/
-├── Main.elm            # Port module — the app entry point, all update logic
+├── Main.elm            # App entry point + top-level update/dispatch
+├── Ports.elm           # The port module — all JS interop ports (Cmd/Sub)
+├── Codec.elm           # Flags / Creds JSON codecs (credsDecoder, encodeCreds)
 ├── Types.elm           # Model, AuthState, GuestState, Msg
 ├── Routing.elm         # URL ↔ Route parsing
 ├── Helpers.elm         # Utility functions
+├── Msg/
+│   └── Scan.elm         # Scan-feature Msg (nested under AuthMsg_'s ScanMsg)
+├── Page/
+│   └── Scan.elm         # Scan/OCR feature update (per-feature TEA, #368)
 ├── Data/
 │   ├── Amendment.elm     # Amendment type, encoder, decoder
 │   ├── Auth.elm          # Creds, AppConfig (session + runtime config)
@@ -262,6 +268,38 @@ landed. Captured via `Task.perform GotSyncTime Time.now` whenever
 zone via `Intl.DateTimeFormat`, so no `Time.Zone` is tracked on the model.
 In-memory only; never syncs to PouchDB.
 
+### Nested update dispatch (per-feature `Page.Foo.update`)
+
+`Main.update` pattern-matches `(Msg, Model)` and delegates to `updateAuth`
+/ `updateGuest` / `updateShared`. `updateAuth` is a large `case msg of` over
+`AuthMsg_`. As features grow, individual features are being carved out of
+that monolithic `case` into their own `Page.Foo` modules — the first being
+the Scan/OCR feature (#368).
+
+The mechanics that avoid an import cycle (Elm forbids them):
+
+- Feature messages live in a dedicated `Msg.Foo` module (e.g. `Msg.Scan`)
+  that **does not import `Types`**. `Types.AuthMsg_` gains one variant,
+  `ScanMsg Msg.Scan.Msg`, and imports `Msg.Scan`.
+- `Page.Foo` (e.g. `Page.Scan`) imports `Types` (for `AuthState` and the
+  `Types.AuthMsg` / `Types.ScanMsg` constructors) and `Msg.Foo` (for the
+  message constructors it pattern-matches), and exposes
+  `update : Msg.Foo.Msg -> AuthState -> ( AuthState, Cmd Types.Msg )`.
+- `updateAuth` collapses every feature arm to one router arm:
+  `ScanMsg m -> Page.Scan.update m as_ |> Tuple.mapFirst AuthModel`.
+
+Because `Page.Scan.update` operates over the whole `AuthState` (the EXIF /
+geocode arms still write `as_.form` via `syncScanLocationToForm`), the seam
+is not yet a self-contained `Scan.Model` — that narrowing is a later step.
+The win today is that Scan changes touch only `Page/Scan.elm` + `Msg/Scan.elm`,
+never `Main.elm` or `AuthMsg_`.
+
+The top-level `( AuthMsg _, GuestModel gs ) -> ( GuestModel gs, Cmd.none )`
+arm intentionally drops an `AuthMsg` that arrives after the session was torn
+down (sign-out / 401) — there's no `AuthState` to run `updateAuth` against.
+In-flight scan results are recovered on the next login from the IndexedDB
+row, not from this dropped message.
+
 ---
 
 ## Data modeling with Dicts
@@ -419,6 +457,12 @@ bidirectionally with `https://couch.ternpike.com/<dbName>`.
 Because PouchDB is JavaScript-only, Elm talks to it through **ports**.
 
 ### Port overview
+
+All `port` declarations live in `src/Ports.elm` (the app's single `port
+module`, extracted from `Main` in #368) so feature modules like `Page.Scan`
+can call the ports they need without importing `Main`. Ports merge into one
+app namespace on the JS side, so `app.ports.<name>` is unaffected by the
+move.
 
 ```elm
 -- Elm → JS
@@ -594,8 +638,16 @@ The BYO/hosted credential decision is modelled by `Data.OcrPath` (#219):
   no BYO key). `OcrPath.resolve` is the single decision point; consumers
   pattern-match on it.
 
-Receipts go through Anthropic's vision model via `Main.makeOcrCall`. The
-system prompt (`Main.ocrSystemPrompt`) asks Claude to extract one JSON
+The Scan/OCR feature's update logic lives in its own module,
+`Page.Scan` (carved out of `Main.updateAuth` in #368 — see "Nested update
+dispatch" below). The Scan messages live in `Msg.Scan` and nest under
+`AuthMsg_`'s single `ScanMsg Msg.Scan.Msg` variant; `Main.updateAuth`
+routes them with one arm (`ScanMsg m -> Page.Scan.update m as_ |>
+Tuple.mapFirst AuthModel`). The helpers named below all live in
+`Page.Scan`.
+
+Receipts go through Anthropic's vision model via `Page.Scan.makeOcrCall`. The
+system prompt (`Page.Scan.ocrSystemPrompt`) asks Claude to extract one JSON
 object per receipt in the image, with these fields (every one optional —
 Claude returns `null` for whatever it couldn't read):
 
@@ -604,7 +656,7 @@ Claude returns `null` for whatever it couldn't read):
   `paymentMethod`.
 
 The raw OCR result lands on `ScanItem.ocrData : Maybe OcrData`
-(`src/Data/Scan.elm`). On batch images, `Main.GotOcrResult` splits one
+(`src/Data/Scan.elm`). On batch images, `Page.Scan`'s `GotOcrResult` handler splits one
 source item into multiple `ScanReady` items, one per OCR result. The
 Scan queue UI (`src/Pages/Scan.elm`) surfaces all of this — amount,
 category pill, merchant, the extracted date with provenance ("📅 May
@@ -615,7 +667,7 @@ right days before you tap Review on each one.
 When OCR fails (HTTP error from Anthropic, refusal, unparseable JSON,
 or no receipts detected), the failure reason is captured on
 `ScanItem.ocrError : Maybe String` and rendered on the Scan card below
-the "OCR failed — fill manually" header. `Main.makeOcrCall` uses
+the "OCR failed — fill manually" header. `Page.Scan.makeOcrCall` uses
 `Http.expectStringResponse` (not `expectString`) so non-2xx bodies are
 preserved — that's where Anthropic's `error.message` lives, and
 surfacing it lets the user tell a rate-limit from a corrupt-image from
