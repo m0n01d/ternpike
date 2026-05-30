@@ -322,6 +322,15 @@ viewScanThumbnail item =
 viewScanCardBody : ScanItem -> Html Msg
 viewScanCardBody item =
     case item.status of
+        ScanDeferred ->
+            -- Captured offline; no OCR has run yet. The full deferred
+            -- card (with the "Add details" offline-edit affordance) is
+            -- wired in #372 — this is the placeholder until then.
+            Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
+                [ Html.div [ Html.Attributes.class "text-moss text-xs" ] [ Html.text "Saved offline" ]
+                , viewProgressBar "w-1/4"
+                ]
+
         ScanQueued ->
             Html.div [ Html.Attributes.class "flex flex-col gap-2 h-full justify-center" ]
                 [ Html.div [ Html.Attributes.class "text-moss text-xs" ] [ Html.text "Queued…" ]

@@ -146,6 +146,9 @@ viewItem ( id, item ) =
 statusLabel : ScanStatus -> String
 statusLabel status =
     case status of
+        ScanDeferred ->
+            "deferred"
+
         ScanProcessing ->
             "processing"
 
@@ -191,6 +194,7 @@ seedModel =
     , form = FreshForm (PendingEntry.defaultPendingEntry seedDate)
     , route = RouteScan (TripId.fromString "trip::2026-05-30::abc")
     , scanQueue = Dict.singleton "scan-0" processingItem
+    , scanSeq = 0
     , sharedTrips = Data.SharedTrips.empty
     , tier = Tier.Tern
     , today = seedDate
@@ -200,13 +204,19 @@ seedModel =
 
 processingItem : ScanItem
 processingItem =
-    { exif = Data.Scan.ExifChecking
+    { draft = Nothing
+    , exif = Data.Scan.ExifChecking
     , exifDebug = ""
+    , expectedExpenseId = Nothing
     , geocode = Data.Scan.GeocodeNotAttempted
     , id = ScanItemId.fromString "scan-0"
     , imageUrl = "data:image/jpeg;base64,xxx"
+    , lastError = Nothing
     , ocrData = Nothing
     , ocrError = Nothing
+    , persistError = False
+    , retryCount = 0
+    , schemaVersion = Data.Scan.currentSchemaVersion
     , status = ScanProcessing
     }
 

@@ -1,53 +1,77 @@
 module Data.Scan exposing
-    ( ExifPhase(..)
+    ( DraftFields
+    , ExifPhase(..)
     , GeocodePhase(..)
     , OcrData
     , ScanItem
     , ScanStatus(..)
+    , childId
+    , currentSchemaVersion
     , effectiveLocation
+    , mintId
     , needsReview
     , ocrDataDecoder
+    , ocrDataEncoder
     , ocrDataListDecoder
+    , reconcileHydratedQueue
+    , scanItemDecoder
+    , scanItemEncoder
     )
 
 {-| Receipt-scan queue: one `ScanItem` per receipt the user has dropped
-into the Scan tab, plus the OCR result the Anthropic API hands back.
+into the Scan tab, plus the OCR result the Anthropic API hands back and
+any fields the user has typed by hand.
 
-The queue is a `Dict String ScanItem` keyed by the item's local id
-(`"scan-<n>"`). Each item moves through `ScanQueued → ScanProcessing →
-ScanReady → ScanSubmitted` as files are read, OCR completes, the user
-reviews the result on the Add page, and the resulting expense is saved.
+The queue is a `Dict String ScanItem` keyed by the item's durable id
+(`scan::<millis>::<seq>` — see `Data.ScanItemId`). An item moves through
+`ScanQueued → ScanProcessing → ScanReady → ScanSubmitted` on the online
+happy path; an offline capture lands in `ScanDeferred` until the network
+returns. Because the captured image plus the user's typed draft must
+survive a reload, a `ScanItem` (de)serializes losslessly to the durable
+store via `scanItemEncoder` / `scanItemDecoder`, and `reconcileHydratedQueue`
+normalizes the queue at boot (in-flight statuses can't survive a reload —
+no OCR request is still alive — so they reset to `ScanDeferred`, while
+`ScanReady` / `ScanSubmitted` are preserved).
 
 Why optional fields on `OcrData`: Anthropic returns "best effort" JSON
 and any field may be missing or unreadable. The Add page fills them in
 from `OcrData` and falls back to defaults for whatever's missing, so
 making them required would force fake placeholder values into the
-domain.
+domain. `DraftFields` is `Maybe`-typed for the same reason — see its
+own doc.
 
 -}
 
 import Data.Category as Category exposing (Category)
 import Data.DateField as DateField exposing (DateField)
-import Data.GeoPoint exposing (GeoPoint)
+import Data.GeoPoint as GeoPoint exposing (GeoPoint)
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money exposing (Money)
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Data.ScanItemId exposing (ScanItemId)
+import Dict exposing (Dict)
 import Json.Decode
 import Json.Decode.Pipeline as Pipeline
+import Json.Encode
 
 
 {-| Lifecycle stage of one queued receipt.
 
-  - `ScanQueued` — file picked, not yet read into a data URL.
+  - `ScanDeferred` — captured offline (or while the network state is
+    still unknown at boot): the image is persisted and the user may type
+    fields by hand, but no OCR has run. A reconnect / retry later moves
+    it on; `reconcileHydratedQueue` also parks any reload-orphaned
+    in-flight item here.
   - `ScanProcessing` — OCR request in flight to Anthropic.
+  - `ScanQueued` — file picked, not yet read into a data URL.
   - `ScanReady` — OCR returned (with or without data); user can review.
   - `ScanSubmitted` — review confirmed and the expense was saved; the
     card stays visible (greyed out) until "Clear submitted" is tapped.
 
 -}
 type ScanStatus
-    = ScanProcessing
+    = ScanDeferred
+    | ScanProcessing
     | ScanQueued
     | ScanReady
     | ScanSubmitted
@@ -114,14 +138,26 @@ type GeocodePhase
 
 {-| One receipt in the scan queue.
 
+  - `draft` — fields the user has typed by hand while the item is
+    deferred / under review, persisted so they survive a reload.
+    `Nothing` until the user touches the form (see `DraftFields`).
   - `exif` — phase of the EXIF-GPS extraction (see `ExifPhase`).
   - `exifDebug` — raw EXIF dump shown in the "debug info" disclosure
     when EXIF parsing finds no GPS. Useful for diagnosing why a photo
     we'd expect to have coordinates didn't.
+  - `expectedExpenseId` — the `ExpenseId` (as a `String`) the item's
+    eventual save will write, stamped at submit so the PouchDB change
+    echo can match the saved expense back to its queue item and clear
+    it. `Nothing` until the item is submitted.
   - `geocode` — phase of the address-geocode call (see `GeocodePhase`).
-  - `id` — local-only key (`"scan-<n>"`), never reaches PouchDB.
+  - `id` — durable, local-only key (`scan::<millis>::<seq>`); persisted
+    to the offline scan store but never reaches PouchDB.
   - `imageUrl` — base64 data URL of the picked image, used as both the
-    preview src and the OCR upload.
+    preview src and the OCR upload, and persisted so the photo survives
+    a reload.
+  - `lastError` — human-readable reason the most recent persist / retry
+    attempt failed, distinct from `ocrError` (which is OCR-specific).
+    `Nothing` when the last attempt succeeded.
   - `ocrData` — `Nothing` until OCR returns; `Just` even if the model
     extracted nothing (so we know it ran).
   - `ocrError` — human-readable reason the most recent OCR attempt
@@ -129,6 +165,13 @@ type GeocodePhase
     while OCR is in flight or after a successful read; surfaced on the
     Scan card so the user can tell why an item is in fill-manually
     mode instead of guessing.
+  - `persistError` — `True` when the last write to the durable store
+    failed, so the UI can surface a "couldn't save offline" warning.
+  - `retryCount` — how many times the OCR / persist pipeline has been
+    re-attempted for this item; drives backoff and a give-up cap.
+  - `schemaVersion` — the `ScanItem` schema version the doc was written
+    with, so a future field change can migrate stored docs (see
+    `currentSchemaVersion`).
   - `status` — the lifecycle stage above.
 
 EXIF and geocode are tracked as independent phases rather than a
@@ -142,15 +185,73 @@ type system should rule out.
 
 -}
 type alias ScanItem =
-    { exif : ExifPhase
+    { draft : Maybe DraftFields
+    , exif : ExifPhase
     , exifDebug : String
+    , expectedExpenseId : Maybe String
     , geocode : GeocodePhase
     , id : ScanItemId
     , imageUrl : String
+    , lastError : Maybe String
     , ocrData : Maybe OcrData
     , ocrError : Maybe String
+    , persistError : Bool
+    , retryCount : Int
+    , schemaVersion : Int
     , status : ScanStatus
     }
+
+
+{-| Fields the user has typed (or corrected) by hand on the Add review
+form while a scan item is deferred or under review, persisted onto the
+item so they survive a reload.
+
+**Every field is `Maybe`-typed on purpose — `DraftFields` is NOT a
+`PendingEntry` clone.** A `PendingEntry` defaults `category` to `Fuel`
+and `date` to today (and stores the rest as plain `String`s, where
+`""` is indistinguishable from "untouched"). Those defaults are the
+right shape for a brand-new form, but the wrong shape for a draft laid
+on top of OCR output: persisting a defaulted `Fuel` / today over a
+field the user never touched would silently clobber whatever OCR (or a
+later retry) extracted. So `Nothing` here means "user hasn't set this —
+fall through to `ocrData`, then to the form default," and only a `Just`
+represents an actual user choice. This is the #93 sentinel lesson:
+model "unset" as `Nothing`, never as a defaulted value that can't be
+told apart from a real one.
+
+  - `address` / `merchant` / `note` / `longNote` — `Nothing` for an
+    untouched field (empty input is normalized to `Nothing`, never `""`).
+  - `amount` — kept as the raw `String` the user is editing (so a
+    half-typed `"12."` round-trips); `Nothing` / empty, never `"0"`.
+  - `category` — `Just` only once the user picks one; no `Fuel` default.
+  - `date` — `Just` only once the user sets one; no today default.
+  - `locationState` — the form's current location provenance (manual
+    pin, browser geo, skip, …), which is itself a closed sum so it
+    needs no `Maybe` wrapper.
+  - `paymentMethod` — `Just` only once the user picks one.
+
+-}
+type alias DraftFields =
+    { address : Maybe String
+    , amount : Maybe String
+    , category : Maybe Category
+    , date : Maybe DateField
+    , locationState : LocationState
+    , longNote : Maybe String
+    , merchant : Maybe String
+    , note : Maybe String
+    , paymentMethod : Maybe PaymentMethod
+    }
+
+
+{-| The current `ScanItem` schema version. Stamped into every doc by
+`scanItemEncoder` and read back by `scanItemDecoder` (defaulting to this
+value when a legacy doc omits it) so a future field change can migrate
+stored offline docs in place.
+-}
+currentSchemaVersion : Int
+currentSchemaVersion =
+    1
 
 
 {-| Project the scan item's EXIF + geocode phases into the
@@ -164,13 +265,19 @@ geocode wins over EXIF (see `Data.Location` for the rationale).
     -- Geocode resolved: receipt's printed address wins, even when EXIF
     -- has its own coords (the photo was taken at home).
     effectiveLocation
-        { exif = ExifFound (GeoPoint.fromDegrees 37.7 -122.4)
+        { draft = Nothing
+        , exif = ExifFound (GeoPoint.fromDegrees 37.7 -122.4)
         , exifDebug = ""
+        , expectedExpenseId = Nothing
         , geocode = GeocodeResolved (GeoPoint.fromDegrees 48.8 2.3)
-        , id = Data.ScanItemId.fromString "scan-0"
+        , id = Data.ScanItemId.fromString "scan::0::0"
         , imageUrl = ""
+        , lastError = Nothing
         , ocrData = Nothing
         , ocrError = Nothing
+        , persistError = False
+        , retryCount = 0
+        , schemaVersion = 1
         , status = ScanReady
         }
     --> LocationGot (GeoPoint.fromDegrees 48.8 2.3) Geocoded
@@ -178,26 +285,38 @@ geocode wins over EXIF (see `Data.Location` for the rationale).
     -- Geocode in flight: surface as "resolving" so the form doesn't
     -- offer the manual-pin prompt yet.
     effectiveLocation
-        { exif = ExifMissing
+        { draft = Nothing
+        , exif = ExifMissing
         , exifDebug = ""
+        , expectedExpenseId = Nothing
         , geocode = GeocodeRequested
-        , id = Data.ScanItemId.fromString "scan-0"
+        , id = Data.ScanItemId.fromString "scan::0::0"
         , imageUrl = ""
+        , lastError = Nothing
         , ocrData = Nothing
         , ocrError = Nothing
+        , persistError = False
+        , retryCount = 0
+        , schemaVersion = 1
         , status = ScanReady
         }
     --> LocationResolving
 
     -- Geocode missed / not attempted: fall through to EXIF if present.
     effectiveLocation
-        { exif = ExifFound (GeoPoint.fromDegrees 37.7 -122.4)
+        { draft = Nothing
+        , exif = ExifFound (GeoPoint.fromDegrees 37.7 -122.4)
         , exifDebug = ""
+        , expectedExpenseId = Nothing
         , geocode = GeocodeMissed
-        , id = Data.ScanItemId.fromString "scan-0"
+        , id = Data.ScanItemId.fromString "scan::0::0"
         , imageUrl = ""
+        , lastError = Nothing
         , ocrData = Nothing
         , ocrError = Nothing
+        , persistError = False
+        , retryCount = 0
+        , schemaVersion = 1
         , status = ScanReady
         }
     --> LocationGot (GeoPoint.fromDegrees 37.7 -122.4) ExifGps
@@ -205,13 +324,19 @@ geocode wins over EXIF (see `Data.Location` for the rationale).
     -- Nothing worked: surface "no GPS" so the user gets the manual
     -- pin button.
     effectiveLocation
-        { exif = ExifMissing
+        { draft = Nothing
+        , exif = ExifMissing
         , exifDebug = ""
+        , expectedExpenseId = Nothing
         , geocode = GeocodeMissed
-        , id = Data.ScanItemId.fromString "scan-0"
+        , id = Data.ScanItemId.fromString "scan::0::0"
         , imageUrl = ""
+        , lastError = Nothing
         , ocrData = Nothing
         , ocrError = Nothing
+        , persistError = False
+        , retryCount = 0
+        , schemaVersion = 1
         , status = ScanReady
         }
     --> LocationNoExifGps
@@ -337,3 +462,454 @@ ocrDataListDecoder =
         [ Json.Decode.list ocrDataDecoder
         , Json.Decode.map List.singleton ocrDataDecoder
         ]
+
+
+{-| Encode an `OcrData` for the durable scan store. Reuses the field
+codecs (`Money.encoder` for `amount`, `DateField.encoder` for `date`,
+`Category.label` / `PaymentMethod.toString` for the enums) so what we
+persist round-trips back through `ocrDataDecoder`. `Nothing` fields are
+written as JSON `null`, which `ocrDataDecoder` reads back as `Nothing`.
+-}
+ocrDataEncoder : OcrData -> Json.Encode.Value
+ocrDataEncoder ocr =
+    Json.Encode.object
+        [ ( "address", maybe Json.Encode.string ocr.address )
+        , ( "amount", maybe Money.encoder ocr.amount )
+        , ( "category", maybe (Category.label >> Json.Encode.string) ocr.category )
+        , ( "date", maybe DateField.encoder ocr.date )
+        , ( "longNote", maybe Json.Encode.string ocr.longNote )
+        , ( "merchant", maybe Json.Encode.string ocr.merchant )
+        , ( "note", maybe Json.Encode.string ocr.note )
+        , ( "paymentMethod", maybe (PaymentMethod.toString >> Json.Encode.string) ocr.paymentMethod )
+        ]
+
+
+{-| Encode a `Maybe a` as either the wrapped value (via `enc`) or JSON
+`null`. The matching `lenient` / `optional` decoders read `null` back as
+`Nothing`.
+-}
+maybe : (a -> Json.Encode.Value) -> Maybe a -> Json.Encode.Value
+maybe enc m =
+    case m of
+        Just a ->
+            enc a
+
+        Nothing ->
+            Json.Encode.null
+
+
+
+-- DURABLE IDS
+
+
+{-| Mint a durable scan-queue id from a capture timestamp (millis since
+epoch) and the monotonic per-session counter (`AuthState.scanSeq`).
+
+The counter — not the file's position in its batch — is the collision
+guard: two photos picked in the same millisecond still get distinct ids
+because the counter advances per item.
+
+    mintId 1716200000000 7
+    --> "scan::1716200000000::7"
+
+-}
+mintId : Int -> Int -> String
+mintId millis seq =
+    "scan::" ++ String.fromInt millis ++ "::" ++ String.fromInt seq
+
+
+{-| Mint the id for the i-th child of a multi-receipt split, reusing the
+parent's id as the middle segment so siblings stay grouped under it.
+
+    childId "scan::1716200000000::7" 2
+    --> "scan::scan::1716200000000::7::2"
+
+-}
+childId : String -> Int -> String
+childId parentId i =
+    "scan::" ++ parentId ++ "::" ++ String.fromInt i
+
+
+
+-- DURABLE STORE CODECS
+
+
+{-| Encode a `ScanItem` for the durable (IndexedDB) scan store. Every
+field is written so the item — image, OCR result, user draft, status,
+retry bookkeeping — survives a reload losslessly. `id` is flattened to
+its raw `String`; the `schemaVersion` is stamped at `currentSchemaVersion`.
+-}
+scanItemEncoder : ScanItem -> Json.Encode.Value
+scanItemEncoder item =
+    Json.Encode.object
+        [ ( "draft", maybe draftFieldsEncoder item.draft )
+        , ( "exif", exifPhaseEncoder item.exif )
+        , ( "exifDebug", Json.Encode.string item.exifDebug )
+        , ( "expectedExpenseId", maybe Json.Encode.string item.expectedExpenseId )
+        , ( "geocode", geocodePhaseEncoder item.geocode )
+        , ( "id", Json.Encode.string (Data.ScanItemId.toString item.id) )
+        , ( "imageUrl", Json.Encode.string item.imageUrl )
+        , ( "lastError", maybe Json.Encode.string item.lastError )
+        , ( "ocrData", maybe ocrDataEncoder item.ocrData )
+        , ( "ocrError", maybe Json.Encode.string item.ocrError )
+        , ( "persistError", Json.Encode.bool item.persistError )
+        , ( "retryCount", Json.Encode.int item.retryCount )
+        , ( "schemaVersion", Json.Encode.int currentSchemaVersion )
+        , ( "status", statusEncoder item.status )
+        ]
+
+
+{-| Decode one `ScanItem` from the durable store. Tolerant of legacy /
+partial docs: a missing `status` defaults to `ScanDeferred` (the safe
+"needs another pass" state), a missing `draft` to `Nothing`, and a
+missing `schemaVersion` to `currentSchemaVersion`. The booleans and
+counters likewise default so an older doc that predates those fields
+still decodes.
+-}
+scanItemDecoder : Json.Decode.Decoder ScanItem
+scanItemDecoder =
+    Json.Decode.succeed ScanItem
+        |> Pipeline.optional "draft" (Json.Decode.nullable draftFieldsDecoder) Nothing
+        |> Pipeline.optional "exif" exifPhaseDecoder ExifMissing
+        |> Pipeline.optional "exifDebug" Json.Decode.string ""
+        |> Pipeline.optional "expectedExpenseId" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "geocode" geocodePhaseDecoder GeocodeNotAttempted
+        |> Pipeline.required "id" (Json.Decode.map Data.ScanItemId.fromString Json.Decode.string)
+        |> Pipeline.optional "imageUrl" Json.Decode.string ""
+        |> Pipeline.optional "lastError" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "ocrData" (Json.Decode.nullable ocrDataDecoder) Nothing
+        |> Pipeline.optional "ocrError" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "persistError" Json.Decode.bool False
+        |> Pipeline.optional "retryCount" Json.Decode.int 0
+        |> Pipeline.optional "schemaVersion" Json.Decode.int currentSchemaVersion
+        |> Pipeline.optional "status" statusDecoder ScanDeferred
+
+
+draftFieldsEncoder : DraftFields -> Json.Encode.Value
+draftFieldsEncoder draft =
+    Json.Encode.object
+        [ ( "address", maybe Json.Encode.string draft.address )
+        , ( "amount", maybe Json.Encode.string draft.amount )
+        , ( "category", maybe (Category.label >> Json.Encode.string) draft.category )
+        , ( "date", maybe DateField.encoder draft.date )
+        , ( "locationState", locationStateEncoder draft.locationState )
+        , ( "longNote", maybe Json.Encode.string draft.longNote )
+        , ( "merchant", maybe Json.Encode.string draft.merchant )
+        , ( "note", maybe Json.Encode.string draft.note )
+        , ( "paymentMethod", maybe (PaymentMethod.toString >> Json.Encode.string) draft.paymentMethod )
+        ]
+
+
+draftFieldsDecoder : Json.Decode.Decoder DraftFields
+draftFieldsDecoder =
+    Json.Decode.succeed DraftFields
+        |> Pipeline.optional "address" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "amount" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "category" (Json.Decode.nullable (Json.Decode.map Category.fromString Json.Decode.string)) Nothing
+        |> Pipeline.optional "date" (lenient DateField.decoder) Nothing
+        |> Pipeline.optional "locationState" locationStateDecoder LocationIdle
+        |> Pipeline.optional "longNote" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "merchant" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "note" (Json.Decode.nullable Json.Decode.string) Nothing
+        |> Pipeline.optional "paymentMethod" (lenient paymentMethodDecoder) Nothing
+
+
+statusEncoder : ScanStatus -> Json.Encode.Value
+statusEncoder status =
+    Json.Encode.string (statusToString status)
+
+
+statusToString : ScanStatus -> String
+statusToString status =
+    case status of
+        ScanDeferred ->
+            "deferred"
+
+        ScanProcessing ->
+            "processing"
+
+        ScanQueued ->
+            "queued"
+
+        ScanReady ->
+            "ready"
+
+        ScanSubmitted ->
+            "submitted"
+
+
+statusDecoder : Json.Decode.Decoder ScanStatus
+statusDecoder =
+    Json.Decode.map
+        (\s ->
+            case s of
+                "deferred" ->
+                    ScanDeferred
+
+                "processing" ->
+                    ScanProcessing
+
+                "queued" ->
+                    ScanQueued
+
+                "ready" ->
+                    ScanReady
+
+                "submitted" ->
+                    ScanSubmitted
+
+                _ ->
+                    ScanDeferred
+        )
+        Json.Decode.string
+
+
+exifPhaseEncoder : ExifPhase -> Json.Encode.Value
+exifPhaseEncoder phase =
+    case phase of
+        ExifChecking ->
+            Json.Encode.object [ ( "phase", Json.Encode.string "checking" ) ]
+
+        ExifFound point ->
+            Json.Encode.object
+                [ ( "phase", Json.Encode.string "found" )
+                , ( "point", GeoPoint.encoder point )
+                ]
+
+        ExifMissing ->
+            Json.Encode.object [ ( "phase", Json.Encode.string "missing" ) ]
+
+
+exifPhaseDecoder : Json.Decode.Decoder ExifPhase
+exifPhaseDecoder =
+    Json.Decode.field "phase" Json.Decode.string
+        |> Json.Decode.andThen
+            (\phase ->
+                case phase of
+                    "found" ->
+                        Json.Decode.map
+                            (\maybePoint ->
+                                case maybePoint of
+                                    Just point ->
+                                        ExifFound point
+
+                                    Nothing ->
+                                        ExifMissing
+                            )
+                            (Json.Decode.field "point" GeoPoint.decoderPair)
+
+                    "checking" ->
+                        Json.Decode.succeed ExifChecking
+
+                    _ ->
+                        Json.Decode.succeed ExifMissing
+            )
+
+
+geocodePhaseEncoder : GeocodePhase -> Json.Encode.Value
+geocodePhaseEncoder phase =
+    case phase of
+        GeocodeMissed ->
+            Json.Encode.object [ ( "phase", Json.Encode.string "missed" ) ]
+
+        GeocodeNotAttempted ->
+            Json.Encode.object [ ( "phase", Json.Encode.string "notAttempted" ) ]
+
+        GeocodeRequested ->
+            Json.Encode.object [ ( "phase", Json.Encode.string "requested" ) ]
+
+        GeocodeResolved point ->
+            Json.Encode.object
+                [ ( "phase", Json.Encode.string "resolved" )
+                , ( "point", GeoPoint.encoder point )
+                ]
+
+
+geocodePhaseDecoder : Json.Decode.Decoder GeocodePhase
+geocodePhaseDecoder =
+    Json.Decode.field "phase" Json.Decode.string
+        |> Json.Decode.andThen
+            (\phase ->
+                case phase of
+                    "resolved" ->
+                        Json.Decode.map
+                            (\maybePoint ->
+                                case maybePoint of
+                                    Just point ->
+                                        GeocodeResolved point
+
+                                    Nothing ->
+                                        GeocodeMissed
+                            )
+                            (Json.Decode.field "point" GeoPoint.decoderPair)
+
+                    "missed" ->
+                        Json.Decode.succeed GeocodeMissed
+
+                    "requested" ->
+                        Json.Decode.succeed GeocodeRequested
+
+                    _ ->
+                        Json.Decode.succeed GeocodeNotAttempted
+            )
+
+
+locationStateEncoder : LocationState -> Json.Encode.Value
+locationStateEncoder state =
+    case state of
+        LocationGot point source ->
+            Json.Encode.object
+                [ ( "kind", Json.Encode.string "got" )
+                , ( "point", GeoPoint.encoder point )
+                , ( "source", Json.Encode.string (locationSourceToString source) )
+                ]
+
+        LocationIdle ->
+            Json.Encode.object [ ( "kind", Json.Encode.string "idle" ) ]
+
+        LocationNoExifGps ->
+            Json.Encode.object [ ( "kind", Json.Encode.string "noExifGps" ) ]
+
+        LocationResolving ->
+            Json.Encode.object [ ( "kind", Json.Encode.string "resolving" ) ]
+
+        LocationSkipped ->
+            Json.Encode.object [ ( "kind", Json.Encode.string "skipped" ) ]
+
+
+locationStateDecoder : Json.Decode.Decoder LocationState
+locationStateDecoder =
+    Json.Decode.field "kind" Json.Decode.string
+        |> Json.Decode.andThen
+            (\kind ->
+                case kind of
+                    "got" ->
+                        Json.Decode.map2
+                            (\maybePoint source ->
+                                case maybePoint of
+                                    Just point ->
+                                        LocationGot point source
+
+                                    Nothing ->
+                                        LocationNoExifGps
+                            )
+                            (Json.Decode.field "point" GeoPoint.decoderPair)
+                            (Json.Decode.field "source" locationSourceDecoder)
+
+                    "skipped" ->
+                        Json.Decode.succeed LocationSkipped
+
+                    "resolving" ->
+                        Json.Decode.succeed LocationResolving
+
+                    "noExifGps" ->
+                        Json.Decode.succeed LocationNoExifGps
+
+                    _ ->
+                        Json.Decode.succeed LocationIdle
+            )
+
+
+locationSourceToString : LocationSource -> String
+locationSourceToString source =
+    case source of
+        BrowserGeo ->
+            "browserGeo"
+
+        ExifGps ->
+            "exifGps"
+
+        Geocoded ->
+            "geocoded"
+
+        ManualPin ->
+            "manualPin"
+
+
+locationSourceDecoder : Json.Decode.Decoder LocationSource
+locationSourceDecoder =
+    Json.Decode.map
+        (\s ->
+            case s of
+                "browserGeo" ->
+                    BrowserGeo
+
+                "exifGps" ->
+                    ExifGps
+
+                "geocoded" ->
+                    Geocoded
+
+                _ ->
+                    ManualPin
+        )
+        Json.Decode.string
+
+
+
+-- BOOT RECONCILE
+
+
+{-| Normalize a hydrated scan queue at boot.
+
+In-flight statuses can't survive a reload — no OCR request is still
+alive after the page is gone — so any `ScanProcessing` / `ScanQueued`
+item is reset to `ScanDeferred`, where the retry / reconnect machinery
+(later issues) can pick it back up. `ScanReady` and `ScanSubmitted` are
+left untouched: a `ScanReady` item still has its parsed OCR result, and
+a `ScanSubmitted` item's expense is already filed.
+
+This is deliberately NOT where delete-vs-keep is decided for submitted
+items. At boot `AuthState.expenses` is still empty, so "this submitted
+scan's expense exists, drop the card" can't be answered yet — the
+PouchDB change echo owns that (a later issue).
+
+    import Data.ScanItemId
+    import Dict
+
+    Dict.get "a"
+        (reconcileHydratedQueue
+            (Dict.singleton "a"
+                { draft = Nothing
+                , exif = ExifMissing
+                , exifDebug = ""
+                , expectedExpenseId = Nothing
+                , geocode = GeocodeNotAttempted
+                , id = Data.ScanItemId.fromString "a"
+                , imageUrl = ""
+                , lastError = Nothing
+                , ocrData = Nothing
+                , ocrError = Nothing
+                , persistError = False
+                , retryCount = 0
+                , schemaVersion = 1
+                , status = ScanProcessing
+                }
+            )
+        )
+        |> Maybe.map .status
+    --> Just ScanDeferred
+
+-}
+reconcileHydratedQueue : Dict String ScanItem -> Dict String ScanItem
+reconcileHydratedQueue queue =
+    Dict.map (\_ item -> { item | status = reconcileStatus item.status }) queue
+
+
+reconcileStatus : ScanStatus -> ScanStatus
+reconcileStatus status =
+    case status of
+        ScanProcessing ->
+            ScanDeferred
+
+        ScanQueued ->
+            ScanDeferred
+
+        ScanDeferred ->
+            ScanDeferred
+
+        ScanReady ->
+            ScanReady
+
+        ScanSubmitted ->
+            ScanSubmitted

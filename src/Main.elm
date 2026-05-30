@@ -213,6 +213,7 @@ toAuthState creds initialRoute gs =
     , pushSubscribed = False
     , route = initialRoute
     , scanQueue = Dict.empty
+    , scanSeq = 0
     , showByoKeyInput = gs.session.config.anthropicKey /= Nothing
     , showDayIntensity = True
     , showInstallPrompt = False
@@ -4109,6 +4110,7 @@ scanModelFromAuth as_ =
     , form = as_.form
     , route = as_.route
     , scanQueue = as_.scanQueue
+    , scanSeq = as_.scanSeq
     , sharedTrips = as_.sharedTrips
     , tier = as_.tier
     , today = as_.today
@@ -4128,6 +4130,7 @@ mergeScanModel scan as_ =
         , form = scan.form
         , route = scan.route
         , scanQueue = scan.scanQueue
+        , scanSeq = scan.scanSeq
     }
 
 
