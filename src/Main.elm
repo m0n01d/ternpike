@@ -541,6 +541,74 @@ milepostInputs as_ now =
     }
 
 
+{-| Like `milepostInputs` but scoped to a single trip.
+
+Produces an `Inputs` snapshot that contains only the expenses and trip record
+for `tripId`. Account-wide markers (Mile Marker 100, Seasoned Traveler) will
+never earn from this projection — correct; they are not trip achievements.
+Trip-scoped markers (Big Rig, Premium Unleaded, Cairn Builder, dollar
+thresholds, etc.) will reflect this trip's reality.
+
+`now` is passed as `Time.millisToPosix 0` by the Ledger call site; no current
+marker uses `now` for per-trip evaluation, and the real `now` is not available
+at view time (see `reconcileMileposts` for the write path that does have it).
+
+-}
+milepostInputsForTrip : TripId.TripId -> AuthState -> Milepost.Inputs
+milepostInputsForTrip tripId as_ =
+    let
+        maybeTrip : Maybe Trip
+        maybeTrip =
+            case as_.trips of
+                TripsLoaded loadedTrips ->
+                    Trips.findTrip tripId loadedTrips
+
+                _ ->
+                    Nothing
+
+        allAmendments : List Amendment.Amendment
+        allAmendments =
+            Dict.values as_.amendments
+
+        allVoids : List Void.Void
+        allVoids =
+            Dict.values as_.voids
+    in
+    case maybeTrip of
+        Nothing ->
+            { expenses = []
+            , now = Time.millisToPosix 0
+            , trips = []
+            , zone = Time.utc
+            }
+
+        Just trip ->
+            let
+                tripExpenses : List Expense
+                tripExpenses =
+                    Dict.get (TripId.toString trip.id) as_.expenses
+                        |> Maybe.withDefault Dict.empty
+                        |> Dict.values
+
+                facts : List Milepost.ExpenseFacts
+                facts =
+                    Entry.resolve tripExpenses allAmendments allVoids trip.id
+                        |> List.map
+                            (\entry ->
+                                { amount = entry.amount
+                                , category = entry.category
+                                , createdAt = entry.createdAt
+                                , tripId = TripId.toString entry.tripId
+                                }
+                            )
+            in
+            { expenses = facts
+            , now = Time.millisToPosix 0
+            , trips = [ { budget = trip.budget, id = TripId.toString trip.id } ]
+            , zone = Time.utc
+            }
+
+
 pouchInDecoder : D.Decoder PouchInbound
 pouchInDecoder =
     D.field "tag" D.string
@@ -4985,8 +5053,22 @@ viewAuth as_ =
                 RouteJoinSharedTrip token ->
                     Pages.JoinSharedTrip.viewAuth as_ token
 
-                RouteLedger _ ->
-                    Pages.Ledger.viewTab as_
+                RouteLedger tripId ->
+                    let
+                        earnedForTrip : List Milepost.MarkerState
+                        earnedForTrip =
+                            Milepost.evaluate (milepostInputsForTrip tripId as_)
+                                |> List.filter
+                                    (\s ->
+                                        case s of
+                                            Milepost.Earned _ ->
+                                                True
+
+                                            Milepost.Locked _ ->
+                                                False
+                                    )
+                    in
+                    Pages.Ledger.viewTab earnedForTrip as_
 
                 RouteMagicLink _ _ ->
                     -- Magic-link landing is a guest-only route; an
