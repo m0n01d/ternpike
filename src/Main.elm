@@ -5002,7 +5002,7 @@ view model =
     , body =
         [ viewDemoBanner demoMode
         , Html.div
-            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-dvh font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
+            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-[var(--app-height,100dvh)] font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
             [ case model of
                 GuestModel gs ->
                     viewGuest gs
@@ -5157,7 +5157,7 @@ viewAuth as_ =
                 RouteVerifyIndex ->
                     { actions = [], body = viewVerifyDashboard as_.basePath, hero = Html.Extra.nothing }
     in
-    Html.div [ Html.Attributes.class "flex flex-col h-dvh" ]
+    Html.div [ Html.Attributes.class "flex flex-col h-[var(--app-height,100dvh)]" ]
         [ UI.Layout.viewHeader as_
         , UI.Layout.viewOfflineBanner (Data.Sync.isOffline as_.network)
         , Html.div
