@@ -183,6 +183,14 @@ Loading bookkeeping:
   - `loadingTrips` / `tripLoaded` — guards against duplicate
     `GetTripExpenses` queries. A trip moves from
     `loadingTrips`→`tripLoaded` when its bundle arrives.
+  - `tripsHydrated` — `True` once the authoritative `GetAllTrips`
+    (fired on the first settled sync edge) has populated the complete
+    trip set. The local-first early read (`TripsPrefetched`) renders the
+    trips list from on-disk data before this, but only the
+    settled/complete read drives the one-time all-trips expense load and
+    milepost reconcile — so milepost evaluation never seeds on a partial
+    set (which would mis-fire celebration toasts for a pre-existing
+    backlog). Also gates the settled read so it fires exactly once.
   - `loadingExpenses` — same idea for single-expense fetches on the
     edit route.
 
@@ -291,6 +299,7 @@ type alias AuthState =
     , tripForm : Maybe TripForm
     , tripLoaded : Set String
     , trips : TripsState
+    , tripsHydrated : Bool
     , version : String
     , voids : Dict String Void
     }

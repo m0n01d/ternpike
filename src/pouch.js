@@ -241,6 +241,22 @@ export function attachPouch(app, { creds = null } = {}) {
     emitSync('syncing')
     const personal = await openPersonalHandle()
     startHandleSync(personal, dbName)
+    // Local-first early render: hand Elm whatever trips are already on disk
+    // immediately, WITHOUT waiting for the first sync round-trip to settle.
+    // On a weak connection the initial replication can take many seconds; the
+    // user's trips are already local, so blocking the list behind the wire
+    // defeats the point of an offline-first app. The authoritative
+    // `GetAllTrips` (fired by Elm on the first settled sync edge) follows and
+    // folds in anything pulled from remote, plus shared-trip handles.
+    //
+    // Deferred one macrotask so we don't stack a cursor scan onto the freshly
+    // opened IndexedDB connection on the same tick it wired changes + sync —
+    // that op-pileup is exactly the Safari `indexed_db_went_bad` abort
+    // openPersonalHandle was restructured to avoid (see its comment).
+    setTimeout(() => {
+      sendTrips('TripsPrefetched').catch(err =>
+        console.error('[pouch] early trips read:', err))
+    }, 0)
     // Eagerly hydrate shared trips from whatever's already in local PouchDB.
     // The paused-event handler will also call this when initial sync
     // settles — that's the canonical path for fresh sign-ins where
@@ -301,6 +317,87 @@ export function attachPouch(app, { creds = null } = {}) {
     return Array.from(handles.values())
   }
 
+  // Read one handle's expense/amend/void docs with key-range scans instead
+  // of a whole-database `allDocs`. Doc ids are prefixed (`expense::`,
+  // `amend::expense::`, `void::expense::`), so a startkey/endkey range is a
+  // bounded cursor seek over the by-id index rather than a full scan that
+  // also deserializes every trip and singleton doc. `￰` is the same
+  // high sentinel the GetExpense range below uses.
+  //
+  // Amendments and voids are returned UN-scoped by trip — exactly as the
+  // legacy per-trip path did — because an `amend`/`void` doc carries only a
+  // `targetId` (the expense id), not a `tripId`. Callers broadcast the full
+  // amend/void maps to every trip and let Elm resolve which apply. Only
+  // expenses are bucketed, by their `tripId` field.
+  async function readExpenseBundle(handle) {
+    const [expRows, amendRows, voidRows] = await Promise.all([
+      handle.local.allDocs({ include_docs: true, startkey: 'expense::', endkey: 'expense::￰' }),
+      handle.local.allDocs({ include_docs: true, startkey: 'amend::expense::', endkey: 'amend::expense::￰' }),
+      handle.local.allDocs({ include_docs: true, startkey: 'void::expense::', endkey: 'void::expense::￰' }),
+    ])
+
+    const amendments = {}
+    for (const row of amendRows.rows) {
+      const d = row.doc
+      if (!d || d.type !== 'amend') continue
+      const { _rev, ...doc } = d
+      amendments[d._id] = doc
+    }
+
+    const voids = {}
+    for (const row of voidRows.rows) {
+      const d = row.doc
+      if (!d || d.type !== 'void') continue
+      const { _rev, ...doc } = d
+      voids[d._id] = doc
+    }
+
+    const expensesByTrip = new Map()
+    for (const row of expRows.rows) {
+      const d = row.doc
+      if (!d || d.type !== 'expense') continue
+      const { _rev, ...doc } = d
+      let bucket = expensesByTrip.get(d.tripId)
+      if (!bucket) {
+        bucket = {}
+        expensesByTrip.set(d.tripId, bucket)
+      }
+      bucket[d._id] = doc
+    }
+
+    return { amendments, expensesByTrip, voids }
+  }
+
+  // Read every open handle's trip docs (range-scoped to `trip::`) and send
+  // them to Elm under `tag`. Used twice: the authoritative `GetAllTrips`
+  // (tag 'TripsLoaded') fired by Elm on the first settled sync edge, and the
+  // local-first early read (tag 'TripsPrefetched') fired from startSync
+  // before sync settles, so the list renders from on-disk data without
+  // waiting on the network. `flockId` is sourced from the handle, never the
+  // doc (the personal handle's is null).
+  async function sendTrips(tag) {
+    const trips = {}
+    const responses = await Promise.all(
+      allHandles().map(async (handle) => {
+        const result = await handle.local.allDocs({
+          include_docs: true,
+          startkey: 'trip::',
+          endkey: 'trip::￰',
+        })
+        return { handle, rows: result.rows }
+      })
+    )
+    for (const { handle, rows } of responses) {
+      for (const row of rows) {
+        const d = row.doc
+        if (!d || d.type !== 'trip') continue
+        const { _rev, ...doc } = d
+        trips[d._id] = { ...doc, flockId: handle.flockId }
+      }
+    }
+    app.ports.pouchIn.send({ tag, trips })
+  }
+
   async function upsertDoc(handle, doc) {
     try {
       const existing = await handle.local.get(doc._id)
@@ -319,22 +416,7 @@ export function attachPouch(app, { creds = null } = {}) {
       switch (msg.tag) {
 
         case 'GetAllTrips': {
-          const trips = {}
-          const responses = await Promise.all(
-            allHandles().map(async (handle) => {
-              const result = await handle.local.allDocs({ include_docs: true })
-              return { handle, rows: result.rows }
-            })
-          )
-          for (const { handle, rows } of responses) {
-            for (const row of rows) {
-              const d = row.doc
-              if (!d || d.type !== 'trip') continue
-              const { _rev, ...doc } = d
-              trips[d._id] = { ...doc, flockId: handle.flockId }
-            }
-          }
-          app.ports.pouchIn.send({ tag: 'TripsLoaded', trips })
+          await sendTrips('TripsLoaded')
           break
         }
 
@@ -356,27 +438,50 @@ export function attachPouch(app, { creds = null } = {}) {
         case 'GetTripExpenses': {
           const handle = targetHandle(msg.target)
           if (!handle) break
-          const result = await handle.local.allDocs({ include_docs: true })
-          const amendments = {}
-          const expenses   = {}
-          const voids      = {}
-          for (const row of result.rows) {
-            const d = row.doc
-            if (!d) continue
-            const { _rev, ...doc } = d
-            if (d.type === 'expense' && d.tripId === msg.tripId) {
-              expenses[d._id] = doc
-            } else if (d.type === 'amend' && d.targetId && typeof d.targetId === 'string' && d.targetId.startsWith('expense::')) {
-              amendments[d._id] = doc
-            } else if (d.type === 'void' && d.targetId && typeof d.targetId === 'string' && d.targetId.startsWith('expense::')) {
-              voids[d._id] = doc
-            }
-          }
+          const { amendments, expensesByTrip, voids } = await readExpenseBundle(handle)
           app.ports.pouchIn.send({
             tag: 'TripExpensesFetched',
             tripId: msg.tripId,
-            amendments, expenses, voids,
+            amendments,
+            expenses: expensesByTrip.get(msg.tripId) || {},
+            voids,
           })
+          break
+        }
+
+        case 'GetAllTripExpenses': {
+          // One-time startup load of every trip's expenses (backs milepost
+          // evaluation). Group the requested trips by their backing handle
+          // so each PouchDB is scanned ONCE, then reply with one
+          // `TripExpensesFetched` per requested trip — including an empty
+          // bundle for trips with no expenses, so Elm's `loadingTrips`
+          // quiescence accounting drains for every requested trip.
+          const byHandle = new Map()
+          for (const req of msg.requests || []) {
+            const handle = targetHandle(req.target)
+            if (!handle) continue
+            let ids = byHandle.get(handle)
+            if (!ids) {
+              ids = new Set()
+              byHandle.set(handle, ids)
+            }
+            ids.add(req.tripId)
+          }
+
+          await Promise.all(
+            Array.from(byHandle.entries()).map(async ([handle, tripIds]) => {
+              const { amendments, expensesByTrip, voids } = await readExpenseBundle(handle)
+              for (const tripId of tripIds) {
+                app.ports.pouchIn.send({
+                  tag: 'TripExpensesFetched',
+                  tripId,
+                  amendments,
+                  expenses: expensesByTrip.get(tripId) || {},
+                  voids,
+                })
+              }
+            })
+          )
           break
         }
 

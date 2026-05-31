@@ -252,6 +252,7 @@ toAuthState creds initialRoute gs =
     , tripForm = Nothing
     , tripLoaded = Set.empty
     , trips = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
+    , tripsHydrated = False
     , version = gs.version
     , voids = Dict.empty
     }
@@ -368,6 +369,21 @@ fetchMe as_ =
 encodePouchOut : PouchOutbound -> D.Value
 encodePouchOut msg =
     case msg of
+        GetAllTripExpenses requests ->
+            E.object
+                [ ( "tag", E.string "GetAllTripExpenses" )
+                , ( "requests"
+                  , E.list
+                        (\( target, tid ) ->
+                            E.object
+                                [ ( "target", Trip.encodeTarget target )
+                                , ( "tripId", E.string (TripId.toString tid) )
+                                ]
+                        )
+                        requests
+                  )
+                ]
+
         GetAllTrips ->
             E.object [ ( "tag", E.string "GetAllTrips" ) ]
 
@@ -694,6 +710,9 @@ pouchInDecoder =
 
                     "TripsLoaded" ->
                         D.map TripsFetched (D.field "trips" (D.dict Trip.decoder))
+
+                    "TripsPrefetched" ->
+                        D.map TripsPrefetched (D.field "trips" (D.dict Trip.decoder))
 
                     _ ->
                         D.fail ("Unknown pouchIn tag: " ++ tag)
@@ -1281,7 +1300,11 @@ handleTripsFetched tripsDict as_ =
             -- duplicated.
             let
                 ( routeState, routeCmd ) =
-                    fetchesForRoute { as_ | trips = TripsLoaded trips }
+                    -- `tripsHydrated = True`: this is the authoritative
+                    -- complete read, so the all-trips load + milepost
+                    -- reconcile below (and the quiescence reconcile in the
+                    -- `TripExpensesFetched` handler) are now allowed to run.
+                    fetchesForRoute { as_ | trips = TripsLoaded trips, tripsHydrated = True }
 
                 ( loadedState, loadAllCmd ) =
                     loadAllTripExpenses routeState
@@ -1309,14 +1332,76 @@ handleTripsFetched tripsDict as_ =
                 -- state). Every other route falls back to the Trips empty
                 -- state as before.
                 RouteJoinSharedTrip _ ->
-                    ( AuthModel { as_ | trips = NoTripsYet }
+                    ( AuthModel { as_ | trips = NoTripsYet, tripsHydrated = True }
                     , Cmd.none
                     )
 
                 _ ->
-                    ( AuthModel { as_ | trips = NoTripsYet, route = RouteTrips }
+                    ( AuthModel { as_ | trips = NoTripsYet, route = RouteTrips, tripsHydrated = True }
                     , Nav.replaceUrl as_.key (as_.basePath ++ "trips")
                     )
+
+
+{-| Local-first early render of the trips list (`TripsPrefetched`).
+
+The JS side reads whatever trips are already on disk the moment the personal
+PouchDB handle opens — before the first sync round-trip settles — and hands
+them here so the list renders immediately instead of blocking on the network
+(the whole point of an offline-first app, and the fix for a multi-second
+`TripsLoading` skeleton on a weak connection).
+
+This is deliberately the LIGHT path. It resolves the skeleton and lazily
+loads the current route's trip (so the Ledger/Stats you're looking at render
+fast), but it does NOT:
+
+  - fire `loadAllTripExpenses` / milepost reconcile — those wait for the
+    authoritative `handleTripsFetched` (complete set) so milepost evaluation
+    never seeds on a partial set (see `tripsHydrated` in `Types.elm`);
+  - clobber the route to `/trips` on an empty read — a brand-new device whose
+    trips haven't synced yet, or a deep link to a not-yet-pulled shared trip,
+    must not lose its route. The empty-state decision belongs to the settled
+    read.
+
+It also no-ops if the authoritative read already populated `trips`
+(`TripsLoaded`): the early read can only be a subset, so it must never
+overwrite the complete set (e.g. when sync settles faster than the deferred
+local read on a warm connection).
+
+-}
+handleTripsPrefetched : Dict.Dict String Trip -> AuthState -> ( Model, Cmd Msg )
+handleTripsPrefetched tripsDict as_ =
+    case as_.trips of
+        TripsLoaded _ ->
+            ( AuthModel as_, Cmd.none )
+
+        _ ->
+            let
+                hint =
+                    Routing.routeTripId as_.route
+
+                intendedTrip =
+                    hint |> Maybe.andThen (\id -> Dict.get (TripId.toString id) tripsDict)
+
+                selectedTrips =
+                    case intendedTrip of
+                        Just trip ->
+                            Just (Trips.selectTrip trip.id (Trips.fromDict tripsDict |> Maybe.withDefault (Trips.singleton trip)))
+
+                        Nothing ->
+                            Trips.fromDict tripsDict
+            in
+            case selectedTrips of
+                Just trips ->
+                    let
+                        ( routeState, routeCmd ) =
+                            fetchesForRoute { as_ | trips = TripsLoaded trips }
+                    in
+                    ( AuthModel routeState, routeCmd )
+
+                Nothing ->
+                    -- Empty local read: keep the skeleton, don't clobber the
+                    -- route. The settled read owns the genuine empty state.
+                    ( AuthModel as_, Cmd.none )
 
 
 {-| Fire `GetTripExpenses` for every loaded trip whose expenses aren't already
@@ -1354,15 +1439,24 @@ loadAllTripExpenses as_ =
                         |> List.map (.id >> TripId.toString)
                         |> Set.fromList
 
-                cmds : List (Cmd Msg)
-                cmds =
-                    List.map
-                        (\trip -> sendPouch (GetTripExpenses (targetForTripId trip.id as_) trip.id))
-                        toLoad
+                -- One bulk request instead of one `GetTripExpenses` per
+                -- trip: the JS side scans each backing PouchDB once and
+                -- buckets expenses by trip, then replies with one
+                -- `TripExpensesFetched` per requested trip — so the
+                -- per-trip quiescence accounting in `loadingTrips` is
+                -- unchanged, but N full-database scans collapse to one
+                -- scan per open handle.
+                requests : List ( Trip.TripTarget, TripId.TripId )
+                requests =
+                    List.map (\trip -> ( targetForTripId trip.id as_, trip.id )) toLoad
             in
-            ( { as_ | loadingTrips = Set.union newLoading as_.loadingTrips }
-            , Cmd.batch cmds
-            )
+            if List.isEmpty requests then
+                ( as_, Cmd.none )
+
+            else
+                ( { as_ | loadingTrips = Set.union newLoading as_.loadingTrips }
+                , sendPouch (GetAllTripExpenses requests)
+                )
 
         _ ->
             ( as_, Cmd.none )
@@ -2560,6 +2654,9 @@ updateAuth msg as_ =
                 Ok (TripsFetched tripsDict) ->
                     handleTripsFetched tripsDict as_
 
+                Ok (TripsPrefetched tripsDict) ->
+                    handleTripsPrefetched tripsDict as_
+
                 Ok (TripExpensesFetched tripId bundle) ->
                     let
                         key =
@@ -2581,8 +2678,17 @@ updateAuth msg as_ =
                         -- later lazy per-route fetch; the reconcile is
                         -- idempotent (writes only on a change) so the repeat is
                         -- harmless.
+                        --
+                        -- Gated on `tripsHydrated`: before the authoritative
+                        -- settled read lands, the only thing in `loadingTrips`
+                        -- is the current route's trip (loaded eagerly by the
+                        -- local-first `TripsPrefetched` render). Reconciling
+                        -- then would seed mileposts off that partial set, and
+                        -- the next pass — once the full set loads — would treat
+                        -- the rest of the backlog as freshly earned and fire
+                        -- spurious celebration toasts. Wait for the complete set.
                         reconcileCmd =
-                            if Set.isEmpty as1.loadingTrips then
+                            if as_.tripsHydrated && Set.isEmpty as1.loadingTrips then
                                 Task.perform (AuthMsg << ReconcileMileposts) Time.now
 
                             else
@@ -2647,28 +2753,29 @@ updateAuth msg as_ =
 
                 Ok (SyncStateMsg state) ->
                     let
-                        -- Fire the initial trip load once sync has had its
-                        -- first chance to settle — whether it succeeded
-                        -- (Synced) or failed (SyncError, AuthExpired). The
-                        -- app is local-first; we shouldn't wait on a working
-                        -- remote before showing the user the data already in
-                        -- their own PouchDB.
+                        -- Fire the authoritative trip load once sync has had
+                        -- its first chance to settle — whether it succeeded
+                        -- (Synced) or failed (SyncError, AuthExpired). This is
+                        -- the COMPLETE read: it spans every open handle
+                        -- (personal + shared) and reflects anything pulled from
+                        -- remote, so it's the one that drives the all-trips
+                        -- expense load + milepost reconcile. The local-first
+                        -- `TripsPrefetched` early read has already rendered the
+                        -- on-disk trips by now; this folds in the rest.
+                        --
+                        -- Gated on `tripsHydrated` (not "trips still loading")
+                        -- because the early read flips `trips` to `TripsLoaded`
+                        -- before this runs. `tripsHydrated` flips True in
+                        -- `handleTripsFetched`, so the settled read fires
+                        -- exactly once rather than on every `Synced` oscillation.
                         syncSettled s =
                             s == Synced || s == SyncError || s == AuthExpired
 
                         syncSettledEdge =
                             syncSettled state && not (syncSettled as_.syncState)
 
-                        tripsStillLoading =
-                            case as_.trips of
-                                TripsLoading _ _ ->
-                                    True
-
-                                _ ->
-                                    False
-
                         loadCmd =
-                            if syncSettledEdge && tripsStillLoading then
+                            if syncSettledEdge && not as_.tripsHydrated then
                                 sendPouch GetAllTrips
 
                             else
