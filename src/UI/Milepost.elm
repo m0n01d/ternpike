@@ -29,6 +29,7 @@ import Data.Milepost as Milepost
 import Html exposing (Html)
 import Html.Attributes
 import Html.Extra
+import UI.Icons
 import UI.MoneyView
 
 
@@ -158,16 +159,13 @@ markerChipSmall state =
             in
             Html.div
                 [ Html.Attributes.classList
-                    [ ( "flex items-center justify-center w-7 h-7 shrink-0 rounded-full font-display font-black text-sm", True )
+                    [ ( "flex items-center justify-center w-7 h-7 shrink-0 rounded-full", True )
                     , ( accent.badge, True )
                     ]
                 , Html.Attributes.attribute "aria-label" marker.name
                 , Html.Attributes.title marker.name
                 ]
-                [ Html.span
-                    [ Html.Attributes.attribute "aria-hidden" "true" ]
-                    [ Html.text (familyGlyph marker.family) ]
-                ]
+                [ familyGlyph marker.family ]
 
         Milepost.Locked _ ->
             Html.Extra.nothing
@@ -176,32 +174,38 @@ markerChipSmall state =
 iconBadge : Milepost.Family -> Bool -> Html msg
 iconBadge family earned =
     Html.div
-        [ Html.Attributes.class "flex items-center justify-center w-10 h-10 shrink-0 rounded-full font-display font-black text-lg"
+        [ Html.Attributes.class "flex items-center justify-center w-10 h-10 shrink-0 rounded-full"
         , Html.Attributes.classList
             [ ( (familyAccent family).badge, earned )
             , ( "bg-tan/40 text-muted", not earned )
             ]
         , Html.Attributes.attribute "aria-hidden" "true"
         ]
-        [ Html.text (familyGlyph family) ]
+        [ familyGlyph family ]
 
 
-{-| A single-character glyph standing in for the family's marker icon.
+{-| The bespoke SVG icon for a family's marker badge (#418).
+
+  - `TrailDiscipline` → trail blaze (tall rounded rectangle)
+  - `MileMarkers` → mile-marker shield (rounded-top pentagon)
+  - `Odometer` → fuel pump
+  - `CautionSigns` → caution diamond with exclamation
+
 -}
-familyGlyph : Milepost.Family -> String
+familyGlyph : Milepost.Family -> Html msg
 familyGlyph family =
     case family of
         Milepost.CautionSigns ->
-            "!"
+            UI.Icons.cautionDiamond "w-5 h-5"
 
         Milepost.MileMarkers ->
-            "M"
+            UI.Icons.mileShield "w-5 h-5"
 
         Milepost.Odometer ->
-            "0"
+            UI.Icons.fuelPump "w-5 h-5"
 
         Milepost.TrailDiscipline ->
-            "T"
+            UI.Icons.blazeTrail "w-5 h-5"
 
 
 reachedStamp : Accent -> Html msg
