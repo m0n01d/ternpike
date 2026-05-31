@@ -530,6 +530,7 @@ milepostInputs as_ now =
                         { amount = entry.amount
                         , category = entry.category
                         , createdAt = entry.createdAt
+                        , isAmended = entry.isAmended
                         , tripId = TripId.toString entry.tripId
                         }
                     )
@@ -538,10 +539,44 @@ milepostInputs as_ now =
     , now = now
     , trips =
         List.map
-            (\trip -> { budget = trip.budget, id = TripId.toString trip.id })
+            (\trip ->
+                { budget = trip.budget
+                , durationDays = tripDurationDays trip
+                , id = TripId.toString trip.id
+                }
+            )
             allTrips
     , zone = Time.utc
     }
+
+
+{-| Whole-day span of a trip's start→end dates for Milepost evaluation.
+
+Guards the "unset" sentinel: `Trip.startDate`/`endDate` decode an empty legacy
+value to the 1970-01-01 epoch (see `Data.Trip`), and `DateField.diffDays`
+between two epochs (or an epoch and a real date) is meaningless — it would yield
+a garbage multi-decade span. When either date is the epoch sentinel we report
+`0` instead, so a trip with no dates set never spuriously earns a duration
+marker.
+
+-}
+tripDurationDays : Trip -> Int
+tripDurationDays trip =
+    let
+        epochSentinel : String
+        epochSentinel =
+            "1970-01-01"
+    in
+    if
+        DateField.toIso trip.startDate
+            == epochSentinel
+            || DateField.toIso trip.endDate
+            == epochSentinel
+    then
+        0
+
+    else
+        DateField.diffDays trip.startDate trip.endDate
 
 
 {-| Like `milepostInputs` but scoped to a single trip.
@@ -601,13 +636,19 @@ milepostInputsForTrip tripId as_ =
                                 { amount = entry.amount
                                 , category = entry.category
                                 , createdAt = entry.createdAt
+                                , isAmended = entry.isAmended
                                 , tripId = TripId.toString entry.tripId
                                 }
                             )
             in
             { expenses = facts
             , now = Time.millisToPosix 0
-            , trips = [ { budget = trip.budget, id = TripId.toString trip.id } ]
+            , trips =
+                [ { budget = trip.budget
+                  , durationDays = tripDurationDays trip
+                  , id = TripId.toString trip.id
+                  }
+                ]
             , zone = Time.utc
             }
 

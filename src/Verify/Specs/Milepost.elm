@@ -100,6 +100,7 @@ partialInput =
             { amount = Money.fromCents 1000
             , category = cat
             , createdAt = Time.millisToPosix 0
+            , isAmended = False
             , tripId = tripId
             }
     in
@@ -115,6 +116,7 @@ partialInput =
         , now = Time.millisToPosix 0
         , trips =
             [ { budget = Money.zero
+              , durationDays = 0
               , id = tripId
               }
             ]
@@ -155,6 +157,7 @@ allEarnedInput =
                         { amount = Money.fromCents 10000
                         , category = Category.Fuel
                         , createdAt = Time.millisToPosix 0
+                        , isAmended = False
                         , tripId = heroTripId
                         }
                     )
@@ -168,37 +171,44 @@ allEarnedInput =
                         { amount = Money.fromCents 10000
                         , category = Category.Fuel
                         , createdAt = Time.millisToPosix 0
+                        , isAmended = False
                         , tripId = "trip-2"
                         }
                     )
 
         -- 5 distinct categories on trip 1 (fuel + 4 more), big amounts for Big Rig ($5,000)
-        -- The $300 Misc expense also earns Souvenir Tax (single Misc >= $250).
+        -- The $300 Misc expense also earns Souvenir Tax (single Misc >= $250) and,
+        -- being amended, earns Detour (first expense correction).
         miscExpensesTrip1 : List Milepost.ExpenseFacts
         miscExpensesTrip1 =
             [ { amount = Money.fromCents 100000
               , category = Category.Food
               , createdAt = Time.millisToPosix 0
+              , isAmended = False
               , tripId = heroTripId
               }
             , { amount = Money.fromCents 150000
               , category = Category.Lodging
               , createdAt = Time.millisToPosix 0
+              , isAmended = False
               , tripId = heroTripId
               }
             , { amount = Money.fromCents 100000
               , category = Category.Camp
               , createdAt = Time.millisToPosix 0
+              , isAmended = False
               , tripId = heroTripId
               }
             , { amount = Money.fromCents 200000
               , category = Category.Transport
               , createdAt = Time.millisToPosix 0
+              , isAmended = False
               , tripId = heroTripId
               }
             , { amount = Money.fromCents 30000
               , category = Category.Misc
               , createdAt = Time.millisToPosix 0
+              , isAmended = True
               , tripId = heroTripId
               }
             ]
@@ -212,6 +222,7 @@ allEarnedInput =
                         { amount = Money.fromCents 100
                         , category = Category.Misc
                         , createdAt = Time.millisToPosix (dayOffset * 86400000)
+                        , isAmended = False
                         , tripId = heroTripId
                         }
                     )
@@ -235,6 +246,7 @@ allEarnedInput =
                                     { amount = Money.fromCents 200
                                     , category = Category.Misc
                                     , createdAt = Time.millisToPosix 0
+                                    , isAmended = False
                                     , tripId = tid
                                     }
                                 )
@@ -252,12 +264,12 @@ allEarnedInput =
         trips =
             List.map
                 (\tid ->
-                    -- Hero trip has a budget lower than its actual total
+                    -- Hero trip is over budget AND spans 14+ days (Are We There Yet?)
                     if tid == heroTripId then
-                        { budget = Money.fromCents 1000, id = tid }
+                        { budget = Money.fromCents 1000, durationDays = 14, id = tid }
 
                     else
-                        { budget = Money.zero, id = tid }
+                        { budget = Money.zero, durationDays = 0, id = tid }
                 )
                 tripIds
     in

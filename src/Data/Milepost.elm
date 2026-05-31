@@ -99,14 +99,23 @@ type alias ExpenseFacts =
     { amount : Money.Money
     , category : Category.Category
     , createdAt : Time.Posix
+    , isAmended : Bool
     , tripId : String
     }
 
 
 {-| A single trip projected down to the fields the evaluation engine needs.
+
+`durationDays` is the whole-day span from the trip's start date to its end date
+(`DateField.diffDays start end`). Callers must clamp it to `0` when either date
+is the "unset" epoch sentinel (`1970-01-01`); see `Main.milepostInputs`. The
+evaluation engine treats `0` as "no meaningful duration" — it never earns a
+duration marker.
+
 -}
 type alias TripFacts =
     { budget : Money.Money
+    , durationDays : Int
     , id : String
     }
 
@@ -150,6 +159,8 @@ catalog =
     , markerBigRig
     , markerBudgetWhatBudget
     , markerSouvenirTax
+    , markerDetour
+    , markerAreWeThereYet
     ]
 
 
@@ -175,6 +186,12 @@ isTripScoped marker =
             False
 
         "seasoned-traveler" ->
+            False
+
+        "detour" ->
+            -- "Make your first expense correction" is a one-time career
+            -- milestone (like Trailhead), not a per-trip marker — keep it off
+            -- the Ledger strip.
             False
 
         _ ->
@@ -300,6 +317,30 @@ markerSouvenirTax =
     , goal = Dollars (Money.fromCents 25000)
     , id = "souvenir-tax"
     , name = "Souvenir Tax"
+    }
+
+
+{-| Earned the first time any expense carries an amendment (a correction).
+-}
+markerDetour : Marker
+markerDetour =
+    { blurb = "Make your first expense correction."
+    , family = CautionSigns
+    , goal = Flag
+    , id = "detour"
+    , name = "Detour"
+    }
+
+
+{-| Earned when the user takes a trip that spans 14 or more days.
+-}
+markerAreWeThereYet : Marker
+markerAreWeThereYet =
+    { blurb = "Take a trip 14+ days long."
+    , family = CautionSigns
+    , goal = Count 14
+    , id = "are-we-there-yet"
+    , name = "Are We There Yet?"
     }
 
 
@@ -473,6 +514,40 @@ evaluateMarker inputs marker =
                     maxAmountWhere (\e -> e.category == Category.Misc) inputs.expenses
             in
             evaluateDollars have "$250" marker
+
+        "detour" ->
+            -- Flag: any expense has been amended (corrected)
+            if List.any .isAmended inputs.expenses then
+                Earned { marker = marker }
+
+            else
+                Locked
+                    { label = "No corrections yet"
+                    , marker = marker
+                    , progress = 0
+                    }
+
+        "are-we-there-yet" ->
+            -- Count 14: longest trip duration in days >= 14
+            let
+                have : Int
+                have =
+                    maxDurationDays inputs.trips
+            in
+            case marker.goal of
+                Count goal ->
+                    if have >= goal then
+                        Earned { marker = marker }
+
+                    else
+                        Locked
+                            { label = String.fromInt have ++ " / " ++ String.fromInt goal ++ " days"
+                            , marker = marker
+                            , progress = min 1 (toFloat have / toFloat goal)
+                            }
+
+                _ ->
+                    Locked { label = "0 / ? days", marker = marker, progress = 0 }
 
         _ ->
             -- Unreachable with a well-formed catalog; treated as a locked Flag.
@@ -721,6 +796,23 @@ maxAmountWhere pred expenses =
         |> List.filter pred
         |> List.map .amount
         |> List.foldl maxMoney Money.zero
+
+
+{-| The longest trip duration (in whole days) across the given trips. Returns 0
+for an empty list. Each `TripFacts.durationDays` is already clamped to 0 by the
+caller when its dates are unset, so this never reports a garbage multi-decade
+span.
+
+No `-->` example: `TripFacts` carries a `Money.Money` budget that isn't
+constructible in the verify-examples context (it only imports this module).
+
+-}
+maxDurationDays : List TripFacts -> Int
+maxDurationDays trips =
+    trips
+        |> List.map .durationDays
+        |> List.maximum
+        |> Maybe.withDefault 0
 
 
 {-| Count the number of distinct values in a list.

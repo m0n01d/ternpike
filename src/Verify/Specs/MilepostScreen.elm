@@ -102,6 +102,7 @@ partialInputs =
             { amount = Money.fromCents 1000
             , category = cat
             , createdAt = Time.millisToPosix 0
+            , isAmended = False
             , tripId = "trip-1"
             }
     in
@@ -113,7 +114,7 @@ partialInputs =
         , makeExpense Category.Transport
         ]
     , now = Time.millisToPosix 0
-    , trips = [ { budget = Money.zero, id = "trip-1" } ]
+    , trips = [ { budget = Money.zero, durationDays = 0, id = "trip-1" } ]
     , zone = Time.utc
     }
 
@@ -141,6 +142,7 @@ allEarnedInputs =
                         { amount = Money.fromCents 10000
                         , category = Category.Fuel
                         , createdAt = Time.millisToPosix 0
+                        , isAmended = False
                         , tripId = heroTripId
                         }
                     )
@@ -153,16 +155,17 @@ allEarnedInputs =
                         { amount = Money.fromCents 10000
                         , category = Category.Fuel
                         , createdAt = Time.millisToPosix 0
+                        , isAmended = False
                         , tripId = "trip-2"
                         }
                     )
 
         miscExpensesTrip1 : List Milepost.ExpenseFacts
         miscExpensesTrip1 =
-            [ { amount = Money.fromCents 100000, category = Category.Food, createdAt = Time.millisToPosix 0, tripId = heroTripId }
-            , { amount = Money.fromCents 150000, category = Category.Lodging, createdAt = Time.millisToPosix 0, tripId = heroTripId }
-            , { amount = Money.fromCents 100000, category = Category.Camp, createdAt = Time.millisToPosix 0, tripId = heroTripId }
-            , { amount = Money.fromCents 200000, category = Category.Transport, createdAt = Time.millisToPosix 0, tripId = heroTripId }
+            [ { amount = Money.fromCents 100000, category = Category.Food, createdAt = Time.millisToPosix 0, isAmended = False, tripId = heroTripId }
+            , { amount = Money.fromCents 150000, category = Category.Lodging, createdAt = Time.millisToPosix 0, isAmended = False, tripId = heroTripId }
+            , { amount = Money.fromCents 100000, category = Category.Camp, createdAt = Time.millisToPosix 0, isAmended = False, tripId = heroTripId }
+            , { amount = Money.fromCents 200000, category = Category.Transport, createdAt = Time.millisToPosix 0, isAmended = False, tripId = heroTripId }
             ]
 
         streakExpenses : List Milepost.ExpenseFacts
@@ -173,6 +176,7 @@ allEarnedInputs =
                         { amount = Money.fromCents 100
                         , category = Category.Misc
                         , createdAt = Time.millisToPosix (dayOffset * 86400000)
+                        , isAmended = False
                         , tripId = heroTripId
                         }
                     )
@@ -188,16 +192,19 @@ allEarnedInputs =
                                     { amount = Money.fromCents 200
                                     , category = Category.Misc
                                     , createdAt = Time.millisToPosix 0
+                                    , isAmended = False
                                     , tripId = "trip-" ++ String.fromInt n
                                     }
                                 )
                     )
 
+        -- Single Misc splurge >= $250 → Souvenir Tax; amended → Detour.
         souvenirExpense : Milepost.ExpenseFacts
         souvenirExpense =
             { amount = Money.fromCents 30000
             , category = Category.Misc
             , createdAt = Time.millisToPosix 0
+            , isAmended = True
             , tripId = heroTripId
             }
 
@@ -212,10 +219,10 @@ allEarnedInputs =
                                 "trip-" ++ String.fromInt n
                         in
                         if tid == heroTripId then
-                            { budget = Money.fromCents 1000, id = tid }
+                            { budget = Money.fromCents 1000, durationDays = 14, id = tid }
 
                         else
-                            { budget = Money.zero, id = tid }
+                            { budget = Money.zero, durationDays = 0, id = tid }
                     )
     in
     { expenses = bigFuelExpenses ++ extraFuelTrip2 ++ miscExpensesTrip1 ++ streakExpenses ++ extraExpenses ++ [ souvenirExpense ]
