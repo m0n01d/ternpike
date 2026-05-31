@@ -2277,9 +2277,9 @@ updateShared msg model =
 
 scrollToTop : Cmd Msg
 scrollToTop =
-    -- The scrollable region is the inner "app-scroll" container (the holy-grail
-    -- flex shell), not the window — so scroll-to-top on route changes targets it.
-    Task.attempt (\_ -> SharedMsg ScrolledToTop) (Browser.Dom.setViewportOf "app-scroll" 0 0)
+    -- The page itself (the document) is the scroller, so route changes scroll
+    -- the window — which also keeps iOS's tap-status-bar-to-top gesture working.
+    Task.perform (\_ -> SharedMsg ScrolledToTop) (Browser.Dom.setViewport 0 0)
 
 
 {-| Split a `data:<mime>;base64,<payload>` URL into its mime type and base64
@@ -5002,7 +5002,7 @@ view model =
     , body =
         [ viewDemoBanner demoMode
         , Html.div
-            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-[var(--app-height,100dvh)] font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
+            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink flex-1 flex flex-col font-body max-w-[480px] mx-auto relative w-full sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
             [ case model of
                 GuestModel gs ->
                     viewGuest gs
@@ -5157,16 +5157,13 @@ viewAuth as_ =
                 RouteVerifyIndex ->
                     { actions = [], body = viewVerifyDashboard as_.basePath, hero = Html.Extra.nothing }
     in
-    Html.div [ Html.Attributes.class "flex flex-col h-[var(--app-height,100dvh)]" ]
+    Html.div [ Html.Attributes.class "flex-1" ]
         [ UI.Layout.viewHeader as_
         , UI.Layout.viewOfflineBanner (Data.Sync.isOffline as_.network)
-        , Html.div
-            [ Html.Attributes.id "app-scroll"
-            , Html.Attributes.class "flex-1 min-h-0 overflow-y-auto overscroll-contain"
-            ]
-            [ UI.Layout.viewErrorBanner as_.error
-            , viewBillingBannerForRoute as_ route
-            , UI.Layout.page
+        , UI.Layout.viewErrorBanner as_.error
+        , viewBillingBannerForRoute as_ route
+        , Html.div [ Html.Attributes.class "pb-[calc(env(safe-area-inset-bottom)+5rem)]" ]
+            [ UI.Layout.page
                 { actions = tab.actions
                 , body = tab.body
                 , hero = tab.hero
