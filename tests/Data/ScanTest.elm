@@ -151,6 +151,7 @@ sampleOcr =
     , amount = Just (Money.fromCents 1230)
     , category = Just Category.Food
     , date = Just sampleDate
+    , fuelDetail = Nothing
     , longNote = Just "a long note about lunch"
     , merchant = Just "Cafe Halibut"
     , note = Just "lunch"

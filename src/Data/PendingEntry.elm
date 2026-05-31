@@ -35,13 +35,17 @@ in one place that can be tested in isolation.
 
 -}
 
-import Data.Category exposing (Category)
+import Data.Category as Category exposing (Category)
 import Data.DateField as DateField exposing (DateField)
 import Data.ExpenseId exposing (ExpenseId)
+import Data.FuelDetail exposing (FuelDetail)
+import Data.FuelGrade as FuelGrade
+import Data.Gallons as Gallons
 import Data.GeoPoint exposing (GeoPoint)
 import Data.Location exposing (LocationState(..))
 import Data.Money as Money exposing (Money)
 import Data.PaymentMethod exposing (PaymentMethod)
+import Data.PricePerGallon as PricePerGallon
 import Maybe.Extra
 
 
@@ -51,12 +55,21 @@ import Maybe.Extra
 the toggle UI emits `Cash`, `Credit`, or `Nothing`, so storing the
 parsed value avoids a needless string round-trip.
 
+`fuelPricePerGallon` / `fuelGallons` / `fuelGrade` are the raw fuel
+inputs shown only when `category == Fuel`. They stay `String` like the
+other text fields and are parsed into a `Data.FuelDetail.FuelDetail` by
+`parseEntry` — and only when the category is `Fuel`, so a price typed
+and then re-categorised to `Food` is dropped rather than saved.
+
 -}
 type alias PendingEntry =
     { address : String
     , amount : String
     , category : Category
     , date : String
+    , fuelGallons : String
+    , fuelGrade : String
+    , fuelPricePerGallon : String
     , locationState : LocationState
     , longNote : String
     , merchant : String
@@ -110,6 +123,7 @@ type alias ParsedEntry =
     , amount : Money
     , category : Category
     , date : DateField
+    , fuelDetail : Maybe FuelDetail
     , geoPoint : Maybe GeoPoint
     , longNote : String
     , merchant : String
@@ -160,6 +174,31 @@ parseEntry pe =
                 _ ->
                     Nothing
 
+        fuelDetail : Maybe FuelDetail
+        fuelDetail =
+            if pe.category == Category.Fuel then
+                let
+                    detail : FuelDetail
+                    detail =
+                        { gallons = Gallons.fromString pe.fuelGallons
+                        , grade =
+                            if String.trim pe.fuelGrade == "" then
+                                Nothing
+
+                            else
+                                Just (FuelGrade.fromString pe.fuelGrade)
+                        , pricePerGallon = PricePerGallon.fromString pe.fuelPricePerGallon
+                        }
+                in
+                if Data.FuelDetail.isEmpty detail then
+                    Nothing
+
+                else
+                    Just detail
+
+            else
+                Nothing
+
         errs : List String
         errs =
             Maybe.Extra.values
@@ -174,6 +213,7 @@ parseEntry pe =
                 , amount = amount
                 , category = pe.category
                 , date = date
+                , fuelDetail = fuelDetail
                 , geoPoint = geoPoint
                 , longNote = pe.longNote
                 , merchant = pe.merchant
@@ -202,8 +242,11 @@ defaultPendingEntry : DateField -> PendingEntry
 defaultPendingEntry today =
     { address = ""
     , amount = ""
-    , category = Data.Category.Fuel
+    , category = Category.Fuel
     , date = DateField.toIso today
+    , fuelGallons = ""
+    , fuelGrade = ""
+    , fuelPricePerGallon = ""
     , locationState = LocationIdle
     , longNote = ""
     , merchant = ""

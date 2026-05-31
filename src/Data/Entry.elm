@@ -45,6 +45,7 @@ import Data.Category as Category exposing (Category)
 import Data.DateField as DateField exposing (DateField)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.FuelDetail exposing (FuelDetail)
 import Data.GeoPoint exposing (GeoPoint)
 import Data.Money as Money exposing (Money)
 import Data.PaymentMethod exposing (PaymentMethod)
@@ -68,6 +69,7 @@ type alias EffectiveEntry =
     , createdAt : Time.Posix
     , createdBy : UserId
     , date : DateField
+    , fuelDetail : Maybe FuelDetail
     , geoPoint : Maybe GeoPoint
     , id : ExpenseId
     , isAmended : Bool
@@ -131,6 +133,7 @@ toEffectiveEntry isAmended e =
     , createdAt = e.createdAt
     , createdBy = e.createdBy
     , date = e.date
+    , fuelDetail = e.fuelDetail
     , geoPoint = e.geoPoint
     , id = e.id
     , isAmended = isAmended
@@ -150,6 +153,12 @@ applyAmendment e a =
     , createdAt = e.createdAt
     , createdBy = e.createdBy
     , date = Maybe.withDefault e.date a.date
+    , fuelDetail =
+        if a.fuelDetail /= Nothing then
+            a.fuelDetail
+
+        else
+            e.fuelDetail
     , geoPoint = e.geoPoint
     , id = e.id
     , isAmended = True

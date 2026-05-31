@@ -465,6 +465,9 @@ type AuthMsg_
     | DuplicateEntry Expense
     | EnableCrewPush
     | ExportCsv Data.TripId.TripId
+    | FuelGallonsChanged String
+    | FuelGradeChanged String
+    | FuelPricePerGallonChanged String
     | GeolocationDenied
     | GotDeleteTripTime Trip Time.Posix
     | GotDuplicateTime Expense Time.Posix

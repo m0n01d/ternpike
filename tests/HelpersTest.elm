@@ -145,6 +145,7 @@ entry r =
     , createdAt = Time.millisToPosix r.millis
     , createdBy = UserId.fromString "alice@example.com"
     , date = DateField.fromIso r.iso |> Maybe.withDefault epoch
+    , fuelDetail = Nothing
     , geoPoint = Just (GeoPoint.fromDegrees 64.0 -149.0)
     , id = ExpenseId.fromString ("expense::" ++ r.iso ++ "T00:00:00Z::" ++ String.fromInt r.millis)
     , isAmended = False

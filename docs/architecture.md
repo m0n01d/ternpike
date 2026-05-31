@@ -911,6 +911,17 @@ Claude returns `null` for whatever it couldn't read):
 - `address` — street address printed on the receipt (added in #150).
 - `amount`, `category`, `date`, `longNote`, `merchant`, `note`,
   `paymentMethod`.
+- `pricePerGallon`, `gallons`, `grade` — fuel-only. The prompt asks for
+  the per-gallon unit price (to the 9/10 cent), the volume pumped, and
+  the grade only on fuel receipts; `null` otherwise. They decode into
+  `OcrData.fuelDetail : Maybe Data.FuelDetail.FuelDetail` (a
+  `{ gallons, grade, pricePerGallon }` bundle, each sub-field optional)
+  and flow through review into `Expense.fuelDetail`. Modelled as a
+  bundle on the expense — **not** as a payload on `Category.Fuel` — so
+  `Category` stays a plain comparable grouping key for Stats / Milepost.
+  Precision: `Data.PricePerGallon` and `Data.Gallons` are opaque
+  `Int`-backed types (mills and milligallons) because `Data.Money`'s
+  integer cents can't hold a `$4.299` pump price.
 
 The raw OCR result lands on `ScanItem.ocrData : Maybe OcrData`
 (`src/Data/Scan.elm`). On batch images, `Page.Scan`'s `GotOcrResult` handler splits one

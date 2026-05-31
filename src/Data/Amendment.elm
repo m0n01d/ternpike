@@ -36,6 +36,7 @@ import Data.AmendmentId as AmendmentId exposing (AmendmentId)
 import Data.Category as Category exposing (Category)
 import Data.DateField as DateField exposing (DateField)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.FuelDetail as FuelDetail exposing (FuelDetail)
 import Data.Iso8601 as Iso8601
 import Data.Money as Money exposing (Money)
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
@@ -53,6 +54,7 @@ type alias Amendment =
     , createdAt : Time.Posix
     , createdBy : UserId
     , date : Maybe DateField
+    , fuelDetail : Maybe FuelDetail
     , id : AmendmentId
     , longNote : Maybe String
     , merchant : Maybe String
@@ -95,6 +97,13 @@ encoder a =
             ++ (case a.date of
                     Just v ->
                         [ ( "date", DateField.encoder v ) ]
+
+                    Nothing ->
+                        []
+               )
+            ++ (case a.fuelDetail of
+                    Just v ->
+                        [ ( "fuel", FuelDetail.encoder v ) ]
 
                     Nothing ->
                         []
@@ -155,6 +164,7 @@ decoder =
         |> Pipeline.required "createdAt" createdAtDecoder
         |> Pipeline.optional "createdBy" UserId.decoder UserId.unknown
         |> Pipeline.optional "date" (Json.Decode.nullable DateField.decoder) Nothing
+        |> Pipeline.optional "fuel" (Json.Decode.nullable FuelDetail.decoder) Nothing
         |> Pipeline.required "_id" AmendmentId.decode
         |> Pipeline.optional "longNote" (Json.Decode.nullable Json.Decode.string) Nothing
         |> Pipeline.optional "merchant" (Json.Decode.nullable Json.Decode.string) Nothing
