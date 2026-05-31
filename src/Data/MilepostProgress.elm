@@ -3,6 +3,7 @@ module Data.MilepostProgress exposing
     , decoder
     , docId
     , encoder
+    , reconcile
     )
 
 {-| The persisted record of which mileposts the user has earned, and when.
@@ -23,13 +24,18 @@ don't collide with the persistence layer.
 @docs decoder
 @docs docId
 @docs encoder
+@docs reconcile
 
 -}
 
+import Data.Iso8601 as Iso8601
 import Data.Milepost exposing (MarkerId)
 import Dict exposing (Dict)
 import Json.Decode
 import Json.Encode
+import Set exposing (Set)
+import Time exposing (Posix)
+import Types exposing (MilepostState(..))
 
 
 {-| The earned-marker map.
@@ -84,3 +90,104 @@ encoder progress =
         , ( "type", Json.Encode.string "milepostProgress" )
         , ( "earned", Json.Encode.dict identity Json.Encode.string progress.earned )
         ]
+
+
+{-| Decide what the milepost reconcile pass should do for one tick, given the
+ids earned right now, the current time, and the loaded persistence state.
+
+This is the pure heart of `Main.reconcileMileposts` (issue #408) — the orchestration
+in `Main` is a thin wrapper that turns this decision into the actual
+`SaveMilepostProgress` port call and toast-queue append. Three cases:
+
+  - **First load (`NotLoaded`)** — seed the persisted map from whatever is
+    earned now, stamping each id with `now`, but enqueue **nothing**. The
+    pre-existing backlog must never trigger celebration toasts.
+
+  - **Idempotent (`Loaded`, nothing new)** — when everything earned now is
+    already persisted, there is nothing to write (`persist = Nothing`) and
+    nothing to toast. No write churn on a steady-state pass.
+
+  - **Fresh earn (`Loaded`, new ids)** — union the newly-earned ids (stamped
+    `now`) into the existing map, persist the union, and enqueue the new ids
+    in sorted order so each gets celebrated.
+
+`rev` is the current PouchDB `_rev`, threaded straight back out so the caller
+can build a conflict-free write. It is `Nothing` on the first-load seed (no
+document exists yet) and carries the existing rev on the `Loaded` paths.
+
+Markers never un-earn: an id present in the persisted map but absent from
+`earnedNow` is preserved in `persist`, never removed.
+
+    import Dict
+    import Set
+    import Time
+    import Types exposing (MilepostState(..))
+
+    reconcile
+        { earnedNow = Set.fromList [ "first-trip" ]
+        , now = Time.millisToPosix 0
+        , state = NotLoaded
+        }
+    --> { persist = Just { earned = Dict.fromList [ ( "first-trip", "1970-01-01T00:00:00Z" ) ] }
+    --> , rev = Nothing
+    --> , toEnqueue = []
+    --> }
+
+    reconcile
+        { earnedNow = Set.fromList [ "first-trip" ]
+        , now = Time.millisToPosix 0
+        , state = Loaded { earned = Dict.fromList [ ( "first-trip", "2024-01-01T00:00:00.000Z" ) ], rev = Just "3-abc" }
+        }
+    --> { persist = Nothing
+    --> , rev = Just "3-abc"
+    --> , toEnqueue = []
+    --> }
+
+-}
+reconcile :
+    { earnedNow : Set String
+    , now : Posix
+    , state : MilepostState
+    }
+    ->
+        { persist : Maybe MilepostProgress
+        , rev : Maybe String
+        , toEnqueue : List String
+        }
+reconcile { earnedNow, now, state } =
+    let
+        nowIso : String
+        nowIso =
+            Iso8601.fromPosix now
+
+        stamp : Set String -> Dict String String
+        stamp ids =
+            ids
+                |> Set.toList
+                |> List.map (\id -> ( id, nowIso ))
+                |> Dict.fromList
+    in
+    case state of
+        NotLoaded ->
+            { persist = Just { earned = stamp earnedNow }
+            , rev = Nothing
+            , toEnqueue = []
+            }
+
+        Loaded { earned, rev } ->
+            let
+                newly : Set String
+                newly =
+                    Set.diff earnedNow (Set.fromList (Dict.keys earned))
+            in
+            if Set.isEmpty newly then
+                { persist = Nothing
+                , rev = rev
+                , toEnqueue = []
+                }
+
+            else
+                { persist = Just { earned = Dict.union (stamp newly) earned }
+                , rev = rev
+                , toEnqueue = Set.toList newly
+                }

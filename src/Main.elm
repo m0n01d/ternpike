@@ -1325,19 +1325,21 @@ loadAllTripExpenses as_ =
 {-| Re-evaluate the milepost catalog against the live state and persist any
 newly-earned markers (Deliverable D, #408).
 
-  - Computes the set of currently-`Earned` marker ids via
-    `Data.Milepost.evaluate (milepostInputs as_ now)`.
-  - **First load** (`milepost == NotLoaded`): seed the earned-marker map from
-    everything earned right now, stamping each with `now`, and write it
-    silently. No toast — the pre-existing backlog shouldn't celebrate on first
-    boot.
-  - **Subsequent passes**: `newlyEarned = earnedNow \ persisted`. If non-empty,
-    write the union (markers never un-earn). Idempotent — when nothing is new,
-    no write is issued, so the oscillating `Synced` edge doesn't churn the doc.
+A thin wrapper over the pure decision `Data.MilepostProgress.reconcile` (#428):
+this function evaluates the catalog, stashes the full state list onto
+`as_.milepostStates` (Decision #409), asks the pure function what to do, then
+turns that decision into the actual `SaveMilepostProgress` port write, the
+`milepost` field update, and the earn-toast queue append (#410).
 
-`newlyEarned` is computed into a named local even though #408 issues no toast,
-so #410 can drop a `ShowMilepostToast` over it without restructuring this
-function.
+  - **First load** (`milepost == NotLoaded`): the pure function seeds the
+    earned-marker map from everything earned right now, stamping each with
+    `now`, and writes it silently. No toast — the pre-existing backlog
+    shouldn't celebrate on first boot (`toEnqueue` is empty).
+  - **Subsequent passes**: when the pure function reports new ids, write the
+    union (markers never un-earn) and enqueue the newly-earned markers,
+    arming the auto-advance timer only if the queue was previously empty.
+    Idempotent — when nothing is new, no write is issued, so the oscillating
+    `Synced` edge doesn't churn the doc.
 
 This is pure local PouchDB; it is NOT gated on remote sync success (local-first
 rule) — the caller fires it once expense loading is quiescent regardless of
@@ -1347,10 +1349,6 @@ whether sync reached the wire.
 reconcileMileposts : Time.Posix -> AuthState -> ( Model, Cmd Msg )
 reconcileMileposts now as_ =
     let
-        nowIso : String
-        nowIso =
-            Iso8601.fromPosix now
-
         -- The full evaluated catalog. Stashed onto `as_.milepostStates` on
         -- every pass (Decision #409) so `Pages.Milepost` can render current
         -- locked/progress state without recomputing — there is no `now` on
@@ -1376,101 +1374,78 @@ reconcileMileposts now as_ =
                                 Nothing
                     )
                 |> Set.fromList
+
+        -- The reconcile DECISION is a pure function (issue #428). It returns
+        -- what to persist, the `_rev` to thread, and which ids to celebrate;
+        -- this wrapper turns that decision into the actual port write and
+        -- toast-queue append. See `Data.MilepostProgress.reconcile` for the
+        -- branch logic (silent first-load, idempotent no-op, fresh-earn enqueue).
+        decision : { persist : Maybe MilepostProgress, rev : Maybe String, toEnqueue : List String }
+        decision =
+            MilepostProgress.reconcile
+                { earnedNow = earnedNow
+                , now = now
+                , state = as_.milepost
+                }
     in
-    case as_.milepost of
-        NotLoaded ->
-            -- First load: seed silently from the current backlog.
-            let
-                seeded : Dict.Dict String String
-                seeded =
-                    earnedNow
-                        |> Set.toList
-                        |> List.map (\id -> ( id, nowIso ))
-                        |> Dict.fromList
+    case decision.persist of
+        Nothing ->
+            -- Idempotent no-op for persistence: nothing new earned since the
+            -- last pass. Still refresh `milepostStates` so the screen reflects
+            -- current locked/progress even when no doc is written.
+            ( AuthModel (withStates as_), Cmd.none )
 
-                progress : MilepostProgress
-                progress =
-                    { earned = seeded }
+        Just progress ->
+            let
+                -- The newly-earned markers, in stable catalog order, mapped
+                -- back from their ids. Appended to the earn-toast queue so
+                -- `UI.MilepostToast` celebrates each one. The pure function
+                -- returns an empty `toEnqueue` on the first-load seed, so the
+                -- pre-existing backlog is silent (no celebrating it).
+                newlyMarkers : List Milepost.Marker
+                newlyMarkers =
+                    Milepost.catalog
+                        |> List.filter (\marker -> List.member marker.id decision.toEnqueue)
+
+                queue : List Milepost.Marker
+                queue =
+                    as_.milepostToasts ++ newlyMarkers
+
+                -- Schedule the auto-advance only when the queue was empty
+                -- before this batch — `DismissMilepostToast` chains the next
+                -- timer itself, so we never stack overlapping sleeps.
+                autoAdvanceCmd : Cmd Msg
+                autoAdvanceCmd =
+                    if List.isEmpty as_.milepostToasts && not (List.isEmpty newlyMarkers) then
+                        milepostToastFor
+
+                    else
+                        Cmd.none
+
+                -- Thread the current `_rev` so PouchDB doesn't 409 on the
+                -- second write. The JS upsert resolves the rev itself, but
+                -- carrying it keeps the local model honest until the write
+                -- confirms back on the change feed.
+                doc : E.Value
+                doc =
+                    case decision.rev of
+                        Just r ->
+                            E.object
+                                [ ( "_id", E.string MilepostProgress.docId )
+                                , ( "_rev", E.string r )
+                                , ( "type", E.string "milepostProgress" )
+                                , ( "earned", E.dict identity E.string progress.earned )
+                                ]
+
+                        Nothing ->
+                            MilepostProgress.encoder progress
             in
-            ( AuthModel (withStates { as_ | milepost = Loaded { earned = seeded, rev = Nothing } })
-            , sendPouch (SaveMilepostProgress (MilepostProgress.encoder progress))
+            ( AuthModel (withStates { as_ | milepost = Loaded { earned = progress.earned, rev = decision.rev }, milepostToasts = queue })
+            , Cmd.batch
+                [ sendPouch (SaveMilepostProgress doc)
+                , autoAdvanceCmd
+                ]
             )
-
-        Loaded { earned, rev } ->
-            let
-                persisted : Set.Set String
-                persisted =
-                    Set.fromList (Dict.keys earned)
-
-                newlyEarned : Set.Set String
-                newlyEarned =
-                    Set.diff earnedNow persisted
-            in
-            if Set.isEmpty newlyEarned then
-                -- Idempotent no-op for persistence: nothing new earned since
-                -- the last pass. Still refresh `milepostStates` so the screen
-                -- reflects current locked/progress even when no doc is written.
-                ( AuthModel (withStates as_), Cmd.none )
-
-            else
-                let
-                    unioned : Dict.Dict String String
-                    unioned =
-                        Set.foldl (\id acc -> Dict.insert id nowIso acc) earned newlyEarned
-
-                    -- The newly-earned markers, in stable catalog order, mapped
-                    -- back from their ids. Appended to the earn-toast queue so
-                    -- `UI.MilepostToast` celebrates each one. Only this `Loaded`
-                    -- branch enqueues — the `NotLoaded` first-load seed above is
-                    -- silent (no celebrating the pre-existing backlog).
-                    newlyMarkers : List Milepost.Marker
-                    newlyMarkers =
-                        Milepost.catalog
-                            |> List.filter (\marker -> Set.member marker.id newlyEarned)
-
-                    queue : List Milepost.Marker
-                    queue =
-                        as_.milepostToasts ++ newlyMarkers
-
-                    -- Schedule the auto-advance only when the queue was empty
-                    -- before this batch — `DismissMilepostToast` chains the next
-                    -- timer itself, so we never stack overlapping sleeps.
-                    autoAdvanceCmd : Cmd Msg
-                    autoAdvanceCmd =
-                        if List.isEmpty as_.milepostToasts then
-                            milepostToastFor
-
-                        else
-                            Cmd.none
-
-                    progress : MilepostProgress
-                    progress =
-                        { earned = unioned }
-
-                    -- Thread the current `_rev` so PouchDB doesn't 409 on the
-                    -- second write. The JS upsert resolves the rev itself, but
-                    -- carrying it keeps the local model honest until the write
-                    -- confirms back on the change feed.
-                    doc : E.Value
-                    doc =
-                        case rev of
-                            Just r ->
-                                E.object
-                                    [ ( "_id", E.string MilepostProgress.docId )
-                                    , ( "_rev", E.string r )
-                                    , ( "type", E.string "milepostProgress" )
-                                    , ( "earned", E.dict identity E.string unioned )
-                                    ]
-
-                            Nothing ->
-                                MilepostProgress.encoder progress
-                in
-                ( AuthModel (withStates { as_ | milepost = Loaded { earned = unioned, rev = rev }, milepostToasts = queue })
-                , Cmd.batch
-                    [ sendPouch (SaveMilepostProgress doc)
-                    , autoAdvanceCmd
-                    ]
-                )
 
 
 upsertTripIntoState : Trip -> TripsState -> TripsState
