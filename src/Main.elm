@@ -2275,7 +2275,9 @@ updateShared msg model =
 
 scrollToTop : Cmd Msg
 scrollToTop =
-    Task.perform (\_ -> SharedMsg ScrolledToTop) (Browser.Dom.setViewport 0 0)
+    -- The scrollable region is the inner "app-scroll" container (the holy-grail
+    -- flex shell), not the window — so scroll-to-top on route changes targets it.
+    Task.attempt (\_ -> SharedMsg ScrolledToTop) (Browser.Dom.setViewportOf "app-scroll" 0 0)
 
 
 {-| Split a `data:<mime>;base64,<payload>` URL into its mime type and base64
@@ -5148,13 +5150,16 @@ viewAuth as_ =
                 RouteVerifyIndex ->
                     { actions = [], body = viewVerifyDashboard as_.basePath, hero = Html.Extra.nothing }
     in
-    Html.div []
+    Html.div [ Html.Attributes.class "flex flex-col h-dvh" ]
         [ UI.Layout.viewHeader as_
         , UI.Layout.viewOfflineBanner (Data.Sync.isOffline as_.network)
-        , UI.Layout.viewErrorBanner as_.error
-        , viewBillingBannerForRoute as_ route
-        , Html.div [ Html.Attributes.class "pb-[calc(env(safe-area-inset-bottom)+5rem)]" ]
-            [ UI.Layout.page
+        , Html.div
+            [ Html.Attributes.id "app-scroll"
+            , Html.Attributes.class "flex-1 min-h-0 overflow-y-auto overscroll-contain"
+            ]
+            [ UI.Layout.viewErrorBanner as_.error
+            , viewBillingBannerForRoute as_ route
+            , UI.Layout.page
                 { actions = tab.actions
                 , body = tab.body
                 , hero = tab.hero
