@@ -173,6 +173,7 @@ allEarnedInput =
                     )
 
         -- 5 distinct categories on trip 1 (fuel + 4 more), big amounts for Big Rig ($5,000)
+        -- The $300 Misc expense also earns Souvenir Tax (single Misc >= $250).
         miscExpensesTrip1 : List Milepost.ExpenseFacts
         miscExpensesTrip1 =
             [ { amount = Money.fromCents 100000
@@ -192,6 +193,11 @@ allEarnedInput =
               }
             , { amount = Money.fromCents 200000
               , category = Category.Transport
+              , createdAt = Time.millisToPosix 0
+              , tripId = heroTripId
+              }
+            , { amount = Money.fromCents 30000
+              , category = Category.Misc
               , createdAt = Time.millisToPosix 0
               , tripId = heroTripId
               }
