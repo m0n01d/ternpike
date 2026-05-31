@@ -1,17 +1,23 @@
 module Verify.Specs.MilepostStrip exposing (results)
 
-{-| Pure-tier verification unit for the Ledger header marker strip (#411).
+{-| Pure-tier verification unit for the Ledger header marker strip (#411, #422).
 
-Pins that `milepostInputsForTrip`-style per-trip projection earns only
-trip-scoped markers and does NOT produce account-wide markers (Mile Marker 100,
-Seasoned Traveler) from a single trip with few expenses.
+Pins that the per-trip strip projection:
 
-The surface counts earned + locked markers across three fixtures:
+  - Earns only trip-scoped markers (not account-wide ones like Mile Marker 100
+    or Seasoned Traveler).
+  - Filters career markers (`trailhead`, `mile-marker-1`) even when they would
+    otherwise be earned by the single-trip inputs.
+  - Renders an EMPTY strip when the only earned markers are career-level.
+
+The surface counts earned + locked markers across four fixtures:
 
   - `empty` — no expenses, nothing earned.
   - `trip-earned` — a single trip with 5 distinct categories + enough fuel
-    for Premium Unleaded, triggering Trailhead, Cairn Builder, and Premium
-    Unleaded, but NOT the account-wide markers.
+    for Premium Unleaded, triggering Cairn Builder and Premium Unleaded after
+    the career-marker filter. Does NOT show Trailhead or Mile Marker 1.
+  - `career-only` — a single trip with exactly one expense (earns Trailhead
+    and Mile Marker 1 only). After filtering, the strip is EMPTY.
   - `probe` — lies (claims earned > actual) so one fixture must FAIL.
 
 Pure-tier only: no DOM seeding. The strip is a presentation concern; the
@@ -31,8 +37,8 @@ import Verify.Runner as Runner
 import Verify.Spec as Spec
 
 
-{-| Input slice: evaluated marker states for a single trip, plus a `corrupt`
-knob for the probe fixture.
+{-| Input slice: evaluated marker states for a single trip after the
+`isTripScoped` filter, plus a `corrupt` knob for the probe fixture.
 -}
 type alias Input =
     { corrupt : Bool
@@ -52,13 +58,15 @@ spec =
     { fixtures =
         [ { input = emptyInput, name = "empty", probe = False }
         , { input = tripEarnedInput, name = "trip-earned", probe = False }
-        , { input = { corrupt = True, earned = earnedForFixture "empty" }, name = "probe-empty-claims-earned", probe = True }
+        , { input = careerOnlyInput, name = "career-only", probe = False }
+        , { input = { corrupt = True, earned = stripForFixture "empty" }, name = "probe-empty-claims-earned", probe = True }
         ]
     , invariants =
         [ { name = "empty trip earns nothing", check = emptyEarnsNothing }
         , { name = "trip-earned has some earned markers", check = tripEarnedHasSome }
-        , { name = "account-wide markers absent from single-trip projection", check = accountWideAbsent }
-        , { name = "earned + locked = total catalog", check = countsSumToTotal }
+        , { name = "career markers absent from every strip", check = careerMarkersAbsent }
+        , { name = "career-only fixture renders an empty strip", check = careerOnlyIsEmpty }
+        , { name = "earned <= total catalog", check = countsSumToTotal }
         ]
     , name = "MilepostStrip"
     , surface = surface
@@ -82,13 +90,14 @@ emptyInputs =
 
 emptyInput : Input
 emptyInput =
-    { corrupt = False, earned = earnedForFixture "empty" }
+    { corrupt = False, earned = stripForFixture "empty" }
 
 
 {-| A single-trip projection: 5 distinct categories + enough fuel for Premium
-Unleaded ($500 on one trip). Earns Trailhead (first expense), Cairn Builder
-(5 distinct categories), and Premium Unleaded ($500 fuel). Does NOT earn Mile
-Marker 100 (100 total expenses) or Seasoned Traveler (10 trips).
+Unleaded ($500 on one trip). After the `isTripScoped` filter, earns Cairn
+Builder (5 distinct categories) and Premium Unleaded ($500 fuel). Does NOT
+show Trailhead (career), Mile Marker 1 (career), Mile Marker 100 (100 total
+expenses account-wide), or Seasoned Traveler (10 trips account-wide).
 -}
 tripEarnedInputs : Milepost.Inputs
 tripEarnedInputs =
@@ -142,20 +151,53 @@ tripEarnedInputs =
 
 tripEarnedInput : Input
 tripEarnedInput =
-    { corrupt = False, earned = earnedForFixture "trip-earned" }
+    { corrupt = False, earned = stripForFixture "trip-earned" }
 
 
-{-| Compute the earned states for a named fixture, mirroring what
-`milepostInputsForTrip` would produce at the call site.
+{-| A single trip with exactly one expense. This earns Trailhead (first
+expense) and Mile Marker 1 (first trip) on the raw evaluation — but both are
+career markers. After the `isTripScoped` filter the strip must be EMPTY.
 -}
-earnedForFixture : String -> List Milepost.MarkerState
-earnedForFixture name =
+careerOnlyInputs : Milepost.Inputs
+careerOnlyInputs =
+    let
+        tripId : String
+        tripId =
+            "first-trip"
+    in
+    { expenses =
+        [ { amount = Money.fromCents 500
+          , category = Category.Food
+          , createdAt = Time.millisToPosix 0
+          , tripId = tripId
+          }
+        ]
+    , now = Time.millisToPosix 0
+    , trips = [ { budget = Money.zero, id = tripId } ]
+    , zone = Time.utc
+    }
+
+
+careerOnlyInput : Input
+careerOnlyInput =
+    { corrupt = False, earned = stripForFixture "career-only" }
+
+
+{-| Compute the trip-scoped earned states for a named fixture, mirroring what
+the `RouteLedger` branch in `Main.elm` produces: evaluate then filter to
+`Earned` markers that pass `Milepost.isTripScoped`.
+-}
+stripForFixture : String -> List Milepost.MarkerState
+stripForFixture name =
     let
         inputs : Milepost.Inputs
         inputs =
             case name of
                 "trip-earned" ->
                     tripEarnedInputs
+
+                "career-only" ->
+                    careerOnlyInputs
 
                 _ ->
                     emptyInputs
@@ -164,8 +206,8 @@ earnedForFixture name =
         |> List.filter
             (\s ->
                 case s of
-                    Milepost.Earned _ ->
-                        True
+                    Milepost.Earned { marker } ->
+                        Milepost.isTripScoped marker
 
                     Milepost.Locked _ ->
                         False
@@ -180,12 +222,13 @@ earnedForFixture name =
 
 Keys:
 
-  - `earned-count` — number of earned markers in this trip's strip.
+  - `earned-count` — number of trip-scoped earned markers in this strip.
   - `total-markers` — total catalog size (derived dynamically).
-  - `account-wide-absent` — "true" when neither "mile-marker-100" nor
-    "seasoned-traveler" appear in the earned list.
+  - `career-markers-absent` — "true" when no career marker ids appear in the
+    earned list.
+  - `career-only-empty` — "true" when the career-only fixture's strip is empty.
 
-When `corrupt = True`, lies about the earned count.
+When `corrupt = True`, lies about the earned count and flags.
 
 -}
 surface : Input -> Contract.Surface
@@ -199,9 +242,9 @@ surface input =
         earnedCount =
             List.length input.earned
 
-        accountWideIds : List String
-        accountWideIds =
-            [ "mile-marker-100", "seasoned-traveler" ]
+        careerIds : List String
+        careerIds =
+            [ "trailhead", "mile-marker-1", "mile-marker-100", "seasoned-traveler" ]
 
         earnedIds : List String
         earnedIds =
@@ -216,20 +259,26 @@ surface input =
                 )
                 input.earned
 
-        accountWideAbsentBool : Bool
-        accountWideAbsentBool =
-            List.all (\id -> not (List.member id earnedIds)) accountWideIds
+        careerAbsentBool : Bool
+        careerAbsentBool =
+            List.all (\id -> not (List.member id earnedIds)) careerIds
+
+        careerOnlyEmptyBool : Bool
+        careerOnlyEmptyBool =
+            List.isEmpty (stripForFixture "career-only")
     in
     if input.corrupt then
-        [ ( "earned-count", String.fromInt totalMarkers )
+        [ ( "career-markers-absent", "false" )
+        , ( "career-only-empty", "false" )
+        , ( "earned-count", String.fromInt totalMarkers )
         , ( "total-markers", String.fromInt totalMarkers )
-        , ( "account-wide-absent", "false" )
         ]
 
     else
-        [ ( "earned-count", String.fromInt earnedCount )
+        [ ( "career-markers-absent", boolStr careerAbsentBool )
+        , ( "career-only-empty", boolStr careerOnlyEmptyBool )
+        , ( "earned-count", String.fromInt earnedCount )
         , ( "total-markers", String.fromInt totalMarkers )
-        , ( "account-wide-absent", boolStr accountWideAbsentBool )
         ]
 
 
@@ -243,21 +292,16 @@ emptyEarnsNothing input _ =
         Nothing
 
     else
-        -- The empty fixture has an empty earned list and zero trip inputs.
-        -- If the earned list is non-empty but the inputs had no expenses/trips,
-        -- that would be a bug in the evaluation engine.
-        -- We pin: empty inputs → empty earned list.
         let
             emptyExpected : List Milepost.MarkerState
             emptyExpected =
-                earnedForFixture "empty"
+                stripForFixture "empty"
         in
         if List.isEmpty emptyExpected then
-            -- OK: empty inputs produce no earned markers
             Nothing
 
         else
-            Just ("empty inputs should produce no earned markers, got " ++ String.fromInt (List.length emptyExpected))
+            Just ("empty inputs should produce no trip-scoped earned markers, got " ++ String.fromInt (List.length emptyExpected))
 
 
 tripEarnedHasSome : Input -> Contract.Surface -> Maybe String
@@ -266,7 +310,6 @@ tripEarnedHasSome input _ =
         Nothing
 
     else
-        -- Only check the trip-earned fixture (has more than 0 earned markers)
         let
             earnedCount : Int
             earnedCount =
@@ -274,26 +317,29 @@ tripEarnedHasSome input _ =
 
             tripEarnedExpected : Int
             tripEarnedExpected =
-                List.length (earnedForFixture "trip-earned")
+                List.length (stripForFixture "trip-earned")
         in
         if earnedCount == 0 || earnedCount >= tripEarnedExpected then
-            -- Non-empty fixture has some earned, or we're on the empty fixture
             Nothing
 
         else
-            Just ("trip-earned fixture should have at least " ++ String.fromInt tripEarnedExpected ++ " earned markers, got " ++ String.fromInt earnedCount)
+            Just ("trip-earned fixture should have at least " ++ String.fromInt tripEarnedExpected ++ " trip-scoped earned markers, got " ++ String.fromInt earnedCount)
 
 
-accountWideAbsent : Input -> Contract.Surface -> Maybe String
-accountWideAbsent input _ =
+{-| Career markers must never appear in the strip regardless of which fixture
+is being tested. This catches both the raw-evaluation case (career markers
+present before filtering) and the filtered case.
+-}
+careerMarkersAbsent : Input -> Contract.Surface -> Maybe String
+careerMarkersAbsent input _ =
     if input.corrupt then
-        Just "corrupt: account-wide markers present (injected lie)"
+        Just "corrupt: career markers present (injected lie)"
 
     else
         let
-            accountWideIds : List String
-            accountWideIds =
-                [ "mile-marker-100", "seasoned-traveler" ]
+            careerIds : List String
+            careerIds =
+                [ "trailhead", "mile-marker-1", "mile-marker-100", "seasoned-traveler" ]
 
             earnedIds : List String
             earnedIds =
@@ -308,15 +354,51 @@ accountWideAbsent input _ =
                     )
                     input.earned
 
-            foundAccountWide : List String
-            foundAccountWide =
-                List.filter (\id -> List.member id earnedIds) accountWideIds
+            foundCareer : List String
+            foundCareer =
+                List.filter (\id -> List.member id earnedIds) careerIds
         in
-        if List.isEmpty foundAccountWide then
+        if List.isEmpty foundCareer then
             Nothing
 
         else
-            Just ("account-wide markers must not appear in per-trip strip: " ++ String.join ", " foundAccountWide)
+            Just ("career markers must not appear in per-trip strip: " ++ String.join ", " foundCareer)
+
+
+{-| The career-only fixture (one expense, one trip) should produce an EMPTY
+strip after the `isTripScoped` filter — because `trailhead` and `mile-marker-1`
+are the only markers earned, and both are career-scoped.
+-}
+careerOnlyIsEmpty : Input -> Contract.Surface -> Maybe String
+careerOnlyIsEmpty input _ =
+    if input.corrupt then
+        Nothing
+
+    else
+        let
+            careerOnlyStrip : List Milepost.MarkerState
+            careerOnlyStrip =
+                stripForFixture "career-only"
+        in
+        if List.isEmpty careerOnlyStrip then
+            Nothing
+
+        else
+            let
+                ids : List String
+                ids =
+                    List.filterMap
+                        (\s ->
+                            case s of
+                                Milepost.Earned { marker } ->
+                                    Just marker.id
+
+                                Milepost.Locked _ ->
+                                    Nothing
+                        )
+                        careerOnlyStrip
+            in
+            Just ("career-only fixture should produce empty strip, but got: " ++ String.join ", " ids)
 
 
 countsSumToTotal : Input -> Contract.Surface -> Maybe String
@@ -330,8 +412,6 @@ countsSumToTotal input _ =
             totalMarkers =
                 List.length Milepost.catalog
 
-            -- We only have the earned slice (Locked are filtered out at the call
-            -- site), so we can only check that earned <= total.
             earnedCount : Int
             earnedCount =
                 List.length input.earned
