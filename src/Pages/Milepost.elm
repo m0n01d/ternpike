@@ -22,7 +22,6 @@ import Html exposing (Html)
 import Html.Attributes
 import Types exposing (AuthState, Msg)
 import UI.Milepost
-import UI.Rule
 import Verify.Contract
 import Verify.Specs.MilepostScreen
 
@@ -117,11 +116,30 @@ viewFamilySection states family =
     else
         Just
             (Html.section [ Html.Attributes.class "mb-6" ]
-                [ UI.Rule.kicker (familyLabel family)
-                , Html.div [ Html.Attributes.class "flex flex-col gap-3" ]
+                [ viewFamilyHeader family
+                , Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3 items-stretch" ]
                     (List.map UI.Milepost.markerChip inFamily)
                 ]
             )
+
+
+{-| The family section header — the kicker label with a small accent-coloured
+dot beside it (matching the family's accent), as in the approved mock (#426).
+-}
+viewFamilyHeader : Milepost.Family -> Html Msg
+viewFamilyHeader family =
+    Html.div [ Html.Attributes.class "flex items-center gap-2 mb-2" ]
+        [ Html.span
+            [ Html.Attributes.classList
+                [ ( "inline-block w-2 h-2 rounded-full shrink-0", True )
+                , ( (UI.Milepost.familyAccent family).bar, True )
+                ]
+            , Html.Attributes.attribute "aria-hidden" "true"
+            ]
+            []
+        , Html.span [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-moss" ]
+            [ Html.text (familyLabel family) ]
+        ]
 
 
 familiesInOrder : List Milepost.Family

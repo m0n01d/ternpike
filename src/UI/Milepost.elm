@@ -90,8 +90,10 @@ familyAccent family =
             }
 
 
-{-| The full achievement card: family-tinted icon badge, name, blurb, and either
-a "Reached" stamp (earned) or a faded, dashed-border progress bar (locked).
+{-| The full achievement "plaque" card, laid out vertically for the two-up
+collection grid (#426): a rounded-square family-tinted icon badge at the top,
+the marker name, its blurb, and a bottom row that is either a "Reached" stamp
+(earned) or a faded, dashed-border progress bar (locked).
 -}
 markerChip : Milepost.MarkerState -> Html msg
 markerChip state =
@@ -103,38 +105,30 @@ markerChip state =
                     familyAccent marker.family
             in
             Html.div
-                [ Html.Attributes.classList
-                    [ ( "relative flex gap-3 p-4 rounded-card bg-cream shadow-card border-l-4", True )
-                    , ( accent.border, True )
-                    ]
-                ]
+                [ Html.Attributes.class "relative flex h-full flex-col gap-2 p-3.5 rounded-card bg-cream shadow-card" ]
                 [ iconBadge marker.family True
-                , Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
-                    [ Html.div [ Html.Attributes.class "flex items-center justify-between gap-2" ]
-                        [ Html.h3 [ Html.Attributes.class "font-display text-lg font-bold text-forest truncate" ]
-                            [ Html.text marker.name ]
-                        , reachedStamp accent
-                        ]
-                    , Html.p [ Html.Attributes.class "text-sm text-muted mt-0.5" ]
-                        [ Html.text marker.blurb ]
-                    , goalTarget marker.goal
-                    ]
+                , Html.h3 [ Html.Attributes.class "font-display text-base font-bold text-forest leading-tight" ]
+                    [ Html.text marker.name ]
+                , Html.p [ Html.Attributes.class "text-xs text-muted leading-snug" ]
+                    [ Html.text marker.blurb ]
+                , goalTarget marker.goal
+                , Html.div [ Html.Attributes.class "mt-auto pt-1" ]
+                    [ reachedStamp accent ]
                 ]
 
         Milepost.Locked { label, marker, progress } ->
             Html.div
                 [ Html.Attributes.class
-                    "relative flex gap-3 p-4 rounded-card bg-cream/60 border border-dashed border-tan opacity-70"
+                    "relative flex h-full flex-col gap-2 p-3.5 rounded-card bg-cream/50 border border-dashed border-tan opacity-75"
                 ]
                 [ iconBadge marker.family False
-                , Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
-                    [ Html.h3 [ Html.Attributes.class "font-display text-lg font-bold text-moss truncate" ]
-                        [ Html.text marker.name ]
-                    , Html.p [ Html.Attributes.class "text-sm text-muted mt-0.5" ]
-                        [ Html.text marker.blurb ]
-                    , goalTarget marker.goal
-                    , progressBar marker.family progress label
-                    ]
+                , Html.h3 [ Html.Attributes.class "font-display text-base font-bold text-moss leading-tight" ]
+                    [ Html.text marker.name ]
+                , Html.p [ Html.Attributes.class "text-xs text-muted leading-snug" ]
+                    [ Html.text marker.blurb ]
+                , goalTarget marker.goal
+                , Html.div [ Html.Attributes.class "mt-auto pt-1" ]
+                    [ progressBar marker.family progress label ]
                 ]
 
 
@@ -174,7 +168,7 @@ markerChipSmall state =
 iconBadge : Milepost.Family -> Bool -> Html msg
 iconBadge family earned =
     Html.div
-        [ Html.Attributes.class "flex items-center justify-center w-10 h-10 shrink-0 rounded-full"
+        [ Html.Attributes.class "flex items-center justify-center w-11 h-11 shrink-0 rounded-xl"
         , Html.Attributes.classList
             [ ( (familyAccent family).badge, earned )
             , ( "bg-tan/40 text-muted", not earned )
