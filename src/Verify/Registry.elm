@@ -14,6 +14,7 @@ themselves.
 import Json.Encode as Encode
 import Verify.Core as Core
 import Verify.Specs.JoinSharedTrip as JoinSharedTrip
+import Verify.Specs.Milepost as Milepost
 import Verify.Specs.NotificationsPaywall as NotificationsPaywall
 import Verify.Specs.ScanDeferral as ScanDeferral
 import Verify.Specs.ScanQueueCard as ScanQueueCard
@@ -34,6 +35,7 @@ runAll =
         , ScanRouting.results
         , JoinSharedTrip.results
         , SharedTripCard.results
+        , Milepost.results
         ]
 
 
