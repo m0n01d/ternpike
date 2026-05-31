@@ -1,6 +1,6 @@
 module Data.Milepost exposing
     ( ExpenseFacts, Family(..), Goal(..), Inputs, Marker, MarkerId, MarkerState(..), TripFacts
-    , catalog, evaluate
+    , catalog, evaluate, isTripScoped
     , dayKey, distinctCount, longestRun, longestStreak, sumWhere
     )
 
@@ -17,7 +17,7 @@ effects. The caller (typically `Main`-side, issue #408) projects the live
 semantics are already baked in by the time `evaluate` is called.
 
 @docs ExpenseFacts, Family, Goal, Inputs, Marker, MarkerId, MarkerState, TripFacts
-@docs catalog, evaluate
+@docs catalog, evaluate, isTripScoped
 @docs dayKey, distinctCount, longestRun, longestStreak, sumWhere
 
 -}
@@ -151,6 +151,34 @@ catalog =
     , markerBudgetWhatBudget
     , markerSouvenirTax
     ]
+
+
+{-| Returns `True` for markers that are meaningful in a per-trip context — i.e.
+markers whose earning condition depends on data from a single trip.
+
+Returns `False` for career/account-wide markers that fire on every trip once
+earned (e.g. `trailhead`, `mile-marker-1`) or that count across all trips
+(`mile-marker-100`, `seasoned-traveler`). Those markers do not belong in the
+per-trip Ledger strip and should be filtered out before display.
+
+-}
+isTripScoped : Marker -> Bool
+isTripScoped marker =
+    case marker.id of
+        "trailhead" ->
+            False
+
+        "mile-marker-1" ->
+            False
+
+        "mile-marker-100" ->
+            False
+
+        "seasoned-traveler" ->
+            False
+
+        _ ->
+            True
 
 
 markerTrailhead : Marker

@@ -5061,8 +5061,8 @@ viewAuth as_ =
                                 |> List.filter
                                     (\s ->
                                         case s of
-                                            Milepost.Earned _ ->
-                                                True
+                                            Milepost.Earned { marker } ->
+                                                Milepost.isTripScoped marker
 
                                             Milepost.Locked _ ->
                                                 False
