@@ -27,12 +27,17 @@ Field types reflect the typed-primitives refactor (#92):
   - `geoPoint : Maybe Data.GeoPoint.GeoPoint` — replaces the parallel
     `lat : Maybe Float, lon : Maybe Float` pair. Encoder still emits the
     sibling `"lat"` / `"lon"` fields when present.
+  - `fuelDetail : Maybe Data.FuelDetail.FuelDetail` — the unit price,
+    volume, and grade of a gas purchase (see `Data.FuelDetail`). `Nothing`
+    for non-fuel expenses and for legacy fuel docs predating the field.
+    Encoded under a nested `"fuel"` object, omitted when `Nothing`.
 
 -}
 
 import Data.Category as Category exposing (Category)
 import Data.DateField as DateField exposing (DateField)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
+import Data.FuelDetail as FuelDetail exposing (FuelDetail)
 import Data.GeoPoint as GeoPoint exposing (GeoPoint)
 import Data.Iso8601 as Iso8601
 import Data.Money as Money exposing (Money)
@@ -52,6 +57,7 @@ type alias Expense =
     , createdAt : Time.Posix
     , createdBy : UserId
     , date : DateField
+    , fuelDetail : Maybe FuelDetail
     , geoPoint : Maybe GeoPoint
     , id : ExpenseId
     , longNote : String
@@ -78,6 +84,13 @@ encoder e =
          , ( "tripId", TripId.encode e.tripId )
          , ( "type", Json.Encode.string "expense" )
          ]
+            ++ (case e.fuelDetail of
+                    Just detail ->
+                        [ ( "fuel", FuelDetail.encoder detail ) ]
+
+                    Nothing ->
+                        []
+               )
             ++ (case e.geoPoint of
                     Just point ->
                         [ ( "lat", Json.Encode.float (GeoPoint.latDegrees point) )
@@ -151,6 +164,7 @@ from the relevant trip — this helper does not filter by trip.
         , createdAt = Time.millisToPosix 1000
         , createdBy = Data.UserId.unknown
         , date = date24
+        , fuelDetail = Nothing
         , geoPoint = Nothing
         , id = Data.ExpenseId.fromString "expense::2024-05-24T00:00:00Z::aaa"
         , longNote = ""
@@ -243,6 +257,18 @@ decoder =
         |> Pipeline.required "createdAt" createdAtDecoder
         |> Pipeline.optional "createdBy" UserId.decoder UserId.unknown
         |> Pipeline.required "date" DateField.decoder
+        |> Pipeline.optional "fuel"
+            (Json.Decode.map
+                (\detail ->
+                    if FuelDetail.isEmpty detail then
+                        Nothing
+
+                    else
+                        Just detail
+                )
+                FuelDetail.decoder
+            )
+            Nothing
         |> Pipeline.custom GeoPoint.decoderPair
         |> Pipeline.required "_id" ExpenseId.decode
         |> Pipeline.optional "longNote" Json.Decode.string ""

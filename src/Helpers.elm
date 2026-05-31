@@ -18,6 +18,7 @@ effectiveEntryToExpense e =
     , createdAt = e.createdAt
     , createdBy = e.createdBy
     , date = e.date
+    , fuelDetail = e.fuelDetail
     , geoPoint = e.geoPoint
     , id = e.id
     , longNote = e.longNote

@@ -141,6 +141,7 @@ ocr merchant =
     , amount = Just (Money.fromCents 1299)
     , category = Just Data.Category.Food
     , date = Nothing
+    , fuelDetail = Nothing
     , longNote = Nothing
     , merchant = Just merchant
     , note = Nothing

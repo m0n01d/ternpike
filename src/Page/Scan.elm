@@ -22,12 +22,15 @@ import Data.Auth exposing (AppConfig, Creds)
 import Data.Category
 import Data.DateField as DateField
 import Data.Expense exposing (Expense)
+import Data.FuelGrade as FuelGrade
+import Data.Gallons as Gallons
 import Data.GeoPoint as GeoPoint
 import Data.Location
 import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.OcrPath as OcrPath
 import Data.PendingEntry as PendingEntry exposing (PendingForm(..))
+import Data.PricePerGallon as PricePerGallon
 import Data.Scan as Scan exposing (CaptureRoute(..), ExifPhase(..), GeocodePhase(..), ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrips exposing (SharedTrips)
@@ -643,6 +646,12 @@ seedPending today item =
         Maybe.Extra.or (fromDraft .date) (fromOcr .date)
             |> Maybe.withDefault today
             |> DateField.toIso
+    , fuelGallons =
+        fromOcr .fuelDetail |> Maybe.andThen .gallons |> Maybe.map Gallons.toInputString |> Maybe.withDefault ""
+    , fuelGrade =
+        fromOcr .fuelDetail |> Maybe.andThen .grade |> Maybe.map FuelGrade.display |> Maybe.withDefault ""
+    , fuelPricePerGallon =
+        fromOcr .fuelDetail |> Maybe.andThen .pricePerGallon |> Maybe.map PricePerGallon.toInputString |> Maybe.withDefault ""
     , locationState =
         case draft of
             Just d ->
@@ -829,7 +838,7 @@ activeTripForGeocode as_ =
 
 ocrSystemPrompt : String
 ocrSystemPrompt =
-    "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"address\": \"<street address as printed on receipt, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
+    "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"address\": \"<street address as printed on receipt, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\", \"pricePerGallon\": <fuel receipts only: the per-gallon unit price as a number, including the trailing 9/10 cent when printed, e.g. 4.299; null otherwise>, \"gallons\": <fuel receipts only: the volume pumped as a number, e.g. 12.345; null otherwise>, \"grade\": \"<fuel receipts only: regular|midgrade|premium|diesel, or the grade exactly as printed; null otherwise>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
 
 
 {-| Build the Anthropic `/v1/messages` request body for an OCR call. The
@@ -1333,6 +1342,7 @@ emptyOcrData =
     , amount = Nothing
     , category = Nothing
     , date = Nothing
+    , fuelDetail = Nothing
     , longNote = Nothing
     , merchant = Nothing
     , note = Nothing

@@ -55,11 +55,15 @@ own doc.
 
 import Data.Category as Category exposing (Category)
 import Data.DateField as DateField exposing (DateField)
+import Data.FuelDetail as FuelDetail exposing (FuelDetail)
+import Data.FuelGrade as FuelGrade
+import Data.Gallons as Gallons
 import Data.GeoPoint as GeoPoint exposing (GeoPoint)
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money exposing (Money)
 import Data.OcrPath exposing (OcrPath(..))
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
+import Data.PricePerGallon as PricePerGallon
 import Data.ScanItemId exposing (ScanItemId)
 import Dict exposing (Dict)
 import Json.Decode
@@ -105,6 +109,7 @@ type alias OcrData =
     , amount : Maybe Money
     , category : Maybe Category
     , date : Maybe DateField
+    , fuelDetail : Maybe FuelDetail
     , longNote : Maybe String
     , merchant : Maybe String
     , note : Maybe String
@@ -290,26 +295,26 @@ draft is the raw string the user is editing; it's parsed through
     -- An empty draft is the identity: OCR passes through untouched.
     mergeOcrIntoDraft
         { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, locationState = LocationIdle, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
-    --> { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
+        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
+    --> { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
 
     -- A set draft field wins over OCR; untouched fields keep OCR.
     mergeOcrIntoDraft
         { address = Just "9 Draft Rd", amount = Just "5.00", category = Just Lodging, date = DateField.fromIso "2024-01-02", locationState = LocationIdle, longNote = Just "draft ln", merchant = Just "My Merchant", note = Just "draft note", paymentMethod = Just Credit }
-        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Just "ocr ln", merchant = Just "Trader Joe's", note = Just "ocr note", paymentMethod = Just Cash }
-    --> { address = Just "9 Draft Rd", amount = Just (Money.fromCents 500), category = Just Lodging, date = DateField.fromIso "2024-01-02", longNote = Just "draft ln", merchant = Just "My Merchant", note = Just "draft note", paymentMethod = Just Credit }
+        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Just "ocr ln", merchant = Just "Trader Joe's", note = Just "ocr note", paymentMethod = Just Cash }
+    --> { address = Just "9 Draft Rd", amount = Just (Money.fromCents 500), category = Just Lodging, date = DateField.fromIso "2024-01-02", fuelDetail = Nothing, longNote = Just "draft ln", merchant = Just "My Merchant", note = Just "draft note", paymentMethod = Just Credit }
 
     -- Untouched category/date do NOT fall back to Fuel/today — they stay OCR.
     mergeOcrIntoDraft
         { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, locationState = LocationIdle, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-        { address = Nothing, amount = Nothing, category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-    --> { address = Nothing, amount = Nothing, category = Just Food, date = DateField.fromIso "2024-05-21", longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+        { address = Nothing, amount = Nothing, category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+    --> { address = Nothing, amount = Nothing, category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
 
     -- An unparseable draft amount can't clobber a real OCR amount.
     mergeOcrIntoDraft
         { address = Nothing, amount = Just "abc", category = Nothing, date = Nothing, locationState = LocationIdle, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-        { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-    --> { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, date = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+        { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, date = Nothing, fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+    --> { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, date = Nothing, fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
 
 -}
 mergeOcrIntoDraft : DraftFields -> OcrData -> OcrData
@@ -318,6 +323,7 @@ mergeOcrIntoDraft draft ocr =
     , amount = Maybe.Extra.or (Maybe.andThen Money.fromDollarString draft.amount) ocr.amount
     , category = Maybe.Extra.or draft.category ocr.category
     , date = Maybe.Extra.or draft.date ocr.date
+    , fuelDetail = ocr.fuelDetail
     , longNote = Maybe.Extra.or draft.longNote ocr.longNote
     , merchant = Maybe.Extra.or draft.merchant ocr.merchant
     , note = Maybe.Extra.or draft.note ocr.note
@@ -506,11 +512,11 @@ expense is safe to file; the badge on the Scan card pulls focus to
 items that need attention.
 
     -- amount missing
-    needsReview { amount = Nothing, merchant = Just "Trattoria", date = Nothing, address = Nothing, category = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
+    needsReview { amount = Nothing, merchant = Just "Trattoria", date = Nothing, address = Nothing, category = Nothing, fuelDetail = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
     --> True
 
     -- merchant missing
-    needsReview { amount = Nothing, merchant = Nothing, date = Nothing, address = Nothing, category = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
+    needsReview { amount = Nothing, merchant = Nothing, date = Nothing, address = Nothing, category = Nothing, fuelDetail = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
     --> True
 
 -}
@@ -939,6 +945,7 @@ ocrDataDecoder =
         |> Pipeline.optional "amount" (lenient Money.decoder) Nothing
         |> Pipeline.optional "category" (Json.Decode.map Just (Json.Decode.map Category.fromString Json.Decode.string)) Nothing
         |> Pipeline.optional "date" (lenient DateField.decoder) Nothing
+        |> Pipeline.custom (Json.Decode.map normalizeFuelDetail FuelDetail.decoder)
         |> Pipeline.optional "longNote" (lenient Json.Decode.string) Nothing
         |> Pipeline.optional "merchant" (lenient Json.Decode.string) Nothing
         |> Pipeline.optional "note" (lenient Json.Decode.string) Nothing
@@ -958,6 +965,19 @@ lenient strict =
         , Json.Decode.map Just strict
         , Json.Decode.succeed Nothing
         ]
+
+
+{-| Collapse an all-empty `FuelDetail` (every sub-field absent — the
+common case for a non-fuel receipt) to `Nothing`, so `OcrData.fuelDetail`
+is only `Just` when the model actually read a price, volume, or grade.
+-}
+normalizeFuelDetail : FuelDetail -> Maybe FuelDetail
+normalizeFuelDetail detail =
+    if FuelDetail.isEmpty detail then
+        Nothing
+
+    else
+        Just detail
 
 
 {-| Map an Anthropic-returned payment-method string to a
@@ -1004,10 +1024,13 @@ ocrDataEncoder ocr =
         , ( "amount", maybe Money.encoder ocr.amount )
         , ( "category", maybe (Category.label >> Json.Encode.string) ocr.category )
         , ( "date", maybe DateField.encoder ocr.date )
+        , ( "gallons", maybe Gallons.encoder (Maybe.andThen .gallons ocr.fuelDetail) )
+        , ( "grade", maybe FuelGrade.encoder (Maybe.andThen .grade ocr.fuelDetail) )
         , ( "longNote", maybe Json.Encode.string ocr.longNote )
         , ( "merchant", maybe Json.Encode.string ocr.merchant )
         , ( "note", maybe Json.Encode.string ocr.note )
         , ( "paymentMethod", maybe (PaymentMethod.toString >> Json.Encode.string) ocr.paymentMethod )
+        , ( "pricePerGallon", maybe PricePerGallon.encoder (Maybe.andThen .pricePerGallon ocr.fuelDetail) )
         ]
 
 

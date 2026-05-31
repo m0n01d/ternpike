@@ -82,6 +82,8 @@ import Data.DateField as DateField
 import Data.Entry as Entry
 import Data.Expense as Expense exposing (Expense)
 import Data.ExpenseId as ExpenseId
+import Data.FuelGrade as FuelGrade
+import Data.Gallons as Gallons
 import Data.GeoPoint as GeoPoint
 import Data.Guest exposing (GuestReason(..), GuestSession)
 import Data.Iso8601 as Iso8601
@@ -93,6 +95,7 @@ import Data.Navigation exposing (Route(..), Tab(..))
 import Data.Notifications as Notifications
 import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
+import Data.PricePerGallon as PricePerGallon
 import Data.Scan exposing (ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip as SharedTrip
@@ -1489,6 +1492,12 @@ expenseToPending e =
     , amount = Money.toDollarString e.amount
     , category = e.category
     , date = DateField.toIso e.date
+    , fuelGallons =
+        e.fuelDetail |> Maybe.andThen .gallons |> Maybe.map Gallons.toInputString |> Maybe.withDefault ""
+    , fuelGrade =
+        e.fuelDetail |> Maybe.andThen .grade |> Maybe.map FuelGrade.display |> Maybe.withDefault ""
+    , fuelPricePerGallon =
+        e.fuelDetail |> Maybe.andThen .pricePerGallon |> Maybe.map PricePerGallon.toInputString |> Maybe.withDefault ""
     , locationState =
         case e.geoPoint of
             Just point ->
@@ -2801,6 +2810,15 @@ updateAuth msg as_ =
         DateChanged s ->
             authPending (\p -> { p | date = s }) { as_ | duplicateWarning = Nothing }
 
+        FuelGallonsChanged s ->
+            authPending (\p -> { p | fuelGallons = s }) as_
+
+        FuelGradeChanged s ->
+            authPending (\p -> { p | fuelGrade = s }) as_
+
+        FuelPricePerGallonChanged s ->
+            authPending (\p -> { p | fuelPricePerGallon = s }) as_
+
         LongNoteChanged s ->
             authPending (\p -> { p | longNote = s }) as_
 
@@ -2856,6 +2874,7 @@ updateAuth msg as_ =
                                     , createdAt = Time.millisToPosix 0
                                     , createdBy = as_.currentUser
                                     , date = parsed.date
+                                    , fuelDetail = parsed.fuelDetail
                                     , geoPoint = parsed.geoPoint
                                     , id = ExpenseId.fromString ""
                                     , longNote = parsed.longNote
@@ -2938,6 +2957,12 @@ updateAuth msg as_ =
                                     , date =
                                         if parsed.date /= original.date then
                                             Just parsed.date
+
+                                        else
+                                            Nothing
+                                    , fuelDetail =
+                                        if parsed.fuelDetail /= original.fuelDetail then
+                                            parsed.fuelDetail
 
                                         else
                                             Nothing
@@ -3024,6 +3049,7 @@ updateAuth msg as_ =
                                     , createdAt = posix
                                     , createdBy = UserId.fromString as_.creds.email
                                     , date = parsed.date
+                                    , fuelDetail = parsed.fuelDetail
                                     , geoPoint = parsed.geoPoint
                                     , longNote = parsed.longNote
                                     , merchant = parsed.merchant

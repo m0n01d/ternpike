@@ -166,6 +166,7 @@ viewBody model pending isEditing =
             , UI.Layout.formField "PAID WITH"
                 (viewPaymentMethodToggle pending.paymentMethod)
             ]
+        , Html.Extra.viewIf (pending.category == Category.Fuel) (viewFuelDetails pending)
         , UI.Rule.kicker "WHERE & WHO"
         , UI.Card.subCard
             [ UI.Layout.formField "MERCHANT"
@@ -248,6 +249,54 @@ viewBody model pending isEditing =
 
                  else
                     "SAVE EXPENSE"
+                )
+            ]
+        ]
+
+
+{-| The fuel-only detail section: per-gallon price, volume, and grade.
+Rendered only when the selected category is `Fuel` (see `viewBody`), so
+the form stays uncluttered for every other kind of expense. The inputs
+are plain strings parsed by `Data.PendingEntry.parseEntry`.
+-}
+viewFuelDetails : PendingEntry -> Html Msg
+viewFuelDetails pending =
+    Html.div []
+        [ UI.Rule.kicker "FUEL DETAILS"
+        , UI.Card.subCard
+            [ UI.Layout.formField "PRICE / GAL"
+                (Html.input
+                    [ Html.Attributes.type_ "number"
+                    , Html.Attributes.attribute "inputmode" "decimal"
+                    , Html.Attributes.attribute "step" "0.001"
+                    , Html.Attributes.value pending.fuelPricePerGallon
+                    , Html.Events.onInput (AuthMsg << FuelPricePerGallonChanged)
+                    , Html.Attributes.placeholder "4.299"
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
+                )
+            , UI.Layout.formField "GALLONS"
+                (Html.input
+                    [ Html.Attributes.type_ "number"
+                    , Html.Attributes.attribute "inputmode" "decimal"
+                    , Html.Attributes.attribute "step" "0.001"
+                    , Html.Attributes.value pending.fuelGallons
+                    , Html.Events.onInput (AuthMsg << FuelGallonsChanged)
+                    , Html.Attributes.placeholder "12.345"
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
+                )
+            , UI.Layout.formField "GRADE"
+                (Html.input
+                    [ Html.Attributes.type_ "text"
+                    , Html.Attributes.value pending.fuelGrade
+                    , Html.Events.onInput (AuthMsg << FuelGradeChanged)
+                    , Html.Attributes.placeholder "Regular"
+                    , UI.Layout.textInputStyle
+                    ]
+                    []
                 )
             ]
         ]

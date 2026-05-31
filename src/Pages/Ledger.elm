@@ -4,9 +4,13 @@ import Data.Category as Category
 import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
 import Data.ExpenseId as ExpenseId
+import Data.FuelDetail exposing (FuelDetail)
+import Data.FuelGrade as FuelGrade
+import Data.Gallons as Gallons
 import Data.Ledger exposing (LedgerMode(..))
 import Data.Milepost as Milepost
 import Data.Money as Money exposing (Money)
+import Data.PricePerGallon as PricePerGallon
 import Data.SharedTrip
 import Data.SharedTrips
 import Data.TripId as TripId
@@ -516,6 +520,7 @@ viewEntryRow opts entry =
             [ Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
                 [ Html.div [ Html.Attributes.class "text-sm text-ink font-body truncate" ]
                     [ Html.text primaryLabel ]
+                , Html.Extra.viewMaybe viewFuelSummary entry.fuelDetail
                 , Html.div [ Html.Attributes.class "mt-1.5 flex items-center gap-2" ]
                     [ Html.span
                         [ Html.Attributes.class "inline-block text-[10px] font-mono uppercase tracking-wider text-moss bg-cream-deep px-2 py-0.5 rounded" ]
@@ -545,6 +550,27 @@ viewEntryRow opts entry =
         , Html.Extra.viewIf isOpen <|
             viewRowMenu opts.canMove opts.readOnly entry
         ]
+
+
+{-| A compact secondary line for fuel expenses: per-gallon price, volume,
+and grade, joining only the parts the receipt actually captured (e.g.
+`$4.299/gal · 12.345 gal · Regular`). `entry.fuelDetail` is only `Just`
+when at least one part is present, so the joined text is never empty.
+-}
+viewFuelSummary : FuelDetail -> Html Msg
+viewFuelSummary fuel =
+    let
+        parts : List String
+        parts =
+            List.filterMap identity
+                [ Maybe.map (\p -> PricePerGallon.format p ++ "/gal") fuel.pricePerGallon
+                , Maybe.map (\g -> Gallons.format g ++ " gal") fuel.gallons
+                , Maybe.map FuelGrade.display fuel.grade
+                ]
+    in
+    Html.div
+        [ Html.Attributes.class "mt-0.5 text-xs text-moss font-mono tabular-nums truncate" ]
+        [ Html.text (String.join " · " parts) ]
 
 
 {-| Variant A author chip — a circle avatar followed by the author's
