@@ -17,8 +17,18 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  html, body {
-    min-height: 100%;
+  html {
+    height: 100%;
+  }
+
+  body {
+    /* Layered viewport-height floor so the document always reaches the
+       visible bottom of an installed (standalone) PWA. Last valid wins:
+       vh as a baseline, dvh where supported, and the JS-measured exact
+       px from --app-height (set in main.js) as the bulletproof layer. */
+    min-height: 100vh;
+    min-height: 100dvh;
+    min-height: var(--app-height, 100dvh);
     background: var(--color-parchment);
   }
 

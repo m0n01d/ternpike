@@ -41,6 +41,17 @@ import './elements/tp-amount.js'
     }
   })
 
+  // ── Viewport-height floor ──────────────────────────────────────────────
+  // Installed (standalone) iOS PWAs don't reliably apply 100dvh, leaving a
+  // gap at the bottom when the document is shorter than the screen. Mirror
+  // the true visible height into --app-height (consumed by the body/root
+  // min-height in CSS). innerHeight is stable across keyboard show/hide on
+  // iOS standalone, so inputs don't cause layout jumps.
+  const setAppHeight = () =>
+    document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px')
+  setAppHeight()
+  window.addEventListener('resize', setAppHeight)
+
   // ── Nano-id (no dependency) ────────────────────────────────────────────
   const nanoid = (len = 8) =>
     crypto.getRandomValues(new Uint8Array(len))

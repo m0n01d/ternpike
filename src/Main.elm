@@ -5000,7 +5000,7 @@ view model =
     , body =
         [ viewDemoBanner demoMode
         , Html.div
-            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-dvh font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
+            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-[100vh] min-h-[100dvh] min-h-[var(--app-height,100dvh)] font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
             [ case model of
                 GuestModel gs ->
                     viewGuest gs
