@@ -55,6 +55,7 @@ routeParser =
             (Parser.s "auth" </> Parser.s "magic" <?> Query.string "token" <?> Query.string "next")
         , Parser.map withNestToken
             (Parser.s "nest" <?> Query.string "token")
+        , Parser.map RouteMilepost (Parser.s "milepost")
         , Parser.map RouteSettings (Parser.s "settings")
         , Parser.map RouteTrips (Parser.s "trips")
         , Parser.map RouteVerify (Parser.s "verify" </> Parser.string </> Parser.string)
@@ -150,6 +151,12 @@ routeToTab route =
         RouteMagicLink _ _ ->
             SettingsTab
 
+        RouteMilepost ->
+            -- The Milepost is account-wide (no trip scope), reached from the
+            -- header — not the bottom nav. Keep the Trips slot lit so the
+            -- nav doesn't render an orphaned highlight.
+            TripsTab
+
         RouteNestPreview _ ->
             SettingsTab
 
@@ -192,6 +199,9 @@ routeTitle route =
 
         RouteMagicLink _ _ ->
             "SIGN IN"
+
+        RouteMilepost ->
+            "THE MILEPOST"
 
         RouteNestPreview _ ->
             "TRIP PREVIEW"

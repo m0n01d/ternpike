@@ -50,6 +50,7 @@ import Data.ExpenseId exposing (ExpenseId)
 import Data.Guest exposing (GuestSession)
 import Data.Location exposing (LocationState)
 import Data.Me
+import Data.Milepost
 import Data.Navigation exposing (Route)
 import Data.NestPreview exposing (NestPreview)
 import Data.Notifications exposing (NotificationPrefs, NotificationToggle, Permission, StandaloneState)
@@ -254,6 +255,7 @@ type alias AuthState =
     , loadingExpenses : Set String
     , loadingTrips : Set String
     , milepost : MilepostState
+    , milepostStates : List Data.Milepost.MarkerState
     , movePicker : Maybe Expense
     , network : NetworkState
     , notificationPermission : Permission

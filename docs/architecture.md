@@ -142,6 +142,7 @@ type alias AuthState =
     , loadingExpenses : Set String
     , loadingTrips  : Set String
     , milepost      : MilepostState
+    , milepostStates : List Milepost.MarkerState
     , network       : NetworkState
     , page          : Page
     , route         : Route
@@ -177,6 +178,19 @@ before the first write confirms back on the change feed. Unlike the billing
 fields above, this DOES live in PouchDB — earned achievements should sync across
 the user's own devices. See "Startup sequence" and "Document ID conventions"
 below.
+
+`milepostStates : List Milepost.MarkerState` is the *evaluated* catalog (every
+marker's `Earned`/`Locked` state, with locked-progress) that `reconcileMileposts`
+stashes on every pass — not just the earned set in the persisted doc. Rendering
+needs the full evaluated catalog, but there is no `now` on the model at view
+time, so the reconcile (which already has `now`) writes the result here. "The
+Milepost" collection screen (`Pages.Milepost`, `RouteMilepost` at
+`/milepost`, reached via the header flag affordance — not the bottom nav, which
+stays trip-scoped) renders straight off this field, grouped by `Milepost.Family`.
+Navigating to `RouteMilepost` kicks a fresh `ReconcileMileposts Time.now` so the
+screen reflects current locked/progress. Shared chip styling lives in
+`UI.Milepost.markerChip`; family colour accents (`brown`/`amber` tokens added to
+`theme.css`) are single-sourced there.
 
 `network : NetworkState` (`Data.Sync`) is also tracked on `GuestState` so the
 disconnected-banner UI works before sign-in. It's a tri-state — `Unknown`

@@ -12,6 +12,10 @@
   --color-parchment:    #faf7f0;
   --color-muted:        #8a8a78;
 
+  /* ── Milepost accents (#409) ───────────────────────────────── */
+  --color-brown:        #5b4636;  /* MileMarkers family accent */
+  --color-amber:        #c98a2b;  /* CautionSigns family accent */
+
   /* ── Semantic / derived ────────────────────────────────────── */
   --color-rust-tint:    #fdf0ea;  /* soft rust bg — error/warning banners */
   --color-danger:       #a83020;  /* destructive — delete buttons, over-budget */
@@ -125,6 +129,12 @@ html.dark {
   --color-rust-deep:    #b05030;
   --color-rust-tint:    #1c0f08;
   --color-danger:       #cc3838;
+
+  /* Milepost accents — lifted off near-black so they read (#409).
+     Brown #5b4636 is invisible on a #1a1a17 surface; shift to a warm
+     dusty tan. Amber brightens slightly to clear the dark background. */
+  --color-brown:        #b89a7e;
+  --color-amber:        #e0a94a;
 
   /* Editorial rules */
   --rule-tan:  1px dashed rgb(46 46 42 / 0.9);

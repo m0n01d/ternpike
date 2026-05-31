@@ -7,6 +7,7 @@ module UI.Icons exposing
     , copy
     , download
     , expand
+    , flag
     , journal
     , kebab
     , map
@@ -116,6 +117,17 @@ expand classes =
         , Svg.path [ Svg.Attributes.d "M20 9 V4 H15" ] []
         , Svg.path [ Svg.Attributes.d "M4 15 V20 H9" ] []
         , Svg.path [ Svg.Attributes.d "M20 15 V20 H15" ] []
+        ]
+
+
+{-| A trail-marker flag on a post — the header affordance for The Milepost
+achievements screen (#409).
+-}
+flag : String -> Svg.Svg msg
+flag classes =
+    Svg.svg (common classes)
+        [ Svg.path [ Svg.Attributes.d "M6 21 V4" ] []
+        , Svg.path [ Svg.Attributes.d "M6 4 H17 L14 8 L17 12 H6" ] []
         ]
 
 

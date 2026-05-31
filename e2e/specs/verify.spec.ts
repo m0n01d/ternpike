@@ -81,6 +81,25 @@ test.describe('Verify DOM tier', () => {
     await expect(el).toHaveAttribute('data-verify-enable-button', 'absent')
   })
 
+  test('milepost screen: empty state when nothing earned', async ({ page }) => {
+    await page.goto('/verify/MilepostScreen/empty')
+    await page.waitForSelector('[data-verify-unit="MilepostScreen"]')
+    const el = page.locator('[data-verify-unit="MilepostScreen"]')
+    await expect(el).toHaveAttribute('data-verify-screen', 'empty')
+    await expect(el).toHaveAttribute('data-verify-earned', '0')
+  })
+
+  test('milepost screen: all-earned populates every family', async ({ page }) => {
+    await page.goto('/verify/MilepostScreen/all-earned')
+    await page.waitForSelector('[data-verify-unit="MilepostScreen"]')
+    const el = page.locator('[data-verify-unit="MilepostScreen"]')
+    await expect(el).toHaveAttribute('data-verify-screen', 'populated')
+
+    const current: VerifyCurrent = await page.evaluate(() => (window as any).__verify.current())
+    expect(current.verdict).toBe('PASS')
+    expect(current.domSurface?.['earned']).toBe(current.domSurface?.['total'])
+  })
+
   test('the full matrix is exposed and the probe fixture FAILS', async ({ page }) => {
     await gotoVerify(page, 'tern')
 
