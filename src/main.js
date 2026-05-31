@@ -283,6 +283,16 @@ import './elements/tp-amount.js'
     }
   }
 
+  // The user's LOCAL calendar date — never UTC. `toISOString()` would hand
+  // back the UTC day, which for any western offset rolls over hours early
+  // (e.g. 6 PM PDT is already "tomorrow" in UTC), so an evening expense would
+  // default to the wrong date. Elm refreshes this from `Time.here`/`Time.now`
+  // on boot and whenever the app regains visibility (travel / crossing
+  // midnight), so this flag only has to be right for the first paint.
+  const localToday = (d =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  )(new Date())
+
   const flags = {
     authCreds:      authCreds,
     anthropicKey:   anthropicKey  || '',
@@ -291,7 +301,7 @@ import './elements/tp-amount.js'
     colorScheme:    localStorage.getItem('color_scheme') || 'auto',
     demoMode:       isDemo,
     pendingRef:     pendingRef,
-    today:          new Date().toISOString().slice(0, 10),
+    today:          localToday,
     vapidPublicKey: import.meta.env.VITE_VAPID_PUBLIC_KEY || '',
     version:        __BUILD_SHA__,
   }

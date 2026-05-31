@@ -134,6 +134,7 @@ type alias GuestState =
     , showSettings : Bool
     , today : DateField
     , version : String
+    , zone : Time.Zone
     }
 
 
@@ -302,6 +303,7 @@ type alias AuthState =
     , tripsHydrated : Bool
     , version : String
     , voids : Dict String Void
+    , zone : Time.Zone
     }
 
 
@@ -406,8 +408,10 @@ handles them without any per-state no-ops leaking into `updateGuest` or
 -}
 type SharedMsg_
     = ApiKeyChanged String
+    | DateContextChanged Time.Zone Time.Posix
     | LinkClicked Browser.UrlRequest
     | NetworkStatusChanged Bool
+    | RefreshDateContext
     | ResetSettingsClicked
     | ScrolledToTop
     | SetColorScheme ColorScheme
