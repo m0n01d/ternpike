@@ -322,17 +322,44 @@ import './elements/tp-amount.js'
     const box = document.createElement('div')
     box.style.cssText =
       'position:fixed;top:env(safe-area-inset-top,0);left:0;z-index:2147483647;' +
-      'font:11px/1.35 ui-monospace,monospace;color:#0f0;background:rgba(0,0,0,.82);' +
-      'padding:6px 8px;max-width:62vw;white-space:pre;pointer-events:none;border-bottom-right-radius:8px'
+      'font:11px/1.3 ui-monospace,monospace;color:#0f0;background:rgba(0,0,0,.85);' +
+      'padding:6px 8px;max-width:70vw;white-space:pre;pointer-events:none;border-bottom-right-radius:8px'
+    // Colored hairlines pinned to the bottom of full-height boxes anchored at
+    // top:0 — whichever sits at the true physical screen bottom is the unit
+    // to use. red=fixed bottom:0, cyan=100lvh, yellow=100dvh, magenta=100svh.
+    const mkBox = (h, color, label) => {
+      const el = document.createElement('div')
+      el.style.cssText =
+        'position:fixed;top:0;left:0;width:100%;height:' + h + ';pointer-events:none;z-index:2147483646'
+      const bar = document.createElement('div')
+      bar.style.cssText =
+        'position:absolute;bottom:0;left:0;right:0;height:2px;background:' + color
+      const tag = document.createElement('div')
+      tag.style.cssText =
+        'position:absolute;bottom:2px;right:2px;font:10px ui-monospace,monospace;color:' + color
+      tag.textContent = label
+      el.append(bar, tag)
+      return el
+    }
     const bottomBar = document.createElement('div')
     bottomBar.style.cssText =
-      'position:fixed;left:0;right:0;bottom:0;height:3px;background:red;z-index:2147483647;pointer-events:none'
+      'position:fixed;left:0;right:0;bottom:0;height:2px;background:red;z-index:2147483647;pointer-events:none'
+    const redTag = document.createElement('div')
+    redTag.style.cssText =
+      'position:fixed;right:2px;bottom:2px;z-index:2147483647;font:10px ui-monospace,monospace;color:red;pointer-events:none'
+    redTag.textContent = 'fixed bottom:0'
     const probe = document.createElement('div')
     probe.style.cssText =
       'position:fixed;bottom:0;left:0;width:0;height:0;' +
       'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);' +
       'visibility:hidden;pointer-events:none'
-    document.body.append(box, bottomBar, probe)
+    const meas = u => { const d = document.createElement('div'); d.style.cssText = 'position:absolute;top:0;left:0;width:0;height:' + u; document.body.appendChild(d); const h = d.offsetHeight; d.remove(); return h }
+    document.body.append(
+      box, bottomBar, redTag, probe,
+      mkBox('100lvh', '#0ff', 'lvh'),
+      mkBox('100dvh', '#ff0', 'dvh'),
+      mkBox('100svh', '#f0f', 'svh'),
+    )
 
     const mql = window.matchMedia('(display-mode: standalone)')
     const read = () => {
@@ -346,15 +373,16 @@ import './elements/tp-amount.js'
       box.textContent = [
         'sha       ' + String(__BUILD_SHA__).slice(0, 8),
         'standalone ' + (window.navigator.standalone === true || mql.matches),
-        'innerH    ' + window.innerHeight,
+        'screen.h  ' + window.screen.height + '  avail ' + (window.screen.availHeight || '?'),
+        'innerH    ' + window.innerHeight + '  outerH ' + window.outerHeight,
         'clientH   ' + document.documentElement.clientHeight,
-        'visualVV  ' + (vv ? Math.round(vv.height) + ' off ' + Math.round(vv.offsetTop) : 'n/a'),
+        'visualVV  ' + (vv ? Math.round(vv.height) + ' off ' + Math.round(vv.offsetTop) + ' scale ' + (vv.scale || 1) : 'n/a'),
+        'dpr       ' + window.devicePixelRatio,
         '--app-h   ' + (appH || '(unset)'),
+        'vh/dvh    ' + meas('100vh') + ' / ' + meas('100dvh'),
+        'svh/lvh   ' + meas('100svh') + ' / ' + meas('100lvh'),
         'safe T/B  ' + ps.paddingTop + ' / ' + ps.paddingBottom,
-        'root.minH ' + (cs ? cs.minHeight : 'n/a'),
-        'root.h    ' + (rect ? Math.round(rect.height) : 'n/a'),
-        'root.bot  ' + (rect ? Math.round(rect.bottom) : 'n/a') + '  (vs innerH ' + window.innerHeight + ')',
-        'body.sH   ' + document.documentElement.scrollHeight,
+        'root.h/bot ' + (rect ? Math.round(rect.height) + ' / ' + Math.round(rect.bottom) : 'n/a'),
       ].join('\n')
     }
     read()
