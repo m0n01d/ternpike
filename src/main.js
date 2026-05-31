@@ -41,17 +41,6 @@ import './elements/tp-amount.js'
     }
   })
 
-  // ── Viewport-height floor ──────────────────────────────────────────────
-  // Installed (standalone) iOS PWAs don't reliably apply 100dvh, leaving a
-  // gap at the bottom when the document is shorter than the screen. Mirror
-  // the true visible height into --app-height (consumed by the body/root
-  // min-height in CSS). innerHeight is stable across keyboard show/hide on
-  // iOS standalone, so inputs don't cause layout jumps.
-  const setAppHeight = () =>
-    document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px')
-  setAppHeight()
-  window.addEventListener('resize', setAppHeight)
-
   // ── Nano-id (no dependency) ────────────────────────────────────────────
   const nanoid = (len = 8) =>
     crypto.getRandomValues(new Uint8Array(len))
@@ -311,90 +300,6 @@ import './elements/tp-amount.js'
   // ── Start Elm ──────────────────────────────────────────────────────────
 
   const app = Elm.Main.init({ flags })
-
-  // ── TEMPORARY viewport diagnostic overlay (remove after #444 diagnosis) ──
-  // Burns the device's real layout numbers into the screen so a single
-  // screenshot reveals what's actually happening (innerHeight vs visual
-  // viewport vs container height vs safe-area insets). The red hairline is
-  // pinned to `bottom:0`; if it floats above the screen edge, the viewport
-  // anchor is wrong; if the nav floats above it, the nav position is wrong.
-  ;(function viewportDebug() {
-    const box = document.createElement('div')
-    box.style.cssText =
-      'position:fixed;top:env(safe-area-inset-top,0);left:0;z-index:2147483647;' +
-      'font:11px/1.3 ui-monospace,monospace;color:#0f0;background:rgba(0,0,0,.85);' +
-      'padding:6px 8px;max-width:70vw;white-space:pre;pointer-events:none;border-bottom-right-radius:8px'
-    // Colored hairlines pinned to the bottom of full-height boxes anchored at
-    // top:0 — whichever sits at the true physical screen bottom is the unit
-    // to use. red=fixed bottom:0, cyan=100lvh, yellow=100dvh, magenta=100svh.
-    const mkBox = (h, color, label) => {
-      const el = document.createElement('div')
-      el.style.cssText =
-        'position:fixed;top:0;left:0;width:100%;height:' + h + ';pointer-events:none;z-index:2147483646'
-      const bar = document.createElement('div')
-      bar.style.cssText =
-        'position:absolute;bottom:0;left:0;right:0;height:2px;background:' + color
-      const tag = document.createElement('div')
-      tag.style.cssText =
-        'position:absolute;bottom:2px;right:2px;font:10px ui-monospace,monospace;color:' + color
-      tag.textContent = label
-      el.append(bar, tag)
-      return el
-    }
-    const bottomBar = document.createElement('div')
-    bottomBar.style.cssText =
-      'position:fixed;left:0;right:0;bottom:0;height:2px;background:red;z-index:2147483647;pointer-events:none'
-    const redTag = document.createElement('div')
-    redTag.style.cssText =
-      'position:fixed;right:2px;bottom:2px;z-index:2147483647;font:10px ui-monospace,monospace;color:red;pointer-events:none'
-    redTag.textContent = 'fixed bottom:0'
-    const probe = document.createElement('div')
-    probe.style.cssText =
-      'position:fixed;bottom:0;left:0;width:0;height:0;' +
-      'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);' +
-      'visibility:hidden;pointer-events:none'
-    const meas = u => { const d = document.createElement('div'); d.style.cssText = 'position:absolute;top:0;left:0;width:0;height:' + u; document.body.appendChild(d); const h = d.offsetHeight; d.remove(); return h }
-    document.body.append(
-      box, bottomBar, redTag, probe,
-      mkBox('100lvh', '#0ff', 'lvh'),
-      mkBox('100dvh', '#ff0', 'dvh'),
-      mkBox('100svh', '#f0f', 'svh'),
-    )
-
-    const mql = window.matchMedia('(display-mode: standalone)')
-    const read = () => {
-      const root =
-        [...document.body.children].find(c => /min-h-/.test(c.className || '')) || null
-      const cs = root ? getComputedStyle(root) : null
-      const rect = root ? root.getBoundingClientRect() : null
-      const ps = getComputedStyle(probe)
-      const vv = window.visualViewport
-      const appH = getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim()
-      box.textContent = [
-        'sha       ' + String(__BUILD_SHA__).slice(0, 8),
-        'standalone ' + (window.navigator.standalone === true || mql.matches),
-        'screen.h  ' + window.screen.height + '  avail ' + (window.screen.availHeight || '?'),
-        'innerH    ' + window.innerHeight + '  outerH ' + window.outerHeight,
-        'clientH   ' + document.documentElement.clientHeight,
-        'visualVV  ' + (vv ? Math.round(vv.height) + ' off ' + Math.round(vv.offsetTop) + ' scale ' + (vv.scale || 1) : 'n/a'),
-        'dpr       ' + window.devicePixelRatio,
-        '--app-h   ' + (appH || '(unset)'),
-        'vh/dvh    ' + meas('100vh') + ' / ' + meas('100dvh'),
-        'svh/lvh   ' + meas('100svh') + ' / ' + meas('100lvh'),
-        'safe T/B  ' + ps.paddingTop + ' / ' + ps.paddingBottom,
-        'root.h/bot ' + (rect ? Math.round(rect.height) + ' / ' + Math.round(rect.bottom) : 'n/a'),
-      ].join('\n')
-    }
-    read()
-    const tick = () => requestAnimationFrame(read)
-    window.addEventListener('resize', tick)
-    window.addEventListener('scroll', tick, true)
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', tick)
-      window.visualViewport.addEventListener('scroll', tick)
-    }
-    setInterval(read, 1000)
-  })()
 
   // Test-only escape hatch. Lets the E2E harness push synthetic port
   // messages into Elm without standing up the whole CouchDB sync chain

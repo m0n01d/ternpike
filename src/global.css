@@ -22,13 +22,13 @@
   }
 
   body {
-    /* Layered viewport-height floor so the document always reaches the
-       visible bottom of an installed (standalone) PWA. Last valid wins:
-       vh as a baseline, dvh where supported, and the JS-measured exact
-       px from --app-height (set in main.js) as the bulletproof layer. */
+    /* Fill the FULL screen, including the Dynamic-Island band. On those
+       devices iOS reports `dvh`/`svh`/`window.innerHeight` as the *small*
+       viewport (screen minus the top inset), so anchoring to them leaves a
+       strip of unpainted screen at the bottom. `vh` (== `lvh`, the large
+       viewport) is the full screen height — that's the one we want. */
     min-height: 100vh;
-    min-height: 100dvh;
-    min-height: var(--app-height, 100dvh);
+    min-height: 100lvh;
     background: var(--color-parchment);
   }
 
