@@ -149,6 +149,7 @@ catalog =
     , markerPremiumUnleaded
     , markerBigRig
     , markerBudgetWhatBudget
+    , markerSouvenirTax
     ]
 
 
@@ -259,6 +260,18 @@ markerBudgetWhatBudget =
     , goal = Flag
     , id = "budget-what-budget"
     , name = "Budget? What Budget?"
+    }
+
+
+{-| Earned when the user logs a single Misc-category expense of $250 or more.
+-}
+markerSouvenirTax : Marker
+markerSouvenirTax =
+    { blurb = "Drop $250 on a single Misc splurge."
+    , family = CautionSigns
+    , goal = Dollars (Money.fromCents 25000)
+    , id = "souvenir-tax"
+    , name = "Souvenir Tax"
     }
 
 
@@ -423,6 +436,15 @@ evaluateMarker inputs marker =
                     , marker = marker
                     , progress = 0
                     }
+
+        "souvenir-tax" ->
+            -- Dollars $250: max single Misc expense >= goal
+            let
+                have : Money.Money
+                have =
+                    maxAmountWhere (\e -> e.category == Category.Misc) inputs.expenses
+            in
+            evaluateDollars have "$250" marker
 
         _ ->
             -- Unreachable with a well-formed catalog; treated as a locked Flag.
@@ -656,6 +678,21 @@ sumWhere pred expenses =
         |> List.filter pred
         |> List.map .amount
         |> Money.sum
+
+
+{-| Return the largest single `amount` among all expenses that satisfy the
+given predicate. Returns `Money.zero` when no expenses match.
+
+Unlike `sumWhere`, this does not accumulate — it finds the single maximum
+value. Used to evaluate "max single expense" markers such as Souvenir Tax.
+
+-}
+maxAmountWhere : (ExpenseFacts -> Bool) -> List ExpenseFacts -> Money.Money
+maxAmountWhere pred expenses =
+    expenses
+        |> List.filter pred
+        |> List.map .amount
+        |> List.foldl maxMoney Money.zero
 
 
 {-| Count the number of distinct values in a list.
