@@ -188,6 +188,12 @@ isTripScoped marker =
         "seasoned-traveler" ->
             False
 
+        "detour" ->
+            -- "Make your first expense correction" is a one-time career
+            -- milestone (like Trailhead), not a per-trip marker — keep it off
+            -- the Ledger strip.
+            False
+
         _ ->
             True
 
