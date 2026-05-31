@@ -193,6 +193,14 @@ allEarnedInputs =
                                 )
                     )
 
+        souvenirExpense : Milepost.ExpenseFacts
+        souvenirExpense =
+            { amount = Money.fromCents 30000
+            , category = Category.Misc
+            , createdAt = Time.millisToPosix 0
+            , tripId = heroTripId
+            }
+
         trips : List Milepost.TripFacts
         trips =
             List.range 1 numTrips
@@ -210,7 +218,7 @@ allEarnedInputs =
                             { budget = Money.zero, id = tid }
                     )
     in
-    { expenses = bigFuelExpenses ++ extraFuelTrip2 ++ miscExpensesTrip1 ++ streakExpenses ++ extraExpenses
+    { expenses = bigFuelExpenses ++ extraFuelTrip2 ++ miscExpensesTrip1 ++ streakExpenses ++ extraExpenses ++ [ souvenirExpense ]
     , now = Time.millisToPosix (30 * 86400000)
     , trips = trips
     , zone = Time.utc
