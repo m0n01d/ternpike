@@ -1,4 +1,4 @@
-module UI.Milepost exposing (Accent, familyAccent, familyGlyph, markerChip)
+module UI.Milepost exposing (Accent, familyAccent, familyGlyph, markerChip, markerChipSmall)
 
 {-| Shared presentation for milepost achievement markers (#409).
 
@@ -18,11 +18,10 @@ class string-concatenation.
 Any `Money` rendered for a dollar goal goes through `UI.MoneyView` (the
 `<tp-amount>` web component), never a hand-formatted string.
 
-The compact icon-only `markerChipSmall` variant is deferred to #411 (its first
-consumer) — `NoUnused.Exports` forbids exporting it before a construction site
-exists, so it lands alongside that reuse rather than dead here.
+The compact icon-only `markerChipSmall` variant ships alongside its first
+consumer in #411 (the Ledger header strip in `Pages.Ledger`).
 
-@docs Accent, familyAccent, familyGlyph, markerChip
+@docs Accent, familyAccent, familyGlyph, markerChip, markerChipSmall
 
 -}
 
@@ -136,6 +135,42 @@ markerChip state =
                     , progressBar marker.family progress label
                     ]
                 ]
+
+
+{-| An icon-only compact chip for use in dense contexts like the Ledger header
+strip (#411). Shows the family glyph in the earned accent colour with a
+circular badge, plus an `aria-label` so the chip is accessible without visible
+text.
+
+Only call with an `Earned` state — rendering a `Locked` state as a small chip
+is visually indistinguishable from earned and is not a use-case for this
+variant; the Ledger strip filters to `Earned` before calling here.
+
+-}
+markerChipSmall : Milepost.MarkerState -> Html msg
+markerChipSmall state =
+    case state of
+        Milepost.Earned { marker } ->
+            let
+                accent : Accent
+                accent =
+                    familyAccent marker.family
+            in
+            Html.div
+                [ Html.Attributes.classList
+                    [ ( "flex items-center justify-center w-7 h-7 shrink-0 rounded-full font-display font-black text-sm", True )
+                    , ( accent.badge, True )
+                    ]
+                , Html.Attributes.attribute "aria-label" marker.name
+                , Html.Attributes.title marker.name
+                ]
+                [ Html.span
+                    [ Html.Attributes.attribute "aria-hidden" "true" ]
+                    [ Html.text (familyGlyph marker.family) ]
+                ]
+
+        Milepost.Locked _ ->
+            Html.Extra.nothing
 
 
 iconBadge : Milepost.Family -> Bool -> Html msg

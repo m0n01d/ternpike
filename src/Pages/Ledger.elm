@@ -5,6 +5,7 @@ import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
 import Data.ExpenseId as ExpenseId
 import Data.Ledger exposing (LedgerMode(..))
+import Data.Milepost as Milepost
 import Data.Money as Money exposing (Money)
 import Data.SharedTrip
 import Data.SharedTrips
@@ -28,18 +29,24 @@ import UI.DateView
 import UI.Gate
 import UI.Icons
 import UI.Mascot
+import UI.Milepost
 import UI.MoneyView
 
 
-viewTab : AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
-viewTab as_ =
+{-| `earned` is the list of `Milepost.Earned` states for the active trip,
+pre-computed at the call site in `Main.viewAuth` via `milepostInputsForTrip`.
+Only `Earned` values are passed — `Locked` ones are filtered out before the
+call.
+-}
+viewTab : List Milepost.MarkerState -> AuthState -> { actions : List (Html Msg), body : Html Msg, hero : Html Msg }
+viewTab earned as_ =
     let
         mode =
             ledgerMode as_
     in
     { actions = viewActions as_
     , body = viewBody as_ mode
-    , hero = viewHero (activeBudget as_) mode
+    , hero = viewHero earned (activeBudget as_) mode
     }
 
 
@@ -145,19 +152,19 @@ viewActions model =
         [ exportButton, mapToggle, refresh ]
 
 
-viewHero : Money -> LedgerMode -> Html Msg
-viewHero budget mode =
+viewHero : List Milepost.MarkerState -> Money -> LedgerMode -> Html Msg
+viewHero earned budget mode =
     case mode of
         LedgerReady entries ->
-            viewLedgerHero budget entries
+            viewLedgerHero earned budget entries
 
         LedgerLoading ->
             Html.div [ Html.Attributes.class "font-mono text-[22px] text-muted" ]
                 [ Html.text "—" ]
 
 
-viewLedgerHero : Money -> List Entry.EffectiveEntry -> Html Msg
-viewLedgerHero budget entries =
+viewLedgerHero : List Milepost.MarkerState -> Money -> List Entry.EffectiveEntry -> Html Msg
+viewLedgerHero earned budget entries =
     let
         total =
             Money.sum (List.map .amount entries)
@@ -182,6 +189,15 @@ viewLedgerHero budget entries =
 
             else
                 String.fromInt entryCount ++ " ENTRIES"
+
+        earnedCount =
+            List.length earned
+
+        moreCount =
+            earnedCount - 4
+
+        visibleChips =
+            List.take 4 earned
     in
     Html.div [ Html.Attributes.class "py-2" ]
         [ Html.div
@@ -195,7 +211,35 @@ viewLedgerHero budget entries =
             [ Html.text kickerText ]
         , Html.Extra.viewIf (not (Money.isZero budget)) <|
             UI.BudgetBar.viewSubtle { budget = budget, spent = total }
+        , Html.Extra.viewIf (earnedCount > 0) <|
+            viewMarkerStrip visibleChips moreCount
         ]
+
+
+{-| A compact row of earned marker chips in the Ledger header.
+
+Shows up to four icon-only chips. When more than four are earned, appends a
+"+N more →" link to the full Milepost screen. Renders `Html.Extra.nothing`
+when the earned list is empty — guarded by the `viewIf` at the call site.
+
+-}
+viewMarkerStrip : List Milepost.MarkerState -> Int -> Html Msg
+viewMarkerStrip chips moreCount =
+    Html.div
+        [ Html.Attributes.class "mt-3 flex items-center gap-1.5 flex-wrap" ]
+        (List.map UI.Milepost.markerChipSmall chips
+            ++ (if moreCount > 0 then
+                    [ Html.a
+                        [ Html.Attributes.href "/milepost"
+                        , Html.Attributes.class "text-[10px] font-mono text-moss hover:text-forest transition-colors whitespace-nowrap"
+                        ]
+                        [ Html.text ("+" ++ String.fromInt moreCount ++ " more →") ]
+                    ]
+
+                else
+                    []
+               )
+        )
 
 
 viewBody : AuthState -> LedgerMode -> Html Msg
