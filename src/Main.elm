@@ -2556,6 +2556,10 @@ updateGuest msg gs =
                 -- re-runs after in-SPA re-login (token expired while the tab
                 -- stayed open) — re-hydrate the durable queue here (#371).
                 , Ports.loadScanQueue ()
+
+                -- `init` won't re-run either, so re-capture the device zone +
+                -- "today" so a re-login doesn't inherit a stale `gs.zone`.
+                , captureDateContext
                 ]
             )
 
@@ -2671,6 +2675,9 @@ updateGuest msg gs =
                         -- scan queue on in-SPA re-login since `toAuthState`
                         -- cleared it and `init` won't re-run (#371).
                         , Ports.loadScanQueue ()
+
+                        -- Likewise re-capture the device zone + "today".
+                        , captureDateContext
                         ]
                     )
 
@@ -5385,7 +5392,14 @@ main =
         , subscriptions =
             \_ ->
                 Sub.batch
-                    [ Browser.Events.onVisibilityChange (\_ -> SharedMsg RefreshDateContext)
+                    [ -- Re-capture the device zone + "today" whenever visibility
+                      -- flips. We fire on both edges (hide and show) rather than
+                      -- filtering to `Visible`: `captureDateContext` is idempotent
+                      -- (it just re-reads `Time.here`/`Time.now` and overwrites
+                      -- `zone`/`today`), so the redundant hide-edge dispatch is
+                      -- harmless, and skipping the filter avoids a no-op message
+                      -- whose only job is to swallow the `Hidden` case.
+                      Browser.Events.onVisibilityChange (\_ -> SharedMsg RefreshDateContext)
                     , Ports.pouchIn (AuthMsg << GotPouchMsg)
                     , Ports.gotGpsCoords
                         (\r ->
