@@ -46,6 +46,7 @@ type Route
     | RouteJoinSharedTrip String
     | RouteLedger TripId
     | RouteMagicLink String (Maybe String)
+    | RouteMilepost
     | RouteNestPreview String
     | RouteScan TripId
     | RouteSettings

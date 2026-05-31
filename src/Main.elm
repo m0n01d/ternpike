@@ -129,6 +129,7 @@ import Pages.Add
 import Pages.Guest exposing (viewGuest)
 import Pages.JoinSharedTrip
 import Pages.Ledger
+import Pages.Milepost
 import Pages.Scan
 import Pages.Settings
 import Pages.Settings.SharedTrips
@@ -152,6 +153,7 @@ import Validate
 import Verify.Core
 import Verify.Registry
 import Verify.Specs.JoinSharedTrip
+import Verify.Specs.MilepostScreen
 import Verify.Specs.NotificationsPaywall
 import Verify.Specs.ScanQueueCard
 import Verify.Specs.SharedTripCard
@@ -241,6 +243,7 @@ toAuthState creds initialRoute gs =
     , trailblazerNumber = creds.trailblazerNumber
     , trailblazerStatus = RemoteData.NotAsked
     , milepost = NotLoaded
+    , milepostStates = []
     , tripForm = Nothing
     , tripLoaded = Set.empty
     , trips = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
@@ -1278,9 +1281,21 @@ reconcileMileposts now as_ =
         nowIso =
             Iso8601.fromPosix now
 
+        -- The full evaluated catalog. Stashed onto `as_.milepostStates` on
+        -- every pass (Decision #409) so `Pages.Milepost` can render current
+        -- locked/progress state without recomputing — there is no `now` on
+        -- the model at view time.
+        states : List Milepost.MarkerState
+        states =
+            Milepost.evaluate (milepostInputs as_ now)
+
+        withStates : AuthState -> AuthState
+        withStates next =
+            { next | milepostStates = states }
+
         earnedNow : Set.Set String
         earnedNow =
-            Milepost.evaluate (milepostInputs as_ now)
+            states
                 |> List.filterMap
                     (\state ->
                         case state of
@@ -1307,7 +1322,7 @@ reconcileMileposts now as_ =
                 progress =
                     { earned = seeded }
             in
-            ( AuthModel { as_ | milepost = Loaded { earned = seeded, rev = Nothing } }
+            ( AuthModel (withStates { as_ | milepost = Loaded { earned = seeded, rev = Nothing } })
             , sendPouch (SaveMilepostProgress (MilepostProgress.encoder progress))
             )
 
@@ -1322,8 +1337,10 @@ reconcileMileposts now as_ =
                     Set.diff earnedNow persisted
             in
             if Set.isEmpty newlyEarned then
-                -- Idempotent no-op: nothing new earned since the last pass.
-                ( AuthModel as_, Cmd.none )
+                -- Idempotent no-op for persistence: nothing new earned since
+                -- the last pass. Still refresh `milepostStates` so the screen
+                -- reflects current locked/progress even when no doc is written.
+                ( AuthModel (withStates as_), Cmd.none )
 
             else
                 let
@@ -1353,7 +1370,7 @@ reconcileMileposts now as_ =
                             Nothing ->
                                 MilepostProgress.encoder progress
                 in
-                ( AuthModel { as_ | milepost = Loaded { earned = unioned, rev = rev } }
+                ( AuthModel (withStates { as_ | milepost = Loaded { earned = unioned, rev = rev } })
                 , sendPouch (SaveMilepostProgress doc)
                 )
 
@@ -1792,6 +1809,12 @@ applyUnitSeed unit fixture as_ =
                 , trips = TripsLoaded (Trips.singleton verifyTrip)
             }
 
+        "MilepostScreen" ->
+            { as_
+                | milepostStates = Verify.Specs.MilepostScreen.statesForFixture fixture
+                , route = RouteMilepost
+            }
+
         "SharedTripCard" ->
             { as_ | sharedTrips = Verify.Specs.SharedTripCard.seededTrips fixture }
 
@@ -2102,8 +2125,19 @@ updateShared msg model =
 
                                 CheckoutReturnNone ->
                                     ( as1, Cmd.none )
+
+                        -- Navigating to The Milepost re-evaluates the catalog
+                        -- so the screen reflects current locked/progress
+                        -- (reconcile is idempotent for persistence).
+                        milepostCmd =
+                            case newRoute of
+                                RouteMilepost ->
+                                    Task.perform (AuthMsg << ReconcileMileposts) Time.now
+
+                                _ ->
+                                    Cmd.none
                     in
-                    ( AuthModel as2, Cmd.batch [ cmd, extraCmd, scrollToTop ] )
+                    ( AuthModel as2, Cmd.batch [ cmd, extraCmd, milepostCmd, scrollToTop ] )
 
 
 scrollToTop : Cmd Msg
@@ -4919,6 +4953,9 @@ viewAuth as_ =
 
                 RouteTrips ->
                     Pages.Trips.viewTab as_
+
+                RouteMilepost ->
+                    Pages.Milepost.viewTab as_
 
                 RouteVerify _ _ ->
                     -- Verification routes mount a seeded fixture model whose

@@ -54,6 +54,20 @@ viewHeader as_ =
         , Html.div [ Html.Attributes.class "flex items-center gap-3" ]
             [ viewSyncBadge { networkOffline = Data.Sync.isOffline as_.network, syncState = as_.syncState }
             , Html.a
+                [ Html.Attributes.href (as_.basePath ++ "milepost")
+                , Html.Attributes.attribute "aria-label" "The Milepost"
+                , Html.Attributes.class
+                    ("inline-flex items-center px-2 py-1 "
+                        ++ (if as_.route == RouteMilepost then
+                                "text-rust"
+
+                            else
+                                "text-muted"
+                           )
+                    )
+                ]
+                [ UI.Icons.flag "w-5 h-5" ]
+            , Html.a
                 [ Html.Attributes.href settingsHref
                 , Html.Attributes.class
                     ("inline-flex items-center px-2 py-1 "
@@ -297,6 +311,9 @@ topoPosClass route =
 
         RouteMagicLink _ _ ->
             "bg-[position:-1280px_-80px]"
+
+        RouteMilepost ->
+            "bg-[position:-1700px_-1380px]"
 
         RouteNestPreview _ ->
             "bg-[position:-580px_-1100px]"
