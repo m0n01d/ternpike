@@ -44,7 +44,7 @@ sub-state (the email form / "check your email").
 view : GuestState -> Html Msg
 view gs =
     Html.div
-        [ Html.Attributes.class "flex-1 flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px]" ]
+        [ Html.Attributes.class "min-h-dvh flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px]" ]
         [ Html.div [ Html.Attributes.class "max-w-sm w-full" ]
             [ case gs.nestPreview of
                 RemoteData.NotAsked ->
@@ -68,7 +68,7 @@ email the link was sent to (forwarding defense), then we verify + sign in.
 viewMagicConfirm : GuestState -> Html Msg
 viewMagicConfirm gs =
     Html.div
-        [ Html.Attributes.class "flex-1 flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px]" ]
+        [ Html.Attributes.class "min-h-dvh flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px]" ]
         [ Html.div [ Html.Attributes.class "max-w-sm w-full" ]
             [ UI.Card.subCard
                 [ Html.form

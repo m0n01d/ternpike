@@ -63,26 +63,24 @@ viewGuest gs =
 viewLogin : GuestState -> Html Msg
 viewLogin gs =
     Html.div
-        [ Html.Attributes.class "flex-1 flex flex-col px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out" ]
-        [ Html.div [ Html.Attributes.class "flex-1 flex flex-col items-center justify-center w-full" ]
-            [ Html.div [ Html.Attributes.class "text-center max-w-sm w-full mb-8" ]
-                [ UI.Mascot.ternSvg "w-32 mx-auto animate-soar"
-                , Html.h1
-                    [ Html.Attributes.class "font-display text-5xl font-black tracking-tight mt-4 text-forest" ]
-                    [ Html.text "Tern"
-                    , Html.span [ Html.Attributes.class "text-rust" ] [ Html.text "pike" ]
-                    ]
-                , Html.p
-                    [ Html.Attributes.class "font-mono text-[11px] uppercase tracking-widest text-moss mt-3" ]
-                    [ Html.text "ROAD LOG FOR THE LONG WAY NORTH" ]
+        [ Html.Attributes.class "min-h-dvh flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out" ]
+        [ Html.div [ Html.Attributes.class "text-center max-w-sm w-full mb-8" ]
+            [ UI.Mascot.ternSvg "w-32 mx-auto animate-soar"
+            , Html.h1
+                [ Html.Attributes.class "font-display text-5xl font-black tracking-tight mt-4 text-forest" ]
+                [ Html.text "Tern"
+                , Html.span [ Html.Attributes.class "text-rust" ] [ Html.text "pike" ]
                 ]
-            , UI.Rule.dashedRule
-            , viewJoinHint gs
-            , Html.div [ Html.Attributes.class "max-w-sm w-full" ]
-                [ viewFormCard gs ]
-            , viewErrorChip gs
+            , Html.p
+                [ Html.Attributes.class "font-mono text-[11px] uppercase tracking-widest text-moss mt-3" ]
+                [ Html.text "ROAD LOG FOR THE LONG WAY NORTH" ]
             ]
-        , Html.div [ Html.Attributes.class "shrink-0 w-full max-w-sm mx-auto text-center pt-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]" ]
+        , UI.Rule.dashedRule
+        , viewJoinHint gs
+        , Html.div [ Html.Attributes.class "max-w-sm w-full" ]
+            [ viewFormCard gs ]
+        , viewErrorChip gs
+        , Html.div [ Html.Attributes.class "mt-6 text-center" ]
             [ UI.Button.ghost { label = "Settings", onClick = GuestMsg ToggleGuestSettings }
             , Html.Extra.viewIf gs.showSettings
                 (Pages.Settings.viewPanel gs.session.config False gs.version)
