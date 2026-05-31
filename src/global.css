@@ -17,8 +17,18 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  html, body {
-    min-height: 100%;
+  html {
+    height: 100%;
+  }
+
+  body {
+    /* Fill the FULL screen, including the Dynamic-Island band. On those
+       devices iOS reports `dvh`/`svh`/`window.innerHeight` as the *small*
+       viewport (screen minus the top inset), so anchoring to them leaves a
+       strip of unpainted screen at the bottom. `vh` (== `lvh`, the large
+       viewport) is the full screen height — that's the one we want. */
+    min-height: 100vh;
+    min-height: 100lvh;
     background: var(--color-parchment);
   }
 
