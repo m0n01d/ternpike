@@ -36,6 +36,7 @@ event delivers all the related documents at once.
 import Data.Amendment exposing (Amendment)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
+import Data.MilepostProgress exposing (MilepostProgress)
 import Data.SharedTrip exposing (SharedTrip)
 import Data.SharedTripId exposing (SharedTripId)
 import Data.Sync exposing (SyncState)
@@ -56,6 +57,7 @@ type PouchOutbound
     | GetTripExpenses TripTarget TripId
     | OpenSharedTrip { dbName : String, flockId : SharedTripId }
     | SaveAmend TripTarget Json.Decode.Value
+    | SaveMilepostProgress Json.Decode.Value
     | SaveExpense TripTarget Json.Decode.Value
     | SaveTrip TripTarget Json.Decode.Value
     | SaveVoid TripTarget Json.Decode.Value
@@ -100,6 +102,7 @@ the doc's `type` field on the JS side.
 type DocChange
     = AmendChanged Amendment
     | ExpenseChanged Expense
+    | MilepostProgressChanged { progress : MilepostProgress, rev : Maybe String }
     | TripChanged Trip
     | VoidChanged Void
 

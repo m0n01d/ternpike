@@ -55,6 +55,19 @@ export function attachPouch(app, { creds = null } = {}) {
             console.error('[pouch] reconcileFlocks:', err))
           return
         }
+        if (handle.localName === PERSONAL_KEY && change.id === 'milepost::progress') {
+          // The earned-marker singleton (#408). Client-written, personal-DB
+          // only. Route it as a typed DbChange so the docChangeDecoder's
+          // "milepostProgress" arm decodes it. Unlike every other doc here we
+          // KEEP `_rev` on the payload — Elm threads it through the next write
+          // so PouchDB doesn't 409 on a second save.
+          app.ports.pouchIn.send({
+            tag: 'DbChange',
+            doc: change.doc,
+            sourceDbName: handle.localName,
+          })
+          return
+        }
         if (change.id === 'sharedtrip:meta') {
           // Route shared trip metadata up as a typed SharedTripMeta event so Elm can
           // decode it through Data.SharedTrip.decoder rather than the
@@ -417,6 +430,17 @@ export function attachPouch(app, { creds = null } = {}) {
         case 'SaveAmend':
         case 'SaveVoid': {
           const handle = targetHandle(msg.target)
+          if (!handle) break
+          await upsertDoc(handle, msg.doc)
+          break
+        }
+
+        case 'SaveMilepostProgress': {
+          // Singleton in the personal DB (no TripTarget). upsertDoc resolves
+          // the current `_rev` itself, so a stale/absent `_rev` on msg.doc is
+          // harmless. Saved doc echoes back through the change feed (with
+          // `_rev`) as a milepostProgress DbChange.
+          const handle = handles.get(PERSONAL_KEY)
           if (!handle) break
           await upsertDoc(handle, msg.doc)
           break

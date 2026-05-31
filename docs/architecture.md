@@ -141,6 +141,7 @@ type alias AuthState =
     , expenses      : Dict String Expense
     , loadingExpenses : Set String
     , loadingTrips  : Set String
+    , milepost      : MilepostState
     , network       : NetworkState
     , page          : Page
     , route         : Route
@@ -165,6 +166,17 @@ and the wire decoder maps that to `Nothing`. `trailblazerNumber` is `Just n`
 (1..500) only for confirmed Trailblazer purchases. None of these three fields
 go through PouchDB — a tier change made on Device A must not wait for sync to
 propagate.
+
+`milepost : MilepostState` (`Types.MilepostState = Loaded { earned, rev } |
+NotLoaded`) holds the user's earned-achievement progress. The earned-marker map
+is persisted in PouchDB at `milepost::progress` (`Data.MilepostProgress`); the
+reconcile pass in `Main` re-evaluates `Data.Milepost.evaluate` on every settled
+sync edge and unions newly-earned markers into the doc. `rev` carries the
+PouchDB `_rev` so the next write doesn't 409; it is `Nothing` only transiently
+before the first write confirms back on the change feed. Unlike the billing
+fields above, this DOES live in PouchDB — earned achievements should sync across
+the user's own devices. See "Startup sequence" and "Document ID conventions"
+below.
 
 `network : NetworkState` (`Data.Sync`) is also tracked on `GuestState` so the
 disconnected-banner UI works before sign-in. It's a tri-state — `Unknown`
@@ -391,6 +403,16 @@ amend::expense::2024-05-21T14:30:45Z::a1b2c3d4::t5s6f7g8
 void::expense::2024-05-21T14:30:45Z::a1b2c3d4::del
 trip::2024-05-21T14:30:45Z::a1b2c3d4
 ```
+
+Two singleton docs in the personal DB use fixed (non-ULID) `_id`s because there
+is only ever one of each: `user:profile` (see "Local-first storage" below) and
+`milepost::progress` (`type = "milepostProgress"`, `Data.MilepostProgress`) —
+the earned-achievement map `{ earned : Dict MarkerId earnedAtIso }`. The
+client writes `milepost::progress` (it's not server-authoritative); the
+`Data.Pouch.SaveMilepostProgress` outbound command upserts it on the personal
+handle, and the change feed routes it back as a `MilepostProgressChanged`
+`DocChange` (keeping `_rev` on the payload so Elm can thread it through the next
+write).
 
 The `amend::` prefix plus the target expense ID lets `pouch.js` fetch all
 amendments for one expense with a single PouchDB `allDocs` range query:
@@ -639,6 +661,7 @@ come back through one `pouchIn` port, also tagged.
 | `SaveExpense` | expense JSON | Upsert expense doc |
 | `SaveAmend` | amendment JSON | Upsert amendment doc |
 | `SaveVoid` | void JSON | Upsert void doc (soft delete) |
+| `SaveMilepostProgress` | `milepost::progress` JSON | Upsert the earned-achievement singleton on the personal handle (no `target` — it's always personal-DB). `upsertDoc` resolves the current `_rev` itself. |
 | `OpenSharedTrip` | `{ flockId, dbName }` | Open a shared-trip-local PouchDB handle immediately (used by the New Trip flow after `POST /sharedtrips` succeeds — avoids racing the personal-DB sync that would otherwise hydrate the handle via `reconcileFlocks`). Idempotent. |
 
 Example:
@@ -712,16 +735,44 @@ Browser loads
             │       toAuthState clears scanQueue and init never re-runs.
             └─ startSync port called immediately
                  └─ pouch.js begins db.sync(remote, { live, retry })
-                      └─ On first "synced" event → Elm receives SyncStateMsg Synced
+                      └─ On first settled sync edge → Elm receives SyncStateMsg
                            └─ update sends GetAllTrips via pouchOut
                                 └─ pouch.js queries allDocs for type:"trip"
                                      └─ pouchIn receives TripsFetched
-                                          └─ update populates as_.trips
+                                          └─ handleTripsFetched populates as_.trips,
+                                             then loadAllTripExpenses fires
+                                             GetTripExpenses for EVERY trip not yet
+                                             cached (Decision 2 of #408 — milepost
+                                             evaluation needs all trips' expenses,
+                                             not just the visited one)
+                                               └─ once loadingTrips drains to empty,
+                                                  ReconcileMileposts fires:
+                                                  evaluate the catalog, union any
+                                                  newly-earned markers into
+                                                  milepost::progress (silent seed on
+                                                  first load, write-on-change after)
 ```
 
 Data is **not** fetched on login — it waits for the first sync to settle.
 This prevents a race where Elm reads stale local data before the sync pulls
 down remote changes.
+
+**Milepost evaluation needs a full expense load (#408).** Route-driven lazy
+loading (below) only fetches the trip the user is looking at, but the
+count/dollar/streak achievement markers need every trip's resolved expenses. So
+after the initial `GetAllTrips` settles, `loadAllTripExpenses` issues a one-time
+`GetTripExpenses` for every trip not already in `tripLoaded`/`loadingTrips`. It
+is fully idempotent and never duplicates the lazy per-route fetch. When that
+wave drains (`loadingTrips` empty), `ReconcileMileposts now` runs
+`Data.Milepost.evaluate (Main.milepostInputs as_ now)` — the projection walks
+all trips, resolves each through `Data.Entry.resolve` (amendments folded, voids
+removed), and flattens to `Data.Milepost.ExpenseFacts` (`zone = Time.utc` in
+v1). On a first load (`milepost == NotLoaded`) it seeds `milepost::progress`
+from the current backlog silently (no toast); on later passes it writes the
+union of `earnedNow \ persisted` only when that set is non-empty (markers never
+un-earn, and the write is skipped when nothing changed so the oscillating
+`Synced` edge doesn't churn the doc). This is local-first — it is NOT gated on
+remote sync success.
 
 The `/me` refresh is the one exception that fires immediately on `AuthModel`
 construction: it's HTTP, not PouchDB, so there's no race with replication; the
@@ -773,11 +824,17 @@ Any write — local or synced from CouchDB — fires `DbChange` through `pouchIn
 The `update` function in `Main.elm` routes incoming docs by their `type` field:
 
 ```elm
-"expense" -> ExpenseChanged (Expense.decoder value)
-"amend"   -> AmendChanged   (Amendment.decoder value)
-"trip"    -> TripChanged     (Trip.decoder value)
-"void"    -> VoidChanged     (Void.decoder value)
+"expense"         -> ExpenseChanged          (Expense.decoder value)
+"amend"           -> AmendChanged            (Amendment.decoder value)
+"milepostProgress"-> MilepostProgressChanged { progress, rev }
+"trip"            -> TripChanged             (Trip.decoder value)
+"void"            -> VoidChanged             (Void.decoder value)
 ```
+
+The `milepost::progress` singleton is special-cased in `pouch.js`'s
+`wireChanges`: it's routed as a `DbChange` like the rest, but its payload keeps
+`_rev` (every other doc has `_rev` stripped) so the `MilepostProgressChanged`
+handler can capture the revision into `MilepostState` for the next write.
 
 Each branch inserts or replaces the doc in the appropriate Dict:
 
