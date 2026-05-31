@@ -102,7 +102,7 @@ view as_ =
                 ]
 
 
-{-| The parchment stamp carrying the family glyph — a larger, light-on-dark
+{-| The parchment stamp carrying the family icon — a larger, light-on-dark
 cousin of `UI.Milepost`'s in-card icon badge, reusing the same accent fill so
 the celebration matches the collection screen.
 -}
@@ -110,9 +110,9 @@ badge : Milepost.Family -> Html msg
 badge family =
     Html.div
         [ Html.Attributes.classList
-            [ ( "flex h-14 w-14 shrink-0 items-center justify-center rounded-full font-display text-2xl font-black shadow-card", True )
+            [ ( "flex h-14 w-14 shrink-0 items-center justify-center rounded-full shadow-card", True )
             , ( (UI.Milepost.familyAccent family).badge, True )
             ]
         , Html.Attributes.attribute "aria-hidden" "true"
         ]
-        [ Html.text (UI.Milepost.familyGlyph family) ]
+        [ UI.Milepost.familyGlyph family ]

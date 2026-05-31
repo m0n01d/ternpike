@@ -1,5 +1,7 @@
 module UI.Icons exposing
-    ( camera
+    ( blazeTrail
+    , camera
+    , cautionDiamond
     , chart
     , chevronRight
     , close
@@ -8,9 +10,11 @@ module UI.Icons exposing
     , download
     , expand
     , flag
+    , fuelPump
     , journal
     , kebab
     , map
+    , mileShield
     , move
     , pencil
     , pin
@@ -128,6 +132,97 @@ flag classes =
     Svg.svg (common classes)
         [ Svg.path [ Svg.Attributes.d "M6 21 V4" ] []
         , Svg.path [ Svg.Attributes.d "M6 4 H17 L14 8 L17 12 H6" ] []
+        ]
+
+
+{-| A trail blaze — a tall rounded vertical rectangle, mimicking the painted
+rectangular blazes used to mark hiking trails. Used as the TrailDiscipline
+family icon in The Milepost (#418).
+-}
+blazeTrail : String -> Svg.Svg msg
+blazeTrail classes =
+    Svg.svg
+        [ Svg.Attributes.class classes
+        , Svg.Attributes.viewBox "0 0 24 24"
+        , Svg.Attributes.fill "currentColor"
+        , Svg.Attributes.stroke "none"
+        ]
+        [ Svg.rect
+            [ Svg.Attributes.x "7"
+            , Svg.Attributes.y "3"
+            , Svg.Attributes.width "10"
+            , Svg.Attributes.height "18"
+            , Svg.Attributes.rx "3"
+            , Svg.Attributes.ry "3"
+            ]
+            []
+        ]
+
+
+{-| A mile-marker shield — the classic rounded-top pentagon road marker shape.
+Used as the MileMarkers family icon in The Milepost (#418).
+-}
+mileShield : String -> Svg.Svg msg
+mileShield classes =
+    Svg.svg
+        [ Svg.Attributes.class classes
+        , Svg.Attributes.viewBox "0 0 24 24"
+        , Svg.Attributes.fill "currentColor"
+        , Svg.Attributes.stroke "none"
+        ]
+        [ Svg.path
+            [ Svg.Attributes.d "M12 2 L20 7 L20 19 A1 1 0 0 1 19 20 L5 20 A1 1 0 0 1 4 19 L4 7 Z" ]
+            []
+        ]
+
+
+{-| A fuel pump — a simple pump silhouette with a nozzle arm. Used as the
+Odometer family icon in The Milepost (#418).
+-}
+fuelPump : String -> Svg.Svg msg
+fuelPump classes =
+    Svg.svg (common classes)
+        [ Svg.rect
+            [ Svg.Attributes.x "3"
+            , Svg.Attributes.y "2"
+            , Svg.Attributes.width "12"
+            , Svg.Attributes.height "20"
+            , Svg.Attributes.rx "1"
+            , Svg.Attributes.fill "none"
+            , Svg.Attributes.stroke "currentColor"
+            ]
+            []
+        , Svg.rect
+            [ Svg.Attributes.x "6"
+            , Svg.Attributes.y "6"
+            , Svg.Attributes.width "6"
+            , Svg.Attributes.height "5"
+            , Svg.Attributes.rx "0.5"
+            , Svg.Attributes.fill "currentColor"
+            , Svg.Attributes.stroke "none"
+            ]
+            []
+        , Svg.path [ Svg.Attributes.d "M15 5 L19 5 A1 1 0 0 1 20 6 L20 11 A1 1 0 0 1 19 12 L17 12 L17 16 A1 1 0 0 0 18 17 L19 17" ] []
+        ]
+
+
+{-| A caution diamond — a rotated square with an exclamation mark. Used as
+the CautionSigns family icon in The Milepost (#418).
+-}
+cautionDiamond : String -> Svg.Svg msg
+cautionDiamond classes =
+    Svg.svg (common classes)
+        [ Svg.path
+            [ Svg.Attributes.d "M12 2 L22 12 L12 22 L2 12 Z" ]
+            []
+        , Svg.path [ Svg.Attributes.d "M12 8 L12 13" ] []
+        , Svg.circle
+            [ Svg.Attributes.cx "12"
+            , Svg.Attributes.cy "16.5"
+            , Svg.Attributes.r "0.6"
+            , Svg.Attributes.fill "currentColor"
+            ]
+            []
         ]
 
 
