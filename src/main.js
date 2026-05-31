@@ -312,6 +312,62 @@ import './elements/tp-amount.js'
 
   const app = Elm.Main.init({ flags })
 
+  // ── TEMPORARY viewport diagnostic overlay (remove after #444 diagnosis) ──
+  // Burns the device's real layout numbers into the screen so a single
+  // screenshot reveals what's actually happening (innerHeight vs visual
+  // viewport vs container height vs safe-area insets). The red hairline is
+  // pinned to `bottom:0`; if it floats above the screen edge, the viewport
+  // anchor is wrong; if the nav floats above it, the nav position is wrong.
+  ;(function viewportDebug() {
+    const box = document.createElement('div')
+    box.style.cssText =
+      'position:fixed;top:env(safe-area-inset-top,0);left:0;z-index:2147483647;' +
+      'font:11px/1.35 ui-monospace,monospace;color:#0f0;background:rgba(0,0,0,.82);' +
+      'padding:6px 8px;max-width:62vw;white-space:pre;pointer-events:none;border-bottom-right-radius:8px'
+    const bottomBar = document.createElement('div')
+    bottomBar.style.cssText =
+      'position:fixed;left:0;right:0;bottom:0;height:3px;background:red;z-index:2147483647;pointer-events:none'
+    const probe = document.createElement('div')
+    probe.style.cssText =
+      'position:fixed;bottom:0;left:0;width:0;height:0;' +
+      'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);' +
+      'visibility:hidden;pointer-events:none'
+    document.body.append(box, bottomBar, probe)
+
+    const mql = window.matchMedia('(display-mode: standalone)')
+    const read = () => {
+      const root =
+        [...document.body.children].find(c => /min-h-/.test(c.className || '')) || null
+      const cs = root ? getComputedStyle(root) : null
+      const rect = root ? root.getBoundingClientRect() : null
+      const ps = getComputedStyle(probe)
+      const vv = window.visualViewport
+      const appH = getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim()
+      box.textContent = [
+        'sha       ' + String(__BUILD_SHA__).slice(0, 8),
+        'standalone ' + (window.navigator.standalone === true || mql.matches),
+        'innerH    ' + window.innerHeight,
+        'clientH   ' + document.documentElement.clientHeight,
+        'visualVV  ' + (vv ? Math.round(vv.height) + ' off ' + Math.round(vv.offsetTop) : 'n/a'),
+        '--app-h   ' + (appH || '(unset)'),
+        'safe T/B  ' + ps.paddingTop + ' / ' + ps.paddingBottom,
+        'root.minH ' + (cs ? cs.minHeight : 'n/a'),
+        'root.h    ' + (rect ? Math.round(rect.height) : 'n/a'),
+        'root.bot  ' + (rect ? Math.round(rect.bottom) : 'n/a') + '  (vs innerH ' + window.innerHeight + ')',
+        'body.sH   ' + document.documentElement.scrollHeight,
+      ].join('\n')
+    }
+    read()
+    const tick = () => requestAnimationFrame(read)
+    window.addEventListener('resize', tick)
+    window.addEventListener('scroll', tick, true)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', tick)
+      window.visualViewport.addEventListener('scroll', tick)
+    }
+    setInterval(read, 1000)
+  })()
+
   // Test-only escape hatch. Lets the E2E harness push synthetic port
   // messages into Elm without standing up the whole CouchDB sync chain
   // (`couch.ternpike.com` is hard-coded in src/pouch.js and isn't
