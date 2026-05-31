@@ -20,8 +20,11 @@ DOM seeding: `Main.applyUnitSeed`'s `"MilepostScreen"` arm sets
 -}
 
 import Data.Category as Category
+import Data.FuelGrade as FuelGrade
+import Data.Gallons as Gallons
 import Data.Milepost as Milepost
 import Data.Money as Money
+import Data.PricePerGallon as PricePerGallon
 import Time
 import Verify.Contract as Contract
 import Verify.Core as Core
@@ -102,12 +105,27 @@ partialInputs =
             { amount = Money.fromCents 1000
             , category = cat
             , createdAt = Time.millisToPosix 0
+            , fuelDetail = Nothing
             , isAmended = False
             , tripId = "trip-1"
             }
     in
     { expenses =
-        [ makeExpense Category.Fuel
+        -- Fuel expense carries a modest detail (10 gal at $4.00/gal, Regular):
+        -- exercises the projection without earning the new fuel markers, keeping
+        -- this a some-but-not-all fixture.
+        [ { amount = Money.fromCents 1000
+          , category = Category.Fuel
+          , createdAt = Time.millisToPosix 0
+          , fuelDetail =
+                Just
+                    { gallons = Gallons.fromString "10"
+                    , grade = Just FuelGrade.Regular
+                    , pricePerGallon = PricePerGallon.fromString "4.00"
+                    }
+          , isAmended = False
+          , tripId = "trip-1"
+          }
         , makeExpense Category.Food
         , makeExpense Category.Camp
         , makeExpense Category.Lodging
@@ -134,14 +152,31 @@ allEarnedInputs =
         heroTripId =
             "trip-1"
 
+        -- Each fuel-up carries 50 gal; the first is a $5.50/gal Premium fill-up
+        -- (earns Sticker Shock + Top Shelf). 11 fuel expenses × 50 gal = 550 gal
+        -- earns Tanked Up (500 gal).
         bigFuelExpenses : List Milepost.ExpenseFacts
         bigFuelExpenses =
             List.range 1 6
                 |> List.map
-                    (\_ ->
+                    (\n ->
                         { amount = Money.fromCents 10000
                         , category = Category.Fuel
                         , createdAt = Time.millisToPosix 0
+                        , fuelDetail =
+                            if n == 1 then
+                                Just
+                                    { gallons = Gallons.fromString "50"
+                                    , grade = Just FuelGrade.Premium
+                                    , pricePerGallon = PricePerGallon.fromString "5.50"
+                                    }
+
+                            else
+                                Just
+                                    { gallons = Gallons.fromString "50"
+                                    , grade = Just FuelGrade.Regular
+                                    , pricePerGallon = PricePerGallon.fromString "4.00"
+                                    }
                         , isAmended = False
                         , tripId = heroTripId
                         }
@@ -155,6 +190,12 @@ allEarnedInputs =
                         { amount = Money.fromCents 10000
                         , category = Category.Fuel
                         , createdAt = Time.millisToPosix 0
+                        , fuelDetail =
+                            Just
+                                { gallons = Gallons.fromString "50"
+                                , grade = Just FuelGrade.Regular
+                                , pricePerGallon = PricePerGallon.fromString "4.00"
+                                }
                         , isAmended = False
                         , tripId = "trip-2"
                         }
@@ -162,10 +203,10 @@ allEarnedInputs =
 
         miscExpensesTrip1 : List Milepost.ExpenseFacts
         miscExpensesTrip1 =
-            [ { amount = Money.fromCents 100000, category = Category.Food, createdAt = Time.millisToPosix 0, isAmended = False, tripId = heroTripId }
-            , { amount = Money.fromCents 150000, category = Category.Lodging, createdAt = Time.millisToPosix 0, isAmended = False, tripId = heroTripId }
-            , { amount = Money.fromCents 100000, category = Category.Camp, createdAt = Time.millisToPosix 0, isAmended = False, tripId = heroTripId }
-            , { amount = Money.fromCents 200000, category = Category.Transport, createdAt = Time.millisToPosix 0, isAmended = False, tripId = heroTripId }
+            [ { amount = Money.fromCents 100000, category = Category.Food, createdAt = Time.millisToPosix 0, fuelDetail = Nothing, isAmended = False, tripId = heroTripId }
+            , { amount = Money.fromCents 150000, category = Category.Lodging, createdAt = Time.millisToPosix 0, fuelDetail = Nothing, isAmended = False, tripId = heroTripId }
+            , { amount = Money.fromCents 100000, category = Category.Camp, createdAt = Time.millisToPosix 0, fuelDetail = Nothing, isAmended = False, tripId = heroTripId }
+            , { amount = Money.fromCents 200000, category = Category.Transport, createdAt = Time.millisToPosix 0, fuelDetail = Nothing, isAmended = False, tripId = heroTripId }
             ]
 
         streakExpenses : List Milepost.ExpenseFacts
@@ -176,6 +217,7 @@ allEarnedInputs =
                         { amount = Money.fromCents 100
                         , category = Category.Misc
                         , createdAt = Time.millisToPosix (dayOffset * 86400000)
+                        , fuelDetail = Nothing
                         , isAmended = False
                         , tripId = heroTripId
                         }
@@ -192,6 +234,7 @@ allEarnedInputs =
                                     { amount = Money.fromCents 200
                                     , category = Category.Misc
                                     , createdAt = Time.millisToPosix 0
+                                    , fuelDetail = Nothing
                                     , isAmended = False
                                     , tripId = "trip-" ++ String.fromInt n
                                     }
@@ -204,6 +247,7 @@ allEarnedInputs =
             { amount = Money.fromCents 30000
             , category = Category.Misc
             , createdAt = Time.millisToPosix 0
+            , fuelDetail = Nothing
             , isAmended = True
             , tripId = heroTripId
             }

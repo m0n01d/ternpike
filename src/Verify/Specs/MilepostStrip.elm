@@ -114,6 +114,7 @@ tripEarnedInputs =
                         { amount = Money.fromCents 10000
                         , category = Category.Fuel
                         , createdAt = Time.millisToPosix 0
+                        , fuelDetail = Nothing
                         , isAmended = False
                         , tripId = tripId
                         }
@@ -124,24 +125,28 @@ tripEarnedInputs =
             [ { amount = Money.fromCents 5000
               , category = Category.Food
               , createdAt = Time.millisToPosix 0
+              , fuelDetail = Nothing
               , isAmended = False
               , tripId = tripId
               }
             , { amount = Money.fromCents 5000
               , category = Category.Lodging
               , createdAt = Time.millisToPosix 0
+              , fuelDetail = Nothing
               , isAmended = False
               , tripId = tripId
               }
             , { amount = Money.fromCents 5000
               , category = Category.Camp
               , createdAt = Time.millisToPosix 0
+              , fuelDetail = Nothing
               , isAmended = False
               , tripId = tripId
               }
             , { amount = Money.fromCents 5000
               , category = Category.Transport
               , createdAt = Time.millisToPosix 0
+              , fuelDetail = Nothing
               , isAmended = False
               , tripId = tripId
               }
@@ -174,6 +179,7 @@ careerOnlyInputs =
         [ { amount = Money.fromCents 500
           , category = Category.Food
           , createdAt = Time.millisToPosix 0
+          , fuelDetail = Nothing
           , isAmended = False
           , tripId = tripId
           }

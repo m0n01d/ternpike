@@ -5,6 +5,7 @@ module Data.PricePerGallon exposing
     , format
     , fromString
     , toInputString
+    , toMills
     )
 
 {-| The unit price of fuel, in **mills** (thousandths of a dollar).
@@ -96,6 +97,14 @@ toInputString (PricePerGallon mills) =
 
     else
         String.fromInt dollars ++ "." ++ String.padLeft 3 '0' (String.fromInt frac)
+
+
+{-| The raw unit price in mills (thousandths of a dollar): `$4.299 == 4299`.
+Used by the Milepost engine to compare a fuel price against a mill threshold.
+-}
+toMills : PricePerGallon -> Int
+toMills (PricePerGallon mills) =
+    mills
 
 
 {-| Decode the legacy/wire `Float` dollars shape into mills, rounding to

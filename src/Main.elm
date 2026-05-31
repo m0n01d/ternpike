@@ -530,6 +530,7 @@ milepostInputs as_ now =
                         { amount = entry.amount
                         , category = entry.category
                         , createdAt = entry.createdAt
+                        , fuelDetail = entry.fuelDetail
                         , isAmended = entry.isAmended
                         , tripId = TripId.toString entry.tripId
                         }
@@ -636,6 +637,7 @@ milepostInputsForTrip tripId as_ =
                                 { amount = entry.amount
                                 , category = entry.category
                                 , createdAt = entry.createdAt
+                                , fuelDetail = entry.fuelDetail
                                 , isAmended = entry.isAmended
                                 , tripId = TripId.toString entry.tripId
                                 }
