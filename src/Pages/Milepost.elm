@@ -109,6 +109,14 @@ viewFamilySection states family =
         inFamily : List Milepost.MarkerState
         inFamily =
             List.filter (\st -> stateFamily st == family) states
+
+        familyEarned : Int
+        familyEarned =
+            List.length (List.filter isEarned inFamily)
+
+        familyTotal : Int
+        familyTotal =
+            List.length inFamily
     in
     if List.isEmpty inFamily then
         Nothing
@@ -116,7 +124,7 @@ viewFamilySection states family =
     else
         Just
             (Html.section [ Html.Attributes.class "mb-6" ]
-                [ viewFamilyHeader family
+                [ viewFamilyHeader family familyEarned familyTotal
                 , Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3 items-stretch" ]
                     (List.map UI.Milepost.markerChip inFamily)
                 ]
@@ -124,21 +132,26 @@ viewFamilySection states family =
 
 
 {-| The family section header — the kicker label with a small accent-coloured
-dot beside it (matching the family's accent), as in the approved mock (#426).
+dot beside it (matching the family's accent), and an earned/total count pushed
+to the right edge, as in the approved mock (#426).
 -}
-viewFamilyHeader : Milepost.Family -> Html Msg
-viewFamilyHeader family =
-    Html.div [ Html.Attributes.class "flex items-center gap-2 mb-2" ]
-        [ Html.span
-            [ Html.Attributes.classList
-                [ ( "inline-block w-2 h-2 rounded-full shrink-0", True )
-                , ( (UI.Milepost.familyAccent family).bar, True )
+viewFamilyHeader : Milepost.Family -> Int -> Int -> Html Msg
+viewFamilyHeader family earned total =
+    Html.div [ Html.Attributes.class "flex items-center justify-between gap-2 mb-2" ]
+        [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
+            [ Html.span
+                [ Html.Attributes.classList
+                    [ ( "inline-block w-2 h-2 rounded-full shrink-0", True )
+                    , ( (UI.Milepost.familyAccent family).bar, True )
+                    ]
+                , Html.Attributes.attribute "aria-hidden" "true"
                 ]
-            , Html.Attributes.attribute "aria-hidden" "true"
+                []
+            , Html.span [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-moss" ]
+                [ Html.text (familyLabel family) ]
             ]
-            []
-        , Html.span [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-moss" ]
-            [ Html.text (familyLabel family) ]
+        , Html.span [ Html.Attributes.class "text-xs font-mono text-muted tabular-nums" ]
+            [ Html.text (String.fromInt earned ++ " / " ++ String.fromInt total) ]
         ]
 
 
