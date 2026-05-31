@@ -14,8 +14,11 @@ arrive in #408 and #409.
 -}
 
 import Data.Category as Category
+import Data.FuelGrade as FuelGrade
+import Data.Gallons as Gallons
 import Data.Milepost as Milepost
 import Data.Money as Money
+import Data.PricePerGallon as PricePerGallon
 import Time
 import Verify.Contract as Contract
 import Verify.Core as Core
@@ -100,6 +103,7 @@ partialInput =
             { amount = Money.fromCents 1000
             , category = cat
             , createdAt = Time.millisToPosix 0
+            , fuelDetail = Nothing
             , isAmended = False
             , tripId = tripId
             }
@@ -107,7 +111,22 @@ partialInput =
     { corrupt = False
     , inputs =
         { expenses =
-            [ makeExpense Category.Fuel
+            -- The Fuel expense carries a modest fuel detail (10 gal at $4.00/gal,
+            -- Regular) — enough to exercise the fuel-detail projection without
+            -- earning Sticker Shock ($5+/gal), Tanked Up (500 gal), or Top Shelf
+            -- (Premium). Keeps `partial` a some-but-not-all fixture.
+            [ { amount = Money.fromCents 1000
+              , category = Category.Fuel
+              , createdAt = Time.millisToPosix 0
+              , fuelDetail =
+                    Just
+                        { gallons = Gallons.fromString "10"
+                        , grade = Just FuelGrade.Regular
+                        , pricePerGallon = PricePerGallon.fromString "4.00"
+                        }
+              , isAmended = False
+              , tripId = tripId
+              }
             , makeExpense Category.Food
             , makeExpense Category.Camp
             , makeExpense Category.Lodging
@@ -148,21 +167,39 @@ allEarnedInput =
         heroTripId =
             "trip-1"
 
-        -- 6 × $100 fuel on trip 1 = $600 (enough for Premium Unleaded + contributes to Fill 'er Up)
+        -- 6 × $100 fuel on trip 1 = $600 (enough for Premium Unleaded + contributes to Fill 'er Up).
+        -- Each carries 50 gallons; the first is a $5.50/gal Premium fill-up, which
+        -- earns Sticker Shock ($5+/gal) and Top Shelf (Premium). The 11 fuel
+        -- expenses (6 here + 5 on trip 2) at 50 gal each total 550 gal, earning
+        -- Tanked Up (500 gal).
         bigFuelExpenses : List Milepost.ExpenseFacts
         bigFuelExpenses =
             List.range 1 6
                 |> List.map
-                    (\_ ->
+                    (\n ->
                         { amount = Money.fromCents 10000
                         , category = Category.Fuel
                         , createdAt = Time.millisToPosix 0
+                        , fuelDetail =
+                            if n == 1 then
+                                Just
+                                    { gallons = Gallons.fromString "50"
+                                    , grade = Just FuelGrade.Premium
+                                    , pricePerGallon = PricePerGallon.fromString "5.50"
+                                    }
+
+                            else
+                                Just
+                                    { gallons = Gallons.fromString "50"
+                                    , grade = Just FuelGrade.Regular
+                                    , pricePerGallon = PricePerGallon.fromString "4.00"
+                                    }
                         , isAmended = False
                         , tripId = heroTripId
                         }
                     )
 
-        -- Extra fuel on trip 2 to push total fuel above $1,000
+        -- Extra fuel on trip 2 to push total fuel above $1,000; 50 gal each.
         extraFuelTrip2 : List Milepost.ExpenseFacts
         extraFuelTrip2 =
             List.range 1 5
@@ -171,6 +208,12 @@ allEarnedInput =
                         { amount = Money.fromCents 10000
                         , category = Category.Fuel
                         , createdAt = Time.millisToPosix 0
+                        , fuelDetail =
+                            Just
+                                { gallons = Gallons.fromString "50"
+                                , grade = Just FuelGrade.Regular
+                                , pricePerGallon = PricePerGallon.fromString "4.00"
+                                }
                         , isAmended = False
                         , tripId = "trip-2"
                         }
@@ -184,30 +227,35 @@ allEarnedInput =
             [ { amount = Money.fromCents 100000
               , category = Category.Food
               , createdAt = Time.millisToPosix 0
+              , fuelDetail = Nothing
               , isAmended = False
               , tripId = heroTripId
               }
             , { amount = Money.fromCents 150000
               , category = Category.Lodging
               , createdAt = Time.millisToPosix 0
+              , fuelDetail = Nothing
               , isAmended = False
               , tripId = heroTripId
               }
             , { amount = Money.fromCents 100000
               , category = Category.Camp
               , createdAt = Time.millisToPosix 0
+              , fuelDetail = Nothing
               , isAmended = False
               , tripId = heroTripId
               }
             , { amount = Money.fromCents 200000
               , category = Category.Transport
               , createdAt = Time.millisToPosix 0
+              , fuelDetail = Nothing
               , isAmended = False
               , tripId = heroTripId
               }
             , { amount = Money.fromCents 30000
               , category = Category.Misc
               , createdAt = Time.millisToPosix 0
+              , fuelDetail = Nothing
               , isAmended = True
               , tripId = heroTripId
               }
@@ -222,6 +270,7 @@ allEarnedInput =
                         { amount = Money.fromCents 100
                         , category = Category.Misc
                         , createdAt = Time.millisToPosix (dayOffset * 86400000)
+                        , fuelDetail = Nothing
                         , isAmended = False
                         , tripId = heroTripId
                         }
@@ -246,6 +295,7 @@ allEarnedInput =
                                     { amount = Money.fromCents 200
                                     , category = Category.Misc
                                     , createdAt = Time.millisToPosix 0
+                                    , fuelDetail = Nothing
                                     , isAmended = False
                                     , tripId = tid
                                     }

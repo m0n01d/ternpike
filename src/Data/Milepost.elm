@@ -23,7 +23,11 @@ semantics are already baked in by the time `evaluate` is called.
 -}
 
 import Data.Category as Category
+import Data.FuelDetail as FuelDetail
+import Data.FuelGrade as FuelGrade
+import Data.Gallons as Gallons
 import Data.Money as Money
+import Data.PricePerGallon as PricePerGallon
 import Time
 
 
@@ -99,6 +103,7 @@ type alias ExpenseFacts =
     { amount : Money.Money
     , category : Category.Category
     , createdAt : Time.Posix
+    , fuelDetail : Maybe FuelDetail.FuelDetail
     , isAmended : Bool
     , tripId : String
     }
@@ -157,6 +162,9 @@ catalog =
     , markerFillErUp
     , markerPremiumUnleaded
     , markerBigRig
+    , markerStickerShock
+    , markerTankedUp
+    , markerTopShelf
     , markerBudgetWhatBudget
     , markerSouvenirTax
     , markerDetour
@@ -295,6 +303,43 @@ markerBigRig =
     , goal = Dollars (Money.fromCents 500000)
     , id = "big-rig"
     , name = "Big Rig"
+    }
+
+
+{-| Earned the first time a fuel-up's unit price is $5.00/gal or more — a
+remote-Alaska gas-pain badge.
+-}
+markerStickerShock : Marker
+markerStickerShock =
+    { blurb = "Pay $5.00 or more for a gallon of gas."
+    , family = Odometer
+    , goal = Flag
+    , id = "sticker-shock"
+    , name = "Sticker Shock"
+    }
+
+
+{-| Earned once the user has pumped 500 whole gallons of fuel across all trips.
+-}
+markerTankedUp : Marker
+markerTankedUp =
+    { blurb = "Pump 500 gallons of fuel across all trips."
+    , family = Odometer
+    , goal = Count 500
+    , id = "tanked-up"
+    , name = "Tanked Up"
+    }
+
+
+{-| Earned the first time the user fills up with Premium-grade fuel.
+-}
+markerTopShelf : Marker
+markerTopShelf =
+    { blurb = "Fill up with Premium at least once."
+    , family = Odometer
+    , goal = Flag
+    , id = "top-shelf"
+    , name = "Top Shelf"
     }
 
 
@@ -477,6 +522,62 @@ evaluateMarker inputs marker =
                         |> List.foldl maxMoney Money.zero
             in
             evaluateDollars have "$5,000" marker
+
+        "sticker-shock" ->
+            -- Flag: any fuel-up priced at $5.00/gal (5000 mills) or more
+            let
+                paidFive : Bool
+                paidFive =
+                    inputs.expenses
+                        |> List.any
+                            (\e ->
+                                case e.fuelDetail |> Maybe.andThen .pricePerGallon of
+                                    Just price ->
+                                        PricePerGallon.toMills price >= 5000
+
+                                    Nothing ->
+                                        False
+                            )
+            in
+            if paidFive then
+                Earned { marker = marker }
+
+            else
+                Locked
+                    { label = "No $5+/gal fill-up yet"
+                    , marker = marker
+                    , progress = 0
+                    }
+
+        "tanked-up" ->
+            -- Count 500: total whole gallons pumped across all trips
+            let
+                have : Int
+                have =
+                    sumGallonsThousandths inputs.expenses // 1000
+            in
+            evaluateCount have marker
+
+        "top-shelf" ->
+            -- Flag: any fuel-up with Premium grade
+            let
+                boughtPremium : Bool
+                boughtPremium =
+                    inputs.expenses
+                        |> List.any
+                            (\e ->
+                                (e.fuelDetail |> Maybe.andThen .grade) == Just FuelGrade.Premium
+                            )
+            in
+            if boughtPremium then
+                Earned { marker = marker }
+
+            else
+                Locked
+                    { label = "No Premium fill-up yet"
+                    , marker = marker
+                    , progress = 0
+                    }
 
         "budget-what-budget" ->
             -- Flag: any trip over budget (skip zero-budget trips)
@@ -781,6 +882,18 @@ sumWhere pred expenses =
         |> List.filter pred
         |> List.map .amount
         |> Money.sum
+
+
+{-| Sum the fuel volume (in thousandths of a gallon) across all expenses that
+carry a `fuelDetail` with a `gallons` reading. Expenses without fuel volume
+contribute nothing. Divide by 1000 for whole gallons.
+-}
+sumGallonsThousandths : List ExpenseFacts -> Int
+sumGallonsThousandths expenses =
+    expenses
+        |> List.filterMap
+            (\e -> e.fuelDetail |> Maybe.andThen .gallons |> Maybe.map Gallons.toThousandths)
+        |> List.sum
 
 
 {-| Return the largest single `amount` among all expenses that satisfy the

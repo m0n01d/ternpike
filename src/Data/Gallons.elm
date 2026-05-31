@@ -6,6 +6,7 @@ module Data.Gallons exposing
     , fromString
     , toFloat
     , toInputString
+    , toThousandths
     )
 
 {-| A fuel volume, in **thousandths of a gallon**.
@@ -97,6 +98,15 @@ trimTrailingZeros s =
 
     else
         s
+
+
+{-| The raw fuel volume in thousandths of a gallon: `12.345 gal == 12345`.
+Used by the Milepost engine to total fuel volume across expenses (divide by
+1000 for whole gallons).
+-}
+toThousandths : Gallons -> Int
+toThousandths (Gallons thousandths) =
+    thousandths
 
 
 {-| Decode the wire `Float` gallons shape into thousandths.
