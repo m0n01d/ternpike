@@ -62,7 +62,7 @@ import Data.SharedTripId exposing (SharedTripId)
 import Data.SharedTripUi exposing (SharedTripUiState)
 import Data.SharedTrips
 import Data.StatsGranularity exposing (Granularity)
-import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover)
+import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover, PricePoint)
 import Data.SubscriptionStatus exposing (SubscriptionStatus)
 import Data.Sync exposing (NetworkState, SyncState)
 import Data.Tier exposing (Tier)
@@ -482,6 +482,7 @@ type AuthMsg_
     | GotVoidTime Expense Time.Posix
     | HoverCumulativePoints (List (CI.One CumulativePoint CI.Dot))
     | HoverDailyBars (List (CI.One DailyDay CI.Bar))
+    | HoverPricePerGallonPoints (List (CI.One PricePoint CI.Dot))
     | InviteEmailChanged String
     | InviteToSharedTripResult (Result Http.Error ())
     | JoinSharedTripAccepted String

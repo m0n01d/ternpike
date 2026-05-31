@@ -1,9 +1,9 @@
 module Data.StatsHover exposing
-    ( CumulativePoint, DailyDay
-    , Hover, empty, setCumulative, setDaily
+    ( CumulativePoint, DailyDay, PricePoint
+    , Hover, empty, setCumulative, setDaily, setPricePerGallon
     )
 
-{-| Transient hover state for the Stats tab's two interactive charts.
+{-| Transient hover state for the Stats tab's three interactive charts.
 
 Lives on `AuthState.statsHover`. Cleared whenever the pointer leaves a
 chart; never persisted. Defined here (rather than inline in `Pages.Stats`)
@@ -18,12 +18,12 @@ Each record type is the per-datum shape passed into `Chart.bars` /
 `Chart.Item.One` handles so that `Chart.tooltip` can render anchored
 tooltips for them.
 
-@docs CumulativePoint, DailyDay
+@docs CumulativePoint, DailyDay, PricePoint
 
 
 # Hover state
 
-@docs Hover, empty, setCumulative, setDaily
+@docs Hover, empty, setCumulative, setDaily, setPricePerGallon
 
 -}
 
@@ -56,12 +56,24 @@ type alias CumulativePoint =
     }
 
 
+{-| One point on the Price-per-Gallon trend line: the underlying ISO date
+plus the `(x, y)` chart coordinates (`x` is the 1-based fuel-up index,
+`y` is the price in dollars).
+-}
+type alias PricePoint =
+    { date : String
+    , x : Float
+    , y : Float
+    }
+
+
 {-| Which chart datapoint(s) the user is currently hovering / tapping.
 Empty lists mean "not hovering this chart."
 -}
 type alias Hover =
     { cumulativePoints : List (CI.One CumulativePoint CI.Dot)
     , dailyBars : List (CI.One DailyDay CI.Bar)
+    , pricePerGallonPoints : List (CI.One PricePoint CI.Dot)
     }
 
 
@@ -71,6 +83,7 @@ empty : Hover
 empty =
     { cumulativePoints = []
     , dailyBars = []
+    , pricePerGallonPoints = []
     }
 
 
@@ -82,3 +95,8 @@ setDaily hover items =
 setCumulative : Hover -> List (CI.One CumulativePoint CI.Dot) -> Hover
 setCumulative hover items =
     { hover | cumulativePoints = items }
+
+
+setPricePerGallon : Hover -> List (CI.One PricePoint CI.Dot) -> Hover
+setPricePerGallon hover items =
+    { hover | pricePerGallonPoints = items }

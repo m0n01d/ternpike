@@ -4,6 +4,7 @@ module Data.PricePerGallon exposing
     , encoder
     , format
     , fromString
+    , toDollars
     , toInputString
     )
 
@@ -34,6 +35,18 @@ non-negative for a real fuel price.
 -}
 type PricePerGallon
     = PricePerGallon Int
+
+
+{-| Convert a `PricePerGallon` to a `Float` in dollars. Useful for
+charting where elm-charts expects `Float` y-values.
+
+    toDollars (PricePerGallon 4299)
+    --> 4.299
+
+-}
+toDollars : PricePerGallon -> Float
+toDollars (PricePerGallon mills) =
+    Basics.toFloat mills / 1000
 
 
 {-| Parse a user-typed dollar string (e.g. `"4.299"` or `"$4.50"`) into a

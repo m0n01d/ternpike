@@ -4,6 +4,7 @@ module Data.Gallons exposing
     , encoder
     , format
     , fromString
+    , toFloat
     , toInputString
     )
 
@@ -28,6 +29,18 @@ import Json.Encode
 -}
 type Gallons
     = Gallons Int
+
+
+{-| Convert a `Gallons` to a `Float`. Useful for charting and arithmetic
+where a plain number is needed.
+
+    toFloat (Gallons 12345)
+    --> 12.345
+
+-}
+toFloat : Gallons -> Basics.Float
+toFloat (Gallons thousandths) =
+    Basics.toFloat thousandths / 1000
 
 
 {-| Parse a user-typed gallons string (e.g. `"12.345"` or `"  12.3 "`)
@@ -97,4 +110,4 @@ decoder =
 -}
 encoder : Gallons -> Json.Encode.Value
 encoder (Gallons thousandths) =
-    Json.Encode.float (toFloat thousandths / 1000)
+    Json.Encode.float (Basics.toFloat thousandths / 1000)

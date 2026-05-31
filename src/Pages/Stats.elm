@@ -7,10 +7,12 @@ import Chart.Item as CI
 import Data.Category as Category
 import Data.DateField as DateField
 import Data.Entry as Entry
+import Data.Gallons
 import Data.Money as Money exposing (Money)
+import Data.PricePerGallon
 import Data.Stats as Stats exposing (StatsMode(..))
 import Data.StatsGranularity as StatsGranularity exposing (Granularity(..))
-import Data.StatsHover exposing (CumulativePoint, DailyDay)
+import Data.StatsHover exposing (CumulativePoint, DailyDay, PricePoint)
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
 import Dict
@@ -74,6 +76,24 @@ statsMode as_ =
 toPrimEntries : List Entry.EffectiveEntry -> List { date : String, amountCents : Int }
 toPrimEntries entries =
     List.map (\e -> { date = DateField.toIso e.date, amountCents = Money.toCents e.amount }) entries
+
+
+toFuelPrims : List Entry.EffectiveEntry -> List Stats.FuelPrim
+toFuelPrims entries =
+    entries
+        |> List.filterMap
+            (\e ->
+                case e.fuelDetail of
+                    Just fd ->
+                        Just
+                            { date = DateField.toIso e.date
+                            , gallons = Maybe.map Data.Gallons.toFloat fd.gallons
+                            , pricePerGallon = Maybe.map Data.PricePerGallon.toDollars fd.pricePerGallon
+                            }
+
+                    Nothing ->
+                        Nothing
+            )
 
 
 viewHero : AuthState -> StatsMode -> Html Msg
@@ -398,6 +418,30 @@ viewBodyReady model entries =
                 , UI.Rule.kicker "CUMULATIVE SPEND"
                 , UI.Card.subCard
                     [ viewCumulativeChart model.statsHover.cumulativePoints entries ]
+                ]
+            )
+        , let
+            fuelPrims =
+                toFuelPrims entries
+
+            summary =
+                Stats.fuelSummary fuelPrims
+
+            hasFuelData =
+                not (List.isEmpty fuelPrims)
+
+            hasFuelPrices =
+                List.length (Stats.pricePerGallonSeries fuelPrims) >= 2
+          in
+          Html.Extra.viewIf hasFuelData
+            (Html.div []
+                [ UI.Rule.dashedRule
+                , UI.Rule.kicker "FUEL"
+                , UI.Card.subCard
+                    [ viewFuelSummaryRow summary
+                    , Html.Extra.viewIf hasFuelPrices
+                        (viewPricePerGallonChart model.statsHover.pricePerGallonPoints fuelPrims)
+                    ]
                 ]
             )
         , Html.Extra.viewIf (not (List.isEmpty top5))
@@ -772,4 +816,123 @@ cumulativeTooltipContent p =
         [ Html.text (Stats.formatDateShort p.date) ]
     , Html.div [ Html.Attributes.class "font-mono text-sm text-rust" ]
         [ Html.text (Stats.formatDollars p.y) ]
+    ]
+
+
+viewFuelSummaryRow :
+    { avg : Maybe Float, max : Maybe Float, min : Maybe Float, totalGallons : Float }
+    -> Html Msg
+viewFuelSummaryRow summary =
+    let
+        formatGallons : Float -> String
+        formatGallons g =
+            let
+                rounded : Float
+                rounded =
+                    toFloat (round (g * 10)) / 10
+
+                str : String
+                str =
+                    String.fromFloat rounded
+            in
+            str ++ " gal total"
+
+        formatPrice : Float -> String
+        formatPrice p =
+            Stats.formatPricePerGallonAxis p ++ "/gal"
+    in
+    Html.div [ Html.Attributes.class "mb-3" ]
+        [ Html.div [ Html.Attributes.class "font-mono text-sm text-ink" ]
+            [ Html.text (formatGallons summary.totalGallons)
+            , case summary.avg of
+                Just avg ->
+                    Html.text (" · avg " ++ formatPrice avg)
+
+                Nothing ->
+                    Html.text ""
+            ]
+        , case ( summary.min, summary.max ) of
+            ( Just lo, Just hi ) ->
+                Html.div [ Html.Attributes.class "font-mono text-xs text-muted mt-0.5" ]
+                    [ Html.text ("low " ++ formatPrice lo ++ " · high " ++ formatPrice hi) ]
+
+            _ ->
+                Html.text ""
+        ]
+
+
+viewPricePerGallonChart : List (CI.One PricePoint CI.Dot) -> List Stats.FuelPrim -> Html Msg
+viewPricePerGallonChart hovered fuelPrims =
+    let
+        points : List PricePoint
+        points =
+            Stats.pricePerGallonSeries fuelPrims
+
+        firstDate : String
+        firstDate =
+            Maybe.Extra.unwrap "" .date (List.head points)
+
+        lastDate : String
+        lastDate =
+            List.Extra.last points |> Maybe.Extra.unwrap "" .date
+    in
+    Html.div []
+        [ Html.div [ Html.Attributes.class "flex items-center justify-end mb-1" ]
+            [ scrubHint ]
+        , C.chart
+            [ CA.height 180
+            , CA.margin { top = 16, bottom = 24, left = 52, right = 12 }
+            , CE.onMouseMove (AuthMsg << HoverPricePerGallonPoints) (CE.getNearest CI.dots)
+            , CE.onMouseLeave (AuthMsg (HoverPricePerGallonPoints []))
+            ]
+            [ C.yLabels
+                [ CA.amount 4
+                , CA.format Stats.formatPricePerGallonAxis
+                , CA.fontSize 10
+                , CA.color UI.Theme.colorMuted
+                , CA.withGrid
+                ]
+            , C.grid [ CA.color UI.Theme.colorTan, CA.dashed [ 2, 3 ] ]
+            , C.series .x
+                [ C.interpolated .y
+                    [ CA.color UI.Theme.colorRust
+                    , CA.width 2
+                    , CA.opacity 0.18
+                    ]
+                    []
+                ]
+                points
+            , C.labelAt .min
+                .min
+                [ CA.moveDown 16
+                , CA.fontSize 10
+                , CA.color UI.Theme.colorMuted
+                , CA.alignLeft
+                ]
+                [ Svg.text (Stats.formatDateShort firstDate) ]
+            , C.labelAt .max
+                .min
+                [ CA.moveDown 16
+                , CA.fontSize 10
+                , CA.color UI.Theme.colorMuted
+                , CA.alignRight
+                ]
+                [ Svg.text (Stats.formatDateShort lastDate) ]
+            , C.each hovered <|
+                \_ item ->
+                    [ C.tooltip item
+                        [ CA.onTopOrBottom, CA.background "#fffaf2", CA.border UI.Theme.colorTan ]
+                        []
+                        (priceTooltipContent (CI.getData item))
+                    ]
+            ]
+        ]
+
+
+priceTooltipContent : PricePoint -> List (Html Never)
+priceTooltipContent p =
+    [ Html.div [ Html.Attributes.class "font-mono text-[11px] text-moss" ]
+        [ Html.text (Stats.formatDateShort p.date) ]
+    , Html.div [ Html.Attributes.class "font-mono text-sm text-rust" ]
+        [ Html.text (Stats.formatPricePerGallonAxis p.y) ]
     ]

@@ -4000,6 +4000,11 @@ updateAuth msg as_ =
             , Cmd.none
             )
 
+        HoverPricePerGallonPoints items ->
+            ( AuthModel { as_ | statsHover = StatsHover.setPricePerGallon as_.statsHover items }
+            , Cmd.none
+            )
+
         CanInstall canIt ->
             ( AuthModel { as_ | showInstallPrompt = canIt }, Cmd.none )
 

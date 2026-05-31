@@ -1,5 +1,6 @@
 module Data.Stats exposing
-    ( StatsMode(..)
+    ( FuelPrim
+    , StatsMode(..)
     , binEntries
     , buildMonthlyBins
     , buildWeeklyBins
@@ -8,9 +9,12 @@ module Data.Stats exposing
     , formatDollars
     , formatIso
     , formatMonthYear
+    , formatPricePerGallonAxis
+    , fuelSummary
     , last7DaysValues
     , monthAbbr
     , parseYearMonth
+    , pricePerGallonSeries
     , spanDays
     , tripDaysIn
     )
@@ -42,7 +46,7 @@ in the examples below.
 import Data.Entry exposing (EffectiveEntry)
 import Data.Money as Money
 import Data.StatsGranularity exposing (Granularity(..))
-import Data.StatsHover exposing (CumulativePoint, DailyDay)
+import Data.StatsHover exposing (CumulativePoint, DailyDay, PricePoint)
 import Date
 import Set
 
@@ -687,6 +691,165 @@ Round-trip: the result always starts with `'$'`:
 formatDollars : Float -> String
 formatDollars dollars =
     Money.format (Money.fromCents (round (dollars * 100)))
+
+
+{-| Format a `Float` price-per-gallon (already in dollars) with three
+decimal places and a leading `$`. Used for chart axis ticks and tooltips
+where the 9/10-cent digit is significant.
+
+    formatPricePerGallonAxis 4.299
+    --> "$4.299"
+
+    formatPricePerGallonAxis 3.5
+    --> "$3.500"
+
+    formatPricePerGallonAxis 5.0
+    --> "$5.000"
+
+-}
+formatPricePerGallonAxis : Float -> String
+formatPricePerGallonAxis dollars =
+    let
+        millis : Int
+        millis =
+            round (dollars * 1000)
+
+        whole : Int
+        whole =
+            millis // 1000
+
+        frac : Int
+        frac =
+            abs (remainderBy 1000 millis)
+    in
+    "$" ++ String.fromInt whole ++ "." ++ String.padLeft 3 '0' (String.fromInt frac)
+
+
+
+-- FUEL CHART
+
+
+{-| Primitive input record for the fuel chart functions. One record per
+fuel-up entry; `gallons` and `pricePerGallon` are `Maybe` because either
+field may be absent from a given fuel-up.
+
+`Pages.Stats.toFuelPrims` produces these from `EffectiveEntry` values;
+the functions below consume them so they stay example-able.
+
+-}
+type alias FuelPrim =
+    { date : String
+    , gallons : Maybe Float
+    , pricePerGallon : Maybe Float
+    }
+
+
+{-| Build the points for the price-per-gallon trend chart, one per
+fuel-up that has a price, in ascending chronological order. `x` is
+1-indexed (mirrors `cumulativePoints`); `y` is the price in dollars.
+
+    pricePerGallonSeries []
+    --> []
+
+    pricePerGallonSeries [ { date = "2024-05-21", gallons = Just 12.3, pricePerGallon = Nothing } ]
+    --> []
+
+    pricePerGallonSeries [ { date = "2024-05-21", gallons = Just 12.3, pricePerGallon = Just 4.299 } ]
+    --> [ { date = "2024-05-21", x = 1, y = 4.299 } ]
+
+    pricePerGallonSeries
+        [ { date = "2024-05-21", gallons = Just 10.0, pricePerGallon = Just 3.59 }
+        , { date = "2024-05-24", gallons = Nothing, pricePerGallon = Just 4.19 }
+        , { date = "2024-05-28", gallons = Just 15.0, pricePerGallon = Nothing }
+        ]
+    --> [ { date = "2024-05-21", x = 1, y = 3.59 }, { date = "2024-05-24", x = 2, y = 4.19 } ]
+
+-}
+pricePerGallonSeries : List FuelPrim -> List PricePoint
+pricePerGallonSeries prims =
+    prims
+        |> List.filterMap
+            (\p ->
+                case p.pricePerGallon of
+                    Just price ->
+                        Just { date = p.date, price = price }
+
+                    Nothing ->
+                        Nothing
+            )
+        |> List.sortBy .date
+        |> List.indexedMap
+            (\i pt ->
+                { date = pt.date
+                , x = toFloat (i + 1)
+                , y = pt.price
+                }
+            )
+
+
+{-| Aggregate fuel stats across a list of fuel-up primitives.
+
+  - `totalGallons` — sum of all `Just gallons` values (entries without a
+    gallons reading contribute 0).
+  - `avg` / `min` / `max` — over the `Just pricePerGallon` values only;
+    `Nothing` when no fuel-up has a price.
+
+Examples:
+
+    fuelSummary []
+    --> { avg = Nothing, max = Nothing, min = Nothing, totalGallons = 0 }
+
+    fuelSummary [ { date = "2024-05-21", gallons = Just 10.0, pricePerGallon = Nothing } ]
+    --> { avg = Nothing, max = Nothing, min = Nothing, totalGallons = 10.0 }
+
+    fuelSummary [ { date = "2024-05-21", gallons = Just 10.0, pricePerGallon = Just 4.299 } ]
+    --> { avg = Just 4.299, max = Just 4.299, min = Just 4.299, totalGallons = 10.0 }
+
+    fuelSummary
+        [ { date = "2024-05-21", gallons = Just 10.0, pricePerGallon = Just 3.59 }
+        , { date = "2024-05-24", gallons = Just 12.0, pricePerGallon = Just 4.299 }
+        , { date = "2024-05-28", gallons = Nothing,   pricePerGallon = Just 5.29 }
+        ]
+    --> { avg = Just 4.393, max = Just 5.29, min = Just 3.59, totalGallons = 22.0 }
+
+-}
+fuelSummary :
+    List FuelPrim
+    -> { avg : Maybe Float, max : Maybe Float, min : Maybe Float, totalGallons : Float }
+fuelSummary prims =
+    let
+        totalGallons : Float
+        totalGallons =
+            prims
+                |> List.filterMap .gallons
+                |> List.sum
+
+        prices : List Float
+        prices =
+            List.filterMap .pricePerGallon prims
+
+        avg : Maybe Float
+        avg =
+            if List.isEmpty prices then
+                Nothing
+
+            else
+                let
+                    n : Int
+                    n =
+                        List.length prices
+
+                    sumPrices : Float
+                    sumPrices =
+                        List.sum prices
+                in
+                Just (toFloat (round (sumPrices / toFloat n * 1000)) / 1000)
+    in
+    { avg = avg
+    , max = List.maximum prices
+    , min = List.minimum prices
+    , totalGallons = totalGallons
+    }
 
 
 
