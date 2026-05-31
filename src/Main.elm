@@ -145,6 +145,7 @@ import Time
 import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestScanState(..), GuestState, MilepostState(..), Model(..), Msg(..), ShareMode(..), SharedMsg_(..))
 import UI.BillingBanner
 import UI.Layout
+import UI.MilepostToast
 import UI.ShareModal
 import UI.TripFormModal
 import UI.TripPicker
@@ -244,6 +245,7 @@ toAuthState creds initialRoute gs =
     , trailblazerStatus = RemoteData.NotAsked
     , milepost = NotLoaded
     , milepostStates = []
+    , milepostToasts = []
     , tripForm = Nothing
     , tripLoaded = Set.empty
     , trips = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
@@ -1348,6 +1350,31 @@ reconcileMileposts now as_ =
                     unioned =
                         Set.foldl (\id acc -> Dict.insert id nowIso acc) earned newlyEarned
 
+                    -- The newly-earned markers, in stable catalog order, mapped
+                    -- back from their ids. Appended to the earn-toast queue so
+                    -- `UI.MilepostToast` celebrates each one. Only this `Loaded`
+                    -- branch enqueues — the `NotLoaded` first-load seed above is
+                    -- silent (no celebrating the pre-existing backlog).
+                    newlyMarkers : List Milepost.Marker
+                    newlyMarkers =
+                        Milepost.catalog
+                            |> List.filter (\marker -> Set.member marker.id newlyEarned)
+
+                    queue : List Milepost.Marker
+                    queue =
+                        as_.milepostToasts ++ newlyMarkers
+
+                    -- Schedule the auto-advance only when the queue was empty
+                    -- before this batch — `DismissMilepostToast` chains the next
+                    -- timer itself, so we never stack overlapping sleeps.
+                    autoAdvanceCmd : Cmd Msg
+                    autoAdvanceCmd =
+                        if List.isEmpty as_.milepostToasts then
+                            milepostToastFor
+
+                        else
+                            Cmd.none
+
                     progress : MilepostProgress
                     progress =
                         { earned = unioned }
@@ -1370,8 +1397,11 @@ reconcileMileposts now as_ =
                             Nothing ->
                                 MilepostProgress.encoder progress
                 in
-                ( AuthModel (withStates { as_ | milepost = Loaded { earned = unioned, rev = rev } })
-                , sendPouch (SaveMilepostProgress doc)
+                ( AuthModel (withStates { as_ | milepost = Loaded { earned = unioned, rev = rev }, milepostToasts = queue })
+                , Cmd.batch
+                    [ sendPouch (SaveMilepostProgress doc)
+                    , autoAdvanceCmd
+                    ]
                 )
 
 
@@ -1433,6 +1463,16 @@ expenseToPending e =
 toastFor : Cmd Msg
 toastFor =
     Task.perform (\_ -> AuthMsg ToastExpired) (Process.sleep 4000)
+
+
+{-| Auto-advance the earn-toast queue after a few seconds by issuing a
+`DismissMilepostToast`, which drops the head and re-arms this timer if more
+markers remain. Mirrors `toastFor`, with a longer dwell so the celebration is
+readable.
+-}
+milepostToastFor : Cmd Msg
+milepostToastFor =
+    Task.perform (\_ -> AuthMsg DismissMilepostToast) (Process.sleep 6000)
 
 
 {-| Resolve the location that will actually be attached to the entry on
@@ -3377,6 +3417,24 @@ updateAuth msg as_ =
         ToastExpired ->
             ( AuthModel { as_ | toast = Nothing }, Cmd.none )
 
+        DismissMilepostToast ->
+            let
+                -- Drop the celebrated head. If markers remain, re-arm the
+                -- auto-advance timer so the next one dismisses on its own too.
+                remaining : List Milepost.Marker
+                remaining =
+                    List.drop 1 as_.milepostToasts
+
+                cmd : Cmd Msg
+                cmd =
+                    if List.isEmpty remaining then
+                        Cmd.none
+
+                    else
+                        milepostToastFor
+            in
+            ( AuthModel { as_ | milepostToasts = remaining }, cmd )
+
         OpenNewTripForm ->
             ( AuthModel
                 { as_
@@ -4995,6 +5053,7 @@ viewAuth as_ =
         , UI.ShareModal.view as_
         , UI.TripFormModal.view as_
         , UI.Layout.viewToast as_.toast
+        , UI.MilepostToast.view as_
         ]
 
 

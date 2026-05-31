@@ -1,4 +1,4 @@
-module UI.Milepost exposing (markerChip)
+module UI.Milepost exposing (Accent, familyAccent, familyGlyph, markerChip)
 
 {-| Shared presentation for milepost achievement markers (#409).
 
@@ -7,8 +7,9 @@ full collection screen (`Pages.Milepost`) and the compact reuse on the Ledger /
 Trips chrome (#411) call into here so the chip styling can't drift between the
 two surfaces.
 
-Each `Family` carries a colour accent (`familyAccent`, kept internal until
-#411 reuses it); the family tokens (`brown`, `amber`) live in `src/theme.css`
+Each `Family` carries a colour accent (`familyAccent`), now also reused by the
+earn-toast plaque (`UI.MilepostToast`, #410); the family tokens (`brown`,
+`amber`) live in `src/theme.css`
 alongside the pre-existing `rust` and `forest-light`. The accent is a record of
 **literal** Tailwind class strings (not a token to concatenate) — Tailwind v4
 only emits utilities it finds verbatim in source, and the styling guide bans
@@ -21,7 +22,7 @@ The compact icon-only `markerChipSmall` variant is deferred to #411 (its first
 consumer) — `NoUnused.Exports` forbids exporting it before a construction site
 exists, so it lands alongside that reuse rather than dead here.
 
-@docs markerChip
+@docs Accent, familyAccent, familyGlyph, markerChip
 
 -}
 
