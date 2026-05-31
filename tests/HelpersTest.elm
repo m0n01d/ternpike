@@ -5,6 +5,7 @@ day-indexed JSON shape consumed by `<waypoint-map>` (#151).
 -}
 
 import Data.Category exposing (Category(..))
+import Data.Currency
 import Data.DateField as DateField
 import Data.Entry exposing (EffectiveEntry)
 import Data.ExpenseId as ExpenseId
@@ -144,6 +145,7 @@ entry r =
     , category = Food
     , createdAt = Time.millisToPosix r.millis
     , createdBy = UserId.fromString "alice@example.com"
+    , currency = Data.Currency.USD
     , date = DateField.fromIso r.iso |> Maybe.withDefault epoch
     , fuelDetail = Nothing
     , geoPoint = Just (GeoPoint.fromDegrees 64.0 -149.0)

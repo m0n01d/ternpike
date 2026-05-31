@@ -122,7 +122,9 @@ partialInput =
                     Just
                         { gallons = Gallons.fromString "10"
                         , grade = Just FuelGrade.Regular
+                        , liters = Nothing
                         , pricePerGallon = PricePerGallon.fromString "4.00"
+                        , pricePerLiter = Nothing
                         }
               , isAmended = False
               , tripId = tripId
@@ -185,14 +187,18 @@ allEarnedInput =
                                 Just
                                     { gallons = Gallons.fromString "50"
                                     , grade = Just FuelGrade.Premium
+                                    , liters = Nothing
                                     , pricePerGallon = PricePerGallon.fromString "5.50"
+                                    , pricePerLiter = Nothing
                                     }
 
                             else
                                 Just
                                     { gallons = Gallons.fromString "50"
                                     , grade = Just FuelGrade.Regular
+                                    , liters = Nothing
                                     , pricePerGallon = PricePerGallon.fromString "4.00"
+                                    , pricePerLiter = Nothing
                                     }
                         , isAmended = False
                         , tripId = heroTripId
@@ -212,7 +218,9 @@ allEarnedInput =
                             Just
                                 { gallons = Gallons.fromString "50"
                                 , grade = Just FuelGrade.Regular
+                                , liters = Nothing
                                 , pricePerGallon = PricePerGallon.fromString "4.00"
+                                , pricePerLiter = Nothing
                                 }
                         , isAmended = False
                         , tripId = "trip-2"

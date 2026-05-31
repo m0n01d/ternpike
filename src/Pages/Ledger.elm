@@ -1,6 +1,7 @@
 module Pages.Ledger exposing (viewTab)
 
 import Data.Category as Category
+import Data.Currency exposing (Currency)
 import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
 import Data.ExpenseId as ExpenseId
@@ -8,9 +9,11 @@ import Data.FuelDetail exposing (FuelDetail)
 import Data.FuelGrade as FuelGrade
 import Data.Gallons as Gallons
 import Data.Ledger exposing (LedgerMode(..))
+import Data.Liters as Liters
 import Data.Milepost as Milepost
 import Data.Money as Money exposing (Money)
 import Data.PricePerGallon as PricePerGallon
+import Data.PricePerLiter as PricePerLiter
 import Data.SharedTrip
 import Data.SharedTrips
 import Data.TripId as TripId
@@ -209,7 +212,7 @@ viewLedgerHero earned budget entries =
             [ Html.text "RUNNING TOTAL" ]
         , Html.div
             [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
-            [ UI.MoneyView.amount total ]
+            [ UI.MoneyView.totals (Entry.totalsByCurrency entries) ]
         , Html.div
             [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
             [ Html.text kickerText ]
@@ -410,19 +413,20 @@ viewEntries opts entries =
                         dayEntries
                     )
                 , Html.Extra.viewIf (List.length dayEntries > 1) <|
-                    viewDayTotal (Dict.get dateIso totals |> Maybe.withDefault Money.zero)
+                    viewDayTotal (Entry.primaryCurrency dayEntries)
+                        (Dict.get dateIso totals |> Maybe.withDefault Money.zero)
                 ]
             )
     in
     Keyed.node "div" [] (List.map groupBlock indexedDates)
 
 
-viewDayTotal : Money -> Html Msg
-viewDayTotal total =
+viewDayTotal : Currency -> Money -> Html Msg
+viewDayTotal currency total =
     Html.div
         [ Html.Attributes.class "mt-3 pt-2 text-center font-mono text-xs tracking-widest text-forest" ]
         [ Html.text "DAY TOTAL  "
-        , UI.MoneyView.amount total
+        , UI.MoneyView.amount currency total
         ]
 
 
@@ -550,7 +554,7 @@ viewEntryRow opts entry =
                   else
                     Html.span
                         [ Html.Attributes.class "font-mono text-base text-forest tabular-nums" ]
-                        [ UI.MoneyView.amount entry.amount ]
+                        [ UI.MoneyView.amount entry.currency entry.amount ]
                 ]
             ]
         , viewRowMenuButton entry
@@ -584,6 +588,8 @@ viewFuelSummary fuel =
             List.filterMap identity
                 [ Maybe.map (\p -> PricePerGallon.format p ++ "/gal") fuel.pricePerGallon
                 , Maybe.map (\g -> Gallons.format g ++ " gal") fuel.gallons
+                , Maybe.map (\p -> PricePerLiter.format p ++ "/L") fuel.pricePerLiter
+                , Maybe.map (\l -> Liters.format l ++ " L") fuel.liters
                 , Maybe.map FuelGrade.display fuel.grade
                 ]
     in

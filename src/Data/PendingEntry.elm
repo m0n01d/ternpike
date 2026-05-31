@@ -36,16 +36,19 @@ in one place that can be tested in isolation.
 -}
 
 import Data.Category as Category exposing (Category)
+import Data.Currency as Currency exposing (Currency)
 import Data.DateField as DateField exposing (DateField)
 import Data.ExpenseId exposing (ExpenseId)
 import Data.FuelDetail exposing (FuelDetail)
 import Data.FuelGrade as FuelGrade
 import Data.Gallons as Gallons
 import Data.GeoPoint exposing (GeoPoint)
+import Data.Liters as Liters
 import Data.Location exposing (LocationState(..))
 import Data.Money as Money exposing (Money)
 import Data.PaymentMethod exposing (PaymentMethod)
 import Data.PricePerGallon as PricePerGallon
+import Data.PricePerLiter as PricePerLiter
 import Maybe.Extra
 
 
@@ -61,11 +64,18 @@ other text fields and are parsed into a `Data.FuelDetail.FuelDetail` by
 `parseEntry` — and only when the category is `Fuel`, so a price typed
 and then re-categorised to `Food` is dropped rather than saved.
 
+`currency` is the currency the amount was paid in. It also drives the
+fuel volume unit: when `currency == CAD` the `fuelGallons` /
+`fuelPricePerGallon` strings are parsed as **liters** and
+**price-per-liter** respectively (the inputs are relabeled in
+`Pages.Add`), so the same two raw fields serve both unit systems.
+
 -}
 type alias PendingEntry =
     { address : String
     , amount : String
     , category : Category
+    , currency : Currency
     , date : String
     , fuelGallons : String
     , fuelGrade : String
@@ -122,6 +132,7 @@ type alias ParsedEntry =
     { address : String
     , amount : Money
     , category : Category
+    , currency : Currency
     , date : DateField
     , fuelDetail : Maybe FuelDetail
     , geoPoint : Maybe GeoPoint
@@ -178,17 +189,37 @@ parseEntry pe =
         fuelDetail =
             if pe.category == Category.Fuel then
                 let
+                    grade : Maybe FuelGrade.FuelGrade
+                    grade =
+                        if String.trim pe.fuelGrade == "" then
+                            Nothing
+
+                        else
+                            Just (FuelGrade.fromString pe.fuelGrade)
+
+                    -- The volume unit follows the currency: a CAD fuel-up is
+                    -- metered in liters at a price-per-liter, a USD one in
+                    -- gallons at a price-per-gallon. The same two raw input
+                    -- strings (`fuelGallons` / `fuelPricePerGallon`) feed
+                    -- whichever pair the currency selects.
                     detail : FuelDetail
                     detail =
-                        { gallons = Gallons.fromString pe.fuelGallons
-                        , grade =
-                            if String.trim pe.fuelGrade == "" then
-                                Nothing
+                        case pe.currency of
+                            Currency.CAD ->
+                                { gallons = Nothing
+                                , grade = grade
+                                , liters = Liters.fromString pe.fuelGallons
+                                , pricePerGallon = Nothing
+                                , pricePerLiter = PricePerLiter.fromString pe.fuelPricePerGallon
+                                }
 
-                            else
-                                Just (FuelGrade.fromString pe.fuelGrade)
-                        , pricePerGallon = PricePerGallon.fromString pe.fuelPricePerGallon
-                        }
+                            Currency.USD ->
+                                { gallons = Gallons.fromString pe.fuelGallons
+                                , grade = grade
+                                , liters = Nothing
+                                , pricePerGallon = PricePerGallon.fromString pe.fuelPricePerGallon
+                                , pricePerLiter = Nothing
+                                }
                 in
                 if Data.FuelDetail.isEmpty detail then
                     Nothing
@@ -212,6 +243,7 @@ parseEntry pe =
                 { address = pe.address
                 , amount = amount
                 , category = pe.category
+                , currency = pe.currency
                 , date = date
                 , fuelDetail = fuelDetail
                 , geoPoint = geoPoint
@@ -243,6 +275,7 @@ defaultPendingEntry today =
     { address = ""
     , amount = ""
     , category = Category.Fuel
+    , currency = Currency.USD
     , date = DateField.toIso today
     , fuelGallons = ""
     , fuelGrade = ""

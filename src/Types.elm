@@ -44,6 +44,7 @@ import Data.Amendment exposing (Amendment)
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category exposing (Category)
 import Data.ColorScheme exposing (ColorScheme)
+import Data.Currency exposing (Currency)
 import Data.DateField exposing (DateField)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
@@ -469,6 +470,7 @@ type AuthMsg_
     | CloseSharedTripModal
     | CloseTripForm
     | ConfirmDeleteTrip Trip
+    | CurrencyChanged Currency
     | DateChanged String
     | DeleteTrip Trip
     | DismissError

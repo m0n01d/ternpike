@@ -1,6 +1,7 @@
 module Pages.Add exposing (viewTab)
 
 import Data.Category as Category exposing (Category)
+import Data.Currency as Currency exposing (Currency)
 import Data.GeoPoint as GeoPoint
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Navigation exposing (Route(..), Tab(..))
@@ -111,12 +112,15 @@ viewEditingActions model =
 viewHero : PendingEntry -> Html Msg
 viewHero pending =
     Html.div [ Html.Attributes.class "py-2" ]
-        [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
-            [ Html.text "AMOUNT" ]
+        [ Html.div [ Html.Attributes.class "flex items-center justify-between mb-1" ]
+            [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
+                [ Html.text "AMOUNT" ]
+            , viewCurrencyToggle pending.currency
+            ]
         , Html.div [ Html.Attributes.class "h-[3rem] flex items-start gap-0" ]
             [ Html.span
                 [ Html.Attributes.class "font-display text-5xl font-black text-forest leading-none" ]
-                [ Html.text "$" ]
+                [ Html.text (currencySymbol pending.currency) ]
             , Html.input
                 [ Html.Attributes.type_ "number"
                 , Html.Attributes.attribute "inputmode" "decimal"
@@ -254,36 +258,71 @@ viewBody model pending isEditing =
         ]
 
 
-{-| The fuel-only detail section: per-gallon price, volume, and grade.
+{-| The fuel-only detail section: unit price, volume, and grade.
 Rendered only when the selected category is `Fuel` (see `viewBody`), so
 the form stays uncluttered for every other kind of expense. The inputs
 are plain strings parsed by `Data.PendingEntry.parseEntry`.
+
+The price and volume labels/placeholders follow the expense currency: a
+CAD fuel-up is metered in liters at a price-per-liter, a USD one in gallons
+at a price-per-gallon. The same two inputs (`fuelPricePerGallon` /
+`fuelGallons`) back both unit systems — `parseEntry` reads the right type.
+
 -}
 viewFuelDetails : PendingEntry -> Html Msg
 viewFuelDetails pending =
+    let
+        metric : Bool
+        metric =
+            pending.currency == Currency.CAD
+    in
     Html.div []
         [ UI.Rule.kicker "FUEL DETAILS"
         , UI.Card.subCard
-            [ UI.Layout.formField "PRICE / GAL"
+            [ UI.Layout.formField
+                (if metric then
+                    "PRICE / L"
+
+                 else
+                    "PRICE / GAL"
+                )
                 (Html.input
                     [ Html.Attributes.type_ "number"
                     , Html.Attributes.attribute "inputmode" "decimal"
                     , Html.Attributes.attribute "step" "0.001"
                     , Html.Attributes.value pending.fuelPricePerGallon
                     , Html.Events.onInput (AuthMsg << FuelPricePerGallonChanged)
-                    , Html.Attributes.placeholder "4.299"
+                    , Html.Attributes.placeholder
+                        (if metric then
+                            "1.659"
+
+                         else
+                            "4.299"
+                        )
                     , UI.Layout.textInputStyle
                     ]
                     []
                 )
-            , UI.Layout.formField "GALLONS"
+            , UI.Layout.formField
+                (if metric then
+                    "LITERS"
+
+                 else
+                    "GALLONS"
+                )
                 (Html.input
                     [ Html.Attributes.type_ "number"
                     , Html.Attributes.attribute "inputmode" "decimal"
                     , Html.Attributes.attribute "step" "0.001"
                     , Html.Attributes.value pending.fuelGallons
                     , Html.Events.onInput (AuthMsg << FuelGallonsChanged)
-                    , Html.Attributes.placeholder "12.345"
+                    , Html.Attributes.placeholder
+                        (if metric then
+                            "45.20"
+
+                         else
+                            "12.345"
+                        )
                     , UI.Layout.textInputStyle
                     ]
                     []
@@ -601,6 +640,47 @@ viewLocationStatus ls =
                     ]
                     [ Html.text "Skip location" ]
                 ]
+
+
+{-| The "$" / "CA$" symbol shown ahead of the amount input for the given
+currency.
+-}
+currencySymbol : Currency -> String
+currencySymbol currency =
+    case currency of
+        Currency.CAD ->
+            "CA$"
+
+        Currency.USD ->
+            "$"
+
+
+{-| A compact USD / CAD segmented control in the amount hero. Selecting a
+currency flips the amount symbol and the fuel section between gallons and
+liters; nothing is converted (see `Data.Currency`).
+-}
+viewCurrencyToggle : Currency -> Html Msg
+viewCurrencyToggle selected =
+    Html.div [ Html.Attributes.class "flex gap-1" ]
+        (List.map (viewCurrencyBtn selected) Currency.all)
+
+
+viewCurrencyBtn : Currency -> Currency -> Html Msg
+viewCurrencyBtn selected currency =
+    let
+        active : Bool
+        active =
+            selected == currency
+    in
+    Html.button
+        [ Html.Events.onClick (AuthMsg (CurrencyChanged currency))
+        , Html.Attributes.classList
+            [ ( "rounded-md py-1 px-2.5 text-[11px] font-mono uppercase tracking-widest cursor-pointer border", True )
+            , ( "bg-forest text-parchment border-forest font-bold", active )
+            , ( "bg-cream text-moss border-tan", not active )
+            ]
+        ]
+        [ Html.text (Currency.toLabel currency) ]
 
 
 viewPaymentMethodToggle : Maybe PaymentMethod -> Html Msg

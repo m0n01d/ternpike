@@ -20,6 +20,7 @@ Side effects are returned as a description (`Effect`) rather than a raw
 
 import Data.Auth exposing (AppConfig, Creds)
 import Data.Category
+import Data.Currency
 import Data.DateField as DateField
 import Data.Expense exposing (Expense)
 import Data.FuelGrade as FuelGrade
@@ -642,6 +643,7 @@ seedPending today item =
     , category =
         Maybe.Extra.or (fromDraft .category) (fromOcr .category)
             |> Maybe.withDefault Data.Category.Fuel
+    , currency = Data.Currency.USD
     , date =
         Maybe.Extra.or (fromDraft .date) (fromOcr .date)
             |> Maybe.withDefault today

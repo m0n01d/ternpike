@@ -1,4 +1,4 @@
-module Data.Entry exposing (Band(..), EffectiveEntry, biggestDay, dailyTotals, medianAmount, resolve, spendBand, topCategory, tripMedian, uniqueDates)
+module Data.Entry exposing (Band(..), EffectiveEntry, biggestDay, dailyTotals, medianAmount, primaryCurrency, resolve, spendBand, topCategory, totalsByCurrency, tripMedian, uniqueDates)
 
 {-| The "effective" (post-amendment, non-voided) view of expenses.
 
@@ -36,12 +36,13 @@ trip's expenses are in memory at a time, thanks to lazy loading) and each
 surviving expense is run through `applyAmends`, which sorts amendments by
 `createdAt` and folds them left-to-right.
 
-@docs Band, EffectiveEntry, biggestDay, dailyTotals, medianAmount, resolve, spendBand, topCategory, tripMedian, uniqueDates
+@docs Band, EffectiveEntry, biggestDay, dailyTotals, medianAmount, primaryCurrency, resolve, spendBand, topCategory, totalsByCurrency, tripMedian, uniqueDates
 
 -}
 
 import Data.Amendment exposing (Amendment)
 import Data.Category as Category exposing (Category)
+import Data.Currency as Currency exposing (Currency)
 import Data.DateField as DateField exposing (DateField)
 import Data.Expense exposing (Expense)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
@@ -68,6 +69,7 @@ type alias EffectiveEntry =
     , category : Category
     , createdAt : Time.Posix
     , createdBy : UserId
+    , currency : Currency
     , date : DateField
     , fuelDetail : Maybe FuelDetail
     , geoPoint : Maybe GeoPoint
@@ -132,6 +134,7 @@ toEffectiveEntry isAmended e =
     , category = e.category
     , createdAt = e.createdAt
     , createdBy = e.createdBy
+    , currency = e.currency
     , date = e.date
     , fuelDetail = e.fuelDetail
     , geoPoint = e.geoPoint
@@ -152,6 +155,7 @@ applyAmendment e a =
     , category = Maybe.withDefault e.category a.category
     , createdAt = e.createdAt
     , createdBy = e.createdBy
+    , currency = Maybe.withDefault e.currency a.currency
     , date = Maybe.withDefault e.date a.date
     , fuelDetail =
         if a.fuelDetail /= Nothing then
@@ -173,6 +177,51 @@ applyAmendment e a =
             e.paymentMethod
     , tripId = e.tripId
     }
+
+
+{-| Total spend per currency, in a stable order (`USD` before `CAD`), with
+only the currencies that actually appear in `entries`.
+
+Ternpike never converts between currencies, so a mixed US/Canada trip can't
+be summed into one number. This returns one subtotal per currency present —
+a single-element list (the today behaviour) for a trip that's all one
+currency, two entries for a trip that crossed the border. The Ledger and
+Stats hero totals render each pair through `UI.MoneyView.amount`.
+
+-}
+totalsByCurrency : List EffectiveEntry -> List ( Currency, Money )
+totalsByCurrency entries =
+    Currency.all
+        |> List.filterMap
+            (\cur ->
+                case List.filter (\e -> e.currency == cur) entries of
+                    [] ->
+                        Nothing
+
+                    matching ->
+                        Just ( cur, Money.sum (List.map .amount matching) )
+            )
+
+
+{-| The single currency to label a derived, scalar aggregate with — the
+median, the daily burn, a category subtotal — where showing a per-currency
+split would be noise. It's the most common currency across `entries`, with
+`USD` winning ties and empty lists (so existing all-USD trips are unaffected).
+
+Derived scalars over a genuinely mixed-currency trip are approximate by
+nature (Ternpike never converts); this picks the currency the trip is
+mostly in. The exact, non-lossy figure is the per-currency split from
+`totalsByCurrency`, which the hero totals show alongside.
+
+-}
+primaryCurrency : List EffectiveEntry -> Currency
+primaryCurrency entries =
+    Currency.all
+        |> List.map (\cur -> ( cur, List.length (List.filter (\e -> e.currency == cur) entries) ))
+        |> List.sortBy (negate << Tuple.second)
+        |> List.head
+        |> Maybe.map Tuple.first
+        |> Maybe.withDefault Currency.USD
 
 
 uniqueDates : List EffectiveEntry -> List DateField
