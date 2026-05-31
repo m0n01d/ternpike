@@ -82,6 +82,12 @@ type PouchOutbound
   - `SharedTripMetaChanged` — a `sharedtrip:meta` document arrived (initial
     hydration after first sync, or a live change). Carries the full
     decoded `SharedTrip`.
+  - `TripsPrefetched` — local-first early render. The JS side reads the
+    trips already on disk the moment the personal handle opens and sends
+    them WITHOUT waiting for the first sync round-trip, so the trips list
+    renders from local data instead of blocking on the network. A
+    (possibly partial) subset; the authoritative `TripsFetched` follows
+    on the first settled sync edge and folds in remote/shared trips.
   - `SharedTripsReconciled` — the JS side has finished opening / closing
     shared trip handles after seeing a `user:sharedtrips` doc; payload is the
     list of `SharedTripId`s the user belongs to right now (so Elm can drop
@@ -100,6 +106,7 @@ type PouchInbound
     | SyncStateMsg SyncState
     | TripExpensesFetched TripId TripBundle
     | TripsFetched (Dict String Trip)
+    | TripsPrefetched (Dict String Trip)
 
 
 {-| One document arriving via the live-changes feed, discriminated by

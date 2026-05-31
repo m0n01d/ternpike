@@ -241,6 +241,22 @@ export function attachPouch(app, { creds = null } = {}) {
     emitSync('syncing')
     const personal = await openPersonalHandle()
     startHandleSync(personal, dbName)
+    // Local-first early render: hand Elm whatever trips are already on disk
+    // immediately, WITHOUT waiting for the first sync round-trip to settle.
+    // On a weak connection the initial replication can take many seconds; the
+    // user's trips are already local, so blocking the list behind the wire
+    // defeats the point of an offline-first app. The authoritative
+    // `GetAllTrips` (fired by Elm on the first settled sync edge) follows and
+    // folds in anything pulled from remote, plus shared-trip handles.
+    //
+    // Deferred one macrotask so we don't stack a cursor scan onto the freshly
+    // opened IndexedDB connection on the same tick it wired changes + sync —
+    // that op-pileup is exactly the Safari `indexed_db_went_bad` abort
+    // openPersonalHandle was restructured to avoid (see its comment).
+    setTimeout(() => {
+      sendTrips('TripsPrefetched').catch(err =>
+        console.error('[pouch] early trips read:', err))
+    }, 0)
     // Eagerly hydrate shared trips from whatever's already in local PouchDB.
     // The paused-event handler will also call this when initial sync
     // settles — that's the canonical path for fresh sign-ins where
@@ -352,6 +368,36 @@ export function attachPouch(app, { creds = null } = {}) {
     return { amendments, expensesByTrip, voids }
   }
 
+  // Read every open handle's trip docs (range-scoped to `trip::`) and send
+  // them to Elm under `tag`. Used twice: the authoritative `GetAllTrips`
+  // (tag 'TripsLoaded') fired by Elm on the first settled sync edge, and the
+  // local-first early read (tag 'TripsPrefetched') fired from startSync
+  // before sync settles, so the list renders from on-disk data without
+  // waiting on the network. `flockId` is sourced from the handle, never the
+  // doc (the personal handle's is null).
+  async function sendTrips(tag) {
+    const trips = {}
+    const responses = await Promise.all(
+      allHandles().map(async (handle) => {
+        const result = await handle.local.allDocs({
+          include_docs: true,
+          startkey: 'trip::',
+          endkey: 'trip::￰',
+        })
+        return { handle, rows: result.rows }
+      })
+    )
+    for (const { handle, rows } of responses) {
+      for (const row of rows) {
+        const d = row.doc
+        if (!d || d.type !== 'trip') continue
+        const { _rev, ...doc } = d
+        trips[d._id] = { ...doc, flockId: handle.flockId }
+      }
+    }
+    app.ports.pouchIn.send({ tag, trips })
+  }
+
   async function upsertDoc(handle, doc) {
     try {
       const existing = await handle.local.get(doc._id)
@@ -370,28 +416,7 @@ export function attachPouch(app, { creds = null } = {}) {
       switch (msg.tag) {
 
         case 'GetAllTrips': {
-          const trips = {}
-          const responses = await Promise.all(
-            allHandles().map(async (handle) => {
-              // Range-scope to `trip::` so we don't deserialize every
-              // expense/amend/void just to surface a handful of trip docs.
-              const result = await handle.local.allDocs({
-                include_docs: true,
-                startkey: 'trip::',
-                endkey: 'trip::￰',
-              })
-              return { handle, rows: result.rows }
-            })
-          )
-          for (const { handle, rows } of responses) {
-            for (const row of rows) {
-              const d = row.doc
-              if (!d || d.type !== 'trip') continue
-              const { _rev, ...doc } = d
-              trips[d._id] = { ...doc, flockId: handle.flockId }
-            }
-          }
-          app.ports.pouchIn.send({ tag: 'TripsLoaded', trips })
+          await sendTrips('TripsLoaded')
           break
         }
 

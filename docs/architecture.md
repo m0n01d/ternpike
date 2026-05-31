@@ -153,6 +153,7 @@ type alias AuthState =
     , trailblazerNumber : Maybe Int
     , tripLoaded    : Set String
     , trips         : TripsState
+    , tripsHydrated : Bool   -- complete (settled) trips read has landed
     , voids         : Dict String Void
     -- ... form fields, UI state, etc.
     }
@@ -705,7 +706,8 @@ Example:
 
 | Tag | Payload |
 |---|---|
-| `TripsFetched` | `{ trips: Dict<id, tripDoc> }` |
+| `TripsPrefetched` | `{ trips: Dict<id, tripDoc> }` — local-first early render (see below). Same shape as `TripsFetched`; a possibly-partial subset read before sync settles. |
+| `TripsFetched` | `{ trips: Dict<id, tripDoc> }` — the authoritative complete read, fired on the first settled sync edge. |
 | `TripExpensesLoaded` | `{ tripId, expenses: Dict, amendments: Dict, voids: Dict }` |
 | `ExpenseFetched` | `{ expense, amendments: Dict, void: Maybe voidDoc }` |
 | `DbChange` | a single changed document |
@@ -766,29 +768,45 @@ Browser loads
             │       arms (VerifyCodeResult / MagicVerifyResult), since
             │       toAuthState clears scanQueue and init never re-runs.
             └─ startSync port called immediately
-                 └─ pouch.js begins db.sync(remote, { live, retry })
+                 └─ pouch.js opens the personal handle, begins db.sync(remote, { live, retry })
+                      ├─ EARLY (local-first): a macrotask later, pouch.js
+                      │    range-scans `trip::` and sends TripsPrefetched —
+                      │    WITHOUT waiting for sync. Elm's handleTripsPrefetched
+                      │    renders the list from on-disk trips immediately and
+                      │    lazily loads the current route's trip. It does NOT
+                      │    run the all-trips load / milepost reconcile, and does
+                      │    NOT clobber the route on an empty read.
                       └─ On first settled sync edge → Elm receives SyncStateMsg
-                           └─ update sends GetAllTrips via pouchOut
-                                └─ pouch.js range-scans the `trip::` prefix
-                                     └─ pouchIn receives TripsFetched
-                                          └─ handleTripsFetched populates as_.trips,
-                                             then loadAllTripExpenses fires ONE
-                                             GetAllTripExpenses for EVERY trip not yet
-                                             cached (Decision 2 of #408 — milepost
-                                             evaluation needs all trips' expenses,
-                                             not just the visited one); pouch.js scans
-                                             each handle once and replies per-trip
-                                               └─ once loadingTrips drains to empty,
-                                                  ReconcileMileposts fires:
-                                                  evaluate the catalog, union any
+                           └─ if not as_.tripsHydrated, update sends GetAllTrips
+                                └─ pouch.js range-scans the `trip::` prefix (all handles)
+                                     └─ pouchIn receives TripsFetched (the COMPLETE set)
+                                          └─ handleTripsFetched sets tripsHydrated,
+                                             populates as_.trips, then loadAllTripExpenses
+                                             fires ONE GetAllTripExpenses for EVERY trip
+                                             not yet cached (Decision 2 of #408 — milepost
+                                             evaluation needs all trips' expenses, not
+                                             just the visited one); pouch.js scans each
+                                             handle once and replies per-trip
+                                               └─ once loadingTrips drains to empty AND
+                                                  tripsHydrated is set, ReconcileMileposts
+                                                  fires: evaluate the catalog, union any
                                                   newly-earned markers into
                                                   milepost::progress (silent seed on
                                                   first load, write-on-change after)
 ```
 
-Data is **not** fetched on login — it waits for the first sync to settle.
-This prevents a race where Elm reads stale local data before the sync pulls
-down remote changes.
+The **trips list is rendered local-first** — the moment the personal PouchDB
+handle is open, `TripsPrefetched` paints whatever's on disk, so the list never
+blocks on the network (critical on a weak connection: the initial replication
+round-trip can take many seconds, and the data is already local). The
+authoritative `GetAllTrips` still waits for the first settled sync edge — it
+is the COMPLETE read (every handle, plus anything pulled from remote) and the
+only one that drives the all-trips expense load + milepost reconcile.
+`tripsHydrated` gates both the settled read (fire once) and the milepost
+reconcile (never seed off the partial early set — that would mis-fire
+celebration toasts for a pre-existing backlog). The empty-state route decision
+also belongs to the settled read, so a not-yet-synced device or a deep link to
+an unsynced trip isn't clobbered by the early render.
 
 **Milepost evaluation needs a full expense load (#408).** Route-driven lazy
 loading (below) only fetches the trip the user is looking at, but the
