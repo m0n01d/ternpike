@@ -18,6 +18,11 @@ Request → response mapping:
 
   - `GetAllTrips` → `TripsFetched (Dict String Trip)`
   - `GetTripExpenses tripId` → `TripExpensesFetched tripId TripBundle`
+  - `GetAllTripExpenses [(target, tripId)]` → one
+    `TripExpensesFetched tripId TripBundle` per requested trip. The JS
+    side scans each backing PouchDB once (not once per trip) and
+    buckets expenses by `tripId`, so the one-time startup load of every
+    trip's expenses is a single scan per handle rather than N.
   - `GetExpense expenseId` → `ExpenseFetched expenseId ExpenseBundle`
   - `SaveAmend` / `SaveExpense` / `SaveTrip` / `SaveVoid` → fire-and-
     forget; the live-changes feed delivers the saved doc back as a
@@ -52,7 +57,8 @@ the already-encoded JSON to keep this module free of encoder
 dependencies on the inner records.
 -}
 type PouchOutbound
-    = GetAllTrips
+    = GetAllTripExpenses (List ( TripTarget, TripId ))
+    | GetAllTrips
     | GetExpense TripTarget ExpenseId
     | GetTripExpenses TripTarget TripId
     | OpenSharedTrip { dbName : String, flockId : SharedTripId }

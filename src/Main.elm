@@ -368,6 +368,21 @@ fetchMe as_ =
 encodePouchOut : PouchOutbound -> D.Value
 encodePouchOut msg =
     case msg of
+        GetAllTripExpenses requests ->
+            E.object
+                [ ( "tag", E.string "GetAllTripExpenses" )
+                , ( "requests"
+                  , E.list
+                        (\( target, tid ) ->
+                            E.object
+                                [ ( "target", Trip.encodeTarget target )
+                                , ( "tripId", E.string (TripId.toString tid) )
+                                ]
+                        )
+                        requests
+                  )
+                ]
+
         GetAllTrips ->
             E.object [ ( "tag", E.string "GetAllTrips" ) ]
 
@@ -1354,15 +1369,24 @@ loadAllTripExpenses as_ =
                         |> List.map (.id >> TripId.toString)
                         |> Set.fromList
 
-                cmds : List (Cmd Msg)
-                cmds =
-                    List.map
-                        (\trip -> sendPouch (GetTripExpenses (targetForTripId trip.id as_) trip.id))
-                        toLoad
+                -- One bulk request instead of one `GetTripExpenses` per
+                -- trip: the JS side scans each backing PouchDB once and
+                -- buckets expenses by trip, then replies with one
+                -- `TripExpensesFetched` per requested trip — so the
+                -- per-trip quiescence accounting in `loadingTrips` is
+                -- unchanged, but N full-database scans collapse to one
+                -- scan per open handle.
+                requests : List ( Trip.TripTarget, TripId.TripId )
+                requests =
+                    List.map (\trip -> ( targetForTripId trip.id as_, trip.id )) toLoad
             in
-            ( { as_ | loadingTrips = Set.union newLoading as_.loadingTrips }
-            , Cmd.batch cmds
-            )
+            if List.isEmpty requests then
+                ( as_, Cmd.none )
+
+            else
+                ( { as_ | loadingTrips = Set.union newLoading as_.loadingTrips }
+                , sendPouch (GetAllTripExpenses requests)
+                )
 
         _ ->
             ( as_, Cmd.none )
