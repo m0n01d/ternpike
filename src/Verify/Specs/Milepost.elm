@@ -83,8 +83,9 @@ emptyInput =
 {-| A partial fixture: some markers earned, some locked.
 
 Has 1 trip and 5 fuel expenses (different categories spread across them), which
-earns: Trailhead, Mile Marker 1, and Cairn Builder (5 distinct categories).
-Does not earn Mile Marker 100, Seasoned Traveler, streaks, or the dollar markers.
+earns: Trailhead (TrailDiscipline), Mile Marker 1 (MileMarkers), and Cairn
+Builder (TrailDiscipline, 5 distinct categories). Does not earn Mile Marker 100,
+Seasoned Traveler, streaks, or the dollar markers.
 
 -}
 partialInput : Input

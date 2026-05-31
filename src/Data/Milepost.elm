@@ -29,6 +29,7 @@ import Time
 
 
 -- TYPES
+-- GloveboxLibrary (the literary family) is introduced by its first markers in #412.
 
 
 {-| The thematic family a marker belongs to. Used for grouping in the UI.
@@ -38,7 +39,6 @@ Constructors are alphabetized per the Elm style guide.
 -}
 type Family
     = CautionSigns
-    | GloveboxLibrary
     | MileMarkers
     | Odometer
     | TrailDiscipline
@@ -155,7 +155,7 @@ catalog =
 markerTrailhead : Marker
 markerTrailhead =
     { blurb = "Log your first expense."
-    , family = MileMarkers
+    , family = TrailDiscipline
     , goal = Flag
     , id = "trailhead"
     , name = "Trailhead"
@@ -185,7 +185,7 @@ markerMileMarker100 =
 markerSeasonedTraveler : Marker
 markerSeasonedTraveler =
     { blurb = "Complete 10 trips."
-    , family = Odometer
+    , family = MileMarkers
     , goal = Count 10
     , id = "seasoned-traveler"
     , name = "Seasoned Traveler"
@@ -215,7 +215,7 @@ markerSwitchbacks =
 markerCairnBuilder : Marker
 markerCairnBuilder =
     { blurb = "Use 5 different expense categories on a single trip."
-    , family = GloveboxLibrary
+    , family = TrailDiscipline
     , goal = Count 5
     , id = "cairn-builder"
     , name = "Cairn Builder"
@@ -225,7 +225,7 @@ markerCairnBuilder =
 markerFillErUp : Marker
 markerFillErUp =
     { blurb = "Spend $1,000 on fuel across all trips."
-    , family = CautionSigns
+    , family = Odometer
     , goal = Dollars (Money.fromCents 100000)
     , id = "fill-er-up"
     , name = "Fill 'er Up"
@@ -235,7 +235,7 @@ markerFillErUp =
 markerPremiumUnleaded : Marker
 markerPremiumUnleaded =
     { blurb = "Spend $500 on fuel in a single trip."
-    , family = CautionSigns
+    , family = Odometer
     , goal = Dollars (Money.fromCents 50000)
     , id = "premium-unleaded"
     , name = "Premium Unleaded"
