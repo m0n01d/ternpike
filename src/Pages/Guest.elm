@@ -63,7 +63,7 @@ viewGuest gs =
 viewLogin : GuestState -> Html Msg
 viewLogin gs =
     Html.div
-        [ Html.Attributes.class "min-h-[var(--app-height,100dvh)] flex flex-col px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out" ]
+        [ Html.Attributes.class "flex-1 flex flex-col px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out" ]
         [ Html.div [ Html.Attributes.class "flex-1 flex flex-col items-center justify-center w-full" ]
             [ Html.div [ Html.Attributes.class "text-center max-w-sm w-full mb-8" ]
                 [ UI.Mascot.ternSvg "w-32 mx-auto animate-soar"
