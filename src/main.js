@@ -759,18 +759,6 @@ import './elements/tp-amount.js'
 
   // ── PWA service worker ─────────────────────────────────────────────────
   if ('serviceWorker' in navigator) {
-    // When a new SW takes control (after SKIP_WAITING below), reload once so
-    // the page actually runs the freshly-deployed bundle. Without this the
-    // new SW activates but the open page keeps the stale JS/CSS — an
-    // installed PWA then shows "no change" after a deploy until it's killed
-    // and cold-launched. The guard prevents a reload loop.
-    let reloadingForNewWorker = false
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (reloadingForNewWorker) return
-      reloadingForNewWorker = true
-      window.location.reload()
-    })
-
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
         reg.addEventListener('updatefound', () => {
