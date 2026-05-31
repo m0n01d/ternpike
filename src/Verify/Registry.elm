@@ -16,6 +16,7 @@ import Verify.Core as Core
 import Verify.Specs.JoinSharedTrip as JoinSharedTrip
 import Verify.Specs.Milepost as Milepost
 import Verify.Specs.MilepostScreen as MilepostScreen
+import Verify.Specs.MilepostToast as MilepostToast
 import Verify.Specs.NotificationsPaywall as NotificationsPaywall
 import Verify.Specs.ScanDeferral as ScanDeferral
 import Verify.Specs.ScanQueueCard as ScanQueueCard
@@ -38,6 +39,7 @@ runAll =
         , SharedTripCard.results
         , Milepost.results
         , MilepostScreen.results
+        , MilepostToast.results
         ]
 
 

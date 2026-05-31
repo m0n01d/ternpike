@@ -256,6 +256,7 @@ type alias AuthState =
     , loadingTrips : Set String
     , milepost : MilepostState
     , milepostStates : List Data.Milepost.MarkerState
+    , milepostToasts : List Data.Milepost.Marker
     , movePicker : Maybe Expense
     , network : NetworkState
     , notificationPermission : Permission
@@ -459,6 +460,7 @@ type AuthMsg_
     | DeleteTrip Trip
     | DismissError
     | DismissMapPicker
+    | DismissMilepostToast
     | DismissPostJoinPrompt
     | DuplicateEntry Expense
     | EnableCrewPush

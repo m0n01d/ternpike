@@ -143,6 +143,7 @@ type alias AuthState =
     , loadingTrips  : Set String
     , milepost      : MilepostState
     , milepostStates : List Milepost.MarkerState
+    , milepostToasts : List Milepost.Marker
     , network       : NetworkState
     , page          : Page
     , route         : Route
@@ -191,6 +192,19 @@ Navigating to `RouteMilepost` kicks a fresh `ReconcileMileposts Time.now` so the
 screen reflects current locked/progress. Shared chip styling lives in
 `UI.Milepost.markerChip`; family colour accents (`brown`/`amber` tokens added to
 `theme.css`) are single-sourced there.
+
+`milepostToasts : List Milepost.Marker` is the earn-toast queue (#410). When the
+`Loaded` branch of `reconcileMileposts` finds newly-earned markers, it maps their
+ids back through `Milepost.catalog` and appends the `Marker`s here; the
+`NotLoaded` first-load seed never enqueues (no celebrating the pre-existing
+backlog). `UI.MilepostToast.view` renders the head of the queue
+(`UI.MilepostToast.next` — the pure decision shared with the
+`Verify.Specs.MilepostToast` surface) as a bottom-anchored forest plaque sliding
+up over the dimmed view, reusing `UI.Milepost`'s family accent + glyph for the
+parchment badge. `DismissMilepostToast` drops the head and re-arms a
+`Process.sleep` auto-advance (mirroring `ToastExpired`/`toastFor`) so a batch of
+earns plays through one at a time; the timer is armed once on enqueue and chained
+by each dismiss so sleeps never stack.
 
 `network : NetworkState` (`Data.Sync`) is also tracked on `GuestState` so the
 disconnected-banner UI works before sign-in. It's a tri-state — `Unknown`
