@@ -80,6 +80,11 @@ For **multi-state UI** (loading / empty / error / success), one mockup per state
 
 It's fine to ship an ASCII wireframe in the initial issue and upgrade to a hi-fi render later as the issue gets prioritized. Don't pre-implement the production asset (e.g., a real SVG template) just to satisfy the mockup requirement — a hand-authored stand-in is enough.
 
+**An approved hi-fi mock is a contract — match it, or get sign-off on the deviation BEFORE shipping, never after.** Once the user has approved a mock, the shipped UI must match its *layout*, not just its content: the grid-vs-list structure, card shape, icon-container shape, section affordances — all of it. The single biggest failure mode here (it happened on the Milepost track, #409) is the issue body faithfully describing the *content* ("a section per family with progress bars") while leaving the *layout* unpinned, so the agent builds a reasonable-but-different arrangement (a vertical list instead of the approved 2-column card grid) and the drift is only noticed by the user after merge. Two hard rules:
+
+1. **When an issue references an approved mock, the issue body must pin the layout in words too** — "2-column grid of plaque cards, icon in a rounded-square badge, family header with a colored dot" — not just "render the markers grouped by family." The mock is the source of truth; the prose must not under-specify it.
+2. **If you (or an agent) deliberately deviate from an approved mock** — for scope, feasibility, or any reason — that is a decision the user owns. Surface it via `AskUserQuestion` and get approval *before* shipping it. Do not ship a different design and explain the difference afterward. "It's basically the same but a list instead of a grid" is exactly the kind of silent downgrade that erodes trust. Verify the shipped UI against the mock (side-by-side screenshot) as part of the PR review, and call out any divergence explicitly.
+
 **Naming:** prefix with the area in square brackets — `[PWA]`, `[Tier]`, `[Stats]`, `[Auth]`. Keep titles under 70 chars.
 
 **Commits cite issues.** Every commit message ends with the issue number it advances: `(fixes #42)` for closing commits, `(#42)` for partial progress. PR titles do the same.
