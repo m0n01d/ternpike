@@ -4,6 +4,7 @@ module Types exposing
     , GuestMsg_(..)
     , GuestScanState(..)
     , GuestState
+    , MilepostState(..)
     , Model(..)
     , Msg(..)
     , ShareMode(..)
@@ -252,6 +253,7 @@ type alias AuthState =
     , ledgerMapExpanded : Bool
     , loadingExpenses : Set String
     , loadingTrips : Set String
+    , milepost : MilepostState
     , movePicker : Maybe Expense
     , network : NetworkState
     , notificationPermission : Permission
@@ -289,6 +291,25 @@ type alias AuthState =
     , version : String
     , voids : Dict String Void
     }
+
+
+{-| The load state of the persisted milepost (achievement) progress doc.
+
+  - `NotLoaded` — the `milepost::progress` document hasn't been read yet (or
+    doesn't exist). The reconcile pass in `Main` treats this as "first load":
+    it seeds the earned-marker map from the current evaluation and writes it
+    silently (no toast for the pre-existing backlog).
+  - `Loaded { earned, rev }` — the document is in hand. `earned` maps each
+    earned `MarkerId` to its ISO-8601 earned-at timestamp; `rev` is the
+    PouchDB `_rev` (REQUIRED to thread through the next write — PouchDB 409s on
+    a second write without the current revision). `rev` is `Nothing` only
+    transiently before the first write's confirmation arrives on the change
+    feed.
+
+-}
+type MilepostState
+    = Loaded { earned : Dict String String, rev : Maybe String }
+    | NotLoaded
 
 
 
@@ -481,6 +502,7 @@ type AuthMsg_
     | OpenTransferModal SharedTripId
     | PaymentMethodChanged (Maybe PaymentMethod)
     | PushSubscribeReceived { error : String, ok : Bool }
+    | ReconcileMileposts Time.Posix
     | RefreshClicked
     | RequestPushPermission
     | ResetLinksClicked SharedTripId

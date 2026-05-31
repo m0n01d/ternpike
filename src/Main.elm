@@ -86,6 +86,8 @@ import Data.GeoPoint as GeoPoint
 import Data.Guest exposing (GuestReason(..), GuestSession)
 import Data.Iso8601 as Iso8601
 import Data.Location exposing (LocationSource(..), LocationState(..))
+import Data.Milepost as Milepost
+import Data.MilepostProgress as MilepostProgress exposing (MilepostProgress)
 import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.Notifications as Notifications
@@ -139,7 +141,7 @@ import Routing
 import Set
 import Task
 import Time
-import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestScanState(..), GuestState, Model(..), Msg(..), ShareMode(..), SharedMsg_(..))
+import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestScanState(..), GuestState, MilepostState(..), Model(..), Msg(..), ShareMode(..), SharedMsg_(..))
 import UI.BillingBanner
 import UI.Layout
 import UI.ShareModal
@@ -238,6 +240,7 @@ toAuthState creds initialRoute gs =
     , today = gs.today
     , trailblazerNumber = creds.trailblazerNumber
     , trailblazerStatus = RemoteData.NotAsked
+    , milepost = NotLoaded
     , tripForm = Nothing
     , tripLoaded = Set.empty
     , trips = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
@@ -388,6 +391,13 @@ encodePouchOut msg =
                 , ( "doc", doc )
                 ]
 
+        SaveMilepostProgress doc ->
+            -- Singleton in the personal DB; no TripTarget.
+            E.object
+                [ ( "tag", E.string "SaveMilepostProgress" )
+                , ( "doc", doc )
+                ]
+
         SaveExpense target doc ->
             E.object
                 [ ( "tag", E.string "SaveExpense" )
@@ -463,6 +473,69 @@ targetForTripId tripId as_ =
             Trip.Personal
 
 
+{-| Project the live `AuthState` into the pure `Data.Milepost.Inputs` snapshot
+that `Data.Milepost.evaluate` consumes.
+
+Walks every loaded trip (`Trips.allTrips`); for each, resolves that trip's
+cached expenses through `Data.Entry.resolve` (folding in amendments and
+removing voids) so the facts handed to `evaluate` already reflect
+post-amendment amounts/categories with voided expenses dropped. Flattens the
+resulting `EffectiveEntry` values to `Data.Milepost.ExpenseFacts` and builds
+`Data.Milepost.TripFacts` from `Trip.budget` / `Trip.id`.
+
+`zone` is `Time.utc` in v1 (Decision 3 — streak day-bucketing is UTC for now);
+`now` is the caller-supplied time.
+
+-}
+milepostInputs : AuthState -> Time.Posix -> Milepost.Inputs
+milepostInputs as_ now =
+    let
+        allTrips : List Trip
+        allTrips =
+            case as_.trips of
+                TripsLoaded loadedTrips ->
+                    Trips.allTrips loadedTrips
+
+                _ ->
+                    []
+
+        allAmendments : List Amendment.Amendment
+        allAmendments =
+            Dict.values as_.amendments
+
+        allVoids : List Void.Void
+        allVoids =
+            Dict.values as_.voids
+
+        factsForTrip : Trip -> List Milepost.ExpenseFacts
+        factsForTrip trip =
+            let
+                tripExpenses : List Expense
+                tripExpenses =
+                    Dict.get (TripId.toString trip.id) as_.expenses
+                        |> Maybe.withDefault Dict.empty
+                        |> Dict.values
+            in
+            Entry.resolve tripExpenses allAmendments allVoids trip.id
+                |> List.map
+                    (\entry ->
+                        { amount = entry.amount
+                        , category = entry.category
+                        , createdAt = entry.createdAt
+                        , tripId = TripId.toString entry.tripId
+                        }
+                    )
+    in
+    { expenses = List.concatMap factsForTrip allTrips
+    , now = now
+    , trips =
+        List.map
+            (\trip -> { budget = trip.budget, id = TripId.toString trip.id })
+            allTrips
+    , zone = Time.utc
+    }
+
+
 pouchInDecoder : D.Decoder PouchInbound
 pouchInDecoder =
     D.field "tag" D.string
@@ -519,6 +592,11 @@ docChangeDecoder =
 
                     "expense" ->
                         D.map ExpenseChanged Expense.decoder
+
+                    "milepostProgress" ->
+                        D.map2 (\progress rev -> MilepostProgressChanged { progress = progress, rev = rev })
+                            MilepostProgress.decoder
+                            (D.maybe (D.field "_rev" D.string))
 
                     "sharedtrip:meta" ->
                         -- Routed up as a top-level SharedTripMeta event by
@@ -840,6 +918,16 @@ handleDbChange change as_ =
                     in
                     clearSubmittedScanItem (ExpenseId.toString e.id) withExpense
 
+                MilepostProgressChanged { progress, rev } ->
+                    -- The earned-marker singleton arrived (our own write
+                    -- confirming, or a sync pull from another device). Capture
+                    -- the map + `_rev` so the next reconcile write threads the
+                    -- right revision. We never shrink the map here — the
+                    -- reconcile pass owns the union.
+                    ( { as_ | milepost = Loaded { earned = progress.earned, rev = rev } }
+                    , Cmd.none
+                    )
+
                 TripChanged t ->
                     ( { as_ | trips = upsertTripIntoState t as_.trips }, Cmd.none )
 
@@ -1064,9 +1152,34 @@ handleTripsFetched tripsDict as_ =
     case selectedTrips of
         Just trips ->
             -- Trips loaded — let fetchesForRoute decide whether the current
-            -- route needs an expenses fetch (will skip if already cached).
-            fetchesForRoute { as_ | trips = TripsLoaded trips }
-                |> (\( s, c ) -> ( AuthModel s, c ))
+            -- route needs an expenses fetch (will skip if already cached),
+            -- then layer on a one-time full load of every other trip's
+            -- expenses so milepost evaluation (count/dollar/streak markers)
+            -- is correct from startup rather than waiting for the user to
+            -- visit each trip (Decision 2). `loadAllTripExpenses` is
+            -- idempotent: it skips trips already in `tripLoaded` /
+            -- `loadingTrips`, so the lazy per-route fetch above is never
+            -- duplicated.
+            let
+                ( routeState, routeCmd ) =
+                    fetchesForRoute { as_ | trips = TripsLoaded trips }
+
+                ( loadedState, loadAllCmd ) =
+                    loadAllTripExpenses routeState
+
+                -- If every trip's expenses were already cached (returning
+                -- session, or a user with zero trips), no `TripExpensesFetched`
+                -- will arrive to drive the reconcile — so trigger it here
+                -- directly. When loads ARE pending, the quiescence check in the
+                -- `TripExpensesFetched` handler fires it instead.
+                reconcileCmd =
+                    if Set.isEmpty loadedState.loadingTrips then
+                        Task.perform (AuthMsg << ReconcileMileposts) Time.now
+
+                    else
+                        Cmd.none
+            in
+            ( AuthModel loadedState, Cmd.batch [ routeCmd, loadAllCmd, reconcileCmd ] )
 
         Nothing ->
             case as_.route of
@@ -1085,6 +1198,164 @@ handleTripsFetched tripsDict as_ =
                     ( AuthModel { as_ | trips = NoTripsYet, route = RouteTrips }
                     , Nav.replaceUrl as_.key (as_.basePath ++ "trips")
                     )
+
+
+{-| Fire `GetTripExpenses` for every loaded trip whose expenses aren't already
+cached (`tripLoaded`) or in flight (`loadingTrips`), marking each as loading.
+
+This is the one-time full load that backs milepost evaluation (Decision 2 in
+#408): the count/dollar/streak markers need every trip's resolved expenses, but
+`fetchesForRoute` only loads the trip the user is currently looking at. We run
+this once after `handleTripsFetched`. It is fully idempotent — a trip already
+loaded or loading is skipped, so it never duplicates the lazy per-route fetch
+and is safe to call repeatedly.
+
+-}
+loadAllTripExpenses : AuthState -> ( AuthState, Cmd Msg )
+loadAllTripExpenses as_ =
+    case as_.trips of
+        TripsLoaded loadedTrips ->
+            let
+                toLoad : List Trip
+                toLoad =
+                    Trips.allTrips loadedTrips
+                        |> List.filter
+                            (\trip ->
+                                let
+                                    key =
+                                        TripId.toString trip.id
+                                in
+                                not (Set.member key as_.tripLoaded)
+                                    && not (Set.member key as_.loadingTrips)
+                            )
+
+                newLoading : Set.Set String
+                newLoading =
+                    toLoad
+                        |> List.map (.id >> TripId.toString)
+                        |> Set.fromList
+
+                cmds : List (Cmd Msg)
+                cmds =
+                    List.map
+                        (\trip -> sendPouch (GetTripExpenses (targetForTripId trip.id as_) trip.id))
+                        toLoad
+            in
+            ( { as_ | loadingTrips = Set.union newLoading as_.loadingTrips }
+            , Cmd.batch cmds
+            )
+
+        _ ->
+            ( as_, Cmd.none )
+
+
+{-| Re-evaluate the milepost catalog against the live state and persist any
+newly-earned markers (Deliverable D, #408).
+
+  - Computes the set of currently-`Earned` marker ids via
+    `Data.Milepost.evaluate (milepostInputs as_ now)`.
+  - **First load** (`milepost == NotLoaded`): seed the earned-marker map from
+    everything earned right now, stamping each with `now`, and write it
+    silently. No toast — the pre-existing backlog shouldn't celebrate on first
+    boot.
+  - **Subsequent passes**: `newlyEarned = earnedNow \ persisted`. If non-empty,
+    write the union (markers never un-earn). Idempotent — when nothing is new,
+    no write is issued, so the oscillating `Synced` edge doesn't churn the doc.
+
+`newlyEarned` is computed into a named local even though #408 issues no toast,
+so #410 can drop a `ShowMilepostToast` over it without restructuring this
+function.
+
+This is pure local PouchDB; it is NOT gated on remote sync success (local-first
+rule) — the caller fires it once expense loading is quiescent regardless of
+whether sync reached the wire.
+
+-}
+reconcileMileposts : Time.Posix -> AuthState -> ( Model, Cmd Msg )
+reconcileMileposts now as_ =
+    let
+        nowIso : String
+        nowIso =
+            Iso8601.fromPosix now
+
+        earnedNow : Set.Set String
+        earnedNow =
+            Milepost.evaluate (milepostInputs as_ now)
+                |> List.filterMap
+                    (\state ->
+                        case state of
+                            Milepost.Earned { marker } ->
+                                Just marker.id
+
+                            Milepost.Locked _ ->
+                                Nothing
+                    )
+                |> Set.fromList
+    in
+    case as_.milepost of
+        NotLoaded ->
+            -- First load: seed silently from the current backlog.
+            let
+                seeded : Dict.Dict String String
+                seeded =
+                    earnedNow
+                        |> Set.toList
+                        |> List.map (\id -> ( id, nowIso ))
+                        |> Dict.fromList
+
+                progress : MilepostProgress
+                progress =
+                    { earned = seeded }
+            in
+            ( AuthModel { as_ | milepost = Loaded { earned = seeded, rev = Nothing } }
+            , sendPouch (SaveMilepostProgress (MilepostProgress.encoder progress))
+            )
+
+        Loaded { earned, rev } ->
+            let
+                persisted : Set.Set String
+                persisted =
+                    Set.fromList (Dict.keys earned)
+
+                newlyEarned : Set.Set String
+                newlyEarned =
+                    Set.diff earnedNow persisted
+            in
+            if Set.isEmpty newlyEarned then
+                -- Idempotent no-op: nothing new earned since the last pass.
+                ( AuthModel as_, Cmd.none )
+
+            else
+                let
+                    unioned : Dict.Dict String String
+                    unioned =
+                        Set.foldl (\id acc -> Dict.insert id nowIso acc) earned newlyEarned
+
+                    progress : MilepostProgress
+                    progress =
+                        { earned = unioned }
+
+                    -- Thread the current `_rev` so PouchDB doesn't 409 on the
+                    -- second write. The JS upsert resolves the rev itself, but
+                    -- carrying it keeps the local model honest until the write
+                    -- confirms back on the change feed.
+                    doc : E.Value
+                    doc =
+                        case rev of
+                            Just r ->
+                                E.object
+                                    [ ( "_id", E.string MilepostProgress.docId )
+                                    , ( "_rev", E.string r )
+                                    , ( "type", E.string "milepostProgress" )
+                                    , ( "earned", E.dict identity E.string unioned )
+                                    ]
+
+                            Nothing ->
+                                MilepostProgress.encoder progress
+                in
+                ( AuthModel { as_ | milepost = Loaded { earned = unioned, rev = rev } }
+                , sendPouch (SaveMilepostProgress doc)
+                )
 
 
 upsertTripIntoState : Trip -> TripsState -> TripsState
@@ -2133,8 +2404,22 @@ updateAuth msg as_ =
                                 , tripLoaded = Set.insert key as_.tripLoaded
                                 , voids = Dict.union bundle.voids as_.voids
                             }
+
+                        -- Once the load-all wave (Decision 2) drains —
+                        -- `loadingTrips` is empty — every trip's expenses are
+                        -- in hand, so re-evaluate mileposts. Firing on
+                        -- quiescence covers both the startup full-load and any
+                        -- later lazy per-route fetch; the reconcile is
+                        -- idempotent (writes only on a change) so the repeat is
+                        -- harmless.
+                        reconcileCmd =
+                            if Set.isEmpty as1.loadingTrips then
+                                Task.perform (AuthMsg << ReconcileMileposts) Time.now
+
+                            else
+                                Cmd.none
                     in
-                    ( AuthModel (hydrateFormForRoute as1), Cmd.none )
+                    ( AuthModel (hydrateFormForRoute as1), reconcileCmd )
 
                 Ok (ExpenseFetched eid bundle) ->
                     let
@@ -2967,6 +3252,9 @@ updateAuth msg as_ =
 
         CloseTripForm ->
             ( AuthModel { as_ | tripForm = Nothing }, Cmd.none )
+
+        ReconcileMileposts now ->
+            reconcileMileposts now as_
 
         RefreshClicked ->
             case Routing.routeTripId as_.route of
