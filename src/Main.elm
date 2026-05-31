@@ -70,6 +70,7 @@ For the full narrative and document ID conventions, see `docs/architecture.md`.
 import Analytics
 import Browser
 import Browser.Dom
+import Browser.Events
 import Browser.Navigation as Nav
 import Codec
 import Data.Amendment as Amendment
@@ -255,6 +256,7 @@ toAuthState creds initialRoute gs =
     , tripsHydrated = False
     , version = gs.version
     , voids = Dict.empty
+    , zone = gs.zone
     }
 
 
@@ -279,6 +281,7 @@ toGuestState reason as_ =
     , showSettings = reason == SessionExpired
     , today = as_.today
     , version = as_.version
+    , zone = as_.zone
     }
 
 
@@ -507,8 +510,10 @@ post-amendment amounts/categories with voided expenses dropped. Flattens the
 resulting `EffectiveEntry` values to `Data.Milepost.ExpenseFacts` and builds
 `Data.Milepost.TripFacts` from `Trip.budget` / `Trip.id`.
 
-`zone` is `Time.utc` in v1 (Decision 3 — streak day-bucketing is UTC for now);
-`now` is the caller-supplied time.
+`zone` is the device's current local zone (`as_.zone`), captured via
+`Time.here` on boot and refreshed on every visibility change, so streak
+day-bucketing happens on the user's _local_ midnights — correct for a
+traveller crossing time zones. `now` is the caller-supplied time.
 
 -}
 milepostInputs : AuthState -> Time.Posix -> Milepost.Inputs
@@ -563,7 +568,7 @@ milepostInputs as_ now =
                 }
             )
             allTrips
-    , zone = Time.utc
+    , zone = as_.zone
     }
 
 
@@ -634,7 +639,7 @@ milepostInputsForTrip tripId as_ =
             { expenses = []
             , now = Time.millisToPosix 0
             , trips = []
-            , zone = Time.utc
+            , zone = as_.zone
             }
 
         Just trip ->
@@ -667,7 +672,7 @@ milepostInputsForTrip tripId as_ =
                   , id = TripId.toString trip.id
                   }
                 ]
-            , zone = Time.utc
+            , zone = as_.zone
             }
 
 
@@ -1731,6 +1736,22 @@ epochDate =
         |> Maybe.withDefault (DateField.today Time.utc (Time.millisToPosix 0))
 
 
+{-| Capture the device's current local time zone and instant, then feed both
+into `DateContextChanged`. Fired on boot and on every visibility change so the
+app's notion of "today" (the default date for a new expense) and the zone used
+for streak/Milepost day-bucketing track the user's real location — even after
+they've travelled across zones or crossed local midnight with the app open.
+
+`Time.here` re-reads the OS-configured zone each time it runs, so a westward
+traveller whose device has switched zones gets the new zone on the next refresh.
+
+-}
+captureDateContext : Cmd Msg
+captureDateContext =
+    Task.map2 Tuple.pair Time.here Time.now
+        |> Task.perform (\( zone, now ) -> SharedMsg (DateContextChanged zone now))
+
+
 
 -- INIT
 
@@ -1798,6 +1819,7 @@ init flagsJson url key =
             , showSettings = False
             , today = initialToday
             , version = dec "version"
+            , zone = Time.utc
             }
     in
     case ( initialRoute, authCreds ) of
@@ -1854,7 +1876,7 @@ init flagsJson url key =
                             _ ->
                                 RemoteData.NotAsked
                 }
-            , bootFetchCmd
+            , Cmd.batch [ bootFetchCmd, captureDateContext ]
             )
 
         ( _, Just creds ) ->
@@ -1905,7 +1927,7 @@ init flagsJson url key =
             -- queue is device-local, not synced — so it's safe to fire on the
             -- boot critical path alongside `/me`.
             ( AuthModel bootedFinal
-            , Cmd.batch [ fetchMe bootedFinal, checkoutCmd, Ports.loadScanQueue () ]
+            , Cmd.batch [ fetchMe bootedFinal, checkoutCmd, Ports.loadScanQueue (), captureDateContext ]
             )
 
 
@@ -2155,6 +2177,24 @@ updateShared msg model =
                     , Ports.saveStorage { key = "anthropic_key", value = Maybe.Extra.unwrap "" AnthropicKey.toHeader newKey }
                     )
 
+        DateContextChanged zone now ->
+            -- Refreshed default "today" + streak-bucketing zone, captured from
+            -- the device on boot and on every visibility change. Re-deriving
+            -- `today` from the live zone keeps a new expense's default date
+            -- pinned to the user's *local* day even after they've travelled
+            -- across zones or crossed midnight with the app open.
+            let
+                refreshedToday : DateField.DateField
+                refreshedToday =
+                    DateField.today zone now
+            in
+            case model of
+                GuestModel gs ->
+                    ( GuestModel { gs | today = refreshedToday, zone = zone }, Cmd.none )
+
+                AuthModel as_ ->
+                    ( AuthModel { as_ | today = refreshedToday, zone = zone }, Cmd.none )
+
         LinkClicked (Browser.Internal url) ->
             let
                 ( navKey, basePath ) =
@@ -2220,6 +2260,12 @@ updateShared msg model =
                         Cmd.none
                     )
 
+        RefreshDateContext ->
+            -- Visibility regained (or boot): re-capture the device zone + now.
+            -- A no-op subscription can't run a Task, so this trigger fires the
+            -- `Time.here`/`Time.now` read that lands as `DateContextChanged`.
+            ( model, captureDateContext )
+
         ResetSettingsClicked ->
             case model of
                 GuestModel gs ->
@@ -2255,6 +2301,7 @@ updateShared msg model =
                         , showSettings = False
                         , today = as_.today
                         , version = as_.version
+                        , zone = as_.zone
                         }
                     , Cmd.batch [ Ports.clearAllStorage (), Ports.stopSync () ]
                     )
@@ -2509,6 +2556,10 @@ updateGuest msg gs =
                 -- re-runs after in-SPA re-login (token expired while the tab
                 -- stayed open) — re-hydrate the durable queue here (#371).
                 , Ports.loadScanQueue ()
+
+                -- `init` won't re-run either, so re-capture the device zone +
+                -- "today" so a re-login doesn't inherit a stale `gs.zone`.
+                , captureDateContext
                 ]
             )
 
@@ -2624,6 +2675,9 @@ updateGuest msg gs =
                         -- scan queue on in-SPA re-login since `toAuthState`
                         -- cleared it and `init` won't re-run (#371).
                         , Ports.loadScanQueue ()
+
+                        -- Likewise re-capture the device zone + "today".
+                        , captureDateContext
                         ]
                     )
 
@@ -5338,7 +5392,15 @@ main =
         , subscriptions =
             \_ ->
                 Sub.batch
-                    [ Ports.pouchIn (AuthMsg << GotPouchMsg)
+                    [ -- Re-capture the device zone + "today" whenever visibility
+                      -- flips. We fire on both edges (hide and show) rather than
+                      -- filtering to `Visible`: `captureDateContext` is idempotent
+                      -- (it just re-reads `Time.here`/`Time.now` and overwrites
+                      -- `zone`/`today`), so the redundant hide-edge dispatch is
+                      -- harmless, and skipping the filter avoids a no-op message
+                      -- whose only job is to swallow the `Hidden` case.
+                      Browser.Events.onVisibilityChange (\_ -> SharedMsg RefreshDateContext)
+                    , Ports.pouchIn (AuthMsg << GotPouchMsg)
                     , Ports.gotGpsCoords
                         (\r ->
                             if r.denied then

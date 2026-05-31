@@ -242,6 +242,7 @@ type alias GuestState =
     , showSettings     : Bool
     , today            : DateField
     , version          : String
+    , zone             : Time.Zone
     }
 ```
 
@@ -309,8 +310,28 @@ landed. Captured via `Task.perform GotSyncTime Time.now` whenever
 `SyncStateMsg` transitions into `Synced`. The Settings page renders it via
 `UI.DateView.dateOf` + `UI.DateView.timeOf`, both of which emit
 `<relative-time>` web components — the browser converts to the user's local
-zone via `Intl.DateTimeFormat`, so no `Time.Zone` is tracked on the model.
-In-memory only; never syncs to PouchDB.
+zone via `Intl.DateTimeFormat`, so *rendering* a stored `Time.Posix` needs no
+`Time.Zone` from Elm. In-memory only; never syncs to PouchDB.
+
+### `today` and `zone` — the device date context
+
+`today : DateField` is the default calendar date stamped on a new expense (and
+on a new trip's start date). `zone : Time.Zone` is the device's local time zone,
+used for streak/Milepost day-bucketing (`Main.milepostInputs`). Both live on
+`GuestState` and `AuthState` and are carried across the auth boundary by
+`toGuestState`/`toAuthState`.
+
+They are **refreshed from the device**, not captured once. On boot, `init`
+fires `captureDateContext` (`Task.map2 Tuple.pair Time.here Time.now`), and the
+`Browser.Events.onVisibilityChange` subscription re-fires it on every visibility
+change via the `RefreshDateContext` shared message. The resulting
+`DateContextChanged zone now` handler (`updateShared`) recomputes
+`today = DateField.today zone now` and stores the live `zone`. This keeps the
+default date pinned to the user's *local* day after they travel across time
+zones or cross local midnight with the app open — the westward-traveler case.
+The JS `today` flag (`main.js`) seeds the first paint from the device's **local**
+date (`getFullYear`/`getMonth`/`getDate`, never `toISOString()`'s UTC day);
+Elm then keeps it fresh.
 
 ### Nested update dispatch (per-feature `Page.Foo.update`)
 
@@ -820,8 +841,9 @@ idempotent and never duplicates the lazy per-route fetch. When that
 wave drains (`loadingTrips` empty), `ReconcileMileposts now` runs
 `Data.Milepost.evaluate (Main.milepostInputs as_ now)` — the projection walks
 all trips, resolves each through `Data.Entry.resolve` (amendments folded, voids
-removed), and flattens to `Data.Milepost.ExpenseFacts` (`zone = Time.utc` in
-v1). On a first load (`milepost == NotLoaded`) it seeds `milepost::progress`
+removed), and flattens to `Data.Milepost.ExpenseFacts` (`zone = as_.zone` — the
+device's live local zone, so streak days bucket on local midnights). On a first
+load (`milepost == NotLoaded`) it seeds `milepost::progress`
 from the current backlog silently (no toast); on later passes it writes the
 union of `earnedNow \ persisted` only when that set is non-empty (markers never
 un-earn, and the write is skipped when nothing changed so the oscillating
