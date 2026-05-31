@@ -297,6 +297,21 @@ import './elements/tp-amount.js'
   }
 
 
+  // ── Real viewport height (iOS `dvh` is unreliable in standalone PWAs) ──
+  // CSS `100dvh` resolves SHORTER than the actual screen on some iOS
+  // versions/standalone PWAs, so a `h-dvh` app shell ends above the screen
+  // bottom and the page body shows through as a dark band below the nav.
+  // Measure the real height in JS and expose it as `--app-height`; the shell
+  // + nav are sized off this var (with a 100dvh fallback). Use innerHeight,
+  // not visualViewport.height, so the layout doesn't jump when the on-screen
+  // keyboard overlays the viewport.
+  const setAppHeight = () => {
+    document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px')
+  }
+  setAppHeight()
+  window.addEventListener('resize', setAppHeight)
+  window.addEventListener('orientationchange', setAppHeight)
+
   // ── Start Elm ──────────────────────────────────────────────────────────
 
   const app = Elm.Main.init({ flags })
