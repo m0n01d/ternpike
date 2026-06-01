@@ -1,4 +1,4 @@
-module UI.MoneyView exposing (amount, totals, wholeDollars)
+module UI.MoneyView exposing (amount, totals, tripEstimate, wholeDollars)
 
 {-| Elm-side wrappers around the `<tp-amount>` web component.
 
@@ -24,9 +24,12 @@ so the a11y attributes never drift.
 -}
 
 import Data.Currency as Currency exposing (Currency)
+import Data.Entry as Entry
+import Data.ExchangeRate as ExchangeRate exposing (RateTable)
 import Data.Money as Money exposing (Money)
 import Html exposing (Html)
 import Html.Attributes
+import UI.DateView
 
 
 {-| Render a `Money` value in the given currency with two decimals.
@@ -67,6 +70,56 @@ totals pairs =
                     [ Html.text "·" ]
                 )
         )
+
+
+{-| The optional home-currency _estimate_ for a trip, rendered beside the
+exact per-currency `totals` split — e.g. `≈ $2,290 USD · est. · as of Jun 1`.
+
+This is the single source of truth for _when_ the estimate shows: only when
+the trip has non-home spend (an all-USD trip's estimate equals its total, so
+it's redundant), a rate table is available, and at least one subtotal could be
+converted. A `+` after the amount flags that some currency had no rate (so the
+figure is a floor, not the full total). The estimate is **derived,
+presentation-only** — Ternpike never converts on the data path; the exact
+figures stay the native `totals` split.
+
+-}
+tripEstimate : RateTable -> List Entry.EffectiveEntry -> Html msg
+tripEstimate rates entries =
+    let
+        result : { missing : List Currency, total : Money }
+        result =
+            Entry.estimatedHomeTotal (ExchangeRate.estimate rates) entries
+
+        allHome : Bool
+        allHome =
+            List.all (\e -> e.currency == Currency.usd) entries
+    in
+    if allHome || ExchangeRate.isEmpty rates || Money.toCents result.total <= 0 then
+        Html.text ""
+
+    else
+        Html.div [ Html.Attributes.class "mt-1 text-sm font-mono text-moss" ]
+            [ Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "≈ " ]
+            , amount Currency.usd result.total
+            , if List.isEmpty result.missing then
+                Html.text ""
+
+              else
+                -- "+" means "at least" (some currency had no rate); decorative,
+                -- so hide it from the reader rather than have it spoken "plus".
+                Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "+" ]
+            , Html.span [ Html.Attributes.class "text-muted" ]
+                (Html.text " · est."
+                    :: (case ExchangeRate.asOf rates of
+                            Just date ->
+                                [ Html.text " · as of ", UI.DateView.monthDay date ]
+
+                            Nothing ->
+                                []
+                       )
+                )
+            ]
 
 
 {-| Render a `Money` value in the given currency with no fractional digits

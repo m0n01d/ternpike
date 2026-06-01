@@ -123,6 +123,20 @@ branch — it keys off `Data.Currency.usesGallons` (the US is the only gallons
 country; everyone else is metric). Trip `budget` stays USD-only (Trip has no
 currency field); `UI.BudgetBar` passes `Data.Currency.usd`, and the bar is
 hidden on any trip with non-USD spend.
+
+**Optional home-currency estimate (#448).** Beside the exact native split, a
+multi-currency trip can show a *derived* estimate — `≈ $2,290 USD · est. · as
+of Jun 1`. Rates are auto-fetched from the free `/rates` Worker endpoint
+(mid-market daily reference rates, keyless upstream, KV-cached) into a
+`Data.ExchangeRate.RateTable` and cached in the synced `user:settings` doc
+(offline fallback, shared across devices). `Http.RatesApi.fetch` fires on
+boot; `Data.Entry.estimatedHomeTotal` folds each `totalsByCurrency` subtotal
+through `Data.ExchangeRate.estimate`, reporting any currency with no rate so
+the UI shows a `+` floor rather than undercounting; `UI.MoneyView.tripEstimate`
+is the single source of truth for when it renders. This is **presentation
+only** — Ternpike never converts on the data path; the estimate is never
+persisted onto an expense, and it's labelled an estimate because mid-market
+rates aren't what a card actually charges.
 - **`<relative-time datetime="2024-05-21">`** — the
   `@github/relative-time-element` package, registered as a side-effect
   import. Wrapped in Elm by `UI.DateView`:
@@ -182,6 +196,7 @@ type alias AuthState =
     , tripLoaded    : Set String
     , trips         : TripsState
     , tripsHydrated : Bool   -- complete (settled) trips read has landed
+    , userSettings  : UserSettingsState  -- synced settings singleton (FX rate cache, #448)
     , voids         : Dict String Void
     -- ... form fields, UI state, etc.
     }
@@ -482,15 +497,22 @@ void::expense::2024-05-21T14:30:45Z::a1b2c3d4::del
 trip::2024-05-21T14:30:45Z::a1b2c3d4
 ```
 
-Two singleton docs in the personal DB use fixed (non-ULID) `_id`s because there
-is only ever one of each: `user:profile` (see "Local-first storage" below) and
+Singleton docs in the personal DB use fixed (non-ULID) `_id`s because there
+is only ever one of each: `user:profile` (see "Local-first storage" below),
 `milepost::progress` (`type = "milepostProgress"`, `Data.MilepostProgress`) —
-the earned-achievement map `{ earned : Dict MarkerId earnedAtIso }`. The
-client writes `milepost::progress` (it's not server-authoritative); the
-`Data.Pouch.SaveMilepostProgress` outbound command upserts it on the personal
-handle, and the change feed routes it back as a `MilepostProgressChanged`
-`DocChange` (keeping `_rev` on the payload so Elm can thread it through the next
-write).
+the earned-achievement map `{ earned : Dict MarkerId earnedAtIso }` — and
+`user:settings` (`type = "userSettings"`, `Data.UserSettings`) — the synced
+per-user preferences singleton (currently the cached exchange-rate table for
+the spend estimate, #448; the first synced-pref doc, shaped to also hold rate
+overrides and eventually `colorScheme`). The client writes both (neither is
+server-authoritative); the `Data.Pouch.SaveMilepostProgress` /
+`SaveUserSettings` outbound commands upsert them on the personal handle
+(`pouch.js` `upsertDoc` resolves `_rev` itself), and the change feed routes
+them back as `MilepostProgressChanged` / `UserSettingsChanged` `DocChange`s
+(keeping `_rev` on the payload so Elm threads it through the next write).
+Because `wireChanges` is `since:'now'`, `pouch.js` also does an explicit
+`sendUserSettings` read on boot so an offline/warm start still surfaces the
+cached rates (`AuthState.userSettings : UserSettingsState`).
 
 The `amend::` prefix plus the target expense ID lets `pouch.js` fetch all
 amendments for one expense with a single PouchDB `allDocs` range query:

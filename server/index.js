@@ -21,6 +21,7 @@ import {
   sendWeeklyScanReminders,
 } from './notifications.js'
 import { registerQrRoutes } from './qr.js'
+import { registerRatesRoutes } from './rates.js'
 import { registerScanRoutes } from './scan.js'
 import { registerScanDemoRoutes } from './scanDemo.js'
 import { registerSharedTripRoutes, runGraceFreezeSweep } from './sharedTrips.js'
@@ -241,6 +242,7 @@ app.use('/invite/*', corsConfig)
 app.use('/marketing/*', corsConfig)
 app.use('/me', corsConfig)
 app.use('/notifications/*', corsConfig)
+app.use('/rates', corsConfig)
 app.use('/scan', corsConfig)
 app.use('/scan-demo', corsConfig)
 app.use('/scan-guest', corsConfig)
@@ -508,6 +510,7 @@ registerGeocodeRoutes(app)
 registerInviteFunnelRoutes(app)
 registerNotificationRoutes(app)
 registerQrRoutes(app)
+registerRatesRoutes(app)
 registerScanRoutes(app)
 registerScanDemoRoutes(app)
 registerSharedTripRoutes(app)

@@ -4,6 +4,7 @@ import Data.Category as Category
 import Data.Currency exposing (Currency)
 import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
+import Data.ExchangeRate exposing (RateTable)
 import Data.ExpenseId as ExpenseId
 import Data.FuelDetail exposing (FuelDetail)
 import Data.FuelGrade as FuelGrade
@@ -53,7 +54,7 @@ viewTab earned as_ =
     in
     { actions = viewActions as_
     , body = viewBody as_ mode
-    , hero = viewHero earned (activeBudget as_) mode
+    , hero = viewHero earned (activeBudget as_) (Types.ratesFromSettings as_.userSettings) mode
     }
 
 
@@ -159,19 +160,19 @@ viewActions model =
         [ exportButton, mapToggle, refresh ]
 
 
-viewHero : List Milepost.MarkerState -> Money -> LedgerMode -> Html Msg
-viewHero earned budget mode =
+viewHero : List Milepost.MarkerState -> Money -> RateTable -> LedgerMode -> Html Msg
+viewHero earned budget rates mode =
     case mode of
         LedgerReady entries ->
-            viewLedgerHero earned budget entries
+            viewLedgerHero earned budget rates entries
 
         LedgerLoading ->
             Html.div [ Html.Attributes.class "font-mono text-[22px] text-muted" ]
                 [ Html.text "—" ]
 
 
-viewLedgerHero : List Milepost.MarkerState -> Money -> List Entry.EffectiveEntry -> Html Msg
-viewLedgerHero earned budget entries =
+viewLedgerHero : List Milepost.MarkerState -> Money -> RateTable -> List Entry.EffectiveEntry -> Html Msg
+viewLedgerHero earned budget rates entries =
     let
         total =
             Money.sum (List.map .amount entries)
@@ -219,6 +220,7 @@ viewLedgerHero earned budget entries =
         , Html.div
             [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
             [ UI.MoneyView.totals (Entry.totalsByCurrency entries) ]
+        , UI.MoneyView.tripEstimate rates entries
         , Html.div
             [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
             [ Html.text kickerText ]

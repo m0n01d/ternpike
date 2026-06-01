@@ -82,6 +82,7 @@ import Data.CsvExport as CsvExport
 import Data.Currency as Currency
 import Data.DateField as DateField
 import Data.Entry as Entry
+import Data.ExchangeRate as ExchangeRate
 import Data.Expense as Expense exposing (Expense)
 import Data.ExpenseId as ExpenseId
 import Data.FuelGrade as FuelGrade
@@ -113,6 +114,7 @@ import Data.Trip as Trip exposing (Trip, TripField(..))
 import Data.TripId as TripId
 import Data.Trips as Trips exposing (TripsState(..))
 import Data.UserId as UserId
+import Data.UserSettings as UserSettings
 import Data.Void as Void
 import Dict
 import Effect
@@ -126,6 +128,7 @@ import Http
 import Http.Billing
 import Http.Me
 import Http.NestPreviewApi
+import Http.RatesApi
 import Http.SharedTripApi
 import Json.Decode as D
 import Json.Encode as E
@@ -149,7 +152,7 @@ import Routing
 import Set
 import Task
 import Time
-import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestScanState(..), GuestState, MilepostState(..), Model(..), Msg(..), ShareMode(..), SharedMsg_(..))
+import Types exposing (AuthMsg_(..), AuthState, GuestMsg_(..), GuestScanState(..), GuestState, MilepostState(..), Model(..), Msg(..), ShareMode(..), SharedMsg_(..), UserSettingsState(..))
 import UI.BillingBanner
 import UI.Layout
 import UI.MilepostToast
@@ -257,6 +260,7 @@ toAuthState creds initialRoute gs =
     , tripLoaded = Set.empty
     , trips = TripsLoading Dict.empty (Routing.routeTripId initialRoute)
     , tripsHydrated = False
+    , userSettings = SettingsNotLoaded
     , version = gs.version
     , voids = Dict.empty
     , zone = gs.zone
@@ -368,6 +372,60 @@ fetchMe as_ =
     Http.Me.fetch as_.config as_.creds (AuthMsg << MeFetched)
 
 
+{-| `GET /rates` refresh for the spend estimate (#448). Fired on boot
+alongside `fetchMe`; the fetched table is cached into the synced
+`Data.UserSettings` doc. Errors are swallowed at the handler — the estimate
+is a convenience and falls back to whatever rates are already cached
+(possibly from another device, or a prior online session).
+-}
+fetchRates : AuthState -> Cmd Msg
+fetchRates as_ =
+    Http.RatesApi.fetch as_.config as_.creds (AuthMsg << RatesFetched)
+
+
+{-| Persist a freshly-fetched rate table into the synced settings singleton,
+threading the current `_rev` (milepost pattern) so the in-place update
+doesn't 409, and optimistically updating the in-memory copy so the estimate
+renders immediately rather than waiting for the change-feed echo.
+-}
+persistRates : ExchangeRate.RateTable -> AuthState -> ( AuthState, Cmd Msg )
+persistRates table as_ =
+    let
+        currentRev : Maybe String
+        currentRev =
+            case as_.userSettings of
+                SettingsLoaded loaded ->
+                    loaded.rev
+
+                SettingsNotLoaded ->
+                    Nothing
+
+        unchanged : Bool
+        unchanged =
+            case as_.userSettings of
+                SettingsLoaded loaded ->
+                    loaded.settings.exchangeRates == table
+
+                SettingsNotLoaded ->
+                    False
+
+        settings : UserSettings.UserSettings
+        settings =
+            { exchangeRates = table }
+    in
+    if unchanged then
+        -- Same rates already cached (the server day-caches, so a daily boot
+        -- re-fetches an identical table). Skip the write to avoid a redundant
+        -- synced rev on every device every boot — and to shrink the
+        -- cross-device write-conflict window.
+        ( as_, Cmd.none )
+
+    else
+        ( { as_ | userSettings = SettingsLoaded { rev = currentRev, settings = settings } }
+        , sendPouch (SaveUserSettings (UserSettings.encoder currentRev settings))
+        )
+
+
 
 -- POUCHDB PROTOCOL
 
@@ -425,6 +483,13 @@ encodePouchOut msg =
             -- Singleton in the personal DB; no TripTarget.
             E.object
                 [ ( "tag", E.string "SaveMilepostProgress" )
+                , ( "doc", doc )
+                ]
+
+        SaveUserSettings doc ->
+            -- Singleton settings doc in the personal DB; no TripTarget.
+            E.object
+                [ ( "tag", E.string "SaveUserSettings" )
                 , ( "doc", doc )
                 ]
 
@@ -752,6 +817,11 @@ docChangeDecoder =
                     "trip" ->
                         D.map TripChanged Trip.decoder
 
+                    "userSettings" ->
+                        D.map2 (\settings rev -> UserSettingsChanged { rev = rev, settings = settings })
+                            UserSettings.decoder
+                            (D.maybe (D.field "_rev" D.string))
+
                     "void" ->
                         D.map VoidChanged Void.decoder
 
@@ -1076,6 +1146,14 @@ handleDbChange change as_ =
 
                 TripChanged t ->
                     ( { as_ | trips = upsertTripIntoState t as_.trips }, Cmd.none )
+
+                UserSettingsChanged { rev, settings } ->
+                    -- The settings singleton arrived (our own write echo, or a
+                    -- sync pull from another device). Capture it + `_rev` so the
+                    -- next write threads the right revision (milepost pattern).
+                    ( { as_ | userSettings = SettingsLoaded { rev = rev, settings = settings } }
+                    , Cmd.none
+                    )
 
                 VoidChanged v ->
                     ( { as_ | voids = Dict.insert v.id v as_.voids }, Cmd.none )
@@ -1943,7 +2021,7 @@ init flagsJson url key =
             -- queue is device-local, not synced — so it's safe to fire on the
             -- boot critical path alongside `/me`.
             ( AuthModel bootedFinal
-            , Cmd.batch [ fetchMe bootedFinal, checkoutCmd, Ports.loadScanQueue (), captureDateContext ]
+            , Cmd.batch [ fetchMe bootedFinal, fetchRates bootedFinal, checkoutCmd, Ports.loadScanQueue (), captureDateContext ]
             )
 
 
@@ -4530,6 +4608,16 @@ updateAuth msg as_ =
             -- requirement. The next call (next startup, next post-
             -- checkout return) will retry. The cached `Creds` tier is
             -- already good enough to keep rendering until then.
+            ( AuthModel as_, Cmd.none )
+
+        RatesFetched (Ok table) ->
+            persistRates table as_
+                |> Tuple.mapFirst AuthModel
+
+        RatesFetched (Err _) ->
+            -- Silent — the estimate is a convenience. Fall back to whatever
+            -- rates are already cached in the synced settings doc (possibly
+            -- from another device or a prior online session); retry next boot.
             ( AuthModel as_, Cmd.none )
 
         OpenInviteModal flockId ->

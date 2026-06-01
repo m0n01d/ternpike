@@ -1,4 +1,4 @@
-module Data.Entry exposing (Band(..), EffectiveEntry, biggestDay, dailyTotals, medianAmount, primaryCurrency, resolve, spendBand, topCategory, totalsByCurrency, tripMedian, uniqueDates)
+module Data.Entry exposing (Band(..), EffectiveEntry, biggestDay, dailyTotals, estimatedHomeTotal, medianAmount, primaryCurrency, resolve, spendBand, topCategory, totalsByCurrency, tripMedian, uniqueDates)
 
 {-| The "effective" (post-amendment, non-voided) view of expenses.
 
@@ -36,7 +36,7 @@ trip's expenses are in memory at a time, thanks to lazy loading) and each
 surviving expense is run through `applyAmends`, which sorts amendments by
 `createdAt` and folds them left-to-right.
 
-@docs Band, EffectiveEntry, biggestDay, dailyTotals, medianAmount, primaryCurrency, resolve, spendBand, topCategory, totalsByCurrency, tripMedian, uniqueDates
+@docs Band, EffectiveEntry, biggestDay, dailyTotals, estimatedHomeTotal, medianAmount, primaryCurrency, resolve, spendBand, topCategory, totalsByCurrency, tripMedian, uniqueDates
 
 -}
 
@@ -218,6 +218,37 @@ totalsByCurrency entries =
                     |> Money.sum
                 )
             )
+
+
+{-| Estimate the trip's total in the home currency by folding each
+per-currency subtotal through `estimator` (typically
+`Data.ExchangeRate.estimate table`), which returns the home-currency value or
+`Nothing` when no rate is known for that currency.
+
+`total` is the sum of every subtotal that _could_ be converted; `missing`
+lists the currencies that had no rate (so the UI can show `≈ $X+` and prompt
+"set a rate for …" rather than silently undercounting). Ternpike never
+converts on the data path — this is a derived, presentation-only estimate; the
+exact figures stay the native per-currency split from `totalsByCurrency`.
+
+-}
+estimatedHomeTotal :
+    (Currency -> Money -> Maybe Money)
+    -> List EffectiveEntry
+    -> { missing : List Currency, total : Money }
+estimatedHomeTotal estimator entries =
+    totalsByCurrency entries
+        |> List.foldl
+            (\( cur, subtotal ) acc ->
+                case estimator cur subtotal of
+                    Just home ->
+                        { acc | total = Money.add acc.total home }
+
+                    Nothing ->
+                        { acc | missing = cur :: acc.missing }
+            )
+            { missing = [], total = Money.zero }
+        |> (\acc -> { acc | missing = List.reverse acc.missing })
 
 
 {-| The single currency to label a derived, scalar aggregate with — the

@@ -9,6 +9,8 @@ module Types exposing
     , Msg(..)
     , ShareMode(..)
     , SharedMsg_(..)
+    , UserSettingsState(..)
+    , ratesFromSettings
     )
 
 {-| Top-level state and message types — the spine of the Elm
@@ -46,6 +48,7 @@ import Data.Category exposing (Category)
 import Data.ColorScheme exposing (ColorScheme)
 import Data.Currency exposing (Currency)
 import Data.DateField exposing (DateField)
+import Data.ExchangeRate as ExchangeRate
 import Data.Expense exposing (Expense)
 import Data.ExpenseId exposing (ExpenseId)
 import Data.Guest exposing (GuestSession)
@@ -71,6 +74,7 @@ import Data.Trip exposing (Trip, TripField, TripForm)
 import Data.TripId exposing (TripId)
 import Data.Trips exposing (TripsState)
 import Data.UserId
+import Data.UserSettings exposing (UserSettings)
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import File exposing (File)
@@ -302,6 +306,7 @@ type alias AuthState =
     , tripLoaded : Set String
     , trips : TripsState
     , tripsHydrated : Bool
+    , userSettings : UserSettingsState
     , version : String
     , voids : Dict String Void
     , zone : Time.Zone
@@ -325,6 +330,29 @@ type alias AuthState =
 type MilepostState
     = Loaded { earned : Dict String String, rev : Maybe String }
     | NotLoaded
+
+
+{-| The load state of the synced per-user settings singleton
+(`Data.UserSettings`, currently the exchange-rate cache). `rev` is threaded
+on the next write so repeated updates don't 409 (milepost pattern).
+-}
+type UserSettingsState
+    = SettingsLoaded { rev : Maybe String, settings : UserSettings }
+    | SettingsNotLoaded
+
+
+{-| The cached exchange-rate table from the settings singleton, or the empty
+table when no settings doc has loaded yet (so the spend estimate stays
+hidden). Shared by the Ledger and Stats heroes.
+-}
+ratesFromSettings : UserSettingsState -> ExchangeRate.RateTable
+ratesFromSettings state =
+    case state of
+        SettingsLoaded loaded ->
+            loaded.settings.exchangeRates
+
+        SettingsNotLoaded ->
+            ExchangeRate.empty
 
 
 
@@ -525,6 +553,7 @@ type AuthMsg_
     | OpenTransferModal SharedTripId
     | PaymentMethodChanged (Maybe PaymentMethod)
     | PushSubscribeReceived { error : String, ok : Bool }
+    | RatesFetched (Result Http.Error ExchangeRate.RateTable)
     | ReconcileMileposts Time.Posix
     | RefreshClicked
     | RequestPushPermission

@@ -47,6 +47,7 @@ import Data.SharedTripId exposing (SharedTripId)
 import Data.Sync exposing (SyncState)
 import Data.Trip exposing (Trip, TripTarget)
 import Data.TripId exposing (TripId)
+import Data.UserSettings exposing (UserSettings)
 import Data.Void exposing (Void)
 import Dict exposing (Dict)
 import Json.Decode
@@ -66,6 +67,7 @@ type PouchOutbound
     | SaveMilepostProgress Json.Decode.Value
     | SaveExpense TripTarget Json.Decode.Value
     | SaveTrip TripTarget Json.Decode.Value
+    | SaveUserSettings Json.Decode.Value
     | SaveVoid TripTarget Json.Decode.Value
 
 
@@ -117,6 +119,7 @@ type DocChange
     | ExpenseChanged Expense
     | MilepostProgressChanged { progress : MilepostProgress, rev : Maybe String }
     | TripChanged Trip
+    | UserSettingsChanged { rev : Maybe String, settings : UserSettings }
     | VoidChanged Void
 
 

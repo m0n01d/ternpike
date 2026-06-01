@@ -198,6 +198,7 @@ viewHeroReady model entries =
             [ Html.div []
                 [ Html.div [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
                     [ UI.MoneyView.totals (Entry.totalsByCurrency entries) ]
+                , UI.MoneyView.tripEstimate (Types.ratesFromSettings model.userSettings) entries
                 , Html.div [ Html.Attributes.class "mt-2 text-xs font-mono tracking-wide text-muted" ]
                     [ Html.text (String.fromInt numEntries ++ " ENTRIES · DAY " ++ dayOfTripStr) ]
                 ]
