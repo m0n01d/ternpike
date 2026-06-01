@@ -212,7 +212,8 @@ usesGallons currency =
 
 
 {-| Decode a code into a `Currency`, tolerating missing/unparseable values by
-falling back to `usd` (see the module doc).
+falling back to `usd` (see the module doc). The `oneOf` also catches a
+non-string JSON value (e.g. `null`, a number) and yields `usd`.
 -}
 decoder : Json.Decode.Decoder Currency
 decoder =

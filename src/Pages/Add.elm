@@ -115,7 +115,7 @@ viewHero pending =
         [ Html.div [ Html.Attributes.class "flex items-center justify-between mb-1" ]
             [ Html.div [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss" ]
                 [ Html.text "AMOUNT" ]
-            , viewCurrencyToggle pending.currency
+            , viewCurrencyPicker pending.currency
             ]
         , Html.div [ Html.Attributes.class "h-[3rem] flex items-start gap-0" ]
             [ Html.span
@@ -648,10 +648,11 @@ codes a Pan-American overlander hits). Choosing a currency flips the amount
 symbol and the fuel section between gallons and liters; nothing is converted
 (see `Data.Currency`).
 -}
-viewCurrencyToggle : Currency -> Html Msg
-viewCurrencyToggle selected =
+viewCurrencyPicker : Currency -> Html Msg
+viewCurrencyPicker selected =
     Html.select
         [ Html.Events.onInput (AuthMsg << CurrencyChanged << Currency.fromLabel)
+        , Html.Attributes.attribute "aria-label" "Currency"
         , Html.Attributes.class "rounded-md py-1 px-2 text-[11px] font-mono uppercase tracking-widest cursor-pointer border bg-cream text-forest border-tan"
         ]
         (List.map (viewCurrencyOption selected) Currency.common)
