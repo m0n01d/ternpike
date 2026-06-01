@@ -21,9 +21,9 @@ Field types reflect the typed-primitives refactor (#92):
   - `amount : Data.Money.Money` — was `Float`. Encoder still emits `Float`
     dollars so the wire format is unchanged. The amount is in the currency
     named by `currency` (no conversion is ever applied).
-  - `currency : Data.Currency.Currency` — the currency the amount was paid
-    in (`USD` / `CAD`). Decodes to `USD` for legacy docs that predate the
-    field, so the addition is wire-compatible.
+  - `currency : Data.Currency.Currency` — the ISO 4217 currency the amount
+    was paid in (`usd`, `cad`, `mxn`, …). Decodes to `usd` for legacy docs
+    that predate the field, so the addition is wire-compatible.
   - `createdAt : Time.Posix` — was `String`. Wire format remains the ISO
     `"YYYY-MM-DDTHH:MM:SSZ"` string for backward compatibility.
   - `date : Data.DateField.DateField` — was `String`. Wire format remains
@@ -171,7 +171,7 @@ from the relevant trip — this helper does not filter by trip.
         , category = Data.Category.Misc
         , createdAt = Time.millisToPosix 1000
         , createdBy = Data.UserId.unknown
-        , currency = Data.Currency.USD
+        , currency = Data.Currency.usd
         , date = date24
         , fuelDetail = Nothing
         , geoPoint = Nothing
@@ -265,7 +265,7 @@ decoder =
             )
         |> Pipeline.required "createdAt" createdAtDecoder
         |> Pipeline.optional "createdBy" UserId.decoder UserId.unknown
-        |> Pipeline.optional "currency" Currency.decoder Currency.USD
+        |> Pipeline.optional "currency" Currency.decoder Currency.usd
         |> Pipeline.required "date" DateField.decoder
         |> Pipeline.optional "fuel"
             (Json.Decode.map

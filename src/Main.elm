@@ -1640,24 +1640,22 @@ expenseToPending e =
     , date = DateField.toIso e.date
 
     -- The volume/price strings hold whichever unit the currency selects:
-    -- liters + price-per-liter for a CAD fuel-up, gallons + price-per-gallon
-    -- for a USD one (the Add form relabels the inputs to match).
+    -- gallons + price-per-gallon for a US fuel-up, liters + price-per-liter
+    -- for any metric one (the Add form relabels the inputs to match).
     , fuelGallons =
-        case e.currency of
-            Currency.CAD ->
-                e.fuelDetail |> Maybe.andThen .liters |> Maybe.map Liters.toInputString |> Maybe.withDefault ""
+        if Currency.usesGallons e.currency then
+            e.fuelDetail |> Maybe.andThen .gallons |> Maybe.map Gallons.toInputString |> Maybe.withDefault ""
 
-            Currency.USD ->
-                e.fuelDetail |> Maybe.andThen .gallons |> Maybe.map Gallons.toInputString |> Maybe.withDefault ""
+        else
+            e.fuelDetail |> Maybe.andThen .liters |> Maybe.map Liters.toInputString |> Maybe.withDefault ""
     , fuelGrade =
         e.fuelDetail |> Maybe.andThen .grade |> Maybe.map FuelGrade.display |> Maybe.withDefault ""
     , fuelPricePerGallon =
-        case e.currency of
-            Currency.CAD ->
-                e.fuelDetail |> Maybe.andThen .pricePerLiter |> Maybe.map PricePerLiter.toInputString |> Maybe.withDefault ""
+        if Currency.usesGallons e.currency then
+            e.fuelDetail |> Maybe.andThen .pricePerGallon |> Maybe.map PricePerGallon.toInputString |> Maybe.withDefault ""
 
-            Currency.USD ->
-                e.fuelDetail |> Maybe.andThen .pricePerGallon |> Maybe.map PricePerGallon.toInputString |> Maybe.withDefault ""
+        else
+            e.fuelDetail |> Maybe.andThen .pricePerLiter |> Maybe.map PricePerLiter.toInputString |> Maybe.withDefault ""
     , locationState =
         case e.geoPoint of
             Just point ->

@@ -130,7 +130,7 @@ viewHeroReady model entries =
             List.filter (\e -> e.currency == displayCurrency) entries
 
         isUsdOnly =
-            List.all (\e -> e.currency == Data.Currency.USD) entries
+            List.all (\e -> e.currency == Data.Currency.usd) entries
 
         total =
             Money.sum (List.map .amount primaryEntries)

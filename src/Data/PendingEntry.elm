@@ -65,10 +65,11 @@ other text fields and are parsed into a `Data.FuelDetail.FuelDetail` by
 and then re-categorised to `Food` is dropped rather than saved.
 
 `currency` is the currency the amount was paid in. It also drives the
-fuel volume unit: when `currency == CAD` the `fuelGallons` /
-`fuelPricePerGallon` strings are parsed as **liters** and
-**price-per-liter** respectively (the inputs are relabeled in
-`Pages.Add`), so the same two raw fields serve both unit systems.
+fuel volume unit: for a metric currency (anything but USD — see
+`Data.Currency.usesGallons`) the `fuelGallons` / `fuelPricePerGallon`
+strings are parsed as **liters** and **price-per-liter** respectively
+(the inputs are relabeled in `Pages.Add`), so the same two raw fields
+serve both unit systems.
 
 -}
 type alias PendingEntry =
@@ -197,29 +198,28 @@ parseEntry pe =
                         else
                             Just (FuelGrade.fromString pe.fuelGrade)
 
-                    -- The volume unit follows the currency: a CAD fuel-up is
-                    -- metered in liters at a price-per-liter, a USD one in
+                    -- The volume unit follows the currency: a metric fuel-up is
+                    -- metered in liters at a price-per-liter, a US one in
                     -- gallons at a price-per-gallon. The same two raw input
                     -- strings (`fuelGallons` / `fuelPricePerGallon`) feed
                     -- whichever pair the currency selects.
                     detail : FuelDetail
                     detail =
-                        case pe.currency of
-                            Currency.CAD ->
-                                { gallons = Nothing
-                                , grade = grade
-                                , liters = Liters.fromString pe.fuelGallons
-                                , pricePerGallon = Nothing
-                                , pricePerLiter = PricePerLiter.fromString pe.fuelPricePerGallon
-                                }
+                        if Currency.usesGallons pe.currency then
+                            { gallons = Gallons.fromString pe.fuelGallons
+                            , grade = grade
+                            , liters = Nothing
+                            , pricePerGallon = PricePerGallon.fromString pe.fuelPricePerGallon
+                            , pricePerLiter = Nothing
+                            }
 
-                            Currency.USD ->
-                                { gallons = Gallons.fromString pe.fuelGallons
-                                , grade = grade
-                                , liters = Nothing
-                                , pricePerGallon = PricePerGallon.fromString pe.fuelPricePerGallon
-                                , pricePerLiter = Nothing
-                                }
+                        else
+                            { gallons = Nothing
+                            , grade = grade
+                            , liters = Liters.fromString pe.fuelGallons
+                            , pricePerGallon = Nothing
+                            , pricePerLiter = PricePerLiter.fromString pe.fuelPricePerGallon
+                            }
                 in
                 if Data.FuelDetail.isEmpty detail then
                     Nothing
@@ -275,7 +275,7 @@ defaultPendingEntry today =
     { address = ""
     , amount = ""
     , category = Category.Fuel
-    , currency = Currency.USD
+    , currency = Currency.usd
     , date = DateField.toIso today
     , fuelGallons = ""
     , fuelGrade = ""

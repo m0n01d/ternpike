@@ -71,11 +71,11 @@ suite =
 
                         amend =
                             baseAmendment expense.id
-                                |> (\a -> { a | currency = Just Data.Currency.CAD })
+                                |> (\a -> { a | currency = Just (Data.Currency.fromLabel "cad") })
                     in
                     Entry.resolve [ expense ] [ amend ] [] tripId
                         |> List.map .currency
-                        |> Expect.equal [ Data.Currency.CAD ]
+                        |> Expect.equal [ Data.Currency.fromLabel "cad" ]
             , test "amendment with Nothing currency keeps the original" <|
                 \_ ->
                     let
@@ -87,21 +87,21 @@ suite =
                     in
                     Entry.resolve [ expense ] [ baseAmendment expense.id ] [] tripId
                         |> List.map .currency
-                        |> Expect.equal [ Data.Currency.USD ]
+                        |> Expect.equal [ Data.Currency.usd ]
             ]
         , describe "totalsByCurrency"
             [ test "an all-USD trip yields a single USD subtotal (today's behaviour)" <|
                 \_ ->
-                    entriesWith [ ( Data.Currency.USD, 1000 ), ( Data.Currency.USD, 500 ) ]
+                    entriesWith [ ( Data.Currency.usd, 1000 ), ( Data.Currency.usd, 500 ) ]
                         |> Entry.totalsByCurrency
                         |> List.map (Tuple.mapSecond Money.toCents)
-                        |> Expect.equal [ ( Data.Currency.USD, 1500 ) ]
+                        |> Expect.equal [ ( Data.Currency.usd, 1500 ) ]
             , test "a mixed trip yields per-currency subtotals, USD first" <|
                 \_ ->
-                    entriesWith [ ( Data.Currency.USD, 1000 ), ( Data.Currency.CAD, 2000 ), ( Data.Currency.USD, 500 ) ]
+                    entriesWith [ ( Data.Currency.usd, 1000 ), ( Data.Currency.fromLabel "cad", 2000 ), ( Data.Currency.usd, 500 ) ]
                         |> Entry.totalsByCurrency
                         |> List.map (Tuple.mapSecond Money.toCents)
-                        |> Expect.equal [ ( Data.Currency.USD, 1500 ), ( Data.Currency.CAD, 2000 ) ]
+                        |> Expect.equal [ ( Data.Currency.usd, 1500 ), ( Data.Currency.fromLabel "cad", 2000 ) ]
             , test "an empty list yields no subtotals" <|
                 \_ ->
                     Entry.totalsByCurrency []
@@ -110,23 +110,23 @@ suite =
         , describe "primaryCurrency"
             [ test "picks the most common currency" <|
                 \_ ->
-                    entriesWith [ ( Data.Currency.USD, 1 ), ( Data.Currency.CAD, 1 ), ( Data.Currency.USD, 1 ) ]
+                    entriesWith [ ( Data.Currency.usd, 1 ), ( Data.Currency.fromLabel "cad", 1 ), ( Data.Currency.usd, 1 ) ]
                         |> Entry.primaryCurrency
-                        |> Expect.equal Data.Currency.USD
+                        |> Expect.equal Data.Currency.usd
             , test "a CAD-only trip is primarily CAD" <|
                 \_ ->
-                    entriesWith [ ( Data.Currency.CAD, 1 ), ( Data.Currency.CAD, 1 ) ]
+                    entriesWith [ ( Data.Currency.fromLabel "cad", 1 ), ( Data.Currency.fromLabel "cad", 1 ) ]
                         |> Entry.primaryCurrency
-                        |> Expect.equal Data.Currency.CAD
+                        |> Expect.equal (Data.Currency.fromLabel "cad")
             , test "ties resolve to USD" <|
                 \_ ->
-                    entriesWith [ ( Data.Currency.USD, 1 ), ( Data.Currency.CAD, 1 ) ]
+                    entriesWith [ ( Data.Currency.usd, 1 ), ( Data.Currency.fromLabel "cad", 1 ) ]
                         |> Entry.primaryCurrency
-                        |> Expect.equal Data.Currency.USD
+                        |> Expect.equal Data.Currency.usd
             , test "an empty list defaults to USD" <|
                 \_ ->
                     Entry.primaryCurrency []
-                        |> Expect.equal Data.Currency.USD
+                        |> Expect.equal Data.Currency.usd
             ]
         ]
 
@@ -172,7 +172,7 @@ baseExpense tripId =
     , category = Food
     , createdAt = Time.millisToPosix 1700000000000
     , createdBy = UserId.fromString "alice@example.com"
-    , currency = Data.Currency.USD
+    , currency = Data.Currency.usd
     , date = DateField.fromIso "2024-05-21" |> Maybe.withDefault epoch
     , fuelDetail = Nothing
     , geoPoint = Nothing

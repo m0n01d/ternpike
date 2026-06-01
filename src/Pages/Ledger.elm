@@ -180,7 +180,7 @@ viewLedgerHero earned budget entries =
         -- every entry is USD, so we never compare it against a cross-currency
         -- (CAD+USD) sum. The hero total above shows the per-currency split.
         isUsdOnly =
-            List.all (\e -> e.currency == Data.Currency.USD) entries
+            List.all (\e -> e.currency == Data.Currency.usd) entries
 
         entryCount =
             List.length entries
