@@ -13,11 +13,15 @@ module Data.ScanTest exposing (suite)
 -}
 
 import Data.Category as Category
+import Data.Currency as Currency
 import Data.DateField as DateField
+import Data.Gallons as Gallons
 import Data.GeoPoint as GeoPoint
+import Data.Liters as Liters
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money
 import Data.PaymentMethod as PaymentMethod
+import Data.PricePerLiter as PricePerLiter
 import Data.Scan as Scan exposing (ExifPhase(..), GeocodePhase(..), ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Dict
@@ -104,7 +108,108 @@ ocrDataDecoderSuite =
                 Json.Decode.decodeString Scan.ocrDataListDecoder wire
                     |> Result.map (List.map .address)
                     |> Expect.equal (Ok [ Just "111 Main St", Just "222 Park Ave" ])
+        , test "parses a metric pump scan: currency MXN + liters/pricePerLiter, no gallons" <|
+            \_ ->
+                let
+                    wire =
+                        """
+                        { "amount": 896.50
+                        , "category": "fuel"
+                        , "currency": "mxn"
+                        , "liters": 38.21
+                        , "pricePerLiter": 23.459
+                        , "grade": "regular"
+                        }
+                        """
+                in
+                Json.Decode.decodeString Scan.ocrDataDecoder wire
+                    |> Result.map
+                        (\ocr ->
+                            { currency = ocr.currency
+                            , liters = Maybe.andThen .liters ocr.fuelDetail
+                            , gallons = Maybe.andThen .gallons ocr.fuelDetail
+                            , pricePerLiter = Maybe.andThen .pricePerLiter ocr.fuelDetail
+                            }
+                        )
+                    |> Expect.equal
+                        (Ok
+                            { currency = Just (Currency.fromLabel "mxn")
+                            , liters = Liters.fromString "38.21"
+                            , gallons = Nothing
+                            , pricePerLiter = PricePerLiter.fromString "23.459"
+                            }
+                        )
+        , test "an unreadable currency collapses to Nothing (not a USD default)" <|
+            \_ ->
+                Json.Decode.decodeString Scan.ocrDataDecoder """{ "amount": 5.5, "currency": "dollars" }"""
+                    |> Result.map .currency
+                    |> Expect.equal (Ok Nothing)
+        , test "currency + liters survive an encode/decode round-trip" <|
+            \_ ->
+                Scan.ocrDataEncoder metricOcr
+                    |> Json.Decode.decodeValue Scan.ocrDataDecoder
+                    |> Expect.equal (Ok metricOcr)
+        , test "sliceJson salvages an array the model wrapped in prose (#452 Valero pump)" <|
+            \_ ->
+                let
+                    modelText : String
+                    modelText =
+                        """I can see a Valero fuel pump display showing:
+- $69.27 (total sale)
+- 14.746 gallons
+
+The price per gallon would be 69.27 / 14.746 ~ 4.699
+
+[{"amount": 69.27, "category": "fuel", "currency": "USD", "gallons": 14.746, "pricePerGallon": 4.699}]"""
+                in
+                Scan.sliceJson modelText
+                    |> Json.Decode.decodeString Scan.ocrDataListDecoder
+                    |> Result.map
+                        (\list ->
+                            List.head list
+                                |> Maybe.map
+                                    (\o ->
+                                        ( o.amount
+                                        , o.currency
+                                        , Maybe.andThen .gallons o.fuelDetail
+                                        )
+                                    )
+                        )
+                    |> Expect.equal
+                        (Ok
+                            (Just
+                                ( Just (Money.fromCents 6927)
+                                , Just (Currency.fromLabel "usd")
+                                , Gallons.fromString "14.746"
+                                )
+                            )
+                        )
         ]
+
+
+{-| A metric (Mexican pump) OCR result: pesos, liters, price-per-liter —
+the foreign-pump shape that the gas-pump scan track (#452) added.
+-}
+metricOcr : Scan.OcrData
+metricOcr =
+    { address = Nothing
+    , amount = Just (Money.fromCents 89650)
+    , category = Just Category.Fuel
+    , currency = Just (Currency.fromLabel "mxn")
+    , date = Nothing
+    , fuelDetail =
+        Just
+            { gallons = Nothing
+            , grade = Nothing
+            , liters = Liters.fromString "38.21"
+            , pricePerGallon = Nothing
+            , pricePerLiter = PricePerLiter.fromString "23.459"
+            }
+    , longNote = Nothing
+    , merchant = Nothing
+    , note = Nothing
+    , paymentMethod = Nothing
+    }
 
 
 
@@ -150,6 +255,7 @@ sampleOcr =
     { address = Just "123 4th Ave, Anchorage AK"
     , amount = Just (Money.fromCents 1230)
     , category = Just Category.Food
+    , currency = Nothing
     , date = Just sampleDate
     , fuelDetail = Nothing
     , longNote = Just "a long note about lunch"

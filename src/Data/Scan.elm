@@ -27,6 +27,7 @@ module Data.Scan exposing
     , reconnectCandidates
     , scanItemDecoder
     , scanItemEncoder
+    , sliceJson
     )
 
 {-| Receipt-scan queue: one `ScanItem` per receipt the user has dropped
@@ -54,16 +55,19 @@ own doc.
 -}
 
 import Data.Category as Category exposing (Category)
+import Data.Currency as Currency exposing (Currency)
 import Data.DateField as DateField exposing (DateField)
 import Data.FuelDetail as FuelDetail exposing (FuelDetail)
 import Data.FuelGrade as FuelGrade
 import Data.Gallons as Gallons
 import Data.GeoPoint as GeoPoint exposing (GeoPoint)
+import Data.Liters as Liters
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Money as Money exposing (Money)
 import Data.OcrPath exposing (OcrPath(..))
 import Data.PaymentMethod as PaymentMethod exposing (PaymentMethod)
 import Data.PricePerGallon as PricePerGallon
+import Data.PricePerLiter as PricePerLiter
 import Data.ScanItemId exposing (ScanItemId)
 import Dict exposing (Dict)
 import Json.Decode
@@ -103,11 +107,18 @@ them — for example a faded thermal receipt can produce a clear amount
 but unreadable date. The Add-page review step is the user's chance to
 correct anything missing or wrong.
 
+`currency` is the ISO-4217 code the model inferred from the image (`USD`,
+`MXN`, …). It is what makes a foreign-pump scan land in the right currency —
+and, transitively, the right fuel unit, since `Data.Currency.usesGallons`
+drives gallons-vs-liters. `Nothing` when the model couldn't tell; the
+Add-review currency picker is the correction path.
+
 -}
 type alias OcrData =
     { address : Maybe String
     , amount : Maybe Money
     , category : Maybe Category
+    , currency : Maybe Currency
     , date : Maybe DateField
     , fuelDetail : Maybe FuelDetail
     , longNote : Maybe String
@@ -287,34 +298,36 @@ draft is the raw string the user is editing; it's parsed through
 `Money.fromDollarString` and only overrides when it parses to a real value.
 
     import Data.Category exposing (Category(..))
+    import Data.Currency as Currency
     import Data.DateField as DateField
     import Data.Location exposing (LocationState(..))
     import Data.Money as Money
     import Data.PaymentMethod exposing (PaymentMethod(..))
 
-    -- An empty draft is the identity: OCR passes through untouched.
+    -- An empty draft is the identity: OCR passes through untouched — the
+    -- OCR-detected currency carries through (DraftFields has none to override).
     mergeOcrIntoDraft
         { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, locationState = LocationIdle, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
-    --> { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
+        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, currency = Just (Currency.fromLabel "mxn"), date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
+    --> { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, currency = Just (Currency.fromLabel "mxn"), date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Just "ln", merchant = Just "Trader Joe's", note = Just "n", paymentMethod = Just Cash }
 
     -- A set draft field wins over OCR; untouched fields keep OCR.
     mergeOcrIntoDraft
         { address = Just "9 Draft Rd", amount = Just "5.00", category = Just Lodging, date = DateField.fromIso "2024-01-02", locationState = LocationIdle, longNote = Just "draft ln", merchant = Just "My Merchant", note = Just "draft note", paymentMethod = Just Credit }
-        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Just "ocr ln", merchant = Just "Trader Joe's", note = Just "ocr note", paymentMethod = Just Cash }
-    --> { address = Just "9 Draft Rd", amount = Just (Money.fromCents 500), category = Just Lodging, date = DateField.fromIso "2024-01-02", fuelDetail = Nothing, longNote = Just "draft ln", merchant = Just "My Merchant", note = Just "draft note", paymentMethod = Just Credit }
+        { address = Just "1 Main St", amount = Just (Money.fromCents 1299), category = Just Food, currency = Nothing, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Just "ocr ln", merchant = Just "Trader Joe's", note = Just "ocr note", paymentMethod = Just Cash }
+    --> { address = Just "9 Draft Rd", amount = Just (Money.fromCents 500), category = Just Lodging, currency = Nothing, date = DateField.fromIso "2024-01-02", fuelDetail = Nothing, longNote = Just "draft ln", merchant = Just "My Merchant", note = Just "draft note", paymentMethod = Just Credit }
 
     -- Untouched category/date do NOT fall back to Fuel/today — they stay OCR.
     mergeOcrIntoDraft
         { address = Nothing, amount = Nothing, category = Nothing, date = Nothing, locationState = LocationIdle, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-        { address = Nothing, amount = Nothing, category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-    --> { address = Nothing, amount = Nothing, category = Just Food, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+        { address = Nothing, amount = Nothing, category = Just Food, currency = Nothing, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+    --> { address = Nothing, amount = Nothing, category = Just Food, currency = Nothing, date = DateField.fromIso "2024-05-21", fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
 
     -- An unparseable draft amount can't clobber a real OCR amount.
     mergeOcrIntoDraft
         { address = Nothing, amount = Just "abc", category = Nothing, date = Nothing, locationState = LocationIdle, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-        { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, date = Nothing, fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
-    --> { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, date = Nothing, fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+        { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, currency = Nothing, date = Nothing, fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+    --> { address = Nothing, amount = Just (Money.fromCents 1299), category = Nothing, currency = Nothing, date = Nothing, fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
 
 -}
 mergeOcrIntoDraft : DraftFields -> OcrData -> OcrData
@@ -322,6 +335,7 @@ mergeOcrIntoDraft draft ocr =
     { address = Maybe.Extra.or draft.address ocr.address
     , amount = Maybe.Extra.or (Maybe.andThen Money.fromDollarString draft.amount) ocr.amount
     , category = Maybe.Extra.or draft.category ocr.category
+    , currency = ocr.currency
     , date = Maybe.Extra.or draft.date ocr.date
     , fuelDetail = ocr.fuelDetail
     , longNote = Maybe.Extra.or draft.longNote ocr.longNote
@@ -512,11 +526,11 @@ expense is safe to file; the badge on the Scan card pulls focus to
 items that need attention.
 
     -- amount missing
-    needsReview { amount = Nothing, merchant = Just "Trattoria", date = Nothing, address = Nothing, category = Nothing, fuelDetail = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
+    needsReview { amount = Nothing, merchant = Just "Trattoria", date = Nothing, address = Nothing, category = Nothing, currency = Nothing, fuelDetail = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
     --> True
 
     -- merchant missing
-    needsReview { amount = Nothing, merchant = Nothing, date = Nothing, address = Nothing, category = Nothing, fuelDetail = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
+    needsReview { amount = Nothing, merchant = Nothing, date = Nothing, address = Nothing, category = Nothing, currency = Nothing, fuelDetail = Nothing, longNote = Nothing, note = Nothing, paymentMethod = Nothing }
     --> True
 
 -}
@@ -944,6 +958,7 @@ ocrDataDecoder =
         |> Pipeline.optional "address" (lenient Json.Decode.string) Nothing
         |> Pipeline.optional "amount" (lenient Money.decoder) Nothing
         |> Pipeline.optional "category" (Json.Decode.map Just (Json.Decode.map Category.fromString Json.Decode.string)) Nothing
+        |> Pipeline.optional "currency" (lenient currencyDecoder) Nothing
         |> Pipeline.optional "date" (lenient DateField.decoder) Nothing
         |> Pipeline.custom (Json.Decode.map normalizeFuelDetail FuelDetail.decoder)
         |> Pipeline.optional "longNote" (lenient Json.Decode.string) Nothing
@@ -980,6 +995,27 @@ normalizeFuelDetail detail =
         Just detail
 
 
+{-| Map an Anthropic-returned currency string to a `Currency`. Unlike
+`Data.Currency.decoder` (which defaults an unparseable value to `usd`),
+this fails on anything that isn't a plausible ISO-4217 code so that
+`lenient` upstream collapses it to `Nothing` — "the model didn't read a
+currency" must stay distinguishable from "the model said USD," since only
+the former should fall back to the form default.
+-}
+currencyDecoder : Json.Decode.Decoder Currency
+currencyDecoder =
+    Json.Decode.string
+        |> Json.Decode.andThen
+            (\s ->
+                case Currency.fromCode s of
+                    Just c ->
+                        Json.Decode.succeed c
+
+                    Nothing ->
+                        Json.Decode.fail ("Unknown currency: " ++ s)
+            )
+
+
 {-| Map an Anthropic-returned payment-method string to a
 `PaymentMethod`. Anything outside the recognized set causes a decode
 failure here, but `lenient` upstream converts that into a `Nothing`
@@ -1011,6 +1047,73 @@ ocrDataListDecoder =
         ]
 
 
+{-| Salvage the JSON region from model output that wrapped it in prose.
+
+Despite the prompt's "return ONLY a raw JSON array, no explanation," the
+vision model sometimes narrates before emitting the JSON — e.g. on a
+glare-obscured pump it answered _"I can see a Valero fuel pump display
+showing: - $69.27 (total sale)… [{…}]"_. The reading was perfect; only
+the envelope was wrong. Rather than discard a correct extraction, slice
+out the bracketed region — the outermost `[`…`]` (array, the prompt's
+shape), else the outermost `{`…`}` (legacy single object) — and let
+`ocrDataListDecoder` parse that. Returns the trimmed input unchanged when
+there's no bracket to find, so a clean response is untouched.
+
+This is a best-effort fallback applied only after a direct parse fails:
+prose containing a stray `[` is a theoretical false positive, but the
+direct-parse-first ordering means a well-formed reply never reaches here.
+
+    sliceJson "I can see a Valero pump.\n\n[{\"amount\": 69.27}]"
+    --> "[{\"amount\": 69.27}]"
+
+    sliceJson "Here it is: {\"amount\": 5} — hope that helps!"
+    --> "{\"amount\": 5}"
+
+    sliceJson "no json at all"
+    --> "no json at all"
+
+-}
+sliceJson : String -> String
+sliceJson raw =
+    let
+        s : String
+        s =
+            String.trim raw
+
+        firstOf : String -> Maybe Int
+        firstOf ch =
+            List.head (String.indexes ch s)
+
+        lastOf : String -> Maybe Int
+        lastOf ch =
+            List.head (List.reverse (String.indexes ch s))
+
+        between : String -> String -> Maybe String
+        between open close =
+            case ( firstOf open, lastOf close ) of
+                ( Just i, Just j ) ->
+                    if j > i then
+                        Just (String.slice i (j + 1) s)
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+    in
+    case between "[" "]" of
+        Just array ->
+            array
+
+        Nothing ->
+            case between "{" "}" of
+                Just object ->
+                    object
+
+                Nothing ->
+                    s
+
+
 {-| Encode an `OcrData` for the durable scan store. Reuses the field
 codecs (`Money.encoder` for `amount`, `DateField.encoder` for `date`,
 `Category.label` / `PaymentMethod.toString` for the enums) so what we
@@ -1023,14 +1126,17 @@ ocrDataEncoder ocr =
         [ ( "address", maybe Json.Encode.string ocr.address )
         , ( "amount", maybe Money.encoder ocr.amount )
         , ( "category", maybe (Category.label >> Json.Encode.string) ocr.category )
+        , ( "currency", maybe Currency.encoder ocr.currency )
         , ( "date", maybe DateField.encoder ocr.date )
         , ( "gallons", maybe Gallons.encoder (Maybe.andThen .gallons ocr.fuelDetail) )
         , ( "grade", maybe FuelGrade.encoder (Maybe.andThen .grade ocr.fuelDetail) )
+        , ( "liters", maybe Liters.encoder (Maybe.andThen .liters ocr.fuelDetail) )
         , ( "longNote", maybe Json.Encode.string ocr.longNote )
         , ( "merchant", maybe Json.Encode.string ocr.merchant )
         , ( "note", maybe Json.Encode.string ocr.note )
         , ( "paymentMethod", maybe (PaymentMethod.toString >> Json.Encode.string) ocr.paymentMethod )
         , ( "pricePerGallon", maybe PricePerGallon.encoder (Maybe.andThen .pricePerGallon ocr.fuelDetail) )
+        , ( "pricePerLiter", maybe PricePerLiter.encoder (Maybe.andThen .pricePerLiter ocr.fuelDetail) )
         ]
 
 
