@@ -7,6 +7,7 @@ import Data.ExpenseId as ExpenseId
 import Data.FuelDetail exposing (FuelDetail)
 import Data.FuelGrade as FuelGrade
 import Data.Gallons as Gallons
+import Data.GeoPoint as GeoPoint
 import Data.Ledger exposing (LedgerMode(..))
 import Data.Milepost as Milepost
 import Data.Money as Money exposing (Money)
@@ -530,26 +531,61 @@ viewEntryRow opts entry =
                         , Html.Attributes.attribute "aria-hidden" "true"
                         ]
                         [ Html.text (Category.icon entry.category) ]
-                    , Html.Extra.viewMaybe
-                        (\_ ->
-                            Html.span
-                                [ Html.Attributes.class "text-moss"
-                                , Html.Attributes.title "Has GPS coordinates"
-                                ]
-                                [ UI.Icons.pin "w-3 h-3" ]
-                        )
-                        entry.geoPoint
+                    , Html.Extra.viewMaybe (viewRowLocation (Money.isZero entry.amount)) entry.geoPoint
                     , viewAuthorChip opts.members entry.createdBy
                     ]
                 ]
             , Html.div
-                [ Html.Attributes.class "font-mono text-base text-forest tabular-nums shrink-0" ]
-                [ UI.MoneyView.amount entry.amount ]
+                [ Html.Attributes.class "shrink-0" ]
+                [ if Money.isZero entry.amount then
+                    viewFreeBadge
+
+                  else
+                    Html.span
+                        [ Html.Attributes.class "font-mono text-base text-forest tabular-nums" ]
+                        [ UI.MoneyView.amount entry.amount ]
+                ]
             ]
         , viewRowMenuButton entry
         , Html.Extra.viewIf isOpen <|
             viewRowMenu opts.canMove opts.readOnly entry
         ]
+
+
+{-| The celebratory "Free" pill that stands in for `$0.00` on the amount
+rail (#1). A free campsite, fee-free park day, or hiker-box score isn't a
+blank entry — it's a win worth surfacing, so it gets a filled forest badge
+rather than a muted zero.
+-}
+viewFreeBadge : Html msg
+viewFreeBadge =
+    Html.span
+        [ Html.Attributes.class "inline-block font-mono text-xs uppercase tracking-wider text-cream bg-forest px-2.5 py-1 rounded-full" ]
+        [ Html.text "Free" ]
+
+
+{-| The captured location for a row's `GeoPoint`. For a free entry the place
+_is_ the value ("a campsite you stayed at", not a $0 purchase), so we surface
+the coordinates inline; paid rows keep the compact pin icon so the amount stays
+the focus.
+-}
+viewRowLocation : Bool -> GeoPoint.GeoPoint -> Html msg
+viewRowLocation isFree point =
+    if isFree then
+        Html.span
+            [ Html.Attributes.class "inline-flex items-center gap-1 text-moss text-[11px] font-mono"
+            , Html.Attributes.title "Where you were"
+            ]
+            [ UI.Icons.pin "w-3 h-3"
+            , Html.text (GeoPoint.format point)
+            ]
+
+    else
+        Html.span
+            [ Html.Attributes.class "text-moss"
+            , Html.Attributes.title "Has GPS coordinates"
+            ]
+            [ UI.Icons.pin "w-3 h-3" ]
 
 
 {-| A compact secondary line for fuel expenses: per-gallon price, volume,
