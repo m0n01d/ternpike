@@ -975,22 +975,31 @@ lifts the returned `Effect` via `Effect.perform as_.key` (the `Effect`
 seam — see "Nested update dispatch" below). The helpers named below all
 live in `Page.Scan`.
 
-Receipts go through Anthropic's vision model: `Page.Scan.update` emits an
+Receipts **and bare gas-pump displays** go through Anthropic's vision model
+(#452): `Page.Scan.update` emits an
 `Effect.MakeOcrCall { backendUrl, body, itemId, path }` whose `body` is built by
 `Page.Scan.ocrRequestBody`, and `Effect.perform` picks the transport from the
 `OcrPath` — direct Anthropic `Http.request` for `ByoPath`, the `scanProxyOut`
 port for `HostedPath`, nothing for `Unscannable`. The
-system prompt (`Page.Scan.ocrSystemPrompt`) asks Claude to extract one JSON
-object per receipt in the image, with these fields (every one optional —
-Claude returns `null` for whatever it couldn't read):
+system prompt (`Page.Scan.ocrSystemPrompt`) is a **receipt-and-fuel-pump**
+parser: it asks Claude to extract one JSON object per receipt OR pump display
+in the image (a pump has no merchant/date/address — those come back `null`),
+with these fields (every one optional — Claude returns `null` for whatever it
+couldn't read):
 
 - `address` — street address printed on the receipt (added in #150).
-- `amount`, `category`, `date`, `longNote`, `merchant`, `note`,
-  `paymentMethod`.
-- `pricePerGallon`, `gallons`, `grade` — fuel-only. The prompt asks for
-  the per-gallon unit price (to the 9/10 cent), the volume pumped, and
-  the grade only on fuel receipts; `null` otherwise. They decode into
-  `OcrData.fuelDetail : Maybe Data.FuelDetail.FuelDetail` (a
+- `amount` — the **total sale** (not the per-unit price), `category`, `date`,
+  `longNote`, `merchant`, `note`, `paymentMethod`.
+- `currency` — the ISO-4217 code Claude inferred from symbols/language
+  (#452). Decodes into `OcrData.currency : Maybe Data.Currency.Currency`
+  (lenient — an unreadable code is `Nothing`, **not** a USD default, so it
+  can fall through to the form default). This is what lets a foreign-pump
+  scan land in the right currency, and transitively the right fuel unit.
+- `pricePerGallon`, `gallons`, `liters`, `pricePerLiter`, `grade` — fuel-only.
+  The prompt asks for the volume + unit price as **either** the gallons pair
+  (US/imperial pumps) **or** the liters pair (metric pumps, labeled
+  LITROS/LITRES/L), never both, plus the grade; `null` otherwise. They decode
+  into `OcrData.fuelDetail : Maybe Data.FuelDetail.FuelDetail` (a
   `{ gallons, grade, liters, pricePerGallon, pricePerLiter }` bundle, each
   sub-field optional) and flow through review into `Expense.fuelDetail`.
   Modelled as a bundle on the expense — **not** as a payload on
@@ -1001,10 +1010,15 @@ Claude returns `null` for whatever it couldn't read):
   integer cents can't hold a `$4.299` pump price.
 
   **Imperial vs. metric is driven by the expense's `Data.Currency`**: a
-  CAD fuel-up fills `liters` + `pricePerLiter`, a USD one fills `gallons`
+  CAD/MXN fuel-up fills `liters` + `pricePerLiter`, a USD one fills `gallons`
   + `pricePerGallon` — they are mutually exclusive in practice. The two
   metric fields were added additively, so legacy/US docs decode with them
-  as `Nothing` and the wire format stays compatible.
+  as `Nothing` and the wire format stays compatible. `Page.Scan.seedPending`
+  bridges OCR → form: it seeds `PendingEntry.currency` from `OcrData.currency`
+  (falling back to USD) and routes whichever unit pair the OCR returned into
+  the form's two shared raw fuel fields, since `Currency.usesGallons` (which
+  `PendingEntry.parseEntry` and the `Pages.Add` labels both call) then decides
+  how they're read.
 
 The raw OCR result lands on `ScanItem.ocrData : Maybe OcrData`
 (`src/Data/Scan.elm`). On batch images, `Page.Scan`'s `GotOcrResult` handler splits one
@@ -1812,7 +1826,7 @@ the real view; map its fixtures to seed state in `Main.seedVerifyAuthState`.
 | Understand what `EffectiveEntry` looks like | `src/Data/Entry.elm` |
 | See how amendments are applied | `src/Data/Entry.elm` `resolve` function |
 | Change currency / metric-fuel handling | `src/Data/Currency.elm`; fuel units in `src/Data/Liters.elm` / `src/Data/PricePerLiter.elm` (+ gallon siblings); the picker/relabel in `src/Pages/Add.elm`; per-currency totals in `Data.Entry.totalsByCurrency`/`primaryCurrency` + `UI.MoneyView` |
-| Add an extracted field to the OCR prompt | `src/Main.elm` `ocrSystemPrompt`, `src/Data/Scan.elm` `OcrData` + `ocrDataDecoder` |
+| Add an extracted field to the OCR prompt | `src/Page/Scan.elm` `ocrSystemPrompt` (keep `server/scanDemo.js` `SYSTEM_PROMPT` byte-identical), `src/Data/Scan.elm` `OcrData` + `ocrDataDecoder` + `ocrDataEncoder`, and `Page.Scan.seedPending` to map it onto the form |
 | Add a new Worker endpoint | `server/<name>.js` exporting `register<Name>Routes(app)`; wire from `server/index.js`. Reuse `server/auth.js` for authenticateCaller / getTier / isPaidTier |
 | Change the Ledger map | `src/Helpers.elm` `encodeWaypoints` for the JSON wire shape; `src/main.js` `WaypointMap` for the Leaflet rendering |
 | Add a hermetic verification unit | `src/Verify/Specs/<Name>.elm` + append to `Verify.Registry.runAll`; attach `Verify.Contract.verifyAttrs` to the view; seed in `Main.seedVerifyAuthState`. See the "Verification" section above |

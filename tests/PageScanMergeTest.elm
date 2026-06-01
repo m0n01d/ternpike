@@ -140,6 +140,7 @@ ocr merchant =
     { address = Nothing
     , amount = Just (Money.fromCents 1299)
     , category = Just Data.Category.Food
+    , currency = Nothing
     , date = Nothing
     , fuelDetail = Nothing
     , longNote = Nothing

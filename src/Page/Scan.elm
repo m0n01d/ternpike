@@ -1,4 +1,4 @@
-module Page.Scan exposing (Model, update)
+module Page.Scan exposing (Model, seedPending, update)
 
 {-| The Scan / OCR feature's `update`, carved out of `Main.updateAuth`
 (#368) and re-typed over an `Effect` seam (#369).
@@ -14,7 +14,12 @@ from `AuthState`, runs `update`, and merges the result back.
 Side effects are returned as a description (`Effect`) rather than a raw
 `Cmd`; the router lifts via `Effect.perform`, tests via `Effect.simulate`.
 
-@docs Model, update
+`seedPending` is exposed for the same test-seam reason: it's the pure
+projection of a scan item's OCR result onto the Add-review form (currency,
+fuel unit, the rest), and pinning the international gas-pump mapping (#452)
+directly is cleaner than driving it through a `ReviewItem` round-trip.
+
+@docs Model, seedPending, update
 
 -}
 
@@ -26,12 +31,14 @@ import Data.Expense exposing (Expense)
 import Data.FuelGrade as FuelGrade
 import Data.Gallons as Gallons
 import Data.GeoPoint as GeoPoint
+import Data.Liters as Liters
 import Data.Location
 import Data.Money as Money
 import Data.Navigation exposing (Route(..), Tab(..))
 import Data.OcrPath as OcrPath
 import Data.PendingEntry as PendingEntry exposing (PendingForm(..))
 import Data.PricePerGallon as PricePerGallon
+import Data.PricePerLiter as PricePerLiter
 import Data.Scan as Scan exposing (CaptureRoute(..), ExifPhase(..), GeocodePhase(..), ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrips exposing (SharedTrips)
@@ -643,17 +650,39 @@ seedPending today item =
     , category =
         Maybe.Extra.or (fromDraft .category) (fromOcr .category)
             |> Maybe.withDefault Data.Category.Fuel
-    , currency = Data.Currency.usd
+    , currency =
+        fromOcr .currency
+            |> Maybe.withDefault Data.Currency.usd
     , date =
         Maybe.Extra.or (fromDraft .date) (fromOcr .date)
             |> Maybe.withDefault today
             |> DateField.toIso
+
+    -- The Add form reuses these two raw fields for both unit systems —
+    -- `currency` decides whether they're read as gallons+$/gal or
+    -- liters+$/L (see `PendingEntry.parseEntry`). So seed from whichever
+    -- pair the OCR returned: a metric pump fills `liters`/`pricePerLiter`,
+    -- a US one `gallons`/`pricePerGallon`.
     , fuelGallons =
-        fromOcr .fuelDetail |> Maybe.andThen .gallons |> Maybe.map Gallons.toInputString |> Maybe.withDefault ""
+        fromOcr .fuelDetail
+            |> Maybe.andThen
+                (\detail ->
+                    Maybe.Extra.or
+                        (Maybe.map Gallons.toInputString detail.gallons)
+                        (Maybe.map Liters.toInputString detail.liters)
+                )
+            |> Maybe.withDefault ""
     , fuelGrade =
         fromOcr .fuelDetail |> Maybe.andThen .grade |> Maybe.map FuelGrade.display |> Maybe.withDefault ""
     , fuelPricePerGallon =
-        fromOcr .fuelDetail |> Maybe.andThen .pricePerGallon |> Maybe.map PricePerGallon.toInputString |> Maybe.withDefault ""
+        fromOcr .fuelDetail
+            |> Maybe.andThen
+                (\detail ->
+                    Maybe.Extra.or
+                        (Maybe.map PricePerGallon.toInputString detail.pricePerGallon)
+                        (Maybe.map PricePerLiter.toInputString detail.pricePerLiter)
+                )
+            |> Maybe.withDefault ""
     , locationState =
         case draft of
             Just d ->
@@ -840,7 +869,7 @@ activeTripForGeocode as_ =
 
 ocrSystemPrompt : String
 ocrSystemPrompt =
-    "You are a receipt parser. The image may contain one or many receipts (e.g. laid out on a table). Extract expense info for EVERY receipt visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt, formatted exactly: {\"amount\": <number>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name>\", \"address\": \"<street address as printed on receipt, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible on receipt>\", \"paymentMethod\": \"<cash|credit|null>\", \"pricePerGallon\": <fuel receipts only: the per-gallon unit price as a number, including the trailing 9/10 cent when printed, e.g. 4.299; null otherwise>, \"gallons\": <fuel receipts only: the volume pumped as a number, e.g. 12.345; null otherwise>, \"grade\": \"<fuel receipts only: regular|midgrade|premium|diesel, or the grade exactly as printed; null otherwise>\"}. If only one receipt is visible, still return a one-element array. For paymentMethod: use cash if receipt shows cash tendered/change; use credit if receipt shows card/credit/debit/visa/mastercard/chip; use null if unclear. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
+    "You are a receipt and fuel-pump parser. The image is either one or many printed receipts (e.g. laid out on a table) OR the LCD/LED display on a fuel pump. A pump display has NO merchant, date, or address — just the sale total, the volume dispensed, the unit price, and sometimes the grade — so for a pump leave merchant/address/date/paymentMethod null rather than guessing. Extract expense info for EVERY receipt or pump visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt or pump, formatted exactly: {\"amount\": <number: the TOTAL sale, i.e. dollars/pesos charged — labeled SALE/TOTAL/$, the settled amount; NOT the per-unit price>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"currency\": \"<ISO-4217 code inferred from symbols and language, e.g. USD|CAD|MXN|GTQ|CRC; PESOS or LITROS strongly imply MXN; a bare $ with GALLONS implies USD; null if genuinely unsure>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name, or null on a pump display>\", \"address\": \"<street address as printed, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible>\", \"paymentMethod\": \"<cash|credit|null>\", \"gallons\": <fuel only, US/imperial pumps: the volume in gallons as a number, e.g. 12.345; null otherwise or when metric>, \"pricePerGallon\": <fuel only, US/imperial pumps: the per-gallon unit price as a number, including the trailing 9/10 cent when printed, e.g. 4.299; null otherwise or when metric>, \"liters\": <fuel only, metric pumps (labeled LITROS/LITRES/L): the volume in liters as a number, e.g. 38.21; null otherwise or when in gallons>, \"pricePerLiter\": <fuel only, metric pumps: the per-liter unit price as a number, e.g. 23.459; null otherwise or when in gallons>, \"grade\": \"<fuel only: regular|midgrade|premium|diesel, or the grade exactly as printed; null otherwise>\"}. Report volume + unit price as EITHER the gallons pair OR the liters pair — whichever the image actually shows, never both. If only one receipt/pump is visible, still return a one-element array. For paymentMethod: use cash if the receipt shows cash tendered/change; use credit if it shows card/credit/debit/visa/mastercard/chip; use null if unclear or on a pump display. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
 
 
 {-| Build the Anthropic `/v1/messages` request body for an OCR call. The
@@ -1184,7 +1213,7 @@ applyOcrOutcome itemId outcome queue =
                     ( markReady Nothing (Just errMsg), [ itemId ] )
 
         OcrSucceeded [] ->
-            ( markReady Nothing (Just "No receipts detected in the image — try a clearer photo or a tighter crop")
+            ( markReady Nothing (Just "Nothing detected in the image — try a clearer photo or a tighter crop of the receipt or pump display")
             , [ itemId ]
             )
 
@@ -1343,6 +1372,7 @@ emptyOcrData =
     { address = Nothing
     , amount = Nothing
     , category = Nothing
+    , currency = Nothing
     , date = Nothing
     , fuelDetail = Nothing
     , longNote = Nothing
