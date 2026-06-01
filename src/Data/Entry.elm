@@ -179,34 +179,52 @@ applyAmendment e a =
     }
 
 
-{-| Total spend per currency, in a stable order (`USD` before `CAD`), with
-only the currencies that actually appear in `entries`.
+{-| The distinct currencies present in `entries`, in a stable display order:
+the home currency (USD) first when present, then the rest alphabetically by
+ISO code. Drives both the per-currency total split and the tie-break for the
+primary currency.
+-}
+currenciesPresent : List EffectiveEntry -> List Currency
+currenciesPresent entries =
+    let
+        ( usds, rest ) =
+            entries
+                |> List.map .currency
+                |> List.Extra.uniqueBy Currency.code
+                |> List.partition (\c -> c == Currency.usd)
+    in
+    usds ++ List.sortBy Currency.code rest
 
-Ternpike never converts between currencies, so a mixed US/Canada trip can't
-be summed into one number. This returns one subtotal per currency present —
-a single-element list (the today behaviour) for a trip that's all one
-currency, two entries for a trip that crossed the border. The Ledger and
-Stats hero totals render each pair through `UI.MoneyView.amount`.
+
+{-| Total spend per currency, in a stable order (home currency first, then by
+ISO code), with only the currencies that actually appear in `entries`.
+
+Ternpike never converts between currencies, so a mixed-currency trip can't be
+summed into one number. This returns one subtotal per currency present — a
+single-element list (the all-one-currency case) for a trip that never crossed
+a border, several for a Pan-American run. The Ledger and Stats hero totals
+render each pair through `UI.MoneyView.amount`.
 
 -}
 totalsByCurrency : List EffectiveEntry -> List ( Currency, Money )
 totalsByCurrency entries =
-    Currency.all
-        |> List.filterMap
+    currenciesPresent entries
+        |> List.map
             (\cur ->
-                case List.filter (\e -> e.currency == cur) entries of
-                    [] ->
-                        Nothing
-
-                    matching ->
-                        Just ( cur, Money.sum (List.map .amount matching) )
+                ( cur
+                , entries
+                    |> List.filter (\e -> e.currency == cur)
+                    |> List.map .amount
+                    |> Money.sum
+                )
             )
 
 
 {-| The single currency to label a derived, scalar aggregate with — the
 median, the daily burn, a category subtotal — where showing a per-currency
 split would be noise. It's the most common currency across `entries`, with
-`USD` winning ties and empty lists (so existing all-USD trips are unaffected).
+the home currency (USD) winning ties and empty lists (so all-USD trips are
+unaffected).
 
 Derived scalars over a genuinely mixed-currency trip are approximate by
 nature (Ternpike never converts); this picks the currency the trip is
@@ -216,12 +234,17 @@ mostly in. The exact, non-lossy figure is the per-currency split from
 -}
 primaryCurrency : List EffectiveEntry -> Currency
 primaryCurrency entries =
-    Currency.all
-        |> List.map (\cur -> ( cur, List.length (List.filter (\e -> e.currency == cur) entries) ))
-        |> List.sortBy (negate << Tuple.second)
+    let
+        countOf : Currency -> Int
+        countOf cur =
+            List.length (List.filter (\e -> e.currency == cur) entries)
+    in
+    -- `currenciesPresent` lists USD first, and `List.sortBy` is stable, so the
+    -- home currency wins ties; an empty list yields `usd` via the default.
+    currenciesPresent entries
+        |> List.sortBy (negate << countOf)
         |> List.head
-        |> Maybe.map Tuple.first
-        |> Maybe.withDefault Currency.USD
+        |> Maybe.withDefault Currency.usd
 
 
 uniqueDates : List EffectiveEntry -> List DateField

@@ -643,7 +643,7 @@ seedPending today item =
     , category =
         Maybe.Extra.or (fromDraft .category) (fromOcr .category)
             |> Maybe.withDefault Data.Category.Fuel
-    , currency = Data.Currency.USD
+    , currency = Data.Currency.usd
     , date =
         Maybe.Extra.or (fromDraft .date) (fromOcr .date)
             |> Maybe.withDefault today

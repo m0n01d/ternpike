@@ -224,7 +224,7 @@ goalTarget goal =
         Milepost.Dollars target ->
             Html.div [ Html.Attributes.class "mt-1 text-xs text-muted font-mono flex items-center gap-1" ]
                 [ Html.text "Target:"
-                , UI.MoneyView.wholeDollars Data.Currency.USD target
+                , UI.MoneyView.wholeDollars Data.Currency.usd target
                 ]
 
         Milepost.Count _ ->

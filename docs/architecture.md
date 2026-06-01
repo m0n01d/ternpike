@@ -101,20 +101,28 @@ stay tidy and the attribute names don't drift.
 
 #### Per-expense currency (no conversion)
 
-Each `Expense` carries `currency : Data.Currency.Currency` (`USD | CAD`).
-`Money` stays currency-agnostic raw `Int` cents — CAD also has 100-cent
-subunits — so the currency is a separate field, not baked into `Money`.
-Amounts are recorded and shown in their **native** currency; the app never
-converts between them. A single trip may freely mix both (an Alaska road
-trip crosses the border repeatedly), so the currency lives per-expense, not
-per-trip. Because totals can't sum across currencies without conversion,
-`Data.Entry.totalsByCurrency` returns one subtotal per currency present
-(rendered by `UI.MoneyView.totals` as `$1,200 · CA$340`), and
+Each `Expense` carries `currency : Data.Currency.Currency` — an **opaque,
+validated ISO 4217 code** (not a closed enum), so any currency a North
+American overlander hits works: `usd`, `cad`, `mxn`, and the Pan-American
+codes (`gtq`, `crc`, …). `Data.Currency.common` is the curated picker set;
+the decoder accepts *any* three-letter code so a doc synced from a newer
+client round-trips. `Money` stays currency-agnostic raw `Int` cents (every
+supported currency has 100-cent minor units — JPY-style 0/3-decimal
+currencies are out of scope), so the currency is a separate field, not baked
+into `Money`. Amounts are recorded and shown in their **native** currency;
+the app never converts. A trip may freely mix currencies (a border-crossing
+road trip), so currency lives per-expense, not per-trip. Because totals can't
+sum across currencies without conversion, `Data.Entry.totalsByCurrency`
+returns one subtotal per currency present (home currency first, then by ISO
+code; rendered by `UI.MoneyView.totals` as `$1,200 · CA$340`), and
 `Data.Entry.primaryCurrency` labels derived single-scalar stats (median,
 daily burn, category subtotals) with the trip's most common currency
-(`USD` on ties / empty). `currency` decodes to `USD` for legacy docs, so the
-addition is wire-compatible. Trip `budget` stays USD-only (Trip has no
-currency field); `UI.BudgetBar` passes `Currency.USD` explicitly.
+(`usd` on ties / empty). `currency` decodes to `usd` for legacy docs, so the
+addition is wire-compatible. The fuel volume unit is **not** a per-currency
+branch — it keys off `Data.Currency.usesGallons` (the US is the only gallons
+country; everyone else is metric). Trip `budget` stays USD-only (Trip has no
+currency field); `UI.BudgetBar` passes `Data.Currency.usd`, and the bar is
+hidden on any trip with non-USD spend.
 - **`<relative-time datetime="2024-05-21">`** — the
   `@github/relative-time-element` package, registered as a side-effect
   import. Wrapped in Elm by `UI.DateView`:

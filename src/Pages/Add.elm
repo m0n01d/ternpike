@@ -120,7 +120,7 @@ viewHero pending =
         , Html.div [ Html.Attributes.class "h-[3rem] flex items-start gap-0" ]
             [ Html.span
                 [ Html.Attributes.class "font-display text-5xl font-black text-forest leading-none" ]
-                [ Html.text (currencySymbol pending.currency) ]
+                [ Html.text (Currency.symbol pending.currency) ]
             , Html.input
                 [ Html.Attributes.type_ "number"
                 , Html.Attributes.attribute "inputmode" "decimal"
@@ -274,7 +274,7 @@ viewFuelDetails pending =
     let
         metric : Bool
         metric =
-            pending.currency == Currency.CAD
+            not (Currency.usesGallons pending.currency)
     in
     Html.div []
         [ UI.Rule.kicker "FUEL DETAILS"
@@ -642,45 +642,28 @@ viewLocationStatus ls =
                 ]
 
 
-{-| The "$" / "CA$" symbol shown ahead of the amount input for the given
-currency.
--}
-currencySymbol : Currency -> String
-currencySymbol currency =
-    case currency of
-        Currency.CAD ->
-            "CA$"
-
-        Currency.USD ->
-            "$"
-
-
-{-| A compact USD / CAD segmented control in the amount hero. Selecting a
-currency flips the amount symbol and the fuel section between gallons and
-liters; nothing is converted (see `Data.Currency`).
+{-| The currency picker in the amount hero — a compact `select` over the
+curated `Data.Currency.common` set (USD, CAD, MXN, and the Central-American
+codes a Pan-American overlander hits). Choosing a currency flips the amount
+symbol and the fuel section between gallons and liters; nothing is converted
+(see `Data.Currency`).
 -}
 viewCurrencyToggle : Currency -> Html Msg
 viewCurrencyToggle selected =
-    Html.div [ Html.Attributes.class "flex gap-1" ]
-        (List.map (viewCurrencyBtn selected) Currency.all)
-
-
-viewCurrencyBtn : Currency -> Currency -> Html Msg
-viewCurrencyBtn selected currency =
-    let
-        active : Bool
-        active =
-            selected == currency
-    in
-    Html.button
-        [ Html.Events.onClick (AuthMsg (CurrencyChanged currency))
-        , Html.Attributes.classList
-            [ ( "rounded-md py-1 px-2.5 text-[11px] font-mono uppercase tracking-widest cursor-pointer border", True )
-            , ( "bg-forest text-parchment border-forest font-bold", active )
-            , ( "bg-cream text-moss border-tan", not active )
-            ]
+    Html.select
+        [ Html.Events.onInput (AuthMsg << CurrencyChanged << Currency.fromLabel)
+        , Html.Attributes.class "rounded-md py-1 px-2 text-[11px] font-mono uppercase tracking-widest cursor-pointer border bg-cream text-forest border-tan"
         ]
-        [ Html.text (Currency.toLabel currency) ]
+        (List.map (viewCurrencyOption selected) Currency.common)
+
+
+viewCurrencyOption : Currency -> Currency -> Html Msg
+viewCurrencyOption selected currency =
+    Html.option
+        [ Html.Attributes.value (Currency.code currency)
+        , Html.Attributes.selected (currency == selected)
+        ]
+        [ Html.text (Currency.symbol currency ++ " " ++ Currency.code currency) ]
 
 
 viewPaymentMethodToggle : Maybe PaymentMethod -> Html Msg

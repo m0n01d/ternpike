@@ -38,7 +38,8 @@ import Json.Encode
 
 A fuel-up is recorded in **either** imperial (`gallons` + `pricePerGallon`)
 **or** metric (`liters` + `pricePerLiter`) units, never both — which pair is
-filled is driven by the expense's `Data.Currency` (CAD ⇒ liters). The metric
+filled is driven by the expense's `Data.Currency` (any non-US currency ⇒
+liters — see `Data.Currency.usesGallons`). The metric
 fields were added additively (#liters track): legacy and US docs decode with
 `liters` / `pricePerLiter` as `Nothing`, so the wire format stays compatible.
 

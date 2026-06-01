@@ -132,7 +132,7 @@ viewTeaser gs teaser =
                 [ Html.text teaser.tripName ]
             , Html.div [ Html.Attributes.class "flex items-baseline gap-2" ]
                 [ Html.span [ Html.Attributes.class "text-2xl font-bold text-ink" ]
-                    [ UI.MoneyView.amount Data.Currency.USD teaser.totalSpent ]
+                    [ UI.MoneyView.amount Data.Currency.usd teaser.totalSpent ]
                 , Html.span [ Html.Attributes.class "text-xs text-muted font-mono uppercase tracking-widest" ]
                     [ Html.text "total" ]
                 ]
@@ -318,7 +318,7 @@ viewScanResult ocr =
             , viewScanRow "Amount"
                 (case ocr.amount of
                     Just amount ->
-                        UI.MoneyView.amount Data.Currency.USD amount
+                        UI.MoneyView.amount Data.Currency.usd amount
 
                     Nothing ->
                         Html.text "—"

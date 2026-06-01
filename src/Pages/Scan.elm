@@ -825,7 +825,7 @@ viewDeferredDraftSummary maybeDraft =
                 amountRow : Html Msg
                 amountRow =
                     Html.Extra.viewMaybe
-                        (\amt -> Html.div [ Html.Attributes.class "text-rust font-mono text-sm font-bold" ] [ UI.MoneyView.amount Data.Currency.USD amt ])
+                        (\amt -> Html.div [ Html.Attributes.class "text-rust font-mono text-sm font-bold" ] [ UI.MoneyView.amount Data.Currency.usd amt ])
                         (draft.amount |> Maybe.andThen Money.fromDollarString)
 
                 dateRow : Html Msg
@@ -891,7 +891,7 @@ viewOcrSummary ocr =
             [ Html.div [ Html.Attributes.class "text-rust font-mono text-base font-bold" ]
                 [ case ocr.amount of
                     Just amt ->
-                        UI.MoneyView.amount Data.Currency.USD amt
+                        UI.MoneyView.amount Data.Currency.usd amt
 
                     Nothing ->
                         Html.text "—"
