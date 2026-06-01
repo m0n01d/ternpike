@@ -68,6 +68,19 @@ export function attachPouch(app, { creds = null } = {}) {
           })
           return
         }
+        if (handle.localName === PERSONAL_KEY && change.id === 'user:settings') {
+          // The per-user settings singleton (#448: exchange-rate cache).
+          // Personal-DB only, client-written. Route as a typed DbChange so the
+          // docChangeDecoder's "userSettings" arm decodes it, and — like
+          // milepost::progress above — KEEP `_rev` so Elm threads it through
+          // the next write and PouchDB doesn't 409.
+          app.ports.pouchIn.send({
+            tag: 'DbChange',
+            doc: change.doc,
+            sourceDbName: handle.localName,
+          })
+          return
+        }
         if (change.id === 'sharedtrip:meta') {
           // Route shared trip metadata up as a typed SharedTripMeta event so Elm can
           // decode it through Data.SharedTrip.decoder rather than the
@@ -256,6 +269,8 @@ export function attachPouch(app, { creds = null } = {}) {
     setTimeout(() => {
       sendTrips('TripsPrefetched').catch(err =>
         console.error('[pouch] early trips read:', err))
+      sendUserSettings().catch(err =>
+        console.error('[pouch] settings read:', err))
     }, 0)
     // Eagerly hydrate shared trips from whatever's already in local PouchDB.
     // The paused-event handler will also call this when initial sync
@@ -375,6 +390,29 @@ export function attachPouch(app, { creds = null } = {}) {
   // before sync settles, so the list renders from on-disk data without
   // waiting on the network. `flockId` is sourced from the handle, never the
   // doc (the personal handle's is null).
+  // Read the settings singleton already on disk and hand it to Elm on boot.
+  // `wireChanges` is `since:'now'`, so it won't re-emit an unchanged local doc
+  // — yet an offline / warm boot must still surface the cached exchange rates
+  // (#448), exactly the spotty-signal-overlander case. Keeps `_rev` so Elm
+  // threads it on the next write. A missing doc (404) is the no-settings-yet
+  // case and is a clean no-op.
+  async function sendUserSettings() {
+    const handle = handles.get(PERSONAL_KEY)
+    if (!handle) return
+    let doc
+    try {
+      doc = await handle.local.get('user:settings')
+    } catch (e) {
+      if (e && e.status === 404) return
+      throw e
+    }
+    app.ports.pouchIn.send({
+      tag: 'DbChange',
+      doc,
+      sourceDbName: handle.localName,
+    })
+  }
+
   async function sendTrips(tag) {
     const trips = {}
     const responses = await Promise.all(
@@ -545,6 +583,17 @@ export function attachPouch(app, { creds = null } = {}) {
           // the current `_rev` itself, so a stale/absent `_rev` on msg.doc is
           // harmless. Saved doc echoes back through the change feed (with
           // `_rev`) as a milepostProgress DbChange.
+          const handle = handles.get(PERSONAL_KEY)
+          if (!handle) break
+          await upsertDoc(handle, msg.doc)
+          break
+        }
+
+        case 'SaveUserSettings': {
+          // Settings singleton in the personal DB (no TripTarget; #448).
+          // upsertDoc resolves the current `_rev` itself, so a stale/absent
+          // `_rev` on msg.doc is harmless. Echoes back through the change
+          // feed (with `_rev`) as a userSettings DbChange.
           const handle = handles.get(PERSONAL_KEY)
           if (!handle) break
           await upsertDoc(handle, msg.doc)

@@ -11,11 +11,13 @@ import Data.Category exposing (Category(..))
 import Data.Currency
 import Data.DateField as DateField
 import Data.Entry as Entry
+import Data.ExchangeRate as ExchangeRate
 import Data.Expense exposing (Expense)
 import Data.ExpenseId as ExpenseId
 import Data.Money as Money
 import Data.TripId as TripId
 import Data.UserId as UserId
+import Dict
 import Expect
 import Test exposing (Test, describe, test)
 import Time
@@ -128,7 +130,33 @@ suite =
                     Entry.primaryCurrency []
                         |> Expect.equal Data.Currency.usd
             ]
+        , describe "estimatedHomeTotal"
+            [ test "all-USD trip estimates to its own sum, nothing missing" <|
+                \_ ->
+                    entriesWith [ ( Data.Currency.usd, 1000 ), ( Data.Currency.usd, 500 ) ]
+                        |> Entry.estimatedHomeTotal (ExchangeRate.estimate estimateTable)
+                        |> (\r -> ( Money.toCents r.total, r.missing ))
+                        |> Expect.equal ( 1500, [] )
+            , test "mixed trip with rates folds each subtotal into USD" <|
+                \_ ->
+                    -- USD 10.00 + CAD 100.00 @ 0.73 = 10.00 + 73.00 = 83.00
+                    entriesWith [ ( Data.Currency.usd, 1000 ), ( Data.Currency.fromLabel "cad", 10000 ) ]
+                        |> Entry.estimatedHomeTotal (ExchangeRate.estimate estimateTable)
+                        |> (\r -> ( Money.toCents r.total, r.missing ))
+                        |> Expect.equal ( 8300, [] )
+            , test "a currency with no rate is summed-around and reported as missing" <|
+                \_ ->
+                    entriesWith [ ( Data.Currency.usd, 1000 ), ( Data.Currency.fromLabel "mxn", 5000 ) ]
+                        |> Entry.estimatedHomeTotal (ExchangeRate.estimate estimateTable)
+                        |> (\r -> ( Money.toCents r.total, List.map Data.Currency.code r.missing ))
+                        |> Expect.equal ( 1000, [ "MXN" ] )
+            ]
         ]
+
+
+estimateTable : ExchangeRate.RateTable
+estimateTable =
+    { asOf = Nothing, rates = Dict.fromList [ ( "cad", 0.73 ) ] }
 
 
 {-| Build effective entries (via the real `resolve`) with the given

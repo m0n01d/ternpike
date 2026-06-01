@@ -8,6 +8,7 @@ import Data.Category as Category
 import Data.Currency exposing (Currency)
 import Data.DateField as DateField
 import Data.Entry as Entry
+import Data.ExchangeRate as ExchangeRate exposing (RateTable)
 import Data.Gallons
 import Data.Money as Money exposing (Money)
 import Data.PricePerGallon
@@ -27,7 +28,7 @@ import Routing
 import Set
 import Svg
 import Svg.Attributes
-import Types exposing (AuthMsg_(..), AuthState, Msg(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..), UserSettingsState(..))
 import UI.BudgetBar
 import UI.Card
 import UI.Mascot
@@ -110,6 +111,19 @@ viewHero model mode =
 viewSkeletonHero : Html Msg
 viewSkeletonHero =
     UI.Mascot.loading
+
+
+{-| The cached exchange-rate table for the spend estimate, or the empty table
+when no settings doc has loaded yet (estimate stays hidden).
+-}
+ratesOf : AuthState -> RateTable
+ratesOf model =
+    case model.userSettings of
+        SettingsLoaded loaded ->
+            loaded.settings.exchangeRates
+
+        SettingsNotLoaded ->
+            ExchangeRate.empty
 
 
 viewHeroReady : AuthState -> List Entry.EffectiveEntry -> Html Msg
@@ -198,6 +212,7 @@ viewHeroReady model entries =
             [ Html.div []
                 [ Html.div [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
                     [ UI.MoneyView.totals (Entry.totalsByCurrency entries) ]
+                , UI.MoneyView.tripEstimate (ratesOf model) entries
                 , Html.div [ Html.Attributes.class "mt-2 text-xs font-mono tracking-wide text-muted" ]
                     [ Html.text (String.fromInt numEntries ++ " ENTRIES · DAY " ++ dayOfTripStr) ]
                 ]
