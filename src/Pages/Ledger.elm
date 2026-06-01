@@ -543,13 +543,32 @@ viewEntryRow opts entry =
                     ]
                 ]
             , Html.div
-                [ Html.Attributes.class "font-mono text-base text-forest tabular-nums shrink-0" ]
-                [ UI.MoneyView.amount entry.amount ]
+                [ Html.Attributes.class "shrink-0" ]
+                [ if Money.isZero entry.amount then
+                    viewFreeBadge
+
+                  else
+                    Html.span
+                        [ Html.Attributes.class "font-mono text-base text-forest tabular-nums" ]
+                        [ UI.MoneyView.amount entry.amount ]
+                ]
             ]
         , viewRowMenuButton entry
         , Html.Extra.viewIf isOpen <|
             viewRowMenu opts.canMove opts.readOnly entry
         ]
+
+
+{-| The celebratory "Free" pill that stands in for `$0.00` on the amount
+rail (#1). A free campsite, fee-free park day, or hiker-box score isn't a
+blank entry — it's a win worth surfacing, so it gets a filled forest badge
+rather than a muted zero.
+-}
+viewFreeBadge : Html msg
+viewFreeBadge =
+    Html.span
+        [ Html.Attributes.class "inline-block font-mono text-xs uppercase tracking-wider text-cream bg-forest px-2.5 py-1 rounded-full" ]
+        [ Html.text "Free" ]
 
 
 {-| A compact secondary line for fuel expenses: per-gallon price, volume,
