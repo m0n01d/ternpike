@@ -15,6 +15,7 @@ module Data.ScanTest exposing (suite)
 import Data.Category as Category
 import Data.Currency as Currency
 import Data.DateField as DateField
+import Data.Gallons as Gallons
 import Data.GeoPoint as GeoPoint
 import Data.Liters as Liters
 import Data.Location exposing (LocationSource(..), LocationState(..))
@@ -148,6 +149,41 @@ ocrDataDecoderSuite =
                 Scan.ocrDataEncoder metricOcr
                     |> Json.Decode.decodeValue Scan.ocrDataDecoder
                     |> Expect.equal (Ok metricOcr)
+        , test "sliceJson salvages an array the model wrapped in prose (#452 Valero pump)" <|
+            \_ ->
+                let
+                    modelText : String
+                    modelText =
+                        """I can see a Valero fuel pump display showing:
+- $69.27 (total sale)
+- 14.746 gallons
+
+The price per gallon would be 69.27 / 14.746 ~ 4.699
+
+[{"amount": 69.27, "category": "fuel", "currency": "USD", "gallons": 14.746, "pricePerGallon": 4.699}]"""
+                in
+                Scan.sliceJson modelText
+                    |> Json.Decode.decodeString Scan.ocrDataListDecoder
+                    |> Result.map
+                        (\list ->
+                            List.head list
+                                |> Maybe.map
+                                    (\o ->
+                                        ( o.amount
+                                        , o.currency
+                                        , Maybe.andThen .gallons o.fuelDetail
+                                        )
+                                    )
+                        )
+                    |> Expect.equal
+                        (Ok
+                            (Just
+                                ( Just (Money.fromCents 6927)
+                                , Just (Currency.fromLabel "usd")
+                                , Gallons.fromString "14.746"
+                                )
+                            )
+                        )
         ]
 
 

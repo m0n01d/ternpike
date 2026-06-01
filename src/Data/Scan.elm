@@ -27,6 +27,7 @@ module Data.Scan exposing
     , reconnectCandidates
     , scanItemDecoder
     , scanItemEncoder
+    , sliceJson
     )
 
 {-| Receipt-scan queue: one `ScanItem` per receipt the user has dropped
@@ -1044,6 +1045,73 @@ ocrDataListDecoder =
         [ Json.Decode.list ocrDataDecoder
         , Json.Decode.map List.singleton ocrDataDecoder
         ]
+
+
+{-| Salvage the JSON region from model output that wrapped it in prose.
+
+Despite the prompt's "return ONLY a raw JSON array, no explanation," the
+vision model sometimes narrates before emitting the JSON — e.g. on a
+glare-obscured pump it answered _"I can see a Valero fuel pump display
+showing: - $69.27 (total sale)… [{…}]"_. The reading was perfect; only
+the envelope was wrong. Rather than discard a correct extraction, slice
+out the bracketed region — the outermost `[`…`]` (array, the prompt's
+shape), else the outermost `{`…`}` (legacy single object) — and let
+`ocrDataListDecoder` parse that. Returns the trimmed input unchanged when
+there's no bracket to find, so a clean response is untouched.
+
+This is a best-effort fallback applied only after a direct parse fails:
+prose containing a stray `[` is a theoretical false positive, but the
+direct-parse-first ordering means a well-formed reply never reaches here.
+
+    sliceJson "I can see a Valero pump.\n\n[{\"amount\": 69.27}]"
+    --> "[{\"amount\": 69.27}]"
+
+    sliceJson "Here it is: {\"amount\": 5} — hope that helps!"
+    --> "{\"amount\": 5}"
+
+    sliceJson "no json at all"
+    --> "no json at all"
+
+-}
+sliceJson : String -> String
+sliceJson raw =
+    let
+        s : String
+        s =
+            String.trim raw
+
+        firstOf : String -> Maybe Int
+        firstOf ch =
+            List.head (String.indexes ch s)
+
+        lastOf : String -> Maybe Int
+        lastOf ch =
+            List.head (List.reverse (String.indexes ch s))
+
+        between : String -> String -> Maybe String
+        between open close =
+            case ( firstOf open, lastOf close ) of
+                ( Just i, Just j ) ->
+                    if j > i then
+                        Just (String.slice i (j + 1) s)
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+    in
+    case between "[" "]" of
+        Just array ->
+            array
+
+        Nothing ->
+            case between "{" "}" of
+                Just object ->
+                    object
+
+                Nothing ->
+                    s
 
 
 {-| Encode an `OcrData` for the durable scan store. Reuses the field

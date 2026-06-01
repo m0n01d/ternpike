@@ -869,7 +869,7 @@ activeTripForGeocode as_ =
 
 ocrSystemPrompt : String
 ocrSystemPrompt =
-    "You are a receipt and fuel-pump parser. The image is either one or many printed receipts (e.g. laid out on a table) OR the LCD/LED display on a fuel pump. A pump display has NO merchant, date, or address — just the sale total, the volume dispensed, the unit price, and sometimes the grade — so for a pump leave merchant/address/date/paymentMethod null rather than guessing. Extract expense info for EVERY receipt or pump visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt or pump, formatted exactly: {\"amount\": <number: the TOTAL sale, i.e. dollars/pesos charged — labeled SALE/TOTAL/$, the settled amount; NOT the per-unit price>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"currency\": \"<ISO-4217 code inferred from symbols and language, e.g. USD|CAD|MXN|GTQ|CRC; PESOS or LITROS strongly imply MXN; a bare $ with GALLONS implies USD; null if genuinely unsure>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name, or null on a pump display>\", \"address\": \"<street address as printed, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible>\", \"paymentMethod\": \"<cash|credit|null>\", \"gallons\": <fuel only, US/imperial pumps: the volume in gallons as a number, e.g. 12.345; null otherwise or when metric>, \"pricePerGallon\": <fuel only, US/imperial pumps: the per-gallon unit price as a number, including the trailing 9/10 cent when printed, e.g. 4.299; null otherwise or when metric>, \"liters\": <fuel only, metric pumps (labeled LITROS/LITRES/L): the volume in liters as a number, e.g. 38.21; null otherwise or when in gallons>, \"pricePerLiter\": <fuel only, metric pumps: the per-liter unit price as a number, e.g. 23.459; null otherwise or when in gallons>, \"grade\": \"<fuel only: regular|midgrade|premium|diesel, or the grade exactly as printed; null otherwise>\"}. Report volume + unit price as EITHER the gallons pair OR the liters pair — whichever the image actually shows, never both. If only one receipt/pump is visible, still return a one-element array. For paymentMethod: use cash if the receipt shows cash tendered/change; use credit if it shows card/credit/debit/visa/mastercard/chip; use null if unclear or on a pump display. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description."
+    "You are a receipt and fuel-pump parser. The image is either one or many printed receipts (e.g. laid out on a table) OR the LCD/LED display on a fuel pump. A pump display has NO merchant, date, or address — just the sale total, the volume dispensed, the unit price, and sometimes the grade — so for a pump leave merchant/address/date/paymentMethod null rather than guessing. Extract expense info for EVERY receipt or pump visible and return ONLY a raw valid JSON array with no markdown, no code fences, no explanation. Each element of the array is one receipt or pump, formatted exactly: {\"amount\": <number: the TOTAL sale, i.e. dollars/pesos charged — labeled SALE/TOTAL/$, the settled amount; NOT the per-unit price>, \"category\": \"<activities|camp|ferry|food|fuel|gear|lodging|medical|misc|parks|shopping|transport>\", \"currency\": \"<ISO-4217 code inferred from symbols and language, e.g. USD|CAD|MXN|GTQ|CRC; PESOS or LITROS strongly imply MXN; a bare $ with GALLONS implies USD; null if genuinely unsure>\", \"note\": \"<brief description max 50 chars>\", \"longNote\": \"<detailed description max 560 chars, include what was purchased, where, any relevant context>\", \"merchant\": \"<store name, or null on a pump display>\", \"address\": \"<street address as printed, include city and state/region when visible, or null if not visible>\", \"date\": \"<YYYY-MM-DD or null if not visible>\", \"paymentMethod\": \"<cash|credit|null>\", \"gallons\": <fuel only, US/imperial pumps: the volume in gallons as a number, e.g. 12.345; null otherwise or when metric>, \"pricePerGallon\": <fuel only, US/imperial pumps: the per-gallon unit price as a number, including the trailing 9/10 cent when printed, e.g. 4.299; null otherwise or when metric>, \"liters\": <fuel only, metric pumps (labeled LITROS/LITRES/L): the volume in liters as a number, e.g. 38.21; null otherwise or when in gallons>, \"pricePerLiter\": <fuel only, metric pumps: the per-liter unit price as a number, e.g. 23.459; null otherwise or when in gallons>, \"grade\": \"<fuel only: regular|midgrade|premium|diesel, or the grade exactly as printed; null otherwise>\"}. Report volume + unit price as EITHER the gallons pair OR the liters pair — whichever the image actually shows, never both. If only one receipt/pump is visible, still return a one-element array. For paymentMethod: use cash if the receipt shows cash tendered/change; use credit if it shows card/credit/debit/visa/mastercard/chip; use null if unclear or on a pump display. Choose the best matching category. Use parks for national/state park entry fees. Use these note formats by category — fuel: \"$X.XX/gal Xgal Grade\" (e.g. \"$4.29/gal 12.3gal Regular\"); camp: \"$XX/night HookupType\" (e.g. \"$35/night Full\"); lodging: \"$XX/night Xnights\" (e.g. \"$89/night 2nights\"); ferry: \"Origin→Dest vehicle|foot\" (e.g. \"Juneau→Haines car\"); parks: \"PassType ParkName\" (e.g. \"Day Pass Denali\"); activities: \"Xppl Activity\" (e.g. \"2ppl Kayaking\"); food: \"Xppl MealType\" (e.g. \"3ppl Dinner\"); all others: brief description. Output the JSON array ONLY: your reply must start with the character [ and end with ] — no preamble, reasoning, or trailing commentary, even if the image is blurry or partly obscured."
 
 
 {-| Build the Anthropic `/v1/messages` request body for an OCR call. The
@@ -1006,18 +1006,31 @@ parseOcrResponseBody responseBody =
             let
                 stripped =
                     stripCodeFence innerJson
+
+                decode : String -> Result Json.Decode.Error (List Scan.OcrData)
+                decode =
+                    Json.Decode.decodeString Scan.ocrDataListDecoder
             in
-            case Json.Decode.decodeString Scan.ocrDataListDecoder stripped of
+            case decode stripped of
                 Ok list ->
                     Ok list
 
-                Err decodeErr ->
-                    Err
-                        ("Couldn't parse receipt JSON: "
-                            ++ Json.Decode.errorToString decodeErr
-                            ++ "\n\nModel returned: "
-                            ++ truncate 240 stripped
-                        )
+                Err _ ->
+                    -- The model sometimes narrates before emitting the JSON
+                    -- ("I can see a Valero pump…\n\n[{…}]"). Salvage the
+                    -- bracketed region and retry before giving up, so a
+                    -- correct reading isn't thrown away over a prose envelope.
+                    case decode (Scan.sliceJson stripped) of
+                        Ok list ->
+                            Ok list
+
+                        Err decodeErr ->
+                            Err
+                                ("Couldn't parse receipt JSON: "
+                                    ++ Json.Decode.errorToString decodeErr
+                                    ++ "\n\nModel returned: "
+                                    ++ truncate 240 stripped
+                                )
 
 
 {-| A terminal OCR result for one item, normalized so the success and
