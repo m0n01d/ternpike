@@ -2,6 +2,7 @@ module Pages.Scan exposing (viewTab)
 
 import Data.AnthropicKey as AnthropicKey
 import Data.Category as Category
+import Data.Currency
 import Data.Money as Money
 import Data.Navigation exposing (Tab(..))
 import Data.OcrPath as OcrPath exposing (OcrPath(..))
@@ -824,7 +825,7 @@ viewDeferredDraftSummary maybeDraft =
                 amountRow : Html Msg
                 amountRow =
                     Html.Extra.viewMaybe
-                        (\amt -> Html.div [ Html.Attributes.class "text-rust font-mono text-sm font-bold" ] [ UI.MoneyView.amount amt ])
+                        (\amt -> Html.div [ Html.Attributes.class "text-rust font-mono text-sm font-bold" ] [ UI.MoneyView.amount Data.Currency.USD amt ])
                         (draft.amount |> Maybe.andThen Money.fromDollarString)
 
                 dateRow : Html Msg
@@ -890,7 +891,7 @@ viewOcrSummary ocr =
             [ Html.div [ Html.Attributes.class "text-rust font-mono text-base font-bold" ]
                 [ case ocr.amount of
                     Just amt ->
-                        UI.MoneyView.amount amt
+                        UI.MoneyView.amount Data.Currency.USD amt
 
                     Nothing ->
                         Html.text "—"

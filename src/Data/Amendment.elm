@@ -24,6 +24,9 @@ Field types reflect the typed-primitives refactor (#94 — R3):
 
   - `amount : Maybe Data.Money.Money` — was `Maybe Float`. Encoder still
     emits `Float` dollars so the wire format is unchanged.
+  - `currency : Maybe Data.Currency.Currency` — set when an edit changes
+    the currency the expense was paid in. Omitted from the document when
+    `Nothing`, like every other patch field.
   - `createdAt : Time.Posix` — was `String`. Wire format remains the
     legacy ISO `"YYYY-MM-DDTHH:MM:SSZ"` string for backward compatibility.
   - `date : Maybe Data.DateField.DateField` — was `Maybe String`. Wire
@@ -34,6 +37,7 @@ Field types reflect the typed-primitives refactor (#94 — R3):
 
 import Data.AmendmentId as AmendmentId exposing (AmendmentId)
 import Data.Category as Category exposing (Category)
+import Data.Currency as Currency exposing (Currency)
 import Data.DateField as DateField exposing (DateField)
 import Data.ExpenseId as ExpenseId exposing (ExpenseId)
 import Data.FuelDetail as FuelDetail exposing (FuelDetail)
@@ -53,6 +57,7 @@ type alias Amendment =
     , category : Maybe Category
     , createdAt : Time.Posix
     , createdBy : UserId
+    , currency : Maybe Currency
     , date : Maybe DateField
     , fuelDetail : Maybe FuelDetail
     , id : AmendmentId
@@ -90,6 +95,13 @@ encoder a =
             ++ (case a.category of
                     Just v ->
                         [ ( "category", Json.Encode.string (Category.label v) ) ]
+
+                    Nothing ->
+                        []
+               )
+            ++ (case a.currency of
+                    Just v ->
+                        [ ( "currency", Currency.encoder v ) ]
 
                     Nothing ->
                         []
@@ -163,6 +175,7 @@ decoder =
             Nothing
         |> Pipeline.required "createdAt" createdAtDecoder
         |> Pipeline.optional "createdBy" UserId.decoder UserId.unknown
+        |> Pipeline.optional "currency" (Json.Decode.nullable Currency.decoder) Nothing
         |> Pipeline.optional "date" (Json.Decode.nullable DateField.decoder) Nothing
         |> Pipeline.optional "fuel" (Json.Decode.nullable FuelDetail.decoder) Nothing
         |> Pipeline.required "_id" AmendmentId.decode

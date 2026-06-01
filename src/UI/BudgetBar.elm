@@ -24,6 +24,7 @@ thousands separators and a screen-reader-friendly `aria-label`.
 
 -}
 
+import Data.Currency
 import Data.Money as Money exposing (Money)
 import Html exposing (Html)
 import Html.Attributes
@@ -50,13 +51,13 @@ view { budget, spent } =
         , Html.div [ Html.Attributes.class "mt-2 flex justify-between items-baseline gap-3" ]
             [ Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
                 [ Html.span [ Html.Attributes.class spentAmountClass ]
-                    [ UI.MoneyView.wholeDollars spent ]
+                    [ UI.MoneyView.wholeDollars Data.Currency.USD spent ]
                 , Html.span [ Html.Attributes.class labelClass ]
                     [ Html.text "spent" ]
                 ]
             , Html.div [ Html.Attributes.class "flex items-baseline gap-1.5" ]
                 [ Html.span [ Html.Attributes.class "text-sm font-semibold text-forest" ]
-                    [ UI.MoneyView.wholeDollars budget ]
+                    [ UI.MoneyView.wholeDollars Data.Currency.USD budget ]
                 , Html.span [ Html.Attributes.class labelClass ]
                     [ Html.text "budget" ]
                 ]

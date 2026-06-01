@@ -5,6 +5,7 @@ import Chart.Attributes as CA
 import Chart.Events as CE
 import Chart.Item as CI
 import Data.Category as Category
+import Data.Currency exposing (Currency)
 import Data.DateField as DateField
 import Data.Entry as Entry
 import Data.Gallons
@@ -117,11 +118,22 @@ viewHeroReady model entries =
         primEntries =
             toPrimEntries entries
 
-        total =
-            Money.sum (List.map .amount entries)
+        displayCurrency =
+            Entry.primaryCurrency entries
 
-        numDays =
-            List.length (Entry.uniqueDates entries)
+        -- Derived scalars (total, burn, averages) are reported in a single
+        -- currency, so they're computed over only the trip's primary-currency
+        -- entries — never a meaningless CAD+USD cent sum. The hero TOTAL SPENT
+        -- above shows the exact per-currency split. For an all-USD trip
+        -- `primaryEntries == entries`, so nothing changes.
+        primaryEntries =
+            List.filter (\e -> e.currency == displayCurrency) entries
+
+        isUsdOnly =
+            List.all (\e -> e.currency == Data.Currency.USD) entries
+
+        total =
+            Money.sum (List.map .amount primaryEntries)
 
         numEntries =
             List.length entries
@@ -129,16 +141,22 @@ viewHeroReady model entries =
         totalCents =
             Money.toCents total
 
+        primaryDayCount =
+            List.length (Entry.uniqueDates primaryEntries)
+
+        primaryEntryCount =
+            List.length primaryEntries
+
         avgPerDay =
-            if numDays > 0 then
-                Money.fromCents (totalCents // numDays)
+            if primaryDayCount > 0 then
+                Money.fromCents (totalCents // primaryDayCount)
 
             else
                 Money.zero
 
         avgPerEntry =
-            if numEntries > 0 then
-                Money.fromCents (totalCents // numEntries)
+            if primaryEntryCount > 0 then
+                Money.fromCents (totalCents // primaryEntryCount)
 
             else
                 Money.zero
@@ -179,20 +197,23 @@ viewHeroReady model entries =
         , Html.div [ Html.Attributes.class "flex items-end justify-between gap-4" ]
             [ Html.div []
                 [ Html.div [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
-                    [ UI.MoneyView.amount total ]
+                    [ UI.MoneyView.totals (Entry.totalsByCurrency entries) ]
                 , Html.div [ Html.Attributes.class "mt-2 text-xs font-mono tracking-wide text-muted" ]
                     [ Html.text (String.fromInt numEntries ++ " ENTRIES · DAY " ++ dayOfTripStr) ]
                 ]
             , sparkline last7
             ]
-        , if not (Money.isZero budget) then
+        , if isUsdOnly && not (Money.isZero budget) then
+            -- The budget is a USD figure; only compare it against spend when
+            -- every entry is USD. A trip with any CAD spend hides the bar
+            -- rather than show a cross-currency comparison.
             UI.BudgetBar.viewLine { budget = budget, spent = total }
 
           else
             UI.Rule.dashedRule
         , Html.div [ Html.Attributes.class "flex gap-6" ]
-            [ statBlock "DAILY BURN" (UI.MoneyView.amount avgPerDay)
-            , statBlock "AVG / ENTRY" (UI.MoneyView.amount avgPerEntry)
+            [ statBlock "DAILY BURN" (UI.MoneyView.amount displayCurrency avgPerDay)
+            , statBlock "AVG / ENTRY" (UI.MoneyView.amount displayCurrency avgPerEntry)
             ]
         ]
 
@@ -308,21 +329,34 @@ viewBodyReady model entries =
         primEntries =
             toPrimEntries entries
 
+        displayCurrency =
+            Entry.primaryCurrency entries
+
+        -- Single-currency scalars (median, daily burn, 30-day projection) are
+        -- computed over only the primary-currency entries so the number matches
+        -- its `displayCurrency` label — no CAD+USD cent sums. All-USD trips are
+        -- unaffected (`primaryEntries == entries`).
+        primaryEntries =
+            List.filter (\e -> e.currency == displayCurrency) entries
+
         numDays =
             List.length (Entry.uniqueDates entries)
 
         numEntries =
             List.length entries
 
+        primaryDayCount =
+            List.length (Entry.uniqueDates primaryEntries)
+
         avgPerDayCents =
-            if numDays > 0 then
-                Money.toCents (Money.sum (List.map .amount entries)) // numDays
+            if primaryDayCount > 0 then
+                Money.toCents (Money.sum (List.map .amount primaryEntries)) // primaryDayCount
 
             else
                 0
 
         median =
-            Entry.medianAmount entries
+            Entry.medianAmount primaryEntries
 
         topCat =
             Entry.topCategory entries
@@ -350,7 +384,7 @@ viewBodyReady model entries =
         [ UI.Rule.kicker "AT A GLANCE"
         , UI.Card.subCard
             [ Html.div [ Html.Attributes.class "grid grid-cols-2 gap-3" ]
-                [ statCard "MEDIAN" (UI.MoneyView.amount median)
+                [ statCard "MEDIAN" (UI.MoneyView.amount displayCurrency median)
                 , statCard "TOP CATEGORY"
                     (Html.text
                         (topCat
@@ -364,7 +398,15 @@ viewBodyReady model entries =
                             Just ( d, t ) ->
                                 Html.span []
                                     [ Html.text (String.slice 5 10 (DateField.toIso d) ++ "  ")
-                                    , UI.MoneyView.amount t
+
+                                    -- Label the biggest day in that day's own
+                                    -- currency, not the trip-wide one — a lone
+                                    -- CAD day in a USD trip shouldn't read `$`.
+                                    , UI.MoneyView.amount
+                                        (Entry.primaryCurrency
+                                            (List.filter (\e -> DateField.compare e.date d == EQ) entries)
+                                        )
+                                        t
                                     ]
 
                             Nothing ->
@@ -384,7 +426,7 @@ viewBodyReady model entries =
                     )
                 , statCard "PROJ / 30 DAYS"
                     (if avgPerDayCents > 0 then
-                        UI.MoneyView.amount (Money.fromCents (avgPerDayCents * 30))
+                        UI.MoneyView.amount displayCurrency (Money.fromCents (avgPerDayCents * 30))
 
                      else
                         Html.text "—"
@@ -479,7 +521,7 @@ viewBodyReady model entries =
                                         , Html.div [ Html.Attributes.class "text-[11px] text-muted" ] [ Html.text (DateField.toIso entry.date) ]
                                         ]
                                     , Html.span [ Html.Attributes.class "font-mono text-rust text-base" ]
-                                        [ UI.MoneyView.amount entry.amount ]
+                                        [ UI.MoneyView.amount entry.currency entry.amount ]
                                     ]
                             )
                             top5
@@ -503,6 +545,9 @@ statCard label_ value =
 viewCategoryList : List Entry.EffectiveEntry -> Html Msg
 viewCategoryList entries =
     let
+        displayCurrency =
+            Entry.primaryCurrency entries
+
         rows =
             Category.all
                 |> List.map
@@ -529,7 +574,8 @@ viewCategoryList entries =
             (List.indexedMap
                 (\i r ->
                     categoryRow
-                        { isLast = i == List.length rows - 1
+                        { currency = displayCurrency
+                        , isLast = i == List.length rows - 1
                         , maxTotalCents = maxTotalCents
                         , row = r
                         }
@@ -540,12 +586,13 @@ viewCategoryList entries =
 
 
 categoryRow :
-    { isLast : Bool
+    { currency : Currency
+    , isLast : Bool
     , maxTotalCents : Int
     , row : { cat : Category.Category, total : Money }
     }
     -> Html Msg
-categoryRow { isLast, maxTotalCents, row } =
+categoryRow { currency, isLast, maxTotalCents, row } =
     let
         pct =
             if maxTotalCents > 0 then
@@ -572,7 +619,7 @@ categoryRow { isLast, maxTotalCents, row } =
         , Html.div [ Html.Attributes.class "flex-1 min-w-0" ]
             [ categoryBar (Category.color row.cat) pct ]
         , Html.span [ Html.Attributes.class "font-mono text-sm text-rust w-20 text-right shrink-0" ]
-            [ UI.MoneyView.amount row.total ]
+            [ UI.MoneyView.amount currency row.total ]
         ]
 
 

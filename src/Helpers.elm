@@ -17,6 +17,7 @@ effectiveEntryToExpense e =
     , category = e.category
     , createdAt = e.createdAt
     , createdBy = e.createdBy
+    , currency = e.currency
     , date = e.date
     , fuelDetail = e.fuelDetail
     , geoPoint = e.geoPoint

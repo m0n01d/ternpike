@@ -79,6 +79,7 @@ import Data.AnthropicKey as AnthropicKey
 import Data.Auth exposing (AppConfig, Creds)
 import Data.ColorScheme as ColorScheme
 import Data.CsvExport as CsvExport
+import Data.Currency as Currency
 import Data.DateField as DateField
 import Data.Entry as Entry
 import Data.Expense as Expense exposing (Expense)
@@ -88,6 +89,7 @@ import Data.Gallons as Gallons
 import Data.GeoPoint as GeoPoint
 import Data.Guest exposing (GuestReason(..), GuestSession)
 import Data.Iso8601 as Iso8601
+import Data.Liters as Liters
 import Data.Location exposing (LocationSource(..), LocationState(..))
 import Data.Milepost as Milepost
 import Data.MilepostProgress as MilepostProgress exposing (MilepostProgress)
@@ -97,6 +99,7 @@ import Data.Notifications as Notifications
 import Data.PendingEntry as PendingEntry exposing (PendingEntry, PendingForm(..))
 import Data.Pouch exposing (DocChange(..), ExpenseBundle, PouchInbound(..), PouchOutbound(..), TripBundle)
 import Data.PricePerGallon as PricePerGallon
+import Data.PricePerLiter as PricePerLiter
 import Data.Scan exposing (ScanItem, ScanStatus(..))
 import Data.ScanItemId as ScanItemId
 import Data.SharedTrip as SharedTrip
@@ -1633,13 +1636,28 @@ expenseToPending e =
     { address = e.address
     , amount = Money.toDollarString e.amount
     , category = e.category
+    , currency = e.currency
     , date = DateField.toIso e.date
+
+    -- The volume/price strings hold whichever unit the currency selects:
+    -- liters + price-per-liter for a CAD fuel-up, gallons + price-per-gallon
+    -- for a USD one (the Add form relabels the inputs to match).
     , fuelGallons =
-        e.fuelDetail |> Maybe.andThen .gallons |> Maybe.map Gallons.toInputString |> Maybe.withDefault ""
+        case e.currency of
+            Currency.CAD ->
+                e.fuelDetail |> Maybe.andThen .liters |> Maybe.map Liters.toInputString |> Maybe.withDefault ""
+
+            Currency.USD ->
+                e.fuelDetail |> Maybe.andThen .gallons |> Maybe.map Gallons.toInputString |> Maybe.withDefault ""
     , fuelGrade =
         e.fuelDetail |> Maybe.andThen .grade |> Maybe.map FuelGrade.display |> Maybe.withDefault ""
     , fuelPricePerGallon =
-        e.fuelDetail |> Maybe.andThen .pricePerGallon |> Maybe.map PricePerGallon.toInputString |> Maybe.withDefault ""
+        case e.currency of
+            Currency.CAD ->
+                e.fuelDetail |> Maybe.andThen .pricePerLiter |> Maybe.map PricePerLiter.toInputString |> Maybe.withDefault ""
+
+            Currency.USD ->
+                e.fuelDetail |> Maybe.andThen .pricePerGallon |> Maybe.map PricePerGallon.toInputString |> Maybe.withDefault ""
     , locationState =
         case e.geoPoint of
             Just point ->
@@ -3011,6 +3029,9 @@ updateAuth msg as_ =
         CategorySelected c ->
             authPending (\p -> { p | category = c }) as_
 
+        CurrencyChanged c ->
+            authPending (\p -> { p | currency = c }) as_
+
         DateChanged s ->
             authPending (\p -> { p | date = s }) { as_ | duplicateWarning = Nothing }
 
@@ -3077,6 +3098,7 @@ updateAuth msg as_ =
                                     , category = parsed.category
                                     , createdAt = Time.millisToPosix 0
                                     , createdBy = as_.currentUser
+                                    , currency = parsed.currency
                                     , date = parsed.date
                                     , fuelDetail = parsed.fuelDetail
                                     , geoPoint = parsed.geoPoint
@@ -3158,6 +3180,12 @@ updateAuth msg as_ =
                                             Nothing
                                     , createdAt = posix
                                     , createdBy = UserId.fromString as_.creds.email
+                                    , currency =
+                                        if parsed.currency /= original.currency then
+                                            Just parsed.currency
+
+                                        else
+                                            Nothing
                                     , date =
                                         if parsed.date /= original.date then
                                             Just parsed.date
@@ -3252,6 +3280,7 @@ updateAuth msg as_ =
                                     , category = parsed.category
                                     , createdAt = posix
                                     , createdBy = UserId.fromString as_.creds.email
+                                    , currency = parsed.currency
                                     , date = parsed.date
                                     , fuelDetail = parsed.fuelDetail
                                     , geoPoint = parsed.geoPoint

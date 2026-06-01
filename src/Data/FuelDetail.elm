@@ -26,18 +26,29 @@ decoder serves both the nested expense doc and the flat OCR response.
 
 import Data.FuelGrade as FuelGrade exposing (FuelGrade)
 import Data.Gallons as Gallons exposing (Gallons)
+import Data.Liters as Liters exposing (Liters)
 import Data.PricePerGallon as PricePerGallon exposing (PricePerGallon)
+import Data.PricePerLiter as PricePerLiter exposing (PricePerLiter)
 import Json.Decode
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
 
 
 {-| Fuel detail: any subset of unit price, volume, and grade.
+
+A fuel-up is recorded in **either** imperial (`gallons` + `pricePerGallon`)
+**or** metric (`liters` + `pricePerLiter`) units, never both — which pair is
+filled is driven by the expense's `Data.Currency` (CAD ⇒ liters). The metric
+fields were added additively (#liters track): legacy and US docs decode with
+`liters` / `pricePerLiter` as `Nothing`, so the wire format stays compatible.
+
 -}
 type alias FuelDetail =
     { gallons : Maybe Gallons
     , grade : Maybe FuelGrade
+    , liters : Maybe Liters
     , pricePerGallon : Maybe PricePerGallon
+    , pricePerLiter : Maybe PricePerLiter
     }
 
 
@@ -47,10 +58,14 @@ all-empty record.
 -}
 isEmpty : FuelDetail -> Bool
 isEmpty detail =
-    detail.gallons == Nothing && detail.grade == Nothing && detail.pricePerGallon == Nothing
+    (detail.gallons == Nothing)
+        && (detail.grade == Nothing)
+        && (detail.liters == Nothing)
+        && (detail.pricePerGallon == Nothing)
+        && (detail.pricePerLiter == Nothing)
 
 
-{-| Decode the three fuel sub-fields from the surrounding object. Each is
+{-| Decode the fuel sub-fields from the surrounding object. Each is
 optional and lenient: a missing field, JSON `null`, or a value of the
 wrong type collapses to `Nothing` on that sub-field rather than failing
 the whole receipt.
@@ -60,7 +75,9 @@ decoder =
     Json.Decode.succeed FuelDetail
         |> Pipeline.optional "gallons" (lenient Gallons.decoder) Nothing
         |> Pipeline.optional "grade" (lenient FuelGrade.decoder) Nothing
+        |> Pipeline.optional "liters" (lenient Liters.decoder) Nothing
         |> Pipeline.optional "pricePerGallon" (lenient PricePerGallon.decoder) Nothing
+        |> Pipeline.optional "pricePerLiter" (lenient PricePerLiter.decoder) Nothing
 
 
 {-| Encode the present sub-fields as an object. Absent sub-fields are
@@ -71,7 +88,9 @@ encoder detail =
     Json.Encode.object
         [ ( "gallons", maybe Gallons.encoder detail.gallons )
         , ( "grade", maybe FuelGrade.encoder detail.grade )
+        , ( "liters", maybe Liters.encoder detail.liters )
         , ( "pricePerGallon", maybe PricePerGallon.encoder detail.pricePerGallon )
+        , ( "pricePerLiter", maybe PricePerLiter.encoder detail.pricePerLiter )
         ]
 
 

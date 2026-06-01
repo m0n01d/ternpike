@@ -1,6 +1,7 @@
 module Data.FuelDetailTest exposing (suite)
 
 import Data.Category
+import Data.Currency
 import Data.FuelDetail as FuelDetail
 import Data.FuelGrade as FuelGrade exposing (FuelGrade(..))
 import Data.Gallons as Gallons
@@ -79,7 +80,9 @@ suite =
                         detail =
                             { gallons = Gallons.fromString "12.345"
                             , grade = Just Regular
+                            , liters = Nothing
                             , pricePerGallon = PricePerGallon.fromString "4.299"
+                            , pricePerLiter = Nothing
                             }
                     in
                     FuelDetail.encoder detail
@@ -87,7 +90,7 @@ suite =
                         |> Expect.equal (Ok detail)
             , test "an all-empty detail is isEmpty" <|
                 \_ ->
-                    FuelDetail.isEmpty { gallons = Nothing, grade = Nothing, pricePerGallon = Nothing }
+                    FuelDetail.isEmpty { gallons = Nothing, grade = Nothing, liters = Nothing, pricePerGallon = Nothing, pricePerLiter = Nothing }
                         |> Expect.equal True
             ]
         , describe "parseEntry fuel gating"
@@ -100,7 +103,9 @@ suite =
                                 (Just
                                     { gallons = Gallons.fromString "12.3"
                                     , grade = Just Regular
+                                    , liters = Nothing
                                     , pricePerGallon = PricePerGallon.fromString "4.299"
+                                    , pricePerLiter = Nothing
                                     }
                                 )
                             )
@@ -128,6 +133,7 @@ base =
     { address = ""
     , amount = "20.00"
     , category = Data.Category.Fuel
+    , currency = Data.Currency.USD
     , date = "2024-05-21"
     , fuelGallons = ""
     , fuelGrade = ""

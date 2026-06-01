@@ -22,6 +22,7 @@ Failure / Success — no wildcard, per CLAUDE.md):
 
 -}
 
+import Data.Currency
 import Data.GuestPreviewGate exposing (GuestPreviewGate(..))
 import Data.NestPreview exposing (NestPreview)
 import Data.Scan exposing (OcrData)
@@ -131,7 +132,7 @@ viewTeaser gs teaser =
                 [ Html.text teaser.tripName ]
             , Html.div [ Html.Attributes.class "flex items-baseline gap-2" ]
                 [ Html.span [ Html.Attributes.class "text-2xl font-bold text-ink" ]
-                    [ UI.MoneyView.amount teaser.totalSpent ]
+                    [ UI.MoneyView.amount Data.Currency.USD teaser.totalSpent ]
                 , Html.span [ Html.Attributes.class "text-xs text-muted font-mono uppercase tracking-widest" ]
                     [ Html.text "total" ]
                 ]
@@ -317,7 +318,7 @@ viewScanResult ocr =
             , viewScanRow "Amount"
                 (case ocr.amount of
                     Just amount ->
-                        UI.MoneyView.amount amount
+                        UI.MoneyView.amount Data.Currency.USD amount
 
                     Nothing ->
                         Html.text "—"

@@ -89,12 +89,32 @@ under `src/elements/`, add a side-effect `import './elements/foo.js'` to
 stay tidy and the attribute names don't drift.
 
 - **`<tp-amount value="12.34" currency="USD">`** — renders a currency
-  amount via `Intl.NumberFormat`. Wrapped in Elm by `UI.MoneyView.amount` /
+  amount via `Intl.NumberFormat`. Wrapped in Elm by
+  `UI.MoneyView.amount : Currency -> Money -> Html msg` /
   `UI.MoneyView.wholeDollars`. The element carries `role="text"` and a
   spoken-form `aria-label` (e.g. `"twelve dollars and thirty-four cents"`,
   `"negative five dollars"`); the visible `$` glyph sits inside an
   `aria-hidden="true"` span. The full a11y contract is documented at the
-  top of `src/elements/tp-amount.js`.
+  top of `src/elements/tp-amount.js`. The `currency` attribute comes from
+  the expense's own `Data.Currency` (`USD` → `$`, `CAD` → `CA$`); see the
+  per-expense currency note below.
+
+#### Per-expense currency (no conversion)
+
+Each `Expense` carries `currency : Data.Currency.Currency` (`USD | CAD`).
+`Money` stays currency-agnostic raw `Int` cents — CAD also has 100-cent
+subunits — so the currency is a separate field, not baked into `Money`.
+Amounts are recorded and shown in their **native** currency; the app never
+converts between them. A single trip may freely mix both (an Alaska road
+trip crosses the border repeatedly), so the currency lives per-expense, not
+per-trip. Because totals can't sum across currencies without conversion,
+`Data.Entry.totalsByCurrency` returns one subtotal per currency present
+(rendered by `UI.MoneyView.totals` as `$1,200 · CA$340`), and
+`Data.Entry.primaryCurrency` labels derived single-scalar stats (median,
+daily burn, category subtotals) with the trip's most common currency
+(`USD` on ties / empty). `currency` decodes to `USD` for legacy docs, so the
+addition is wire-compatible. Trip `budget` stays USD-only (Trip has no
+currency field); `UI.BudgetBar` passes `Currency.USD` explicitly.
 - **`<relative-time datetime="2024-05-21">`** — the
   `@github/relative-time-element` package, registered as a side-effect
   import. Wrapped in Elm by `UI.DateView`:
@@ -963,13 +983,20 @@ Claude returns `null` for whatever it couldn't read):
   the per-gallon unit price (to the 9/10 cent), the volume pumped, and
   the grade only on fuel receipts; `null` otherwise. They decode into
   `OcrData.fuelDetail : Maybe Data.FuelDetail.FuelDetail` (a
-  `{ gallons, grade, pricePerGallon }` bundle, each sub-field optional)
-  and flow through review into `Expense.fuelDetail`. Modelled as a
-  bundle on the expense — **not** as a payload on `Category.Fuel` — so
-  `Category` stays a plain comparable grouping key for Stats / Milepost.
-  Precision: `Data.PricePerGallon` and `Data.Gallons` are opaque
-  `Int`-backed types (mills and milligallons) because `Data.Money`'s
+  `{ gallons, grade, liters, pricePerGallon, pricePerLiter }` bundle, each
+  sub-field optional) and flow through review into `Expense.fuelDetail`.
+  Modelled as a bundle on the expense — **not** as a payload on
+  `Category.Fuel` — so `Category` stays a plain comparable grouping key
+  for Stats / Milepost. Precision: `Data.PricePerGallon` / `Data.Gallons`
+  (and their metric siblings `Data.PricePerLiter` / `Data.Liters`) are
+  opaque `Int`-backed types (mills and milli-units) because `Data.Money`'s
   integer cents can't hold a `$4.299` pump price.
+
+  **Imperial vs. metric is driven by the expense's `Data.Currency`**: a
+  CAD fuel-up fills `liters` + `pricePerLiter`, a USD one fills `gallons`
+  + `pricePerGallon` — they are mutually exclusive in practice. The two
+  metric fields were added additively, so legacy/US docs decode with them
+  as `Nothing` and the wire format stays compatible.
 
 The raw OCR result lands on `ScanItem.ocrData : Maybe OcrData`
 (`src/Data/Scan.elm`). On batch images, `Page.Scan`'s `GotOcrResult` handler splits one
@@ -1776,6 +1803,7 @@ the real view; map its fixtures to seed state in `Main.seedVerifyAuthState`.
 | Change sync settings | `src/pouch.js` `startSync` handler |
 | Understand what `EffectiveEntry` looks like | `src/Data/Entry.elm` |
 | See how amendments are applied | `src/Data/Entry.elm` `resolve` function |
+| Change currency / metric-fuel handling | `src/Data/Currency.elm`; fuel units in `src/Data/Liters.elm` / `src/Data/PricePerLiter.elm` (+ gallon siblings); the picker/relabel in `src/Pages/Add.elm`; per-currency totals in `Data.Entry.totalsByCurrency`/`primaryCurrency` + `UI.MoneyView` |
 | Add an extracted field to the OCR prompt | `src/Main.elm` `ocrSystemPrompt`, `src/Data/Scan.elm` `OcrData` + `ocrDataDecoder` |
 | Add a new Worker endpoint | `server/<name>.js` exporting `register<Name>Routes(app)`; wire from `server/index.js`. Reuse `server/auth.js` for authenticateCaller / getTier / isPaidTier |
 | Change the Ledger map | `src/Helpers.elm` `encodeWaypoints` for the JSON wire shape; `src/main.js` `WaypointMap` for the Leaflet rendering |

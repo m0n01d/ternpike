@@ -25,6 +25,7 @@ consumer in #411 (the Ledger header strip in `Pages.Ledger`).
 
 -}
 
+import Data.Currency
 import Data.Milepost as Milepost
 import Html exposing (Html)
 import Html.Attributes
@@ -223,7 +224,7 @@ goalTarget goal =
         Milepost.Dollars target ->
             Html.div [ Html.Attributes.class "mt-1 text-xs text-muted font-mono flex items-center gap-1" ]
                 [ Html.text "Target:"
-                , UI.MoneyView.wholeDollars target
+                , UI.MoneyView.wholeDollars Data.Currency.USD target
                 ]
 
         Milepost.Count _ ->

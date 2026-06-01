@@ -108,7 +108,7 @@ rowLabel expense =
                 "this expense"
     in
     [ Html.text (head ++ " · ")
-    , UI.MoneyView.amount expense.amount
+    , UI.MoneyView.amount expense.currency expense.amount
     ]
 
 
