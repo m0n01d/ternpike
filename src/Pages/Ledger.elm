@@ -176,6 +176,12 @@ viewLedgerHero earned budget entries =
         total =
             Money.sum (List.map .amount entries)
 
+        -- The budget is a USD figure; only show the spent/budget bar when
+        -- every entry is USD, so we never compare it against a cross-currency
+        -- (CAD+USD) sum. The hero total above shows the per-currency split.
+        isUsdOnly =
+            List.all (\e -> e.currency == Data.Currency.USD) entries
+
         entryCount =
             List.length entries
 
@@ -216,7 +222,7 @@ viewLedgerHero earned budget entries =
         , Html.div
             [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
             [ Html.text kickerText ]
-        , Html.Extra.viewIf (not (Money.isZero budget)) <|
+        , Html.Extra.viewIf (isUsdOnly && not (Money.isZero budget)) <|
             UI.BudgetBar.viewSubtle { budget = budget, spent = total }
         , Html.Extra.viewIf (earnedCount > 0) <|
             viewMarkerStrip visibleChips moreCount

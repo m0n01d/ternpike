@@ -118,14 +118,22 @@ viewHeroReady model entries =
         primEntries =
             toPrimEntries entries
 
-        total =
-            Money.sum (List.map .amount entries)
-
         displayCurrency =
             Entry.primaryCurrency entries
 
-        numDays =
-            List.length (Entry.uniqueDates entries)
+        -- Derived scalars (total, burn, averages) are reported in a single
+        -- currency, so they're computed over only the trip's primary-currency
+        -- entries — never a meaningless CAD+USD cent sum. The hero TOTAL SPENT
+        -- above shows the exact per-currency split. For an all-USD trip
+        -- `primaryEntries == entries`, so nothing changes.
+        primaryEntries =
+            List.filter (\e -> e.currency == displayCurrency) entries
+
+        isUsdOnly =
+            List.all (\e -> e.currency == Data.Currency.USD) entries
+
+        total =
+            Money.sum (List.map .amount primaryEntries)
 
         numEntries =
             List.length entries
@@ -133,16 +141,22 @@ viewHeroReady model entries =
         totalCents =
             Money.toCents total
 
+        primaryDayCount =
+            List.length (Entry.uniqueDates primaryEntries)
+
+        primaryEntryCount =
+            List.length primaryEntries
+
         avgPerDay =
-            if numDays > 0 then
-                Money.fromCents (totalCents // numDays)
+            if primaryDayCount > 0 then
+                Money.fromCents (totalCents // primaryDayCount)
 
             else
                 Money.zero
 
         avgPerEntry =
-            if numEntries > 0 then
-                Money.fromCents (totalCents // numEntries)
+            if primaryEntryCount > 0 then
+                Money.fromCents (totalCents // primaryEntryCount)
 
             else
                 Money.zero
@@ -189,7 +203,10 @@ viewHeroReady model entries =
                 ]
             , sparkline last7
             ]
-        , if not (Money.isZero budget) then
+        , if isUsdOnly && not (Money.isZero budget) then
+            -- The budget is a USD figure; only compare it against spend when
+            -- every entry is USD. A trip with any CAD spend hides the bar
+            -- rather than show a cross-currency comparison.
             UI.BudgetBar.viewLine { budget = budget, spent = total }
 
           else
@@ -315,21 +332,31 @@ viewBodyReady model entries =
         displayCurrency =
             Entry.primaryCurrency entries
 
+        -- Single-currency scalars (median, daily burn, 30-day projection) are
+        -- computed over only the primary-currency entries so the number matches
+        -- its `displayCurrency` label — no CAD+USD cent sums. All-USD trips are
+        -- unaffected (`primaryEntries == entries`).
+        primaryEntries =
+            List.filter (\e -> e.currency == displayCurrency) entries
+
         numDays =
             List.length (Entry.uniqueDates entries)
 
         numEntries =
             List.length entries
 
+        primaryDayCount =
+            List.length (Entry.uniqueDates primaryEntries)
+
         avgPerDayCents =
-            if numDays > 0 then
-                Money.toCents (Money.sum (List.map .amount entries)) // numDays
+            if primaryDayCount > 0 then
+                Money.toCents (Money.sum (List.map .amount primaryEntries)) // primaryDayCount
 
             else
                 0
 
         median =
-            Entry.medianAmount entries
+            Entry.medianAmount primaryEntries
 
         topCat =
             Entry.topCategory entries
@@ -371,7 +398,15 @@ viewBodyReady model entries =
                             Just ( d, t ) ->
                                 Html.span []
                                     [ Html.text (String.slice 5 10 (DateField.toIso d) ++ "  ")
-                                    , UI.MoneyView.amount displayCurrency t
+
+                                    -- Label the biggest day in that day's own
+                                    -- currency, not the trip-wide one — a lone
+                                    -- CAD day in a USD trip shouldn't read `$`.
+                                    , UI.MoneyView.amount
+                                        (Entry.primaryCurrency
+                                            (List.filter (\e -> DateField.compare e.date d == EQ) entries)
+                                        )
+                                        t
                                     ]
 
                             Nothing ->
