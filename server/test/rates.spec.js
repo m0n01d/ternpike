@@ -125,4 +125,29 @@ describe('GET /rates', () => {
     const res = await request(env, 'GET', '/rates', { headers: await authed(ALICE) })
     assert.equal(res.status, 502)
   })
+
+  test('zero / negative / non-number upstream rates are skipped (no Infinity)', async () => {
+    fx = stubUpstream({
+      body: {
+        result: 'success',
+        base_code: 'USD',
+        rates: { CAD: 0, MXN: -1, GTQ: 'oops', HNL: 24.6 },
+      },
+    })
+    const res = await request(env, 'GET', '/rates', { headers: await authed(ALICE) })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.rates.cad, undefined)
+    assert.equal(res.body.rates.mxn, undefined)
+    assert.equal(res.body.rates.gtq, undefined)
+    assert.ok(Math.abs(res.body.rates.hnl - 1 / 24.6) < 1e-5)
+  })
+
+  test('a success body with no rates degrades to an empty table (estimate hidden), not a 502', async () => {
+    fx = stubUpstream({ body: { result: 'success', base_code: 'USD' } })
+    const res = await request(env, 'GET', '/rates', { headers: await authed(ALICE) })
+    assert.equal(res.status, 200)
+    assert.equal(res.body.ok, true)
+    assert.deepEqual(res.body.rates, {})
+    assert.equal(typeof res.body.date, 'string')
+  })
 })

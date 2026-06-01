@@ -10,6 +10,7 @@ module Types exposing
     , ShareMode(..)
     , SharedMsg_(..)
     , UserSettingsState(..)
+    , ratesFromSettings
     )
 
 {-| Top-level state and message types — the spine of the Elm
@@ -338,6 +339,20 @@ on the next write so repeated updates don't 409 (milepost pattern).
 type UserSettingsState
     = SettingsLoaded { rev : Maybe String, settings : UserSettings }
     | SettingsNotLoaded
+
+
+{-| The cached exchange-rate table from the settings singleton, or the empty
+table when no settings doc has loaded yet (so the spend estimate stays
+hidden). Shared by the Ledger and Stats heroes.
+-}
+ratesFromSettings : UserSettingsState -> ExchangeRate.RateTable
+ratesFromSettings state =
+    case state of
+        SettingsLoaded loaded ->
+            loaded.settings.exchangeRates
+
+        SettingsNotLoaded ->
+            ExchangeRate.empty
 
 
 

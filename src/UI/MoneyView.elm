@@ -100,15 +100,15 @@ tripEstimate rates entries =
 
     else
         Html.div [ Html.Attributes.class "mt-1 text-sm font-mono text-moss" ]
-            [ Html.text "≈ "
+            [ Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "≈ " ]
             , amount Currency.usd result.total
-            , Html.text
-                (if List.isEmpty result.missing then
-                    ""
+            , if List.isEmpty result.missing then
+                Html.text ""
 
-                 else
-                    "+"
-                )
+              else
+                -- "+" means "at least" (some currency had no rate); decorative,
+                -- so hide it from the reader rather than have it spoken "plus".
+                Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "+" ]
             , Html.span [ Html.Attributes.class "text-muted" ]
                 (Html.text " · est."
                     :: (case ExchangeRate.asOf rates of

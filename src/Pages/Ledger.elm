@@ -4,7 +4,7 @@ import Data.Category as Category
 import Data.Currency exposing (Currency)
 import Data.DateField as DateField exposing (DateField)
 import Data.Entry as Entry
-import Data.ExchangeRate as ExchangeRate exposing (RateTable)
+import Data.ExchangeRate exposing (RateTable)
 import Data.ExpenseId as ExpenseId
 import Data.FuelDetail exposing (FuelDetail)
 import Data.FuelGrade as FuelGrade
@@ -29,7 +29,7 @@ import Html.Extra
 import Html.Keyed as Keyed
 import Routing
 import Set
-import Types exposing (AuthMsg_(..), AuthState, Msg(..), UserSettingsState(..))
+import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Avatar
 import UI.BudgetBar
 import UI.Button
@@ -54,21 +54,8 @@ viewTab earned as_ =
     in
     { actions = viewActions as_
     , body = viewBody as_ mode
-    , hero = viewHero earned (activeBudget as_) (ratesOf as_) mode
+    , hero = viewHero earned (activeBudget as_) (Types.ratesFromSettings as_.userSettings) mode
     }
-
-
-{-| The cached exchange-rate table for the spend estimate, or the empty table
-when no settings doc has loaded yet (estimate stays hidden).
--}
-ratesOf : AuthState -> RateTable
-ratesOf as_ =
-    case as_.userSettings of
-        SettingsLoaded loaded ->
-            loaded.settings.exchangeRates
-
-        SettingsNotLoaded ->
-            ExchangeRate.empty
 
 
 activeBudget : AuthState -> Money

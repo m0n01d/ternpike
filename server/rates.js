@@ -46,6 +46,10 @@ async function fetchRates(env) {
     throw new Error(`fx ${res.status}`)
   }
   const body = await res.json()
+  // open.er-api signals failure with `result: "error"`; we 502 on that. A
+  // missing/empty `result` (e.g. a different upstream behind RATES_BASE_URL)
+  // is tolerated and falls through — any resulting empty `rates` then
+  // degrades to a hidden estimate client-side rather than an error.
   if (body.result && body.result !== 'success') {
     throw new Error(`fx ${body.result}`)
   }

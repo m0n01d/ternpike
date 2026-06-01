@@ -196,6 +196,7 @@ type alias AuthState =
     , tripLoaded    : Set String
     , trips         : TripsState
     , tripsHydrated : Bool   -- complete (settled) trips read has landed
+    , userSettings  : UserSettingsState  -- synced settings singleton (FX rate cache, #448)
     , voids         : Dict String Void
     -- ... form fields, UI state, etc.
     }

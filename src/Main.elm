@@ -400,13 +400,30 @@ persistRates table as_ =
                 SettingsNotLoaded ->
                     Nothing
 
+        unchanged : Bool
+        unchanged =
+            case as_.userSettings of
+                SettingsLoaded loaded ->
+                    loaded.settings.exchangeRates == table
+
+                SettingsNotLoaded ->
+                    False
+
         settings : UserSettings.UserSettings
         settings =
             { exchangeRates = table }
     in
-    ( { as_ | userSettings = SettingsLoaded { rev = currentRev, settings = settings } }
-    , sendPouch (SaveUserSettings (UserSettings.encoder currentRev settings))
-    )
+    if unchanged then
+        -- Same rates already cached (the server day-caches, so a daily boot
+        -- re-fetches an identical table). Skip the write to avoid a redundant
+        -- synced rev on every device every boot — and to shrink the
+        -- cross-device write-conflict window.
+        ( as_, Cmd.none )
+
+    else
+        ( { as_ | userSettings = SettingsLoaded { rev = currentRev, settings = settings } }
+        , sendPouch (SaveUserSettings (UserSettings.encoder currentRev settings))
+        )
 
 
 
