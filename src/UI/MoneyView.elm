@@ -162,7 +162,7 @@ estimateCaption rates =
 breakdown : List ( Currency, Money ) -> Html msg
 breakdown pairs =
     Html.div
-        [ Html.Attributes.class "mt-3 pt-2 border-t border-tan/50" ]
+        [ Html.Attributes.class "mt-3 pt-2 border-t border-tan/60" ]
         (Html.div
             [ Html.Attributes.class "text-[9px] font-mono uppercase tracking-widest text-moss mb-1" ]
             [ Html.text "Actually spent" ]
