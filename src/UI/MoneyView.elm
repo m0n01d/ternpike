@@ -1,4 +1,4 @@
-module UI.MoneyView exposing (amount, totals, tripEstimate, wholeDollars)
+module UI.MoneyView exposing (amount, heroTotal, wholeDollars)
 
 {-| Elm-side wrappers around the `<tp-amount>` web component.
 
@@ -47,79 +47,167 @@ amount currency m =
         []
 
 
-{-| Render a list of per-currency subtotals (from
-`Data.Entry.totalsByCurrency`) as one inline group, each amount in its own
-currency, separated by a middot.
+{-| The trip's hero total — the single entry point the Ledger and Stats heroes
+use for the big spend figure. Picks the right layout for the trip's currency
+shape:
 
-Ternpike never converts between currencies, so a mixed US/Canada trip total
-can't collapse to one number — this shows `$1,200 · CA$340`. A single-currency
-trip yields a one-element list and renders exactly like a bare
-`amount` call, so existing all-USD trips are visually unchanged. The amounts
-inherit the surrounding font size (the Ledger/Stats heroes are large-text
-containers).
+  - **Single currency** (the common case): one big native number, byte-identical
+    to before. If it's a _foreign_ single currency with a rate available, a
+    small `≈ $… USD · est.` line sits below it.
+  - **Multi-currency, rate available**: the converted home-currency estimate as
+    the big headline (`≈ $420 USD`, clearly marked an estimate), with the exact
+    native amounts stacked beneath under an "actually spent" label — the source
+    of truth, never hidden.
+  - **Multi-currency, no rate** (offline, or an un-rated currency): the native
+    amounts stacked as the headline (they can't collapse to one number).
+
+This owns its own font sizing (the call sites no longer wrap it in a
+`text-5xl` container). Ternpike never converts on the data path — the estimate
+headline is derived, presentation-only, and `≈`/`est.`-marked so it can't be
+mistaken for what was actually spent.
 
 -}
-totals : List ( Currency, Money ) -> Html msg
-totals pairs =
-    Html.span []
-        (pairs
-            |> List.map (\( currency, m ) -> amount currency m)
-            |> List.intersperse
-                (Html.span
-                    [ Html.Attributes.class "px-2 text-muted" ]
-                    [ Html.text "·" ]
+heroTotal : RateTable -> List Entry.EffectiveEntry -> Html msg
+heroTotal rates entries =
+    let
+        subtotals : List ( Currency, Money )
+        subtotals =
+            Entry.totalsByCurrency entries
+
+        est : { missing : List Currency, total : Money }
+        est =
+            Entry.estimatedHomeTotal (ExchangeRate.estimate rates) entries
+
+        estimateShown : Bool
+        estimateShown =
+            not (ExchangeRate.isEmpty rates)
+                && (Money.toCents est.total > 0)
+                && List.any (\e -> e.currency /= Currency.usd) entries
+    in
+    case subtotals of
+        [] ->
+            bigAmount Currency.usd Money.zero
+
+        [ ( currency, m ) ] ->
+            Html.div []
+                (bigAmount currency m
+                    :: (if estimateShown then
+                            [ estimateLine est rates ]
+
+                        else
+                            []
+                       )
                 )
+
+        many ->
+            if estimateShown then
+                Html.div []
+                    [ estimateHeadline est
+                    , estimateCaption rates
+                    , breakdown many
+                    ]
+
+            else
+                stackedNative many
+
+
+bigAmount : Currency -> Money -> Html msg
+bigAmount currency m =
+    Html.div
+        [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
+        [ amount currency m ]
+
+
+stackedNative : List ( Currency, Money ) -> Html msg
+stackedNative pairs =
+    Html.div
+        [ Html.Attributes.class "font-display text-4xl font-black text-forest tracking-tight leading-tight" ]
+        (List.map (\( currency, m ) -> Html.div [] [ amount currency m ]) pairs)
+
+
+estimateHeadline : { missing : List Currency, total : Money } -> Html msg
+estimateHeadline est =
+    -- text-4xl (vs the single-currency text-5xl) keeps `≈ $11,147.00` on one
+    -- line at mobile width even for large totals, and matches the stacked-native
+    -- size so the estimate reads as a peer of the native headline, not louder.
+    Html.div
+        [ Html.Attributes.class "font-display text-4xl font-black text-forest tracking-tight leading-none" ]
+        [ Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "≈ " ]
+        , amount Currency.usd est.total
+        , if List.isEmpty est.missing then
+            Html.text ""
+
+          else
+            -- "+" means "at least" (some currency had no rate); decorative, so
+            -- hidden from the reader rather than spoken "plus".
+            Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "+" ]
+        ]
+
+
+estimateCaption : RateTable -> Html msg
+estimateCaption rates =
+    Html.div
+        [ Html.Attributes.class "mt-1 text-[11px] font-mono tracking-wide text-muted" ]
+        (Html.text "est."
+            :: (case ExchangeRate.asOf rates of
+                    Just date ->
+                        [ Html.text " · as of ", UI.DateView.monthDay date ]
+
+                    Nothing ->
+                        []
+               )
         )
 
 
-{-| The optional home-currency _estimate_ for a trip, rendered beside the
-exact per-currency `totals` split — e.g. `≈ $2,290 USD · est. · as of Jun 1`.
+breakdown : List ( Currency, Money ) -> Html msg
+breakdown pairs =
+    Html.div
+        [ Html.Attributes.class "mt-3 pt-2 border-t border-tan/50" ]
+        (Html.div
+            [ Html.Attributes.class "text-[9px] font-mono uppercase tracking-widest text-moss mb-1" ]
+            [ Html.text "Actually spent" ]
+            :: List.map breakdownRow pairs
+        )
 
-This is the single source of truth for _when_ the estimate shows: only when
-the trip has non-home spend (an all-USD trip's estimate equals its total, so
-it's redundant), a rate table is available, and at least one subtotal could be
-converted. A `+` after the amount flags that some currency had no rate (so the
-figure is a floor, not the full total). The estimate is **derived,
-presentation-only** — Ternpike never converts on the data path; the exact
-figures stay the native `totals` split.
 
+breakdownRow : ( Currency, Money ) -> Html msg
+breakdownRow ( currency, m ) =
+    Html.div
+        [ Html.Attributes.class "flex items-baseline justify-between py-0.5" ]
+        [ Html.span
+            [ Html.Attributes.class "text-[11px] font-mono uppercase tracking-wider text-muted" ]
+            [ Html.text (Currency.code currency) ]
+        , Html.div
+            [ Html.Attributes.class "font-display text-xl font-bold text-forest" ]
+            [ amount currency m ]
+        ]
+
+
+{-| The small `≈ $… USD · est.` line used under a single foreign-currency
+total (the multi-currency case promotes the estimate to a headline instead —
+see `heroTotal`).
 -}
-tripEstimate : RateTable -> List Entry.EffectiveEntry -> Html msg
-tripEstimate rates entries =
-    let
-        result : { missing : List Currency, total : Money }
-        result =
-            Entry.estimatedHomeTotal (ExchangeRate.estimate rates) entries
+estimateLine : { missing : List Currency, total : Money } -> RateTable -> Html msg
+estimateLine est rates =
+    Html.div [ Html.Attributes.class "mt-1 text-sm font-mono text-moss" ]
+        [ Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "≈ " ]
+        , amount Currency.usd est.total
+        , if List.isEmpty est.missing then
+            Html.text ""
 
-        allHome : Bool
-        allHome =
-            List.all (\e -> e.currency == Currency.usd) entries
-    in
-    if allHome || ExchangeRate.isEmpty rates || Money.toCents result.total <= 0 then
-        Html.text ""
+          else
+            Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "+" ]
+        , Html.span [ Html.Attributes.class "text-muted" ]
+            (Html.text " · est."
+                :: (case ExchangeRate.asOf rates of
+                        Just date ->
+                            [ Html.text " · as of ", UI.DateView.monthDay date ]
 
-    else
-        Html.div [ Html.Attributes.class "mt-1 text-sm font-mono text-moss" ]
-            [ Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "≈ " ]
-            , amount Currency.usd result.total
-            , if List.isEmpty result.missing then
-                Html.text ""
-
-              else
-                -- "+" means "at least" (some currency had no rate); decorative,
-                -- so hide it from the reader rather than have it spoken "plus".
-                Html.span [ Html.Attributes.attribute "aria-hidden" "true" ] [ Html.text "+" ]
-            , Html.span [ Html.Attributes.class "text-muted" ]
-                (Html.text " · est."
-                    :: (case ExchangeRate.asOf rates of
-                            Just date ->
-                                [ Html.text " · as of ", UI.DateView.monthDay date ]
-
-                            Nothing ->
-                                []
-                       )
-                )
-            ]
+                        Nothing ->
+                            []
+                   )
+            )
+        ]
 
 
 {-| Render a `Money` value in the given currency with no fractional digits

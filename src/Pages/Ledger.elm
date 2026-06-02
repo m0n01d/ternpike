@@ -217,10 +217,7 @@ viewLedgerHero earned budget rates entries =
         [ Html.div
             [ Html.Attributes.class "text-[10px] font-mono uppercase tracking-widest text-moss mb-1" ]
             [ Html.text "RUNNING TOTAL" ]
-        , Html.div
-            [ Html.Attributes.class "font-display text-5xl font-black text-forest tracking-tight leading-none" ]
-            [ UI.MoneyView.totals (Entry.totalsByCurrency entries) ]
-        , UI.MoneyView.tripEstimate rates entries
+        , UI.MoneyView.heroTotal rates entries
         , Html.div
             [ Html.Attributes.class "mt-2 text-xs text-muted font-mono tracking-wide" ]
             [ Html.text kickerText ]
