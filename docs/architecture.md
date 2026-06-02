@@ -114,7 +114,8 @@ the app never converts. A trip may freely mix currencies (a border-crossing
 road trip), so currency lives per-expense, not per-trip. Because totals can't
 sum across currencies without conversion, `Data.Entry.totalsByCurrency`
 returns one subtotal per currency present (home currency first, then by ISO
-code; rendered by `UI.MoneyView.totals` as `$1,200 · CA$340`), and
+code; rendered by `UI.MoneyView.heroTotal` — stacked one-per-line in the
+hero, or as the "actually spent" breakdown under the converted estimate), and
 `Data.Entry.primaryCurrency` labels derived single-scalar stats (median,
 daily burn, category subtotals) with the trip's most common currency
 (`usd` on ties / empty). `currency` decodes to `usd` for legacy docs, so the
@@ -132,9 +133,11 @@ of Jun 1`. Rates are auto-fetched from the free `/rates` Worker endpoint
 (offline fallback, shared across devices). `Http.RatesApi.fetch` fires on
 boot; `Data.Entry.estimatedHomeTotal` folds each `totalsByCurrency` subtotal
 through `Data.ExchangeRate.estimate`, reporting any currency with no rate so
-the UI shows a `+` floor rather than undercounting; `UI.MoneyView.tripEstimate`
-is the single source of truth for when it renders. This is **presentation
-only** — Ternpike never converts on the data path; the estimate is never
+the UI shows a `+` floor rather than undercounting; `UI.MoneyView.heroTotal`
+is the single entry point for the hero total — it shows the estimate as the
+headline (with the native amounts as a stacked breakdown) only for a
+multi-currency trip with a rate, and falls back to the native total/stack
+otherwise. This is **presentation only** — Ternpike never converts on the data path; the estimate is never
 persisted onto an expense, and it's labelled an estimate because mid-market
 rates aren't what a card actually charges.
 - **`<relative-time datetime="2024-05-21">`** — the
