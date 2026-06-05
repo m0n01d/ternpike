@@ -6,6 +6,10 @@ dist/
 .env.local
 .env.*.local
 tests/VerifyExamples/
+# ReScript: compiled output is in-source (.res.mjs); build cache is lib/
+*.res.mjs
+/lib/
+.bsb.lock
 .claude/worktrees/
 e2e/.state/
 e2e/.results/
