@@ -6,8 +6,10 @@
 //
 // Most endpoints are thin proxies over `couchAdmin`, since the TUI is the
 // only consumer and the caller is already trusted. The user mutation
-// endpoints reuse the same provisioning + cascade helpers the real auth
-// flow uses (`setTier` + `onTierChanged` in sharedTrips.js).
+// endpoints write through the canonical `upsertUser` (server/users.js) so
+// changes land on the `user:<email>` record `getTier` actually reads, then
+// run the `onTierChanged` cascade (server/sharedTrips.js) for shared-trip
+// billing. (The legacy `setTier` bare-key write was shadowed by the record.)
 
 import { sendTestPush } from './notifications.js'
 import {
@@ -18,14 +20,20 @@ import {
   onTierChanged,
   personalDbName,
   readSharedTripMeta,
-  setTier,
   sharedTripDbName,
 } from './sharedTrips.js'
+import { freshUser, getUser, slugFor, upsertUser } from './users.js'
 
 const VALID_TIERS = ['tern', 'osprey', 'trailblazer']
 const TERNPIKE_DB_PREFIXES = ['ternpike-', 'sharedtrip-']
 
 const nowIso = () => new Date().toISOString()
+
+// `upsertUser` throws this when asked to lower a Trailblazer — the
+// "Trailblazer is permanent" invariant. Admin surfaces it as a clean 409
+// rather than a 500; the only reset path is delete + recreate.
+const isTrailblazerDowngrade = (err) =>
+  /refusing to downgrade trailblazer/i.test(String(err?.message || err))
 
 const guard = (c) => {
   const env = c.env
@@ -199,13 +207,55 @@ export function registerAdminRoutes(app) {
     const denied = guard(c)
     if (denied) return denied
     if (!c.env.TIERS_KV) return c.json({ ok: true, users: [] })
-    const list = await c.env.TIERS_KV.list()
-    const users = []
-    for (const key of list.keys) {
-      const tier = (await c.env.TIERS_KV.get(key.name)) || 'tern'
-      users.push({ email: key.name, tier })
-    }
-    users.sort((a, b) => a.email.localeCompare(b.email))
+    // `TIERS_KV` holds three key shapes: canonical `user:<email>` JSON
+    // records, the `slug:<slug>` reverse index, and legacy bare `<email>`
+    // tier strings. The list must surface one row per *user* — never the
+    // slug index, never a `user:`-prefixed pseudo-email.
+    const byEmail = new Map()
+    // Canonical records first (the source of truth).
+    let cursor
+    do {
+      const page = await c.env.TIERS_KV.list({ prefix: 'user:', cursor })
+      for (const key of page.keys) {
+        const email = key.name.slice('user:'.length)
+        let rec = null
+        try {
+          const raw = await c.env.TIERS_KV.get(key.name)
+          rec = raw ? JSON.parse(raw) : null
+        } catch {
+          rec = null
+        }
+        byEmail.set(email, {
+          email,
+          subscriptionStatus: rec?.subscriptionStatus ?? null,
+          tier: rec?.tier || 'tern',
+          trailblazerNumber: rec?.trailblazerNumber ?? null,
+        })
+      }
+      cursor = page.list_complete ? undefined : page.cursor
+    } while (cursor)
+    // Legacy bare-key users that have not been upserted to a record yet.
+    let legacyCursor
+    do {
+      const page = await c.env.TIERS_KV.list({ cursor: legacyCursor })
+      for (const key of page.keys) {
+        const name = key.name
+        if (name.startsWith('user:') || name.startsWith('slug:')) continue
+        if (!name.includes('@') || byEmail.has(name)) continue
+        const raw = (await c.env.TIERS_KV.get(name)) || 'tern'
+        const tier = VALID_TIERS.includes(raw) ? raw : 'tern'
+        byEmail.set(name, {
+          email: name,
+          subscriptionStatus: null,
+          tier,
+          trailblazerNumber: null,
+        })
+      }
+      legacyCursor = page.list_complete ? undefined : page.cursor
+    } while (legacyCursor)
+    const users = Array.from(byEmail.values()).sort((a, b) =>
+      a.email.localeCompare(b.email),
+    )
     return c.json({ ok: true, users })
   })
 
@@ -226,9 +276,14 @@ export function registerAdminRoutes(app) {
       const password = await derivePassword(email, c.env.SERVER_SECRET)
       await ensureCouchUser(c.env, email, password)
       const dbName = await ensurePersonalDb(c.env, email)
-      await setTier(c.env, email, tier)
+      // Write the canonical `user:<email>` record (not just the legacy bare
+      // key) so `getTier` — which reads the record first — sees this tier.
+      await upsertUser(c.env, freshUser(email, { tier }))
       return c.json({ ok: true, email, tier, dbName }, 201)
     } catch (err) {
+      if (isTrailblazerDowngrade(err)) {
+        return c.json({ ok: false, error: 'trailblazer_permanent' }, 409)
+      }
       console.error('admin/users POST:', err)
       return c.json({ ok: false, error: String(err.message || err) }, 500)
     }
@@ -248,14 +303,16 @@ export function registerAdminRoutes(app) {
     const sharedTrips = sharedTripsDoc.ok
       ? sharedTripsDoc.body?.flocks || []
       : []
+    const record = await getUser(c.env, email)
     return c.json({
       ok: true,
-      email,
-      tier,
-      personalDb: dbName,
       docCount: stats.docCount,
-      sizeBytes: stats.sizeBytes,
+      email,
+      personalDb: dbName,
+      record,
       sharedTrips,
+      sizeBytes: stats.sizeBytes,
+      tier,
     })
   })
 
@@ -269,8 +326,15 @@ export function registerAdminRoutes(app) {
       return c.json({ ok: false, error: 'invalid_tier' }, 400)
     }
     try {
-      await setTier(c.env, email, tier)
+      // Write through the canonical record (preserving billing/referral
+      // fields). The legacy `setTier` bare-key write was shadowed by this
+      // record in `getTier`, so admin tier changes silently no-op'd.
+      const existing = (await getUser(c.env, email)) || freshUser(email)
+      await upsertUser(c.env, { ...existing, email, tier })
     } catch (err) {
+      if (isTrailblazerDowngrade(err)) {
+        return c.json({ ok: false, error: 'trailblazer_permanent' }, 409)
+      }
       return c.json(
         { ok: false, error: 'kv_failed', detail: String(err.message || err) },
         500,
@@ -296,6 +360,30 @@ export function registerAdminRoutes(app) {
     return c.json({ ok: true, email, tier })
   })
 
+  // Generic record update — backs the admin TUI's full-record `$EDITOR`
+  // edit. Accepts a partial `UserRecord`; `upsertUser` validates tier +
+  // subscriptionStatus and enforces Trailblazer permanence. No tier
+  // cascade here — tier changes go through the dedicated route above.
+  app.put('/admin/users/:email', async (c) => {
+    const denied = guard(c)
+    if (denied) return denied
+    const email = c.req.param('email').toLowerCase()
+    const body = await c.req.json().catch(() => ({}))
+    if (body.tier !== undefined && !VALID_TIERS.includes(body.tier)) {
+      return c.json({ ok: false, error: 'invalid_tier' }, 400)
+    }
+    try {
+      const existing = (await getUser(c.env, email)) || freshUser(email)
+      const record = await upsertUser(c.env, { ...existing, ...body, email })
+      return c.json({ ok: true, email, record })
+    } catch (err) {
+      if (isTrailblazerDowngrade(err)) {
+        return c.json({ ok: false, error: 'trailblazer_permanent' }, 409)
+      }
+      return c.json({ ok: false, error: String(err.message || err) }, 400)
+    }
+  })
+
   app.delete('/admin/users/:email', async (c) => {
     const denied = guard(c)
     if (denied) return denied
@@ -304,7 +392,15 @@ export function registerAdminRoutes(app) {
     try {
       await dropCouchUser(c.env, email)
       await dropDb(c.env, dbName)
-      if (c.env.TIERS_KV) await c.env.TIERS_KV.delete(email)
+      if (c.env.TIERS_KV) {
+        // Remove all three key shapes so a delete is a true reset — the
+        // canonical record, the legacy bare key, and the slug index.
+        // (This is the only way to reset a Trailblazer, since upsertUser
+        // refuses to downgrade one.)
+        await c.env.TIERS_KV.delete('user:' + email)
+        await c.env.TIERS_KV.delete(email)
+        await c.env.TIERS_KV.delete('slug:' + slugFor(email))
+      }
       return c.json({ ok: true, email })
     } catch (err) {
       console.error('admin/users DELETE:', err)
