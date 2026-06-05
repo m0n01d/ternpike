@@ -1,0 +1,6 @@
+# ReScript compiler output — emitted in-source next to each .res
+*.res.mjs
+
+# ReScript build artifacts (root .gitignore's /lib/ is root-anchored)
+lib/
+.bsb.lock
