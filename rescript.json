@@ -12,5 +12,8 @@
       "in-source": true
     }
   ],
-  "suffix": ".res.mjs"
+  "suffix": ".res.mjs",
+  "warnings": {
+    "error": "+a"
+  }
 }
