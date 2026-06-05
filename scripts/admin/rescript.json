@@ -1,0 +1,26 @@
+{
+  "name": "ternpike-admin",
+  "sources": [
+    {
+      "dir": "src",
+      "subdirs": true
+    }
+  ],
+  "package-specs": [
+    {
+      "module": "esmodule",
+      "in-source": true
+    }
+  ],
+  "suffix": ".res.mjs",
+  "dependencies": [
+    "@rescript/react"
+  ],
+  "jsx": {
+    "version": 4,
+    "mode": "automatic"
+  },
+  "warnings": {
+    "error": "+a"
+  }
+}

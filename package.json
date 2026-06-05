@@ -22,7 +22,8 @@
     "e2e:update-snapshots": "rescript build && vite build && playwright test --config=e2e/playwright.config.ts --update-snapshots",
     "e2e:marketing": "playwright test --config=marketing/playwright.config.ts",
     "e2e:marketing:live": "WAITLIST_LIVE=1 playwright test --config=marketing/playwright.config.ts --grep live",
-    "admin": "npm --prefix scripts/admin start"
+    "admin": "npm --prefix scripts/admin start",
+    "seed:dev-tiers": "npm --prefix scripts/admin run seed:dev-tiers"
   },
   "devDependencies": {
     "@caseywebb/elmq": "^0.8.0",
