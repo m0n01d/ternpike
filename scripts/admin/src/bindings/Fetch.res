@@ -1,16 +1,13 @@
 /***
-Minimal typed bindings for the global `fetch` + `Response`. Only the slice the
-admin API client uses is bound (a POST with a string body, plus reading the
-status and text of the response). No `%raw`, no escape hatches.
-
-The full TUI rewrite will widen `requestInit` (optional body for GET/DELETE,
-query strings) and add `json`/`headers` readers — bind on first use.
+Minimal typed bindings for the global `fetch` + `Response`. `body` is optional
+so GET/DELETE can omit it. No `%raw`, no escape hatches. JSON read is done by
+the caller (`Req`) via `text` + `JSON.parseExn`.
 */
 
 type response
 
 type requestInit = {
-  body: string,
+  body?: string,
   headers: Dict.t<string>,
   method: string,
 }

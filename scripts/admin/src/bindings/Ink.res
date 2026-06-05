@@ -1,30 +1,23 @@
 /***
-Minimal, typed bindings for Ink 5 (https://github.com/vadimdemedes/ink) — the
-React-for-the-terminal renderer. Only what the TEA hello-world needs is bound
-here; everything the full admin-TUI rewrite will eventually want is listed in
-the "NOT YET BOUND" note at the bottom so the next rung knows the surface area.
-
-No `%raw`, no `Obj.magic`, no `%identity` — every value crosses the JS boundary
-through a typed `external`. Ink components are ordinary React components, so they
-bind with `@module("ink") @react.component external make`.
+Typed bindings for Ink 5 (the React-for-the-terminal renderer) + its companion
+input packages. Ink components are ordinary React components, bound with
+`@module(...) @react.component external make`. No `%raw`, no `Obj.magic`,
+no `%identity` — every value crosses the boundary through a typed `external`.
 */
 
-// ---------------------------------------------------------------------------
-// render: mount a React element as the root of an Ink app.
-//
-// Ink's real signature returns an `Instance` (rerender/unmount/waitUntilExit).
-// hello-world never touches it, so we bind the return as `unit`. When the full
-// rewrite needs programmatic unmount/waitUntilExit, widen this to an opaque
-// `instance` type with @send bindings rather than changing call sites.
-// ---------------------------------------------------------------------------
+// render: mount a React element as the root of an Ink app. (The real return is
+// an Instance; widen to an opaque type with @send when programmatic
+// unmount/waitUntilExit is needed.)
 @module("ink")
 external render: React.element => unit = "render"
 
-// ---------------------------------------------------------------------------
-// <Box> — the flexbox layout primitive. Props are all optional; bind the subset
-// hello-world uses. Ink accepts many more (margin/padding/border/width/height/…);
-// add them as labelled optional args here when a screen needs them.
-// ---------------------------------------------------------------------------
+// A Box dimension is a JS `number | string` (cells or a "%"). Modeled as an
+// unboxed variant so both cross the boundary type-safely.
+@unboxed
+type dimension =
+  | Cells(int)
+  | Percent(string)
+
 module Box = {
   @module("ink") @react.component
   external make: (
@@ -37,20 +30,23 @@ module Box = {
       | #"space-between"
       | #"space-around"
     ]=?,
+    ~flexGrow: int=?,
     ~gap: int=?,
     ~padding: int=?,
     ~paddingX: int=?,
     ~paddingY: int=?,
+    ~marginTop: int=?,
+    ~marginBottom: int=?,
+    ~width: dimension=?,
     ~borderStyle: [#single | #double | #round | #bold | #classic]=?,
+    ~borderColor: string=?,
     ~children: React.element=?,
   ) => React.element = "Box"
 }
 
-// ---------------------------------------------------------------------------
-// <Text> — terminal text node. `color`/`backgroundColor` are chalk color names
-// (kept as `string` rather than a closed variant so any chalk color works).
-// ---------------------------------------------------------------------------
 module Text = {
+  // `color`/`backgroundColor` are chalk color names (kept as `string` so any
+  // chalk color works).
   @module("ink") @react.component
   external make: (
     ~color: string=?,
@@ -59,16 +55,51 @@ module Text = {
     ~dimColor: bool=?,
     ~italic: bool=?,
     ~underline: bool=?,
+    ~wrap: [
+      | #wrap
+      | #truncate
+      | #"truncate-start"
+      | #"truncate-middle"
+      | #"truncate-end"
+    ]=?,
     ~children: React.element=?,
   ) => React.element = "Text"
 }
 
-// ---------------------------------------------------------------------------
-// useInput((input, key) => unit) — keyboard handler hook. `input` is the raw
-// character(s); `key` is the modifier/special-key record. Only the fields
-// hello-world reads are bound; the real record has ~20 fields (arrows, ctrl,
-// meta, tab, backspace, delete, pageUp/Down, …) — add them as needed.
-// ---------------------------------------------------------------------------
+// ink-text-input — single-line controlled input (default export).
+module TextInput = {
+  @module("ink-text-input") @react.component
+  external make: (
+    ~value: string,
+    ~onChange: string => unit,
+    ~onSubmit: string => unit=?,
+    ~placeholder: string=?,
+    ~focus: bool=?,
+  ) => React.element = "default"
+}
+
+// ink-select-input — arrow-key list (default export). Item values cross the
+// boundary as `string`; callers map back to their own type (see TierSelect).
+module SelectInput = {
+  type item = {label: string, value: string}
+
+  @module("ink-select-input") @react.component
+  external make: (
+    ~items: array<item>,
+    ~onSelect: item => unit,
+    ~initialIndex: int=?,
+  ) => React.element = "default"
+}
+
+// ink-spinner — animated spinner (default export). `type` is the spinner name.
+module Spinner = {
+  @module("ink-spinner") @react.component
+  external make: (@as("type") ~type_: string=?) => React.element = "default"
+}
+
+// useInput((input, key) => unit) — keyboard handler. `input` is the raw
+// character(s); `key` is the modifier/special-key record (the fields screens
+// use; add more from Ink's set as needed).
 type key = {
   escape: bool,
   return: bool,
@@ -76,33 +107,21 @@ type key = {
   downArrow: bool,
   leftArrow: bool,
   rightArrow: bool,
+  pageUp: bool,
+  pageDown: bool,
   ctrl: bool,
   shift: bool,
+  meta: bool,
   tab: bool,
+  backspace: bool,
+  delete: bool,
 }
 
 @module("ink")
 external useInput: ((string, key) => unit) => unit = "useInput"
 
-// ---------------------------------------------------------------------------
-// useApp() -> { exit } — programmatic unmount. `exit` optionally takes an Error;
-// we bind the no-arg form the quit path uses.
-// ---------------------------------------------------------------------------
+// useApp() -> { exit } — programmatic unmount (no-arg form).
 type app = {exit: unit => unit}
 
 @module("ink")
 external useApp: unit => app = "useApp"
-
-// NOT YET BOUND (the full admin TUI will want these — bind on first use, same
-// no-escape-hatch rules):
-//
-//   Components:  Spacer, Newline, Static, Transform.
-//   Companion packages: ink-text-input (TextInput), ink-select-input
-//     (SelectInput, props items + onSelect), ink-spinner (Spinner, prop type).
-//   Hooks: useStdin, useStdout, useStderr, useFocus, useFocusManager.
-//   render's real return is an Instance (rerender, unmount, waitUntilExit —
-//     waitUntilExit returns a JS Promise of unit).
-//   Box: the rest of the flexbox props (width, height, min*, margin*,
-//     borderColor, flexGrow, flexShrink, flexBasis).
-//   key: the remaining special keys (meta, tab already bound, backspace,
-//     delete, pageUp, pageDown, home, end).
