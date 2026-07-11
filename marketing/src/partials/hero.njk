@@ -2,13 +2,15 @@
   <picture class="absolute inset-0 z-0 block">
     <source type="image/avif" srcset="/img/hero-alaska-range.avif">
     <source type="image/webp" srcset="/img/hero-alaska-range.webp">
-    <img class="h-full w-full object-cover" src="/img/hero-alaska-range.jpg" alt="Green valley and mountain range under a cloudy Alaska sky" width="2400" height="1601" fetchpriority="high">
+    <img class="h-full w-full object-cover origin-center [transform:scale(1.2)_translateX(-9%)]" src="/img/hero-alaska-range.jpg" alt="A camper tucked into the sagebrush at the treeline below a hazy mountain ridge at dawn" width="1600" height="1066" fetchpriority="high">
   </picture>
-  <div aria-hidden="true" class="absolute inset-0 z-[1] mix-blend-multiply bg-[linear-gradient(180deg,rgb(30_40_24_/0.30)_0%,rgb(30_40_24_/0.62)_100%),radial-gradient(120%_90%_at_50%_0%,rgb(107_124_88_/0.25),transparent_60%)]"></div>
+  <div aria-hidden="true" class="absolute inset-0 z-[1] mix-blend-multiply bg-[radial-gradient(80%_80%_at_23%_47%,transparent_0%,rgb(30_40_24_/0.10)_34%,rgb(30_40_24_/0.50)_100%),linear-gradient(180deg,transparent_45%,rgb(30_40_24_/0.30)_100%)] md:bg-[radial-gradient(78%_84%_at_33%_46%,transparent_0%,rgb(30_40_24_/0.08)_34%,rgb(30_40_24_/0.46)_100%),linear-gradient(180deg,transparent_45%,rgb(30_40_24_/0.28)_100%)]"></div>
   <div class="absolute inset-y-0 left-[clamp(40px,8vw,80px)] z-[2] w-px bg-[rgb(212_201_168_/0.22)]"></div>
   <div class="relative z-10 flex flex-col items-center text-center max-w-[820px] animate-fade-up">
 
-    <div class="mb-6 animate-soar animate-fade-up [animation-delay:50ms]">
+    <h1 class="font-display font-black text-[clamp(36px,6.4vw,68px)] tracking-[-0.025em] leading-[1.04] text-cream max-w-[880px] [text-shadow:0_2px_24px_rgb(26_36_18_/0.45)] animate-fade-up [animation-delay:150ms]">{{ hero.headline }}</h1>
+
+    <div class="my-6 animate-soar animate-fade-up [animation-delay:200ms]">
       <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
         <path d="M60 40 C40 26, 8 20, 0 29 C16 28, 38 34, 60 44Z" fill="var(--color-cream)"/>
         <path d="M60 40 C80 26, 112 20, 120 29 C104 28, 82 34, 60 44Z" fill="var(--color-tan)"/>
@@ -23,8 +25,6 @@
         <circle cx="79.5" cy="38.5" r="0.8" fill="var(--color-cream)"/>
       </svg>
     </div>
-
-    <h1 class="font-display font-black text-[clamp(36px,6.4vw,68px)] tracking-[-0.025em] leading-[1.04] text-cream max-w-[880px] [text-shadow:0_2px_24px_rgb(26_36_18_/0.45)] animate-fade-up [animation-delay:150ms]">{{ hero.headline }}</h1>
 
     {% if hero.subheadline %}
     <p class="hero-subhead animate-fade-up [animation-delay:200ms]">{{ hero.subheadline }}</p>
