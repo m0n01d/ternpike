@@ -124,3 +124,82 @@ crons = ["0 * * * *", "0 17 * * 5"]
 #   VAPID_PRIVATE_KEY     (base64url; PERMANENT — re-keying invalidates all push subscriptions)
 #   VAPID_PUBLIC_KEY      (base64url; also shipped to client as VITE_VAPID_PUBLIC_KEY at build time)
 #   VAPID_SUBJECT         (mailto: URL, e.g. mailto:ops@ternpike.com)
+
+# ===========================================================================
+# Staging environment — deployed test bed running Stripe in TEST mode.
+#
+#   Deploy:  wrangler deploy --env staging       (-> ternpike-auth-staging)
+#   URL:     https://ternpike-auth-staging.<your-subdomain>.workers.dev
+#   Secrets: set per-env with `wrangler secret put NAME --env staging`
+#
+# Wrangler does NOT inherit bindings/vars/routes into named environments, so
+# everything the Worker needs is re-declared below. See docs/key-rotation.md
+# "Staging environment" for the full bring-up procedure.
+#
+# Isolation model (chosen deliberately):
+#   • KV is FULLY SEPARATE — create staging namespaces and paste their ids
+#     below, so a test-mode Stripe webhook can never flip a real user's tier
+#     or read prod auth codes.
+#   • CouchDB is SHARED with prod (same COUCH_URL). Because per-user CouchDB
+#     passwords are HMAC(SERVER_SECRET, email), staging's SERVER_SECRET and
+#     COUCH_ADMIN_USER/PASS secrets MUST be set to the SAME values as prod or
+#     logins won't match the shared DB. Those three are copied, not rotated.
+#   • NO cron triggers here — the hourly grace-freeze sweep reads shared-trip
+#     docs from the shared CouchDB and could freeze real trips.
+#
+# Create the staging KV namespaces (once), then paste each returned id:
+#   wrangler kv namespace create CODES_KV_staging
+#   wrangler kv namespace create TIERS_KV_staging
+#   wrangler kv namespace create GEOCODE_RL_KV_staging
+#   wrangler kv namespace create GEOCODE_CACHE_KV_staging
+#   wrangler kv namespace create PUSH_KV_staging
+#   wrangler kv namespace create INVITE_KV_staging
+#   wrangler kv namespace create QR_KV_staging
+# ===========================================================================
+[env.staging]
+workers_dev = true
+
+[[env.staging.kv_namespaces]]
+binding = "CODES_KV"
+id = "REPLACE_WITH_STAGING_CODES_KV_ID"
+
+[[env.staging.kv_namespaces]]
+binding = "TIERS_KV"
+id = "REPLACE_WITH_STAGING_TIERS_KV_ID"
+
+[[env.staging.kv_namespaces]]
+binding = "GEOCODE_RL_KV"
+id = "REPLACE_WITH_STAGING_GEOCODE_RL_KV_ID"
+
+[[env.staging.kv_namespaces]]
+binding = "GEOCODE_CACHE_KV"
+id = "REPLACE_WITH_STAGING_GEOCODE_CACHE_KV_ID"
+
+[[env.staging.kv_namespaces]]
+binding = "PUSH_KV"
+id = "REPLACE_WITH_STAGING_PUSH_KV_ID"
+
+[[env.staging.kv_namespaces]]
+binding = "INVITE_KV"
+id = "REPLACE_WITH_STAGING_INVITE_KV_ID"
+
+[[env.staging.kv_namespaces]]
+binding = "QR_KV"
+id = "REPLACE_WITH_STAGING_QR_KV_ID"
+
+# Staging gets its own TrailblazerSlots DO instance (its own 1..500 counter),
+# isolated from prod — correct, since staging should never draw down real slots.
+[[env.staging.durable_objects.bindings]]
+name = "TRAILBLAZER_SLOTS"
+class_name = "TrailblazerSlots"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["TrailblazerSlots"]
+
+[env.staging.vars]
+# Shared with prod — see isolation note above.
+COUCH_URL = "https://couch.ternpike.com"
+RESEND_AUDIENCE_ID = "206e97c4-13b7-4a6a-a85b-01414c35449b"
+# Test-mode Stripe coupon id (or leave empty to skip the promo block).
+STRIPE_RECEIPT_COUPON_ID = ""
