@@ -158,6 +158,17 @@ crons = ["0 * * * *", "0 17 * * 5"]
 # ===========================================================================
 [env.staging]
 workers_dev = true
+# CRITICAL: named environments INHERIT the top-level `routes` in wrangler 4.x.
+# Without this empty override, deploying staging would reassign the
+# api.ternpike.com custom domain away from the production Worker. Keep staging
+# on its workers.dev URL only.
+routes = []
+
+# Also override triggers to empty so staging does NOT inherit the top-level
+# crons — the hourly grace-freeze sweep reads shared-trip docs from the shared
+# CouchDB and must never run from the test bed.
+[env.staging.triggers]
+crons = []
 
 [[env.staging.kv_namespaces]]
 binding = "CODES_KV"
