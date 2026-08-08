@@ -716,58 +716,13 @@ import './elements/tp-amount.js'
     // after first paint, and the first reading can be transient.
     ;[0, 300, 1000, 2500].forEach((delay) => setTimeout(healViewport, delay))
 
-    // On-screen readout, STAGING ONLY. Four fixes have missed because every
-    // device report is a screenshot rather than a measurement, and asking for
-    // Web Inspector over USB is too much friction to actually happen. This
-    // paints the numbers into the corner so a screenshot IS the measurement.
-    // Attached to <html>, not <body>, because Elm owns body's children and
-    // would clobber it on the next render.
-    const onStaging =
-      /^staging-/.test(window.location.host) ||
-      String(__BACKEND_URL__).includes('staging')
-
-    if (onStaging) {
-      const hud = document.createElement('div')
-      hud.setAttribute(
-        'style',
-        'position:fixed;top:calc(env(safe-area-inset-top) + 60px);left:0;'+
-          'z-index:2147483647;pointer-events:none;' +
-          'font:9px ui-monospace,monospace;line-height:1.25;white-space:pre;' +
-          'background:rgba(0,0,0,.72);color:#7dd88f;padding:3px 5px;' +
-          'border-bottom-right-radius:5px;max-width:60vw',
-      )
-      document.documentElement.appendChild(hud)
-      // Resolve a CSS viewport unit to px, so we can see whether lvh/dvh/svh
-      // agree with innerHeight or with the stuck visualViewport reading.
-      const probeEl = document.createElement('div')
-      probeEl.setAttribute('style', 'position:absolute;top:-9999px;width:1px')
-      document.documentElement.appendChild(probeEl)
-      const probe = (n, unit) => {
-        probeEl.style.height = `${n}${unit}`
-        return Math.round(probeEl.getBoundingClientRect().height)
-      }
-
-      const paintHud = () => {
-        const vv = window.visualViewport
-        const nav = document.querySelector('nav')
-        hud.textContent = [
-          `inner ${window.innerHeight}  vv ${vv ? Math.round(vv.height) : '-'}`,
-          `vvTop ${vv ? Math.round(vv.offsetTop) : '-'}  scale ${vv ? vv.scale.toFixed(2) : '-'}`,
-          `client ${document.documentElement.clientHeight}  outer ${window.outerHeight}`,
-          `screen ${window.screen.height}  avail ${window.screen.availHeight}`,
-          `lvh ${probe(100, 'lvh')}  dvh ${probe(100, 'dvh')}  svh ${probe(100, 'svh')}`,
-          `short ${shortfall()}`,
-          `navBottom ${nav ? Math.round(nav.getBoundingClientRect().bottom) : '-'}`,
-        ].join('\n')
-      }
-      setInterval(paintHud, 500)
-      paintHud()
-    }
-
-    // Diagnostic for Safari Web Inspector (Mac → connected iPhone → console):
-    // `__ternpikeViewport()`. Reports the two heights whose disagreement IS
-    // the bug, plus where the nav actually rendered, so a device report can be
-    // a measurement instead of a screenshot.
+    // Console diagnostic, kept after the on-screen HUD was removed. Run
+    // `__ternpikeViewport()` from Safari Web Inspector (Mac → connected
+    // iPhone) if bottom chrome ever looks misplaced again. The reading that
+    // solved this the first time was `visualViewport` disagreeing with
+    // everything else while the nav sat at exactly `innerHeight - vvTop`;
+    // this returns both halves of that comparison plus the nav's real rect.
+    // Costs nothing until called — no element, no timer.
     window.__ternpikeViewport = () => {
       const vv = window.visualViewport
       const nav = document.querySelector('nav')
