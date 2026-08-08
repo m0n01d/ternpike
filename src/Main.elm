@@ -5313,7 +5313,37 @@ view model =
     , body =
         [ viewDemoBanner demoMode
         , Html.div
-            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-screen min-h-[100lvh] font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
+            [ -- The app shell is a FIXED-HEIGHT FLEX COLUMN, not a
+              -- `min-height` page that grows with its content, and the bottom
+              -- nav is the last row of that column rather than a `fixed`
+              -- element. That is the whole point: `position: fixed` resolves
+              -- against a viewport that iOS 26 standalone corrupts, and no
+              -- amount of measuring it back into place has worked (five
+              -- attempts, #480/#481 among them). Nothing here is
+              -- viewport-anchored, so the corruption has nothing to reach.
+              --
+              -- Measured on device (iOS 26.5.2, standalone, right after the
+              -- photo picker closed): inner/outer/screen/avail/lvh/dvh all
+              -- agreed at 874 while `visualViewport` alone read 566 with
+              -- `offsetTop` 55 — and the fixed nav sat at exactly 874-55.
+              -- `dvh` reads the healthy number, so sizing the shell by height
+              -- is sound where anchoring by viewport was not.
+              --
+              -- `h-screen` is the fallback for browsers without `dvh`, and the
+              -- `supports-[height:100dvh]:` variant is load-bearing rather
+              -- than decorative: writing the two plainly as
+              -- `h-screen h-[100dvh]` does NOT work, because the cascade is
+              -- decided by the order Tailwind emits the rules in, not by the
+              -- order they appear in this attribute — and it emits
+              -- `.h-\[100dvh\]` BEFORE `.h-screen`, so the 100vh fallback
+              -- would silently win everywhere. The variant sorts after the
+              -- base utility and is scoped by `@supports`, so `dvh` wins where
+              -- it exists and `100vh` applies only where it does not.
+              --
+              -- `overflow-hidden` keeps the shell itself from ever scrolling,
+              -- so the only scroller is the content row in `viewAuth`.
+              Html.Attributes.class "bg-parchment dark:bg-cream text-ink h-screen supports-[height:100dvh]:h-[100dvh] flex flex-col overflow-hidden font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20"
+            ]
             [ case model of
                 GuestModel gs ->
                     viewGuest gs
@@ -5474,12 +5504,20 @@ viewAuth as_ =
     -- dismiss control, so `group-has-[input:focus]:hidden` (and friends, in
     -- `UI.Layout.viewUpdateToast`) is what keeps it from parking itself over
     -- the Add form while the user types.
-    Html.div [ Html.Attributes.class "group" ]
+    --
+    -- It is also the inner flex column: header / banners / scroller / nav.
+    -- `min-h-0` is load-bearing on both this element and the scroller — a flex
+    -- item's default `min-height: auto` refuses to shrink below its content,
+    -- so without it the column grows past the shell and the scroller never
+    -- scrolls. The content row is the ONLY scroller in the app; the nav below
+    -- it is an ordinary flow sibling, which is what makes it immune to the
+    -- `visualViewport` corruption (see the shell comment in `view`).
+    Html.div [ Html.Attributes.class "group flex flex-col min-h-0 flex-1" ]
         [ UI.Layout.viewHeader as_
         , UI.Layout.viewOfflineBanner (Data.Sync.isOffline as_.network)
         , UI.Layout.viewErrorBanner as_.error
         , viewBillingBannerForRoute as_ route
-        , Html.div [ Html.Attributes.class "pb-[calc(env(safe-area-inset-bottom)+5rem)]" ]
+        , Html.div [ Html.Attributes.class "flex-1 overflow-y-auto min-h-0" ]
             [ UI.Layout.page
                 { actions = tab.actions
                 , body = tab.body

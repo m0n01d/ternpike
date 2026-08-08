@@ -63,7 +63,16 @@ viewGuest gs =
 viewLogin : GuestState -> Html Msg
 viewLogin gs =
     Html.div
-        [ Html.Attributes.class "min-h-screen min-h-[100lvh] flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out" ]
+        [ -- `flex-1 min-h-0`, not `min-h-[100lvh]`: this is a direct child of
+          -- the fixed-height, `overflow-hidden` app shell in `Main.view`, so
+          -- it fills the shell exactly rather than declaring its own height.
+          -- `100lvh` exceeds the shell whenever `lvh > dvh` (a browser with a
+          -- retracting URL bar), and the overflow would be clipped away with
+          -- no scroller to reach it. `overflow-y-auto` restores the body
+          -- scrolling this screen used to rely on when it is genuinely too
+          -- tall — a short landscape phone with the keyboard up.
+          Html.Attributes.class "flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out"
+        ]
         [ Html.div [ Html.Attributes.class "text-center max-w-sm w-full mb-8" ]
             [ UI.Mascot.ternSvg "w-32 mx-auto animate-soar"
             , Html.h1

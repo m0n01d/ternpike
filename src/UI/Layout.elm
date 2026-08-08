@@ -160,19 +160,23 @@ viewOfflineBanner networkOffline =
 viewBottomNav : AuthState -> Html Msg
 viewBottomNav as_ =
     Html.nav
-        [ -- `transform-gpu` promotes the nav to its own compositing layer:
-          -- iOS 26 WebKit can paint `fixed` elements offset from their
-          -- computed position during body scroll, and an owned layer keeps
-          -- the paint anchored to the real viewport.
-          -- `bottom` is driven by `--vv-bottom-offset`, set from
-          -- `visualViewport` in `src/main.js`. `position: fixed` resolves
-          -- against the LAYOUT viewport, which iOS standalone can leave stuck
-          -- short after a keyboard — parking this bar a keyboard-height above
-          -- the screen. The custom property is the gap between the layout
-          -- viewport's bottom and the visible one, so the bar lands on the
-          -- real screen edge. It computes to `0px` whenever the two agree,
-          -- which is every healthy browser, so this cannot regress them.
-          Html.Attributes.class "fixed bottom-[var(--vv-bottom-offset,0px)] left-1/2 -translate-x-1/2 transform-gpu w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10 pb-[env(safe-area-inset-bottom)] sm:border-x sm:border-tan/40 sm:dark:border-moss/20"
+        [ -- NOT `position: fixed`, deliberately. This is the last row of the
+          -- app-shell flex column in `Main.view` — an ordinary flow element.
+          --
+          -- Five fixes tried to keep a `fixed` nav on the screen edge by
+          -- correcting the viewport it resolves against (`--vv-bottom-offset`,
+          -- #480/#481, and the heal shim before them). The device measurement
+          -- that ended that approach: every height metric agreed at 874 while
+          -- `visualViewport` alone read 566 at `offsetTop` 55, and the nav
+          -- rendered at exactly 874-55. `fixed` was reading the one corrupt
+          -- number. Nothing here reads it now, so it cannot be displaced.
+          --
+          -- `shrink-0` keeps the column from compressing the nav when content
+          -- is tall; the scroller above it takes all the slack instead.
+          -- `transform-gpu` stays for the iOS 26 paint-offset reason (own
+          -- compositing layer). Width and side borders come from the shell —
+          -- repeating `max-w-[480px]`/`sm:border-x` here would double them.
+          Html.Attributes.class "shrink-0 transform-gpu backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10 pb-[env(safe-area-inset-bottom)]"
         ]
         (List.map (viewNavTab as_)
             [ ( ScanTab, UI.Icons.camera, "Scan" )
@@ -321,43 +325,57 @@ updateBar action =
 
 {-| Chrome shared by both bottom bars, minus the vertical slot.
 
-`left`/`right` use `max(1rem, env(safe-area-inset-*))` and the nav's
-`max-w-[480px] mx-auto` so a landscape notch can't run the Reload button under
-the Dynamic Island column.
+`absolute`, not `fixed`: both bars anchor to the app shell (the `relative`
+root in `Main.view`) rather than to the viewport. They used to be `fixed`, and
+so inherited exactly the `visualViewport` displacement that moved the nav —
+a toast is worth nothing if iOS parks it mid-screen. Anchoring to the shell
+also keeps them lined up with the nav they sit above, since the nav is now a
+row of that same shell.
+
+`left`/`right` use `max(1rem, env(safe-area-inset-*))` and `max-w-[480px]
+mx-auto` so a landscape notch can't run the Reload button under the Dynamic
+Island column.
 
 -}
 barChrome : String
 barChrome =
-    "fixed left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto max-w-[480px] z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel bg-[image:var(--bg-grain)]"
+    "absolute left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto max-w-[480px] z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel bg-[image:var(--bg-grain)]"
 
 
 {-| The slot immediately above the bottom nav.
 
-Computed, not guessed: the nav is `fixed bottom-0` with `min-h-[56px]` tabs
-_plus_ `pb-[env(safe-area-inset-bottom)]` (~34px on a home-indicator iPhone),
-so it occupies roughly 0–90px. `4.5rem` (72px) above the inset clears it. The
-old hard-coded 72px offset spanned 72–118px — straight through `viewNavTab`'s active
-indicator and icon tops — and at `z-50` against the nav's `z-10` it won
-hit-testing, eating taps across the whole nav.
+Computed, not guessed: the nav sits at the bottom of the shell with
+`min-h-[56px]` tabs _plus_ `pb-[env(safe-area-inset-bottom)]` (~34px on a
+home-indicator iPhone), so it occupies roughly 0–90px of the shell's bottom
+edge. `4.5rem` (72px) above the inset clears it. The old hard-coded 72px
+offset spanned 72–118px — straight through `viewNavTab`'s active indicator and
+icon tops — and at `z-50` against the nav's `z-10` it won hit-testing, eating
+taps across the whole nav.
+
+The `--vv-bottom-offset` term is gone along with the writer in `src/main.js`:
+these bars are `absolute` against the shell now, so there is no viewport
+reading left to correct for.
 
 -}
 lowerSlot : String
 lowerSlot =
-    "bottom-[calc(env(safe-area-inset-bottom)+4.5rem+var(--vv-bottom-offset,0px))]"
+    "bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"
 
 
 {-| One slot up: clears the ~70px update bar plus a gap.
 -}
 upperSlot : String
 upperSlot =
-    "bottom-[calc(env(safe-area-inset-bottom)+10rem+var(--vv-bottom-offset,0px))]"
+    "bottom-[calc(env(safe-area-inset-bottom)+10rem)]"
 
 
 {-| Hide the bar while a text field is focused.
 
-In standalone iOS the software keyboard shrinks the layout viewport, so a
-`fixed bottom-…` element is lifted to sit _over_ the form fields mid-screen —
-and `keyboardLikelyOpen()` makes the viewport heal deliberately bail while
+In standalone iOS the software keyboard shrinks the viewport, which shrinks
+the `h-[100dvh]` shell, which lifts a bottom-anchored bar up over the form
+fields mid-screen. Making these bars `absolute` against the shell instead of
+`fixed` fixes where they sit relative to the nav, not this — the shell itself
+is what moves. `keyboardLikelyOpen()` also makes the viewport heal bail while
 typing, so nothing corrects it. An undismissable bar parked over the Add form
 is the worst outcome in this design; suppressing it while the keyboard is up
 preserves "no dismiss" without the pathology.
