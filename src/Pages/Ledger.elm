@@ -437,7 +437,12 @@ viewDayTotal currency total =
 
 viewDayKicker : Maybe Entry.Band -> Int -> DateField -> Html Msg
 viewDayKicker maybeBand dayN date =
-    Html.div [ Html.Attributes.class "sticky top-14 z-[9] bg-parchment dark:bg-cream border-t border-tan/40 -mx-5 px-5 py-3 flex items-center gap-3" ]
+    -- `top-0`, not `top-14`. The 56px used to clear the app header, because
+    -- the sticky context was the body scroll and the header floated over it.
+    -- The scroller is now the content row of the app shell, which starts
+    -- BELOW the header — 56px there would strand the day kicker in mid-air
+    -- with rows scrolling visibly behind the gap.
+    Html.div [ Html.Attributes.class "sticky top-0 z-[9] bg-parchment dark:bg-cream border-t border-tan/40 -mx-5 px-5 py-3 flex items-center gap-3" ]
         [ Html.span
             [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-rust" ]
             [ Html.text ("DAY " ++ String.fromInt dayN) ]
