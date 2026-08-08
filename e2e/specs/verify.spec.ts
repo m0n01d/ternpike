@@ -144,6 +144,60 @@ test.describe('Verify DOM tier', () => {
     )
   })
 
+  // One fixture per test: each `page.goto` in this sandbox waits out an
+  // unreachable Google Fonts @import before `load` fires, so batching four
+  // navigations into one case blows the 30s budget.
+  test('update toast: no update renders an empty, attribute-only host', async ({ page }) => {
+    // `Html.Extra.nothing` emits no element, so absence is encoded as a
+    // surface VALUE on an always-rendered wrapper. If it were encoded by
+    // dropping the host, this selector would hang to timeout rather than fail.
+    await page.goto('/verify/UpdateToast/hidden')
+    // `attached`, not `visible`: the wrapper has no box on this fixture.
+    await page.waitForSelector('[data-verify-unit="UpdateToast"]', { state: 'attached' })
+    const el = page.locator('[data-verify-unit="UpdateToast"]')
+    await expect(el).toHaveAttribute('data-verify-reload', 'absent')
+    await expect(el).toHaveAttribute('data-verify-bar-slot', 'absent')
+    await expect(page.getByText('New version available')).toHaveCount(0)
+  })
+
+  test('update toast: a waiting worker offers a described Reload', async ({ page }) => {
+    await page.goto('/verify/UpdateToast/waiting')
+    await page.waitForSelector('[data-verify-unit="UpdateToast"]', { state: 'attached' })
+    await expect(page.locator('[data-verify-unit="UpdateToast"]')).toHaveAttribute(
+      'data-verify-reload',
+      'ready',
+    )
+    await expect(page.getByText('New version available')).toBeVisible()
+    // A bare "Reload" is meaningless reached by swipe.
+    await expect(
+      page.getByRole('button', { name: 'Reload to install the new version' }),
+    ).toBeEnabled()
+  })
+
+  test('update toast: applying renders a busy, non-re-tappable Reload', async ({ page }) => {
+    await page.goto('/verify/UpdateToast/applying')
+    await page.waitForSelector('[data-verify-unit="UpdateToast"]', { state: 'attached' })
+    await expect(page.locator('[data-verify-unit="UpdateToast"]')).toHaveAttribute(
+      'data-verify-reload',
+      'busy',
+    )
+    await expect(page.getByRole('button', { name: 'Reload' })).toBeDisabled()
+  })
+
+  test('update toast: the ordinary toast shifts off the update bar', async ({ page }) => {
+    // Sharing a slot would make every ordinary toast ("Link copied", share
+    // errors, ~10 toastFor sites) invisible for the rest of the session — the
+    // update bar is permanent and renders later in the DOM.
+    await page.goto('/verify/UpdateToast/toast-both')
+    await page.waitForSelector('[data-verify-unit="UpdateToast"]', { state: 'attached' })
+    const el = page.locator('[data-verify-unit="UpdateToast"]')
+    await expect(el).toHaveAttribute('data-verify-bar-slot', 'lower')
+    await expect(el).toHaveAttribute('data-verify-toast-slot', 'upper')
+
+    const current: VerifyCurrent = await page.evaluate(() => (window as any).__verify.current())
+    expect(current.verdict).toBe('PASS')
+  })
+
   test('the /verify dashboard lists every fixture with deep links', async ({ page }) => {
     await page.goto('/verify')
     await page.waitForSelector('a[href*="/verify/"]')

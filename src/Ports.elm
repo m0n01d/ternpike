@@ -1,11 +1,11 @@
 port module Ports exposing
-    ( canInstall, clearAllStorage, clearStorage, deleteScanItem, downloadFile
+    ( applySwUpdate, canInstall, clearAllStorage, clearStorage, deleteScanItem, downloadFile
     , extractExifGps, gotExifResult, gotGpsCoords
     , loadScanQueue, nativeShare, nativeShareResult, networkStatus, notificationState
     , ocrImagePrepared, pouchIn, pouchOut, prepareOcrImage, pushSubscribeResult
     , requestGeolocation, saveScanItem, savePushPrefs, saveStorage, scanItemSaved
     , scanProxyIn, scanProxyOut, scanQueueLoaded, startSync, stopSync, storageStatus
-    , subscribePush, trackFunnel, triggerInstallPrompt
+    , subscribePush, swUpdateReady, trackFunnel, triggerInstallPrompt
     , unsubscribePush, verifyResults
     )
 
@@ -14,13 +14,13 @@ so feature modules (e.g. `Page.Scan`) can call the ports they need
 without depending on `Main`. The set is unchanged from when these lived
 in `Main`; only their home moved (#368).
 
-@docs canInstall, clearAllStorage, clearStorage, deleteScanItem, downloadFile
+@docs applySwUpdate, canInstall, clearAllStorage, clearStorage, deleteScanItem, downloadFile
 @docs extractExifGps, gotExifResult, gotGpsCoords
 @docs loadScanQueue, nativeShare, nativeShareResult, networkStatus, notificationState
 @docs ocrImagePrepared, pouchIn, pouchOut, prepareOcrImage, pushSubscribeResult
 @docs requestGeolocation, saveScanItem, savePushPrefs, saveStorage, scanItemSaved
 @docs scanProxyIn, scanProxyOut, scanQueueLoaded, startSync, stopSync, storageStatus
-@docs subscribePush, trackFunnel, triggerInstallPrompt
+@docs subscribePush, swUpdateReady, trackFunnel, triggerInstallPrompt
 @docs unsubscribePush, verifyResults
 
 -}
@@ -184,3 +184,37 @@ UA is iOS/iPadOS — used to gate the manual Add-to-Home-Screen nudge since iOS
 never fires `beforeinstallprompt` (#377).
 -}
 port storageStatus : ({ available : Bool, installed : Bool, isIos : Bool, persisted : Bool } -> msg) -> Sub msg
+
+
+
+-- SERVICE-WORKER UPDATE TOAST (#477)
+
+
+{-| Ask JS to activate the waiting service worker: it posts `SKIP_WAITING` and
+reloads once the new worker takes control (`controllerchange`).
+
+Fired by the update bar's **Reload** button. The handler is defensive by
+design — if there is no waiting worker it reloads immediately, and it arms a
+~4s timeout that force-reloads when `controllerchange` never arrives. A
+waiting worker that never activates is a real WebKit behavior
+([199110](https://bugs.webkit.org/show_bug.cgi?id=199110), open iOS 12.3 →
+16), and the fetch handler is network-first, so an unconditional reload is
+always correct. Reload can therefore never be a no-op.
+
+-}
+port applySwUpdate : () -> Cmd msg
+
+
+{-| `True` when JS is holding a service worker that is installed and waiting
+to take over; `False` retracts it (the worker went `redundant`, so a failed
+activation can't leave a permanent bar on screen).
+
+`Bool` rather than a one-shot signal, matching every other state-carrying Sub
+port (`canInstall`, `networkStatus`, `storageStatus`). JS holds the waiting
+worker and re-emits on every resume tick: `Main.updateAuth` is only reached
+from `AuthModel`, so a notification that lands while the login screen is
+mounted is dropped, and without the re-emit a logged-out user would never see
+the toast for the rest of the session.
+
+-}
+port swUpdateReady : (Bool -> msg) -> Sub msg

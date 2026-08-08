@@ -27,29 +27,60 @@ const STATIC_CACHE_FIRST = [
   'fonts.gstatic.com',
 ];
 
+// The app shell minus '/' — incidental assets whose absence still leaves a
+// usable build. '/' plus the hashed entry JS/CSS are handled separately below.
+const INCIDENTAL = APP_SHELL.filter(u => u !== '/');
+
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE).then(c => {
-      const urls = [...APP_SHELL, ...(Array.isArray(PRECACHE_URLS) ? PRECACHE_URLS : [])];
-      // Don't let one missing asset fail the whole install.
-      return Promise.all(
-        urls.map(u => c.add(u).catch(err => console.warn('[sw] precache failed', u, err)))
+    caches.open(CACHE).then(async c => {
+      // ATOMIC critical set (#477). This install no longer calls
+      // `skipWaiting()`, so activation can happen hours later and possibly
+      // OFFLINE. A holed precache used to be harmless (activate followed
+      // install by milliseconds); now it would strand the user on an
+      // unusable generation — and we'd have offered them a toast for it.
+      // `addAll` is all-or-nothing: a partial precache fails install, the
+      // worker never reaches `waiting`, and no toast is ever offered.
+      const critical = ['/', ...(Array.isArray(PRECACHE_URLS) ? PRECACHE_URLS : [])];
+      await c.addAll(critical);
+      // Icons / manifest stay tolerant: missing ones don't break the app.
+      await Promise.all(
+        INCIDENTAL.map(u => c.add(u).catch(err => console.warn('[sw] precache failed', u, err)))
       );
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => {
+        // Keep the current generation AND the most recent previous one
+        // (#477). A user who ignores the update toast can sit on the old
+        // worker indefinitely; deleting every non-current cache the moment a
+        // new generation activates would leave a failed rollout with nothing
+        // to serve offline. `caches.keys()` resolves oldest-first, so the
+        // tail of the non-current list is the previous generation.
+        const others = keys.filter(k => k !== CACHE);
+        const stale = others.slice(0, Math.max(0, others.length - 1));
+        return Promise.all(stale.map(k => caches.delete(k)));
+      })
+      // Keep claiming: `controllerchange` is what the Reload button waits on.
       .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  if (!event.data) return;
+  if (event.data.type === 'SKIP_WAITING') {
+    // The ONLY early-activation path now — a user tapping Reload.
     self.skipWaiting();
+  }
+  if (event.data.type === 'GET_VERSION' && event.ports && event.ports[0]) {
+    // Lets the page ask a waiting worker which generation it would serve, so
+    // it can suppress the spurious toast a network-first refresh produces
+    // (the page is already running the new bundle). See src/main.js.
+    event.ports[0].postMessage({ version: CACHE });
   }
 });
 
@@ -63,10 +94,13 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Cache-first for fonts (immutable content-addressed URLs)
+  // Cache-first for fonts (immutable content-addressed URLs).
+  // Scoped to CACHE, not `caches.match` — two generations now coexist for an
+  // unbounded window (see `activate`), and the global match searches every
+  // cache oldest-first, which would serve the PREVIOUS generation's copy.
   if (STATIC_CACHE_FIRST.some(h => url.hostname.includes(h))) {
     event.respondWith(
-      caches.match(req).then(cached => {
+      caches.open(CACHE).then(c => c.match(req)).then(cached => {
         if (cached) return cached;
         return fetch(req).then(response => {
           const clone = response.clone();
@@ -90,10 +124,12 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(async () => {
-        const cached = await caches.match(req);
+        // Same generation-scoping as the font branch above.
+        const c = await caches.open(CACHE);
+        const cached = await c.match(req);
         if (cached) return cached;
         if (req.mode === 'navigate') {
-          const shell = await caches.match('/');
+          const shell = await c.match('/');
           if (shell) return shell;
         }
         return Response.error();

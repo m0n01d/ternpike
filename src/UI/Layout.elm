@@ -8,9 +8,11 @@ module UI.Layout exposing
     , viewHeader
     , viewOfflineBanner
     , viewToast
+    , viewUpdateToast
     )
 
 import Data.Navigation exposing (Route(..), Tab(..))
+import Data.SwUpdate as SwUpdate
 import Data.Sync exposing (SyncState(..))
 import Data.Trip exposing (Trip)
 import Data.Trips as Trips exposing (TripsState(..))
@@ -24,6 +26,8 @@ import Types exposing (AuthMsg_(..), AuthState, Msg(..))
 import UI.Button
 import UI.Icons
 import UI.Mascot
+import Verify.Contract
+import Verify.Specs.UpdateToast
 
 
 viewHeader : AuthState -> Html Msg
@@ -207,12 +211,39 @@ viewNavTab as_ ( tab, iconFn, label_ ) =
         )
 
 
-viewToast : Maybe String -> Html Msg
-viewToast toast =
+{-| The transient toast ("Link copied", share errors, every `toastFor` site).
+
+Takes the whole `AuthState` rather than a bare `Maybe String` because its
+vertical slot now depends on `as_.swUpdate`: the persistent update bar
+(`viewUpdateToast`) owns the lower slot, and this toast shifts one slot up
+whenever that bar is showing. Sharing an offset would make every ordinary
+toast invisible for the rest of the session — the update bar has no dismiss
+and renders later in the DOM (#477).
+
+The old hard-coded 72px offset predated the safe-area nav and overlapped it. Both
+bars now anchor to the nav's real height — `min-h-[56px]` tabs plus
+`pb-[env(safe-area-inset-bottom)]` — and match its
+`max-w-[480px]` gutters so the action never lands under the Dynamic Island in
+landscape.
+
+-}
+viewToast : AuthState -> Html Msg
+viewToast as_ =
+    let
+        shifted : Bool
+        shifted =
+            SwUpdate.isShowing as_.swUpdate
+    in
     Html.Extra.viewMaybe
         (\message ->
             Html.div
-                [ Html.Attributes.class "fixed bottom-[72px] left-4 right-4 z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel animate-fade-up bg-[image:var(--bg-grain)]" ]
+                [ Html.Attributes.classList
+                    [ ( barChrome, True )
+                    , ( "animate-fade-up", True )
+                    , ( lowerSlot, not shifted )
+                    , ( upperSlot, shifted )
+                    ]
+                ]
                 [ Html.span [ Html.Attributes.class "flex-1 text-sm text-ink" ] [ Html.text message ]
                 , Html.button
                     [ Html.Events.onClick (AuthMsg ToastExpired)
@@ -221,7 +252,116 @@ viewToast toast =
                     [ UI.Icons.close "w-4 h-4" ]
                 ]
         )
-        toast
+        as_.toast
+
+
+{-| The persistent "New version available · Reload" bar (#477).
+
+Always renders its wrapper — that is where `Verify.Contract.verifyAttrs` and
+the `role="status"` live region hang. `NoUpdate` leaves the wrapper empty
+rather than removing it, so `/verify/UpdateToast/hidden` resolves its selector
+instead of hanging, and the live region exists before the announcement lands.
+
+There is deliberately no dismiss control (the ask is to force the update) and
+no `animate-fade-up`: `healViewport` toggles `document.body.style.display`,
+which restarts CSS animations, and on the Add page the heal runs on every
+`focusout` — a persistent animated bar would re-slide on every field blur.
+
+-}
+viewUpdateToast : AuthState -> Html Msg
+viewUpdateToast as_ =
+    let
+        input : Verify.Specs.UpdateToast.Input
+        input =
+            Verify.Specs.UpdateToast.honest
+                { swUpdate = as_.swUpdate
+                , toastPresent = as_.toast /= Nothing
+                }
+    in
+    Html.div
+        (Html.Attributes.attribute "role" "status"
+            :: Html.Attributes.attribute "aria-live" "polite"
+            :: Verify.Contract.verifyAttrs "UpdateToast" (Verify.Specs.UpdateToast.surface input)
+        )
+        [ case as_.swUpdate of
+            SwUpdate.Applying ->
+                updateBar (UI.Button.primaryBusy { label = "Reload" })
+
+            SwUpdate.NoUpdate ->
+                Html.Extra.nothing
+
+            SwUpdate.UpdateWaiting ->
+                updateBar
+                    (UI.Button.primaryDescribed
+                        { ariaLabel = "Reload to install the new version"
+                        , label = "Reload"
+                        , onClick = AuthMsg ApplySwUpdate
+                        }
+                    )
+        ]
+
+
+updateBar : Html Msg -> Html Msg
+updateBar action =
+    Html.div
+        [ Html.Attributes.class (barChrome ++ " " ++ lowerSlot ++ " " ++ keyboardSuppressed) ]
+        [ Html.span [ Html.Attributes.class "flex-1 text-sm text-ink" ]
+            [ Html.text "New version available" ]
+        , Html.div [ Html.Attributes.class "shrink-0" ] [ action ]
+        ]
+
+
+{-| Chrome shared by both bottom bars, minus the vertical slot.
+
+`left`/`right` use `max(1rem, env(safe-area-inset-*))` and the nav's
+`max-w-[480px] mx-auto` so a landscape notch can't run the Reload button under
+the Dynamic Island column.
+
+-}
+barChrome : String
+barChrome =
+    "fixed left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto max-w-[480px] z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel bg-[image:var(--bg-grain)]"
+
+
+{-| The slot immediately above the bottom nav.
+
+Computed, not guessed: the nav is `fixed bottom-0` with `min-h-[56px]` tabs
+_plus_ `pb-[env(safe-area-inset-bottom)]` (~34px on a home-indicator iPhone),
+so it occupies roughly 0–90px. `4.5rem` (72px) above the inset clears it. The
+old hard-coded 72px offset spanned 72–118px — straight through `viewNavTab`'s active
+indicator and icon tops — and at `z-50` against the nav's `z-10` it won
+hit-testing, eating taps across the whole nav.
+
+-}
+lowerSlot : String
+lowerSlot =
+    "bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"
+
+
+{-| One slot up: clears the ~70px update bar plus a gap.
+-}
+upperSlot : String
+upperSlot =
+    "bottom-[calc(env(safe-area-inset-bottom)+10rem)]"
+
+
+{-| Hide the bar while a text field is focused.
+
+In standalone iOS the software keyboard shrinks the layout viewport, so a
+`fixed bottom-…` element is lifted to sit _over_ the form fields mid-screen —
+and `keyboardLikelyOpen()` makes the viewport heal deliberately bail while
+typing, so nothing corrects it. An undismissable bar parked over the Add form
+is the worst outcome in this design; suppressing it while the keyboard is up
+preserves "no dismiss" without the pathology.
+
+The `group` anchor is the `viewAuth` root. Only the tags that raise the
+keyboard are matched — `group-focus-within` would also fire on the Reload
+button itself and hide the bar the instant it was tapped.
+
+-}
+keyboardSuppressed : String
+keyboardSuppressed =
+    "group-has-[input:focus]:hidden group-has-[textarea:focus]:hidden group-has-[select:focus]:hidden"
 
 
 viewErrorBanner : Maybe String -> Html Msg

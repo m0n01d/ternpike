@@ -840,19 +840,227 @@ import './elements/tp-amount.js'
     }
   })
 
-  // ── PWA service worker ─────────────────────────────────────────────────
-  if ('serviceWorker' in navigator) {
+  // ── PWA service worker + "New version available" toast (#477) ──────────
+  //
+  // `sw.js` no longer calls `skipWaiting()` in `install`, so a new worker
+  // parks in `waiting` until the user taps Reload. This block is the other
+  // half of that contract: notice the waiting worker, tell Elm, and reload
+  // exactly once when it takes control.
+  //
+  // Gated behind `!isVerify` for the same reason `emitNotificationState()`
+  // is: a real waiting worker during `npm run verify:dom` would flip the
+  // seeded UpdateToast fixture and make the DOM tier nondeterministic.
+  //
+  // This is a SECOND, independent resume path from the iOS viewport heal
+  // above. They stay separate; the heal's listeners are registered earlier in
+  // this file, so for a shared event the heal runs first (heal-then-update),
+  // and unlike the heal this block runs on every platform, not just
+  // installed-iOS.
+  if ('serviceWorker' in navigator && !isVerify) {
+    const UPDATE_THROTTLE_MS = 5 * 60 * 1000
+    const UPDATE_RACE_MS = 10000
+    const ACTIVATION_FALLBACK_MS = 4000
+
+    // Objects, not booleans. `controller` is null on a first-ever visit and
+    // on any page a worker hasn't claimed; comparing IDENTITY later answers
+    // "a *different* worker took over", which a boot-time boolean cannot.
+    const bootController = navigator.serviceWorker.controller
+
+    // `CACHE` in sw.js is stamped as `ternpike-<sha8>` (see vite.config.js),
+    // while `__BUILD_SHA__` is the full sha — line them up before comparing.
+    const runningCache = `ternpike-${String(__BUILD_SHA__).slice(0, 8)}`
+
+    let bootActive = null
+    let waitingWorker = null
+    // Two INDEPENDENT flags. Sharing one (an "unrequested claim?" boolean
+    // doubling as "did the user authorize this?") makes Reload a no-op in the
+    // headline case: session starts uncontrolled → becomes controlled →
+    // deploy → tap → suppressed.
+    let userRequestedUpdate = false
+    let reloading = false
+    // `register()` below soft-updates already, so the window opens now.
+    let lastUpdateCheck = Date.now()
+
+    const notifyElm = (ready) => {
+      if (app.ports.swUpdateReady) app.ports.swUpdateReady.send(ready)
+    }
+
+    const reloadOnce = () => {
+      if (reloading) return
+      reloading = true
+      window.location.reload()
+    }
+
+    // Ask a worker which cache generation it would serve. Resolves `null`
+    // when it doesn't answer within the budget (a wedged or older worker).
+    const workerVersion = (worker) =>
+      new Promise((resolve) => {
+        let settled = false
+        const done = (v) => {
+          if (settled) return
+          settled = true
+          resolve(v)
+        }
+        try {
+          const channel = new MessageChannel()
+          channel.port1.onmessage = (e) => done((e.data && e.data.version) || null)
+          worker.postMessage({ type: 'GET_VERSION' }, [channel.port2])
+        } catch (err) {
+          done(null)
+        }
+        setTimeout(() => done(null), 2000)
+      })
+
+    const retract = (worker) => {
+      if (waitingWorker !== worker) return
+      waitingWorker = null
+      notifyElm(false)
+    }
+
+    const announce = async (worker) => {
+      // The worker that was already active when this page booted is the one
+      // serving it — never a reason to offer an update.
+      if (worker === bootActive) return
+      const version = await workerVersion(worker)
+      // The fetch handler is network-first, so an ordinary refresh after a
+      // deploy already runs the NEW bundle while the old worker still
+      // controls the page — and that same navigation installs the new worker
+      // → waiting → a toast on a page that IS the new version. Suppress
+      // exactly that. A worker that doesn't answer (`null`) is announced: a
+      // missing toast is a dead feature, a spurious one is only noise.
+      if (version !== null && version === runningCache) return
+      waitingWorker = worker
+      notifyElm(true)
+    }
+
+    // Detection has to be exhaustive or the toast silently never appears for
+    // the WHOLE session — a second `update()` does not re-fire `updatefound`
+    // for a worker already parked in `waiting`.
+    const track = (worker) => {
+      if (!worker) return
+      const evaluate = () => {
+        if (worker.state === 'installed' || worker.state === 'activated') {
+          // `installed` and `activated` are both "ready". Note there is no
+          // `navigator.serviceWorker.controller` guard: on an UNCONTROLLED
+          // page a new worker auto-activates with no client to wait for —
+          // exactly the version-skew case the old condition hid.
+          announce(worker)
+        } else if (worker.state === 'redundant') {
+          // A failed activation must not leave a permanent toast behind.
+          retract(worker)
+        }
+      }
+      // `statechange` never re-fires a transition that already happened, so
+      // read the current state immediately as well as subscribing.
+      evaluate()
+      worker.addEventListener('statechange', evaluate)
+    }
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading) return
+      const claimedByNewWorker =
+        bootController !== null && navigator.serviceWorker.controller !== bootController
+      if (!userRequestedUpdate && !claimedByNewWorker) return
+      // `controllerchange` fires in EVERY claimed client, so one tab's Reload
+      // would otherwise discard another tab's half-typed expense.
+      if (!userRequestedUpdate && !document.hidden) return
+      reloadOnce()
+    })
+
+    if (app.ports.applySwUpdate) {
+      app.ports.applySwUpdate.subscribe(async () => {
+        userRequestedUpdate = true
+        // Resolve the registration at TAP time. A `reg` closed over from boot
+        // throws `InvalidStateError` once Safari/ITP has evicted it.
+        let reg = null
+        try {
+          reg = await navigator.serviceWorker.getRegistration()
+        } catch (err) {
+          console.warn('[sw] getRegistration failed on apply:', err)
+        }
+        const waiting = (reg && reg.waiting) || waitingWorker
+        if (!waiting) {
+          // Network-first makes an unconditional reload always correct.
+          reloadOnce()
+          return
+        }
+        // The dangerous case is NOT "no waiting worker" — it's a waiting
+        // worker that never activates (WebKit 199110 was open iOS 12.3 → 16).
+        // This fallback closes the entire "Reload does nothing" class.
+        setTimeout(reloadOnce, ACTIVATION_FALLBACK_MS)
+        waiting.postMessage({ type: 'SKIP_WAITING' })
+      })
+    }
+
+    const withTimeout = (promise, ms) =>
+      Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))])
+
+    // Re-emit the held state on every tick. `Main.updateAuth` is only reached
+    // from `AuthModel`: `( AuthMsg _, GuestModel gs )` DROPS the message. The
+    // registration resolves within the first second of boot, so for a
+    // logged-out user the notification would be discarded and never re-sent —
+    // no toast for the rest of the session, precisely when the shipped fix
+    // might be an auth fix. Holding the state here and re-emitting lets Elm
+    // converge no matter which model was mounted when the worker landed.
+    const reemit = () => {
+      if (waitingWorker) notifyElm(true)
+    }
+
+    const onResume = async () => {
+      // Deliberately NOT filtered on `document.hidden`: WebKit 202399 reports
+      // the wrong visibility state in standalone. The throttle de-duplicates.
+      if (navigator.onLine === false) return
+      if (Date.now() - lastUpdateCheck < UPDATE_THROTTLE_MS) {
+        reemit()
+        return
+      }
+      let reg = null
+      try {
+        reg = await navigator.serviceWorker.getRegistration()
+      } catch (err) {
+        reg = null
+      }
+      if (!reg) {
+        // Safari/ITP evicts registrations after ~7 days without interaction —
+        // exactly this app's user. Re-register rather than give up.
+        try {
+          reg = await navigator.serviceWorker.register('/sw.js')
+        } catch (err) {
+          console.warn('[sw] re-register on resume failed:', err)
+          return
+        }
+      }
+      if (!reg) return
+      // A wedged registration HANGS rather than rejecting, so try/catch alone
+      // buys nothing — race it against a timeout.
+      const settled = await withTimeout(
+        reg.update().then(() => true).catch(() => null),
+        UPDATE_RACE_MS,
+      )
+      // Throttle timestamp advances only on success.
+      if (settled) lastUpdateCheck = Date.now()
+      track(reg.waiting)
+      track(reg.installing)
+      reemit()
+    }
+
+    document.addEventListener('visibilitychange', onResume)
+    window.addEventListener('pageshow', onResume)
+    window.addEventListener('focus', onResume)
+    window.addEventListener('online', onResume)
+
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
+        bootActive = reg.active
+        // Three call sites, one helper. A worker can already be parked in
+        // `waiting` (or mid-`installing`) before this promise resolves.
+        track(reg.waiting)
+        track(reg.installing)
         reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing
-          if (!newWorker) return
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New SW ready — tell it to activate immediately.
-              newWorker.postMessage({ type: 'SKIP_WAITING' })
-            }
-          })
+          // `reg.installing` can already have advanced by the time this
+          // fires; the old `const w = reg.installing; if (!w) return` bailed
+          // silently and killed the toast for the whole session.
+          track(reg.installing || reg.waiting)
         })
       })
       .catch(err => console.error('[sw] registration failed:', err))
