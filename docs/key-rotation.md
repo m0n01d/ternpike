@@ -279,6 +279,26 @@ endpoint's signing secret (`whsec_…`) into `STRIPE_WEBHOOK_SECRET --env stagin
 card `4242 4242 4242 4242`, and confirm the webhook delivery shows `200` in the
 Stripe (test) dashboard and the tier flips in the **staging** `TIERS_KV`.
 
+### Deployed staging app (frontend)
+
+The staging bed also has a deployed frontend so billing can be exercised
+without localhost:
+
+- **URL: `https://staging-ternpike.dwightdoane.workers.dev`** — the Elm app
+  built with `VITE_BACKEND_URL` pointing at `ternpike-auth-staging`. Named
+  `staging-ternpike` on purpose: it matches the API's `PREVIEW_ORIGIN` CORS
+  regex (`<anything>-ternpike.dwightdoane.workers.dev`), and it's also in the
+  billing checkout Origin allowlist (`server/billing.js`). CouchDB CORS echoes
+  any origin, so PouchDB sync works from it too (shared CouchDB — real trips).
+- **Deploy it with `npm run deploy:staging` from the repo ROOT** (root
+  `wrangler.jsonc` `[env.staging]`). The script builds with the staging URL
+  baked in, then deploys. **Never run a bare `wrangler deploy` from the root
+  after a staging build** — `dist/` would still hold the staging-pointed
+  bundle and you'd ship it to `app.ternpike.com`; the root `npm run deploy`
+  script rebuilds for prod first, so always deploy through the npm scripts.
+- Local alternative: `npm run dev:staging` (dev server on localhost:3000
+  against the staging API).
+
 ### Verify / list staging secrets
 
 ```bash
