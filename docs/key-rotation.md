@@ -309,3 +309,4 @@ still be rejected on a real deploy — fill them in from step 1 first.
 `TURNSTILE_SECRET_KEY` is referenced only in a `wrangler.toml` comment and read
 by no current code. If it's still set on the Worker you can remove it with
 `wrangler secret delete TURNSTILE_SECRET_KEY` — nothing depends on it.
+**Done: deleted from `ternpike-auth` on 2026-08-08.**
