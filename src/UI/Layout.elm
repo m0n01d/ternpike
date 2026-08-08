@@ -2,13 +2,11 @@ module UI.Layout exposing
     ( formField
     , page
     , textInputStyle
-    , viewBottomNav
+    , viewBottomStack
     , viewDeleteConfirmModal
     , viewErrorBanner
     , viewHeader
     , viewOfflineBanner
-    , viewToast
-    , viewUpdateToast
     )
 
 import Data.Navigation exposing (Route(..), Tab(..))
@@ -157,22 +155,63 @@ viewOfflineBanner networkOffline =
             [ Html.text "You're offline · changes will sync when you reconnect" ]
 
 
+{-| The whole bottom chrome as ONE `position: sticky` element: the ordinary
+toast, the persistent update bar, and the nav, in that order, pinned to the
+foot of the scrollport.
+
+Why one sticky wrapper rather than three positioned elements:
+
+  - **Sticky, not fixed.** `position: fixed` resolves against the viewport iOS
+    26 standalone corrupts. Measured on device (iOS 26.5.2, installed, right
+    after the photo picker closed): `inner/outer/screen/avail/lvh/dvh` all read
+    874 while `visualViewport` alone read 566 at `offsetTop` 55 — and the fixed
+    nav landed at `navBottom 819`, exactly `874 - vvTop`. On that same device
+    in that same state the `sticky top-0` header rendered CORRECTLY. The
+    hypothesis this rests on: `sticky` resolves against the SCROLLPORT — the
+    layout viewport, healthy at 874 — so it is immune where `fixed` is not.
+    That is a hypothesis backed by one strong observation, not a proven fact;
+    device verification on staging is the test.
+  - **Sticky keeps the document as the scroller**, which `fixed`'s alternative
+    in #483 (a fixed-height shell with an inner `overflow-y-auto`) did not.
+    iOS tap-the-status-bar-to-scroll-to-top only ever drives the document
+    scroller, and losing it is what this change exists to undo.
+  - **One wrapper, not three.** Being a single in-flow element means the stack
+    settles into its own space at the very end of the document at maximum
+    scroll, so nothing is ever permanently hidden behind it and no content
+    padding has to guess its height. It also makes the two toasts ordinary flow
+    siblings above the nav, which is what retires the hand-computed
+    `bottom-[calc(…)]` slots — see `barChrome`.
+
+`z-50` puts the whole stack over page content. Nothing inside reads
+`visualViewport`, and the writer that used to feed `--vv-bottom-offset` is gone
+from `src/main.js`.
+
+-}
+viewBottomStack : AuthState -> Html Msg
+viewBottomStack as_ =
+    Html.div
+        [ Html.Attributes.class "sticky bottom-0 z-50" ]
+        [ viewToast as_
+        , viewUpdateToast as_
+        , viewBottomNav as_
+        ]
+
+
 viewBottomNav : AuthState -> Html Msg
 viewBottomNav as_ =
     Html.nav
-        [ -- `transform-gpu` promotes the nav to its own compositing layer:
-          -- iOS 26 WebKit can paint `fixed` elements offset from their
-          -- computed position during body scroll, and an owned layer keeps
-          -- the paint anchored to the real viewport.
-          -- `bottom` is driven by `--vv-bottom-offset`, set from
-          -- `visualViewport` in `src/main.js`. `position: fixed` resolves
-          -- against the LAYOUT viewport, which iOS standalone can leave stuck
-          -- short after a keyboard — parking this bar a keyboard-height above
-          -- the screen. The custom property is the gap between the layout
-          -- viewport's bottom and the visible one, so the bar lands on the
-          -- real screen edge. It computes to `0px` whenever the two agree,
-          -- which is every healthy browser, so this cannot regress them.
-          Html.Attributes.class "fixed bottom-[var(--vv-bottom-offset,0px)] left-1/2 -translate-x-1/2 transform-gpu w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10 pb-[env(safe-area-inset-bottom)] sm:border-x sm:border-tan/40 sm:dark:border-moss/20"
+        [ -- NOT `position: fixed`, deliberately — see `viewBottomStack`, whose
+          -- `sticky bottom-0` wrapper is what pins this to the screen edge.
+          -- This nav is an ordinary flow element and reads no viewport metric.
+          --
+          -- `shrink-0` keeps a flex parent from ever compressing it (the stack
+          -- itself is block flow today, but the nav has been a flex row of the
+          -- app shell before and may be again). `transform-gpu` stays for the
+          -- iOS 26 paint-offset reason — its own compositing layer keeps the
+          -- paint anchored to the computed position. Width and side borders
+          -- come from the shell; repeating `max-w-[480px]`/`sm:border-x` here
+          -- would double them.
+          Html.Attributes.class "shrink-0 transform-gpu backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10 pb-[env(safe-area-inset-bottom)]"
         ]
         (List.map (viewNavTab as_)
             [ ( ScanTab, UI.Icons.camera, "Scan" )
@@ -221,37 +260,28 @@ viewNavTab as_ ( tab, iconFn, label_ ) =
 
 {-| The transient toast ("Link copied", share errors, every `toastFor` site).
 
-Takes the whole `AuthState` rather than a bare `Maybe String` because its
-vertical slot now depends on `as_.swUpdate`: the persistent update bar
-(`viewUpdateToast`) owns the lower slot, and this toast shifts one slot up
-whenever that bar is showing. Sharing an offset would make every ordinary
-toast invisible for the rest of the session — the update bar has no dismiss
-and renders later in the DOM (#477).
+The rule from #477 — the persistent update bar owns the slot nearest the nav
+and this toast must never share it, or the undismissable update bar buries
+every ordinary toast for the rest of the session — is now enforced by DOM
+ORDER rather than by two hand-computed `bottom-[calc(…)]` offsets. Both bars
+are ordinary flow children of `viewBottomStack`, and this one is rendered
+FIRST, so in a bottom-anchored column it always sits one row above the update
+bar and drops down to sit directly on the nav when the update bar is absent.
+Two flow siblings cannot occupy the same space, so the regression the offsets
+guarded against is now structurally impossible rather than arithmetically
+avoided.
 
-The old hard-coded 72px offset predated the safe-area nav and overlapped it. Both
-bars now anchor to the nav's real height — `min-h-[56px]` tabs plus
-`pb-[env(safe-area-inset-bottom)]` — and match its
-`max-w-[480px]` gutters so the action never lands under the Dynamic Island in
-landscape.
+It still takes the whole `AuthState` (not a bare `Maybe String`) because
+`Verify.Specs.UpdateToast` reads `as_.toast` alongside `as_.swUpdate` to report
+both slots.
 
 -}
 viewToast : AuthState -> Html Msg
 viewToast as_ =
-    let
-        shifted : Bool
-        shifted =
-            SwUpdate.isShowing as_.swUpdate
-    in
     Html.Extra.viewMaybe
         (\message ->
             Html.div
-                [ Html.Attributes.classList
-                    [ ( barChrome, True )
-                    , ( "animate-fade-up", True )
-                    , ( lowerSlot, not shifted )
-                    , ( upperSlot, shifted )
-                    ]
-                ]
+                [ Html.Attributes.class (barChrome ++ " animate-fade-up") ]
                 [ Html.span [ Html.Attributes.class "flex-1 text-sm text-ink" ] [ Html.text message ]
                 , Html.button
                     [ Html.Events.onClick (AuthMsg ToastExpired)
@@ -312,54 +342,44 @@ viewUpdateToast as_ =
 updateBar : Html Msg -> Html Msg
 updateBar action =
     Html.div
-        [ Html.Attributes.class (barChrome ++ " " ++ lowerSlot ++ " " ++ keyboardSuppressed) ]
+        [ Html.Attributes.class (barChrome ++ " " ++ keyboardSuppressed) ]
         [ Html.span [ Html.Attributes.class "flex-1 text-sm text-ink" ]
             [ Html.text "New version available" ]
         , Html.div [ Html.Attributes.class "shrink-0" ] [ action ]
         ]
 
 
-{-| Chrome shared by both bottom bars, minus the vertical slot.
+{-| Chrome shared by both bottom bars.
 
-`left`/`right` use `max(1rem, env(safe-area-inset-*))` and the nav's
-`max-w-[480px] mx-auto` so a landscape notch can't run the Reload button under
-the Dynamic Island column.
+NOT positioned — no `fixed`, no `absolute`, and no `bottom-[calc(…)]` slot.
+Both bars are ordinary flow children of `viewBottomStack`, stacked above the
+nav by the wrapper's single `sticky bottom-0`. That is what deleted the pair
+of hand-computed slot offsets this used to carry: their whole job was to place
+two out-of-flow bars above a nav of known height without colliding, and flow
+does that for free and cannot get the arithmetic wrong when the nav's height
+changes.
+
+`mb-3` is the gap to whatever sits below (the other bar, or the nav). The
+left/right margins use `max(1rem, env(safe-area-inset-*))` so a landscape
+notch can't run the Reload button under the Dynamic Island column; the 480px
+cap comes from the shell, so there is no `max-w`/`mx-auto` to repeat here.
 
 -}
 barChrome : String
 barChrome =
-    "fixed left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto max-w-[480px] z-50 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel bg-[image:var(--bg-grain)]"
-
-
-{-| The slot immediately above the bottom nav.
-
-Computed, not guessed: the nav is `fixed bottom-0` with `min-h-[56px]` tabs
-_plus_ `pb-[env(safe-area-inset-bottom)]` (~34px on a home-indicator iPhone),
-so it occupies roughly 0–90px. `4.5rem` (72px) above the inset clears it. The
-old hard-coded 72px offset spanned 72–118px — straight through `viewNavTab`'s active
-indicator and icon tops — and at `z-50` against the nav's `z-10` it won
-hit-testing, eating taps across the whole nav.
-
--}
-lowerSlot : String
-lowerSlot =
-    "bottom-[calc(env(safe-area-inset-bottom)+4.5rem+var(--vv-bottom-offset,0px))]"
-
-
-{-| One slot up: clears the ~70px update bar plus a gap.
--}
-upperSlot : String
-upperSlot =
-    "bottom-[calc(env(safe-area-inset-bottom)+10rem+var(--vv-bottom-offset,0px))]"
+    "ml-[max(1rem,env(safe-area-inset-left))] mr-[max(1rem,env(safe-area-inset-right))] mb-3 flex items-center gap-3 rounded-xl px-4 py-3 bg-cream border border-rust shadow-panel bg-[image:var(--bg-grain)]"
 
 
 {-| Hide the bar while a text field is focused.
 
-In standalone iOS the software keyboard shrinks the layout viewport, so a
-`fixed bottom-…` element is lifted to sit _over_ the form fields mid-screen —
-and `keyboardLikelyOpen()` makes the viewport heal deliberately bail while
-typing, so nothing corrects it. An undismissable bar parked over the Add form
-is the worst outcome in this design; suppressing it while the keyboard is up
+In standalone iOS the software keyboard shrinks the viewport, which drags the
+bottom of the scrollport up with it — and a `sticky bottom-0` stack follows the
+scrollport, so the bar lands over the form fields mid-screen exactly as the
+`fixed` and fixed-height-shell versions did. Moving the bars between `fixed`,
+`absolute` and `sticky` never addressed this; what moves is the scrollport
+itself. `keyboardLikelyOpen()` also makes the viewport heal bail while typing,
+so nothing corrects it. An undismissable bar parked over the Add form is the
+worst outcome in this design; suppressing it while the keyboard is up
 preserves "no dismiss" without the pathology.
 
 The `group` anchor is the `viewAuth` root. Only the tags that raise the

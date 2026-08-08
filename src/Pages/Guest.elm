@@ -63,7 +63,20 @@ viewGuest gs =
 viewLogin : GuestState -> Html Msg
 viewLogin gs =
     Html.div
-        [ Html.Attributes.class "min-h-screen min-h-[100lvh] flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out" ]
+        [ -- `flex-1`, not `min-h-[100lvh]`: this is the only child of the
+          -- `min-h-screen flex flex-col` app shell in `Main.view`, so it grows
+          -- to fill the shell and centres against it. Re-declaring `100lvh`
+          -- would overshoot whenever the shell is taller than the viewport
+          -- (the demo banner renders above it), pushing the centred card
+          -- off-centre by exactly the banner's height.
+          --
+          -- No `min-h-0`/`overflow-y-auto`: a flex item's automatic minimum
+          -- size keeps this at least as tall as its content, and the DOCUMENT
+          -- scrolls when that exceeds the viewport — a short landscape phone
+          -- with the keyboard up. #483's inner scroller is what took iOS
+          -- tap-status-bar-to-scroll-to-top away.
+          Html.Attributes.class "flex-1 flex flex-col items-center justify-center px-6 bg-[image:var(--bg-topo-atlas)] bg-no-repeat bg-[size:2400px_2000px] bg-[position:-960px_-540px] transition-[background-position] duration-700 ease-out"
+        ]
         [ Html.div [ Html.Attributes.class "text-center max-w-sm w-full mb-8" ]
             [ UI.Mascot.ternSvg "w-32 mx-auto animate-soar"
             , Html.h1

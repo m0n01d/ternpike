@@ -5313,7 +5313,52 @@ view model =
     , body =
         [ viewDemoBanner demoMode
         , Html.div
-            [ Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-screen min-h-[100lvh] font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
+            [ -- The app shell is a MIN-HEIGHT FLEX COLUMN, and THE DOCUMENT IS
+              -- THE SCROLLER. Both halves are load-bearing:
+              --
+              -- 1. `min-h-*` (never `h-*`) and NO `overflow-hidden`, so the
+              --    shell grows past the viewport and `document.documentElement`
+              --    stays the scrolling element. That is what makes iOS
+              --    "tap the status bar to scroll to top" work — a gesture that
+              --    only ever drives the document scroller, never an inner
+              --    `overflow-y-auto` div. #483 traded it away for a fixed-height
+              --    shell; this restores it.
+              -- 2. `flex flex-col` so `viewAuth`'s content row can `flex-1` and
+              --    push the bottom stack to the foot of a SHORT page. Without
+              --    it a page with two rows would leave the nav floating in the
+              --    middle of the screen.
+              --
+              -- `overflow-hidden` must stay OFF for a second reason beyond
+              -- scrolling: any `overflow: hidden` ancestor silently disables
+              -- `position: sticky` in its subtree, and the header and the
+              -- bottom stack are both sticky.
+              --
+              -- Why sticky rather than fixed, measured on device (iOS 26.5.2,
+              -- standalone, right after the photo picker closed):
+              --
+              --     inner 874  outer 874  screen 874  avail 874
+              --     lvh 874    dvh 874    vv 566      vvTop 55
+              --     navBottom 819
+              --
+              -- Every metric agreed at 874 except `visualViewport`, which was
+              -- corrupt and STAYED corrupt; `navBottom 819` is exactly
+              -- `874 - vvTop`, i.e. `position: fixed` resolving against the one
+              -- poisoned number. The sticky header on that same device in that
+              -- same state rendered CORRECTLY — which is the evidence behind
+              -- the hypothesis this shell rests on: `sticky` resolves against
+              -- the scrollport (the layout viewport, healthy at 874) and so is
+              -- immune where `fixed` is not. Hypothesis, not proven fact —
+              -- it is what device verification on staging is for.
+              --
+              -- `min-h-[100lvh]` alongside `min-h-screen` is the pre-#483 pair,
+              -- kept verbatim. It is harmless redundancy rather than a
+              -- fallback: CSS defines `vh` as the LARGE viewport unit, so
+              -- `100vh == 100lvh` and Tailwind's emit order between the two
+              -- cannot matter. (Contrast `h-screen` + `h-[100dvh]`, where the
+              -- values genuinely differ and the emit order silently decided the
+              -- winner — the trap #483 documented.)
+              Html.Attributes.class "bg-parchment dark:bg-cream text-ink min-h-screen min-h-[100lvh] flex flex-col font-body max-w-[480px] mx-auto relative sm:shadow-card sm:border-x sm:border-tan/40 sm:dark:border-moss/20"
+            ]
             [ case model of
                 GuestModel gs ->
                     viewGuest gs
@@ -5469,17 +5514,35 @@ viewAuth as_ =
                     { actions = [], body = viewVerifyDashboard as_.basePath, hero = Html.Extra.nothing }
     in
     -- `group` is the anchor for the update bar's keyboard suppression: in
-    -- standalone iOS the software keyboard shrinks the layout viewport, which
-    -- lifts a `fixed bottom-…` element up over the form fields. The bar has no
-    -- dismiss control, so `group-has-[input:focus]:hidden` (and friends, in
+    -- standalone iOS the software keyboard shrinks the viewport and lifts a
+    -- bottom-anchored bar up over the form fields. The bar has no dismiss
+    -- control, so `group-has-[input:focus]:hidden` (and friends, in
     -- `UI.Layout.viewUpdateToast`) is what keeps it from parking itself over
     -- the Add form while the user types.
-    Html.div [ Html.Attributes.class "group" ]
+    --
+    -- It is also the inner flex column: header / banners / content / bottom
+    -- stack. NOTHING here scrolls — the DOCUMENT scrolls. `flex-1` on the
+    -- content row is a sticky-footer spacer, not a scroller: it absorbs the
+    -- slack on a short page so `UI.Layout.viewBottomStack` reaches the foot of
+    -- the shell instead of floating mid-screen, and on a long page it simply
+    -- takes its content height and lets the document grow. Do not reintroduce
+    -- `overflow-y-auto`/`min-h-0` here: an inner scroller is what took
+    -- tap-status-bar-to-top away in #483, and an `overflow` ancestor also
+    -- disables the `sticky` header and bottom stack outright.
+    Html.div [ Html.Attributes.class "group flex flex-col flex-1" ]
         [ UI.Layout.viewHeader as_
         , UI.Layout.viewOfflineBanner (Data.Sync.isOffline as_.network)
         , UI.Layout.viewErrorBanner as_.error
         , viewBillingBannerForRoute as_ route
-        , Html.div [ Html.Attributes.class "pb-[calc(env(safe-area-inset-bottom)+5rem)]" ]
+        , -- `pb-4` is breathing room, NOT nav clearance. The old
+          -- `pb-[calc(env(safe-area-inset-bottom)+5rem)]` existed because a
+          -- `fixed` nav occupies no flow space, so without it the last rows
+          -- were permanently unreachable. The bottom stack is `sticky` and
+          -- therefore IS in flow: at maximum scroll it settles into its own
+          -- space at the end of the document and hides nothing. Re-adding a
+          -- full nav-height pad would just leave a nav-sized void under the
+          -- last row.
+          Html.div [ Html.Attributes.class "flex-1 pb-4" ]
             [ UI.Layout.page
                 { actions = tab.actions
                 , body = tab.body
@@ -5487,7 +5550,6 @@ viewAuth as_ =
                 , route = route
                 }
             ]
-        , UI.Layout.viewBottomNav as_
         , Html.Extra.viewMaybe UI.Layout.viewDeleteConfirmModal as_.confirmDeleteTrip
         , case ( as_.movePicker, as_.trips ) of
             ( Just expense, TripsLoaded loadedTrips ) ->
@@ -5502,9 +5564,13 @@ viewAuth as_ =
         , Pages.Settings.SharedTrips.viewModal as_
         , UI.ShareModal.view as_
         , UI.TripFormModal.view as_
-        , UI.Layout.viewToast as_
-        , UI.Layout.viewUpdateToast as_
         , UI.MilepostToast.view as_
+
+        -- LAST child, deliberately. `UI.Layout.viewBottomStack` is the single
+        -- `sticky bottom-0` element that carries both toasts and the nav; the
+        -- modals above it are all `fixed inset-0`, so they contribute no flow
+        -- height and cannot come between the stack and the end of the column.
+        , UI.Layout.viewBottomStack as_
         ]
 
 

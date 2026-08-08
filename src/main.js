@@ -681,62 +681,32 @@ import './elements/tp-amount.js'
     })
     window.addEventListener('pageshow', healSoon)
 
-    // Anchor the bottom chrome to the VISIBLE viewport, not the layout one.
+    // The `--vv-bottom-offset` writer that used to live here is GONE, and so
+    // is the `position: fixed` bottom nav it existed to reposition. The nav
+    // and both bottom bars now ride one `position: sticky` wrapper
+    // (`UI.Layout.viewBottomStack`), so nothing in the app resolves its
+    // position against `visualViewport` and there is no offset left to
+    // compute. Sticky resolves against the SCROLLPORT — which is the document
+    // again, and which reads the healthy 874 below — rather than against the
+    // one number iOS corrupts.
     //
-    // Healing has now failed four times, so stop depending on it. `position:
-    // fixed` resolves against the layout viewport; iOS standalone can leave
-    // that stuck a keyboard-height short, which parks the nav mid-screen with
-    // page content scrolling past underneath. Rather than try to force the
-    // layout viewport to correct itself, measure the gap and offset the bar
-    // by it:
+    // Why the whole approach was abandoned, from the device measurement that
+    // settled it (iOS 26.5.2, standalone, right after the photo picker
+    // closed — the reproducible trigger):
     //
-    //   visible bottom (in layout coords) = vv.offsetTop + vv.height
-    //   `bottom: X` puts the element's bottom at  innerHeight - X
-    //   so                                   X = innerHeight - offsetTop - height
+    //     inner 874  outer 874  screen 874  avail 874  lvh 874  dvh 874
+    //     vv 566     vvTop 55   svh 812     client 812
+    //     offset 0px navBottom 819
     //
-    // When the two viewports agree — every healthy browser — X is 0px and
-    // nothing moves, so this cannot regress the working case. While the
-    // keyboard is up the gap is genuinely the keyboard, and the bar should
-    // stay behind it as it does today, so hold the offset at 0 then.
-    const syncViewportOffset = () => {
-      const vv = window.visualViewport
-      if (!vv) return
-      // SIGN MATTERS, and the first version had it backwards. Measured on
-      // device (iOS 26.5.2, standalone, no keyboard up):
-      //
-      //     inner 874   vv 566   vvTop 0   scale 1.00   navBottom 566
-      //
-      // The LAYOUT viewport was healthy at 874; the VISUAL viewport was the
-      // one stuck — 308px short, a phantom keyboard that had long since
-      // closed. The original formula read that as "the layout viewport
-      // overhangs the visible area", computed +308px, and shoved the nav up
-      // by exactly that. It caused the very misplacement it was meant to fix.
-      //
-      // Only ever push the bar DOWN, never up. A negative result means the
-      // layout viewport really is short and the bar would otherwise float
-      // above the screen edge — the case worth correcting. A positive result
-      // means `visualViewport` is reporting smaller than the layout viewport,
-      // which is either a real keyboard or a stuck reading; in both cases the
-      // bar belongs at the layout bottom, so clamp to 0 and leave it alone.
-      const raw =
-        keyboardLikelyOpen() || (vv.scale && Math.abs(vv.scale - 1) > 0.01)
-          ? 0
-          : Math.round(window.innerHeight - vv.offsetTop - vv.height)
-      document.documentElement.style.setProperty(
-        '--vv-bottom-offset',
-        `${Math.min(0, raw)}px`,
-      )
-    }
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', syncViewportOffset)
-      window.visualViewport.addEventListener('scroll', syncViewportOffset)
-    }
-    window.addEventListener('resize', syncViewportOffset)
-    document.addEventListener('focusin', syncViewportOffset)
-    document.addEventListener('focusout', () => setTimeout(syncViewportOffset, 300))
-    document.addEventListener('visibilitychange', syncViewportOffset)
-    ;[0, 300, 1000, 2500].forEach((delay) => setTimeout(syncViewportOffset, delay))
+    // Every metric agreed at 874 except `visualViewport`, which was corrupt
+    // and STAYED corrupt after the native sheet closed. `navBottom 819` is
+    // exactly 874-55 — the nav displaced by precisely `vvTop`. iOS was
+    // resolving `fixed` against the one poisoned number while the rest of the
+    // layout system was healthy. Five fixes tried to correct or work around
+    // that number; this one removes the dependency instead. `lvh`/`dvh`
+    // reading a healthy 874 is what makes a height-sized shell viable.
+    //
+    // The heal shim above stays for now — one change at a time.
 
     // Heal at BOOT, not only on later events. A standalone app relaunched
     // from a suspended state can paint its first frame already stuck, and
@@ -786,7 +756,7 @@ import './elements/tp-amount.js'
           `client ${document.documentElement.clientHeight}  outer ${window.outerHeight}`,
           `screen ${window.screen.height}  avail ${window.screen.availHeight}`,
           `lvh ${probe(100, 'lvh')}  dvh ${probe(100, 'dvh')}  svh ${probe(100, 'svh')}`,
-          `short ${shortfall()}  offset ${getComputedStyle(document.documentElement).getPropertyValue('--vv-bottom-offset').trim() || '0px'}`,
+          `short ${shortfall()}`,
           `navBottom ${nav ? Math.round(nav.getBoundingClientRect().bottom) : '-'}`,
         ].join('\n')
       }
