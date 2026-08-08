@@ -24,6 +24,7 @@ import Verify.Specs.ScanQueueCard as ScanQueueCard
 import Verify.Specs.ScanRouting as ScanRouting
 import Verify.Specs.SharedTripCard as SharedTripCard
 import Verify.Specs.TierGating as TierGating
+import Verify.Specs.UpdateToast as UpdateToast
 
 
 {-| Every unit × fixture result. Add a unit by appending its `results` here.
@@ -42,6 +43,7 @@ runAll =
         , MilepostScreen.results
         , MilepostStrip.results
         , MilepostToast.results
+        , UpdateToast.results
         ]
 
 

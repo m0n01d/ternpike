@@ -350,6 +350,12 @@ port. `showInstallPrompt` is driven by the
 `beforeinstallprompt` (stashed JS-side), back to `False` after the
 user accepts/dismisses the prompt or after `appinstalled`. The
 Settings tab renders an "Install app" button only when it's `True`.
+`swUpdate : Data.SwUpdate.UpdateState` is the service-worker update
+lifecycle (`NoUpdate` / `UpdateWaiting` / `Applying`), fed by the
+`swUpdateReady` port and read by `UI.Layout.viewUpdateToast` (the
+persistent "New version available · Reload" bar) and by
+`UI.Layout.viewToast`, which shifts one slot up while the bar is
+showing (#477).
 `showDayIntensity` defaults to `True` and toggles the Ledger's
 band-tinted day rail; it's an in-memory UI pref until the
 `user:profile` PouchDB doc lands and absorbs it. The hover state for the
@@ -754,11 +760,13 @@ port pouchOut             : Json.Encode.Value -> Cmd msg   -- send a command to 
 port startSync            : Json.Encode.Value -> Cmd msg   -- start live CouchDB sync
 port stopSync             : () -> Cmd msg
 port triggerInstallPrompt : () -> Cmd msg                  -- replay stashed beforeinstallprompt
+port applySwUpdate        : () -> Cmd msg                  -- activate the waiting service worker
 
 -- JS → Elm
-port pouchIn       : (Json.Decode.Value -> msg) -> Sub msg  -- receive a result
-port networkStatus : (Bool -> msg) -> Sub msg               -- True = online, False = offline
-port canInstall    : (Bool -> msg) -> Sub msg               -- True = home-screen install available
+port pouchIn        : (Json.Decode.Value -> msg) -> Sub msg -- receive a result
+port networkStatus  : (Bool -> msg) -> Sub msg              -- True = online, False = offline
+port canInstall     : (Bool -> msg) -> Sub msg              -- True = home-screen install available
+port swUpdateReady  : (Bool -> msg) -> Sub msg              -- True = a new service worker is waiting
 ```
 
 `networkStatus` is wired in `src/main.js`: it sends `navigator.onLine` once
@@ -777,6 +785,35 @@ False`. Same on `appinstalled`. Browsers that never fire
 `beforeinstallprompt` (e.g. Safari) leave `showInstallPrompt` at `False`,
 so users there see no button — matching the address-bar install icon's
 behaviour.
+
+`swUpdateReady` / `applySwUpdate` are the service-worker update toast (#477).
+`public/sw.js` no longer calls `skipWaiting()` in `install`, so a new worker
+parks in `waiting`; `src/main.js` notices it (at registration, on
+`updatefound`, and on a throttled `registration.update()` fired from
+`visibilitychange` / `pageshow` / `focus` / `online`) and sends
+`swUpdateReady True`. That drives `AuthState.swUpdate :
+Data.SwUpdate.UpdateState`, which `UI.Layout.viewUpdateToast` renders as the
+persistent "New version available · Reload" bar. Tapping Reload fires
+`applySwUpdate`; JS posts `SKIP_WAITING` and reloads on `controllerchange`,
+with a ~4s timeout fallback because a waiting worker that never activates is
+real WebKit behaviour. `False` retracts (the worker went `redundant`).
+
+Three details that are load-bearing rather than incidental:
+
+- **JS holds the waiting state and re-emits it.** `updateAuth` is only reached
+  from `AuthModel` — `( AuthMsg _, GuestModel gs )` drops the message — and
+  registration resolves inside the first second of boot, so a logged-out user
+  would otherwise never see the toast for the whole session. The re-emit on
+  every resume tick lets Elm converge regardless of which model was mounted.
+- **The waiting worker is version-checked before Elm hears about it.** The
+  fetch handler is network-first, so an ordinary refresh after a deploy
+  already runs the new bundle while the old worker still controls the page.
+  JS `postMessage({ type: 'GET_VERSION' })`s the waiting worker over a
+  `MessageChannel` and only notifies when the reported `CACHE` differs from
+  the running page's `__BUILD_SHA__`.
+- **The whole block is gated behind `!isVerify`,** like `emitNotificationState()`
+  — a real waiting worker during `npm run verify:dom` would flip the seeded
+  `UpdateToast` fixture and make the DOM tier nondeterministic.
 
 All PouchDB commands go through one `pouchOut` port. The payload is a JSON
 object with a `tag` field that `pouch.js` switches on. All PouchDB responses
@@ -1860,7 +1897,19 @@ unit is `Verify.Specs.TierGating` (the "Share a trip" create-row gate).
 **Adding a unit:** create `src/Verify/Specs/<Name>.elm` exposing `surface`,
 `results` (`= Runner.runUnit spec`), and an `honest` projection; append its
 `results` to `Verify.Registry.runAll`; attach `Contract.verifyAttrs "<Name>"` to
-the real view; map its fixtures to seed state in `Main.seedVerifyAuthState`.
+the real view; map its fixtures to seed state by adding a `"<Name>" ->` arm to
+**`Main.applyUnitSeed`**. (`seedVerifyAuthState` only builds the base
+`AuthState` and delegates to `applyUnitSeed` — all per-unit seeding lives
+there.) Every unit ships at least one fixture whose name starts with the
+literal `probe` (`MatrixTest.isProbeFixture` is `String.startsWith "probe"`),
+and it must FAIL.
+
+If a unit's view can render nothing (`Html.Extra.nothing` emits no element),
+hang `verifyAttrs` on an **always-rendered wrapper** and encode absence as a
+surface value (`reload = "absent"`, `enable-button = "absent"`). An absent host
+makes the DOM tier hang on its selector until timeout rather than fail fast —
+and assert it with `waitForSelector(..., { state: 'attached' })`, since an
+attribute-only wrapper has no box.
 
 > Scope: this verifies **client-side** behavior off pure state projections. It
 > does not replace genuine integration specs (real CouchDB sync, Resend email,
@@ -1884,4 +1933,4 @@ the real view; map its fixtures to seed state in `Main.seedVerifyAuthState`.
 | Add an extracted field to the OCR prompt | `src/Page/Scan.elm` `ocrSystemPrompt` (keep `server/scanDemo.js` `SYSTEM_PROMPT` byte-identical), `src/Data/Scan.elm` `OcrData` + `ocrDataDecoder` + `ocrDataEncoder`, and `Page.Scan.seedPending` to map it onto the form |
 | Add a new Worker endpoint | `server/<name>.js` exporting `register<Name>Routes(app)`; wire from `server/index.js`. Reuse `server/auth.js` for authenticateCaller / getTier / isPaidTier |
 | Change the Ledger map | `src/Helpers.elm` `encodeWaypoints` for the JSON wire shape; `src/main.js` `WaypointMap` for the Leaflet rendering |
-| Add a hermetic verification unit | `src/Verify/Specs/<Name>.elm` + append to `Verify.Registry.runAll`; attach `Verify.Contract.verifyAttrs` to the view; seed in `Main.seedVerifyAuthState`. See the "Verification" section above |
+| Add a hermetic verification unit | `src/Verify/Specs/<Name>.elm` + append to `Verify.Registry.runAll`; attach `Verify.Contract.verifyAttrs` to the view; seed in `Main.applyUnitSeed`. See the "Verification" section above |

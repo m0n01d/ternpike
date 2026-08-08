@@ -5,6 +5,7 @@ module UI.Button exposing
     , iconButton
     , primary
     , primaryBusy
+    , primaryDescribed
     , secondary
     , secondaryLink
     )
@@ -56,9 +57,20 @@ iconButton { icon, onClick, title } =
 
 primary : { label : String, onClick : msg } -> Html msg
 primary { label, onClick } =
+    primaryDescribed { ariaLabel = label, label = label, onClick = onClick }
+
+
+{-| `primary` with an explicit accessible name, for buttons whose visible
+label is meaningless out of context — a bare "Reload" reached by swipe says
+nothing about what is being reloaded. `primary` delegates here with
+`ariaLabel = label`, so there is one button implementation, not two.
+-}
+primaryDescribed : { ariaLabel : String, label : String, onClick : msg } -> Html msg
+primaryDescribed { ariaLabel, label, onClick } =
     Html.button
         [ Html.Attributes.type_ "button"
         , Html.Events.onClick onClick
+        , Html.Attributes.attribute "aria-label" ariaLabel
         , Html.Attributes.class "bg-rust hover:bg-rust-deep text-parchment font-mono uppercase tracking-widest text-sm px-6 py-3 rounded-lg border-none cursor-pointer"
         ]
         [ Html.text label ]

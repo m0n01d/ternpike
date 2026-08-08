@@ -68,6 +68,7 @@ import Data.SharedTrips
 import Data.StatsGranularity exposing (Granularity)
 import Data.StatsHover exposing (CumulativePoint, DailyDay, Hover, PricePoint)
 import Data.SubscriptionStatus exposing (SubscriptionStatus)
+import Data.SwUpdate
 import Data.Sync exposing (NetworkState, SyncState)
 import Data.Tier exposing (Tier)
 import Data.Trip exposing (Trip, TripField, TripForm)
@@ -234,6 +235,13 @@ Ephemeral UI:
     The Settings page renders an "Install app" button only when this
     is `True` — browsers that don't fire `beforeinstallprompt` (e.g.
     Safari) never see the button.
+  - `swUpdate` — `Data.SwUpdate.UpdateState`, driven by the
+    `swUpdateReady` port. `UpdateWaiting` renders the persistent "New
+    version available · Reload" bar
+    (`UI.Layout.viewUpdateToast`); `Applying` renders it busy while the
+    waiting service worker takes over. JS holds the waiting worker and
+    re-emits on every resume, so this converges even when the
+    notification first landed on the login screen (#477).
 
 Whenever fields here change, update `docs/architecture.md` per the
 project memo.
@@ -296,6 +304,7 @@ type alias AuthState =
     , storagePersisted : Bool
     , submitting : Bool
     , subscriptionStatus : Maybe SubscriptionStatus
+    , swUpdate : Data.SwUpdate.UpdateState
     , syncState : SyncState
     , tier : Tier
     , toast : Maybe String
@@ -485,6 +494,7 @@ handles them without any per-state no-ops leaking into `updateGuest`.
 type AuthMsg_
     = AddressChanged String
     | AmountChanged String
+    | ApplySwUpdate
     | BillingCheckoutClicked String
     | BillingCheckoutResult (Result Http.Billing.CheckoutFailure Http.Billing.CheckoutOk)
     | BillingPortalClicked
@@ -581,6 +591,7 @@ type AuthMsg_
     | SubmitInvite
     | SubmitShareTrip
     | SubmitTransfer
+    | SwUpdateReady Bool
     | TakeOverBilling SharedTripId
     | ToastExpired
     | ToggleDayIntensity
