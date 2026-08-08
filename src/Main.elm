@@ -232,6 +232,8 @@ toAuthState creds initialRoute gs =
     , openLedgerMenu = Nothing
     , postJoinPrompt = False
     , pwaInstalled = False
+    , pushConfigured = False
+    , pushError = Nothing
     , pushSubscribed = False
     , route = initialRoute
     , scanQueue = Dict.empty
@@ -2093,8 +2095,14 @@ applyUnitSeed unit fixture as_ =
                 input =
                     Verify.Specs.NotificationsPaywall.inputForFixture fixture
             in
+            -- `configured` normally arrives on the `notificationState` port,
+            -- which never fires on a `/verify` route (see the `isVerify` skip
+            -- in `src/main.js`). Seed it straight from the fixture so the DOM
+            -- tier is deterministic and needs no backend to answer.
             { as_
                 | notificationPermission = input.permission
+                , pushConfigured = input.configured
+                , pushError = input.error
                 , pushSubscribed = input.subscribed
                 , standalone = input.standalone
                 , tier =
@@ -4932,10 +4940,16 @@ updateAuth msg as_ =
 
         -- PWA notifications (foundation #175): the `Ports.notificationState`
         -- port reports the browser's permission state, the subscribe
-        -- flag, the standalone-PWA flag, and the persisted prefs blob
-        -- on every relevant event. We mirror all four into AuthState
-        -- here. Hydration via the JS handler + persistence via PouchDB
-        -- land in the downstream port-wiring + Settings issues.
+        -- flag, the standalone-PWA flag, whether the API serves a VAPID
+        -- public key, and the persisted prefs blob on every relevant
+        -- event. We mirror all five into AuthState here.
+        --
+        -- `configured` is API-sourced rather than build-time (#488 vs #490):
+        -- the build-time `VITE_VAPID_PUBLIC_KEY` stopped deciding whether
+        -- push can work the moment the subscribe path started asking the API
+        -- for the key, so gating the pane on it stranded staging — an empty
+        -- build-time value, a live server key, and a pane insisting push was
+        -- unavailable.
         NotificationStateChanged payload ->
             let
                 prefs =
@@ -4957,6 +4971,7 @@ updateAuth msg as_ =
                 { as_
                     | notificationPermission = Notifications.permissionFromString payload.permission
                     , notificationPrefs = prefs
+                    , pushConfigured = payload.configured
                     , pushSubscribed = payload.subscribed
                     , standalone = standalone
                 }
@@ -4970,11 +4985,26 @@ updateAuth msg as_ =
         SharedTripActivityNotified ->
             ( AuthModel as_, Cmd.none )
 
-        -- Server-route handling (storing the subscription server-side,
-        -- surfacing errors in the Settings UI) lands in later issues;
-        -- for now we mirror the `ok` flag into AuthState.
+        -- Both halves of the payload matter. Mirroring only `ok` (what this
+        -- did before) threw the reason away, so a denied permission, a
+        -- rejected `pushManager.subscribe`, a missing VAPID key, or a network
+        -- failure all rendered as an inert button and no feedback at all.
+        -- `pushError` carries the reason to the Settings pane; every JS
+        -- failure path in `subscribePush` supplies one, and the emptiness
+        -- guard keeps a malformed payload from rendering a blank line.
         PushSubscribeReceived payload ->
-            ( AuthModel { as_ | pushSubscribed = payload.ok }, Cmd.none )
+            ( AuthModel
+                { as_
+                    | pushError =
+                        if payload.ok || String.isEmpty payload.error then
+                            Nothing
+
+                        else
+                            Just payload.error
+                    , pushSubscribed = payload.ok
+                }
+            , Cmd.none
+            )
 
         -- Fired by the Settings UI's "Enable notifications" button. We
         -- emit `Ports.subscribePush` and let the JS handler request browser
@@ -4987,8 +5017,11 @@ updateAuth msg as_ =
         -- re-emits `Ports.notificationState` + `Ports.pushSubscribeResult` so
         -- `NotificationStateChanged` / `PushSubscribeReceived` update
         -- AuthState.
+        -- Clearing `pushError` here means a retry starts from a clean pane
+        -- rather than leaving the previous attempt's reason on screen next to
+        -- a button the user just tapped again.
         RequestPushPermission ->
-            ( AuthModel as_
+            ( AuthModel { as_ | pushError = Nothing }
             , Ports.subscribePush
                 { prefs = Notifications.encodePrefs as_.notificationPrefs
                 , vapidPublicKey = as_.config.vapidPublicKey

@@ -59,10 +59,13 @@ type alias Creds =
     See `Data.AnthropicKey` for the opaque type and wire-compatible codecs.
   - `backendUrl` — base URL for the auth server (`/auth/request-code`,
     `/auth/verify-code`, eventually `/me` and `/scan`).
-  - `vapidPublicKey` — the Web Push VAPID public key the JS handler
-    passes to `pushManager.subscribe()`. Empty string when not
-    configured (dev environments without VAPID set); the Settings
-    UI's "Enable notifications" path silently no-ops in that case.
+  - `vapidPublicKey` — build-time Web Push VAPID public key, now only a
+    **fallback**. The JS handler asks the API for the key it actually holds
+    (`GET /notifications/vapid-public-key`) and uses this value only when that
+    endpoint is unreachable. Staging never receives the build-time var at all,
+    so nothing user-facing may be gated on it — the Settings pane reads
+    `AuthState.pushConfigured`, which the `notificationState` port sources
+    from the API.
 
 -}
 type alias AppConfig =

@@ -350,6 +350,44 @@ port. `showInstallPrompt` is driven by the
 `beforeinstallprompt` (stashed JS-side), back to `False` after the
 user accepts/dismisses the prompt or after `appinstalled`. The
 Settings tab renders an "Install app" button only when it's `True`.
+The Settings → Notifications pane reads five `AuthState` fields:
+`notificationPermission : Data.Notifications.Permission`, `standalone :
+Data.Notifications.StandaloneState`, `pushSubscribed : Bool`, `pushConfigured :
+Bool`, and `pushError : Maybe String`. The first four come from the
+`notificationState` port; the fifth is set by `PushSubscribeReceived` when the
+JS handler reports `ok:false` (an empty `error` string collapses to `Nothing` so
+a malformed payload can't render a blank line) and cleared again by
+`RequestPushPermission` so a retry starts from a clean pane. Before `pushError`
+existed, `PushSubscribeReceived` read only `.ok`, so a denied permission, a
+rejected `pushManager.subscribe`, a missing VAPID key, or a network failure all
+rendered as an inert button and no feedback whatsoever.
+
+Which of the pane's seven branches renders is decided by the one pure function
+`Data.Notifications.panelState`, shared by `Pages.Settings.viewNotificationsBody`
+and `Verify.Specs.NotificationsPaywall.surface`. Alongside tier, permission,
+standalone, and subscribed it takes `configured` — `AuthState.pushConfigured`.
+A deployment whose API serves no VAPID public key cannot call
+`pushManager.subscribe` at all, so it renders `PanelNotConfigured` instead of a
+button; that branch ranks behind `PanelUnsupported` and `PanelUpgradeRequired`
+(facts about the browser and the account, true on every deployment) and ahead
+of everything else, which would otherwise send the user down a dead end.
+
+`pushConfigured` is deliberately **not** `AppConfig.vapidPublicKey /= ""`.
+It was, until the subscribe path started fetching the key from
+`GET /notifications/vapid-public-key` at subscribe time — after which the
+build-time value no longer decided anything, while still deciding the gate.
+Staging is built by GitHub Actions and never receives `VITE_VAPID_PUBLIC_KEY`,
+so the pane declared push unavailable on an environment where the API serves a
+key and push works. `src/main.js` now resolves the question once per page load
+(`fetchApiVapidPublicKey`, cached and shared with the subscribe handler) and
+ships the answer as `configured` on the boot-time `notificationState` event.
+An API that answers with an empty `publicKey` means genuinely-not-configured; an
+API that is unreachable (offline, or a deploy predating the endpoint) falls back
+to `Boolean(build-time key)` rather than wrongly claiming "not configured".
+`Main.applyUnitSeed` seeds `pushConfigured` per fixture — the port never fires
+on a `/verify` route — so the DOM tier needs no backend and does not depend on
+how the CI build was configured.
+
 `swUpdate : Data.SwUpdate.UpdateState` is the service-worker update
 lifecycle (`NoUpdate` / `UpdateWaiting` / `Applying`), fed by the
 `swUpdateReady` port and read by `UI.Layout.viewUpdateToast` (the

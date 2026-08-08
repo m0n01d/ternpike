@@ -716,58 +716,13 @@ import './elements/tp-amount.js'
     // after first paint, and the first reading can be transient.
     ;[0, 300, 1000, 2500].forEach((delay) => setTimeout(healViewport, delay))
 
-    // On-screen readout, STAGING ONLY. Four fixes have missed because every
-    // device report is a screenshot rather than a measurement, and asking for
-    // Web Inspector over USB is too much friction to actually happen. This
-    // paints the numbers into the corner so a screenshot IS the measurement.
-    // Attached to <html>, not <body>, because Elm owns body's children and
-    // would clobber it on the next render.
-    const onStaging =
-      /^staging-/.test(window.location.host) ||
-      String(__BACKEND_URL__).includes('staging')
-
-    if (onStaging) {
-      const hud = document.createElement('div')
-      hud.setAttribute(
-        'style',
-        'position:fixed;top:calc(env(safe-area-inset-top) + 60px);left:0;'+
-          'z-index:2147483647;pointer-events:none;' +
-          'font:9px ui-monospace,monospace;line-height:1.25;white-space:pre;' +
-          'background:rgba(0,0,0,.72);color:#7dd88f;padding:3px 5px;' +
-          'border-bottom-right-radius:5px;max-width:60vw',
-      )
-      document.documentElement.appendChild(hud)
-      // Resolve a CSS viewport unit to px, so we can see whether lvh/dvh/svh
-      // agree with innerHeight or with the stuck visualViewport reading.
-      const probeEl = document.createElement('div')
-      probeEl.setAttribute('style', 'position:absolute;top:-9999px;width:1px')
-      document.documentElement.appendChild(probeEl)
-      const probe = (n, unit) => {
-        probeEl.style.height = `${n}${unit}`
-        return Math.round(probeEl.getBoundingClientRect().height)
-      }
-
-      const paintHud = () => {
-        const vv = window.visualViewport
-        const nav = document.querySelector('nav')
-        hud.textContent = [
-          `inner ${window.innerHeight}  vv ${vv ? Math.round(vv.height) : '-'}`,
-          `vvTop ${vv ? Math.round(vv.offsetTop) : '-'}  scale ${vv ? vv.scale.toFixed(2) : '-'}`,
-          `client ${document.documentElement.clientHeight}  outer ${window.outerHeight}`,
-          `screen ${window.screen.height}  avail ${window.screen.availHeight}`,
-          `lvh ${probe(100, 'lvh')}  dvh ${probe(100, 'dvh')}  svh ${probe(100, 'svh')}`,
-          `short ${shortfall()}`,
-          `navBottom ${nav ? Math.round(nav.getBoundingClientRect().bottom) : '-'}`,
-        ].join('\n')
-      }
-      setInterval(paintHud, 500)
-      paintHud()
-    }
-
-    // Diagnostic for Safari Web Inspector (Mac → connected iPhone → console):
-    // `__ternpikeViewport()`. Reports the two heights whose disagreement IS
-    // the bug, plus where the nav actually rendered, so a device report can be
-    // a measurement instead of a screenshot.
+    // Console diagnostic, kept after the on-screen HUD was removed. Run
+    // `__ternpikeViewport()` from Safari Web Inspector (Mac → connected
+    // iPhone) if bottom chrome ever looks misplaced again. The reading that
+    // solved this the first time was `visualViewport` disagreeing with
+    // everything else while the nav sat at exactly `innerHeight - vvTop`;
+    // this returns both halves of that comparison plus the nav's real rect.
+    // Costs nothing until called — no element, no timer.
     window.__ternpikeViewport = () => {
       const vv = window.visualViewport
       const nav = document.querySelector('nav')
@@ -1239,13 +1194,55 @@ import './elements/tp-amount.js'
     'PushManager' in window &&
     'serviceWorker' in navigator
 
+  // Cached answer from `GET /notifications/vapid-public-key`, shared by the
+  // boot-time `configured` probe and the subscribe handler so the key is
+  // fetched once per page load rather than once per consumer.
+  //
+  //   undefined -> the API has not answered yet, or the last attempt failed
+  //                (network error / non-2xx, e.g. an API deploy that predates
+  //                the endpoint). Callers retry.
+  //   ''        -> the API answered and this deployment genuinely has no key.
+  //   '<key>'   -> the API answered with its public key.
+  //
+  // The undefined-vs-'' distinction is the whole point: "unreachable" and
+  // "server has no key" must not collapse into the same answer, because only
+  // the second one means push really cannot work here.
+  let apiVapidPublicKey
+
+  async function fetchApiVapidPublicKey() {
+    if (typeof apiVapidPublicKey === 'string') return apiVapidPublicKey
+    try {
+      const resp = await fetch(`${__BACKEND_URL__}/notifications/vapid-public-key`)
+      if (resp.ok) apiVapidPublicKey = (await resp.json()).publicKey || ''
+      else console.warn('[notifications] vapid key endpoint returned', resp.status)
+    } catch (err) {
+      console.warn('[notifications] vapid key fetch failed:', err)
+    }
+    return apiVapidPublicKey
+  }
+
+  // Is push actually configured where it matters — on the server that holds
+  // the private half of the keypair? Not "did this build receive a
+  // VITE_VAPID_PUBLIC_KEY", which is the question the Settings pane used to
+  // ask and which staging always answered "no" to while push worked fine.
+  //
+  // Fallback when the API is unreachable: `Boolean(build-time key)`. An
+  // offline boot, or an API deploy older than the endpoint, must not make the
+  // pane claim "not configured" — that state is reserved for an API that
+  // answered and told us it has no key.
+  async function pushConfigured() {
+    const key = await fetchApiVapidPublicKey()
+    return key === undefined ? Boolean(flags.vapidPublicKey) : key !== ''
+  }
+
   // Read the current per-device subscription (if any) and the persisted
   // server-side prefs, then emit a single `notificationState` event so
   // Elm hydrates `notificationPermission`, `notificationPrefs`,
-  // `pushSubscribed`, and `standalone` from frame zero.
+  // `pushConfigured`, `pushSubscribed`, and `standalone` from frame zero.
   async function emitNotificationState() {
     if (!notificationsSupported) {
       app.ports.notificationState.send({
+        configured: await pushConfigured(),
         permission: 'unsupported',
         prefs: { weeklyScanReminder: false },
         standalone: false,
@@ -1253,6 +1250,7 @@ import './elements/tp-amount.js'
       })
       return
     }
+    const configured = await pushConfigured()
     const standalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       window.navigator.standalone === true
@@ -1327,7 +1325,7 @@ import './elements/tp-amount.js'
         }
       }
     }
-    app.ports.notificationState.send({ permission, prefs, standalone, subscribed })
+    app.ports.notificationState.send({ configured, permission, prefs, standalone, subscribed })
   }
 
   // Fire-and-forget initial emit. The await chain is internal — we
@@ -1338,10 +1336,33 @@ import './elements/tp-amount.js'
 
   if (notificationsSupported && app.ports.subscribePush) {
     app.ports.subscribePush.subscribe(async ({ prefs, vapidPublicKey }) => {
-      if (!vapidPublicKey) {
+      // Ask the API for ITS public key rather than trusting a build-time one.
+      //
+      // The keypair's private half is a Worker secret set per environment;
+      // the public half used to arrive as a Vite env var. Those two can drift,
+      // and did: staging is the only deployment built by GitHub Actions rather
+      // than Cloudflare Workers Builds, so it never received the var at all —
+      // empty key, and `subscribePush` bailed below before ever prompting, so
+      // "Enable notifications" looked completely dead.
+      //
+      // Hardcoding a per-environment value only moves the failure: a key that
+      // doesn't match the environment's private half subscribes successfully
+      // and then fails at SEND time, with nothing surfaced at subscribe time.
+      // Sourcing it from the API that holds the private half makes a mismatch
+      // structurally impossible. The build-time value stays as a fallback for
+      // when the endpoint is unreachable (offline, or an older API deploy).
+      //
+      // Shares `fetchApiVapidPublicKey`'s cache with the boot-time
+      // `configured` probe, so the key is fetched once per page load rather
+      // than again on every tap.
+      let key = await fetchApiVapidPublicKey()
+      if (!key) key = vapidPublicKey || ''
+
+      if (!key) {
         app.ports.pushSubscribeResult.send({
           ok: false,
-          error: 'VAPID public key not configured',
+          error:
+            'Push isn\'t configured for this environment — the server has no VAPID key.',
         })
         return
       }
@@ -1368,7 +1389,7 @@ import './elements/tp-amount.js'
       try {
         const reg = await navigator.serviceWorker.ready
         const sub = await reg.pushManager.subscribe({
-          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+          applicationServerKey: urlBase64ToUint8Array(key),
           userVisibleOnly: true,
         })
         const auth = basicAuthHeader()

@@ -1,5 +1,74 @@
 # Alaska Expense Tracker — Claude Notes
 
+## Rule zero: do not guess
+
+**Never ship a change you cannot verify, and never present a hypothesis as a fix.**
+This is the most expensive failure mode in this repo. Every violation costs a
+deploy, a device test, and the owner's time — and one of them actively caused
+the bug it was written to fix.
+
+A change is a **guess** if any of these is true:
+
+- It cannot be reproduced or verified in this environment (iOS-standalone
+  layout, service-worker lifecycle, native pickers, real push delivery — none
+  of these reproduce in headless Chromium, so CI green proves nothing about
+  them).
+- It rests on an assumption about runtime state that has not been *measured*.
+- It contradicts something the repo owner has stated about their own setup.
+  What they tell you is data. Do not overrule it with an assumption.
+
+When you would otherwise guess, do one of these three instead:
+
+1. **Measure.** Add an instrument, not a fix. A staging-only readout, a logged
+   value, an endpoint that reports the real state. One measurement beats five
+   attempts and is far cheaper than either.
+2. **Remove the dependency.** If a value can't be trusted, stop consuming it
+   rather than trying to correct it. If two things can drift, make drift
+   structurally impossible instead of adding another sync step.
+3. **Ask one precise question** — or say plainly that you don't know. "I can't
+   verify this from here, here's the one thing I need" is a complete and
+   acceptable answer.
+
+If you do ship something unverified because there is genuinely no alternative,
+**label it a hypothesis in the PR title and body, and say what evidence would
+falsify it.** Do not describe it as a fix.
+
+### Before merging two related PRs, check whether they interact
+
+Rule zero covers unverified *changes*. This covers unverified *combinations*.
+
+If two open PRs touch the same feature, read the one line where they meet
+before merging the second. Not the diffs — the actual decision point they
+share.
+
+#488 hid the notifications button when `configured` was false, computed from
+the build-time `vapidPublicKey`. #490 then moved that key to a runtime fetch
+*because the build-time value was unreliable*. Merged minutes apart, each green
+on its own, they produced a pane insisting push "isn't configured" on an
+environment where the API was serving a perfectly good key — so the owner
+couldn't even attempt it. Opening `Pages.Settings.notificationsInput` before
+the second merge would have taken seconds.
+
+Green CI on each PR says nothing about the pair: neither diff was wrong, their
+combination was.
+
+### Receipts
+
+- **The floating bottom nav took six attempts.** Five tried to correct the
+  layout viewport, all on the unmeasured assumption that it was the thing stuck
+  short. #480 went further and trusted `visualViewport` as ground truth: it
+  computed a +308px offset and *became* the misplacement it was meant to fix,
+  reaching `main` untested. The on-device HUD then took **one screenshot** to
+  show that only `visualViewport` was corrupt (566 vs a healthy 874 everywhere
+  else) and that the trigger was the photo picker, not the keyboard. The
+  instrument should have been attempt one.
+- **The staging VAPID key.** The owner said plainly that staging had its own
+  keypair. #489 hardcoded production's public key anyway. A mismatched key is
+  *worse* than a missing one — `subscribe()` succeeds and only the eventual
+  send fails, with nothing surfaced at subscribe time. The fix was to stop
+  baking a key at all and serve it from the API that holds the private half.
+
+
 ## Shared conventions
 
 Workspace-wide conventions (language choice, ReScript rules, `resq`, sub-agent orchestration, PR rules) live in the private repo [`m0n01d/claude-conventions`](https://github.com/m0n01d/claude-conventions). On the Mac they auto-load via `~/code/CLAUDE.md`; **a cloud sandbox does not see them** — fetch before starting work:

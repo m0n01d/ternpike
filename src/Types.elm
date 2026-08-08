@@ -287,6 +287,8 @@ type alias AuthState =
     , openLedgerMenu : Maybe ExpenseId
     , postJoinPrompt : Bool
     , pwaInstalled : Bool
+    , pushConfigured : Bool
+    , pushError : Maybe String
     , pushSubscribed : Bool
     , route : Route
     , scanQueue : Dict String ScanItem
@@ -549,7 +551,7 @@ type AuthMsg_
     | MerchantChanged String
     | MoveEntry Expense TripId
     | NoteChanged String
-    | NotificationStateChanged { permission : String, prefs : Json.Decode.Value, standalone : Bool, subscribed : Bool }
+    | NotificationStateChanged { configured : Bool, permission : String, prefs : Json.Decode.Value, standalone : Bool, subscribed : Bool }
     | OpenEditTripForm Trip
     | OpenInviteCrewModal SharedTripId
     | OpenInviteModal SharedTripId

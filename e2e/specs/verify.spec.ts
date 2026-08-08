@@ -73,6 +73,34 @@ test.describe('Verify DOM tier', () => {
     await expect(el).toHaveAttribute('data-verify-upgrade-copy', 'osprey')
   })
 
+  test('no VAPID key on the server → no enable button, and it says so', async ({ page }) => {
+    // When the API reports no VAPID public key, tapping Enable could never
+    // succeed. Offering the button anyway is the "does nothing" bug.
+    await page.goto('/verify/NotificationsPaywall/unconfigured')
+    await page.waitForSelector('[data-verify-unit="NotificationsPaywall"]')
+    const el = page.locator('[data-verify-unit="NotificationsPaywall"]')
+    await expect(el).toHaveAttribute('data-verify-panel', 'unconfigured')
+    await expect(el).toHaveAttribute('data-verify-enable-button', 'absent')
+    await expect(page.getByRole('button', { name: 'Enable notifications' })).toHaveCount(0)
+    await expect(page.getByText(/aren't configured on the server/)).toBeVisible()
+  })
+
+  test('a failed subscribe shows its reason next to the button', async ({ page }) => {
+    // The regression this guards: PushSubscribeReceived used to read only
+    // `.ok` and drop `.error`, so every failure rendered as silence.
+    await page.goto('/verify/NotificationsPaywall/subscribe-error')
+    await page.waitForSelector('[data-verify-unit="NotificationsPaywall"]')
+    const el = page.locator('[data-verify-unit="NotificationsPaywall"]')
+    await expect(el).toHaveAttribute('data-verify-panel', 'enable')
+    await expect(el).toHaveAttribute(
+      'data-verify-error',
+      'Registration failed - push service error',
+    )
+    await expect(
+      page.getByText("Couldn't enable notifications: Registration failed - push service error"),
+    ).toBeVisible()
+  })
+
   test('unsupported browser → no enable button', async ({ page }) => {
     await page.goto('/verify/NotificationsPaywall/unsupported')
     await page.waitForSelector('[data-verify-unit="NotificationsPaywall"]')
