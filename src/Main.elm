@@ -232,6 +232,7 @@ toAuthState creds initialRoute gs =
     , openLedgerMenu = Nothing
     , postJoinPrompt = False
     , pwaInstalled = False
+    , pushError = Nothing
     , pushSubscribed = False
     , route = initialRoute
     , scanQueue = Dict.empty
@@ -2092,9 +2093,27 @@ applyUnitSeed unit fixture as_ =
                 input : Verify.Specs.NotificationsPaywall.Input
                 input =
                     Verify.Specs.NotificationsPaywall.inputForFixture fixture
+
+                -- `configured` is read off the real `AppConfig`, which on a
+                -- local or CI build has no VITE_VAPID_PUBLIC_KEY at all. Seed
+                -- it from the fixture so the DOM tier is deterministic
+                -- regardless of the environment it was built in.
+                seedConfig : AppConfig
+                seedConfig =
+                    { anthropicKey = as_.config.anthropicKey
+                    , backendUrl = as_.config.backendUrl
+                    , vapidPublicKey =
+                        if input.configured then
+                            "verify-fixture-vapid-public-key"
+
+                        else
+                            ""
+                    }
             in
             { as_
-                | notificationPermission = input.permission
+                | config = seedConfig
+                , notificationPermission = input.permission
+                , pushError = input.error
                 , pushSubscribed = input.subscribed
                 , standalone = input.standalone
                 , tier =
@@ -4970,11 +4989,26 @@ updateAuth msg as_ =
         SharedTripActivityNotified ->
             ( AuthModel as_, Cmd.none )
 
-        -- Server-route handling (storing the subscription server-side,
-        -- surfacing errors in the Settings UI) lands in later issues;
-        -- for now we mirror the `ok` flag into AuthState.
+        -- Both halves of the payload matter. Mirroring only `ok` (what this
+        -- did before) threw the reason away, so a denied permission, a
+        -- rejected `pushManager.subscribe`, a missing VAPID key, or a network
+        -- failure all rendered as an inert button and no feedback at all.
+        -- `pushError` carries the reason to the Settings pane; every JS
+        -- failure path in `subscribePush` supplies one, and the emptiness
+        -- guard keeps a malformed payload from rendering a blank line.
         PushSubscribeReceived payload ->
-            ( AuthModel { as_ | pushSubscribed = payload.ok }, Cmd.none )
+            ( AuthModel
+                { as_
+                    | pushError =
+                        if payload.ok || String.isEmpty payload.error then
+                            Nothing
+
+                        else
+                            Just payload.error
+                    , pushSubscribed = payload.ok
+                }
+            , Cmd.none
+            )
 
         -- Fired by the Settings UI's "Enable notifications" button. We
         -- emit `Ports.subscribePush` and let the JS handler request browser
@@ -4987,8 +5021,11 @@ updateAuth msg as_ =
         -- re-emits `Ports.notificationState` + `Ports.pushSubscribeResult` so
         -- `NotificationStateChanged` / `PushSubscribeReceived` update
         -- AuthState.
+        -- Clearing `pushError` here means a retry starts from a clean pane
+        -- rather than leaving the previous attempt's reason on screen next to
+        -- a button the user just tapped again.
         RequestPushPermission ->
-            ( AuthModel as_
+            ( AuthModel { as_ | pushError = Nothing }
             , Ports.subscribePush
                 { prefs = Notifications.encodePrefs as_.notificationPrefs
                 , vapidPublicKey = as_.config.vapidPublicKey

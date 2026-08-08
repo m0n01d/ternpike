@@ -158,6 +158,8 @@ drift.
 
   - `PanelUnsupported` — the browser has no Notification API.
   - `PanelUpgradeRequired` — free tier; show the upgrade prompt + disabled button.
+  - `PanelNotConfigured` — this build ships no VAPID public key, so no
+    subscription can ever be created here; say so instead of offering a button.
   - `PanelNeedsInstall` — paid but running in a browser tab, not the installed PWA.
   - `PanelBlocked` — permission denied; show re-enable instructions.
   - `PanelSubscribed` — granted and subscribed; show the per-pref toggle rows.
@@ -168,6 +170,7 @@ type PanelState
     = PanelBlocked
     | PanelCanEnable
     | PanelNeedsInstall
+    | PanelNotConfigured
     | PanelSubscribed
     | PanelUnsupported
     | PanelUpgradeRequired
@@ -176,38 +179,72 @@ type PanelState
 {-| Decide which notifications-panel branch applies. Mirrors the precedence in
 `Pages.Settings.viewNotificationsBody` exactly.
 
-    panelState { isPaid = False, permission = Granted, standalone = Standalone, subscribed = False }
+`configured` is "this build has a VAPID public key" (`AppConfig.vapidPublicKey`
+is non-empty). Without one, `pushManager.subscribe` cannot be called at all.
+
+    panelState { configured = True, isPaid = False, permission = Granted, standalone = Standalone, subscribed = False }
     --> PanelUpgradeRequired
 
-    panelState { isPaid = True, permission = Granted, standalone = Standalone, subscribed = True }
+    panelState { configured = True, isPaid = True, permission = Granted, standalone = Standalone, subscribed = True }
     --> PanelSubscribed
 
-    panelState { isPaid = True, permission = Default, standalone = InBrowser, subscribed = False }
+    panelState { configured = True, isPaid = True, permission = Default, standalone = InBrowser, subscribed = False }
     --> PanelNeedsInstall
 
-    panelState { isPaid = True, permission = Denied, standalone = Standalone, subscribed = False }
+    panelState { configured = True, isPaid = True, permission = Denied, standalone = Standalone, subscribed = False }
     --> PanelBlocked
 
-    panelState { isPaid = True, permission = Default, standalone = Standalone, subscribed = False }
+    panelState { configured = True, isPaid = True, permission = Default, standalone = Standalone, subscribed = False }
     --> PanelCanEnable
 
-    panelState { isPaid = True, permission = Unsupported, standalone = Standalone, subscribed = True }
+    panelState { configured = True, isPaid = True, permission = Unsupported, standalone = Standalone, subscribed = True }
     --> PanelUnsupported
+
+    panelState { configured = False, isPaid = True, permission = Default, standalone = Standalone, subscribed = False }
+    --> PanelNotConfigured
+
+An unconfigured build still defers to the browser and the tier:
+
+    panelState { configured = False, isPaid = True, permission = Unsupported, standalone = Standalone, subscribed = False }
+    --> PanelUnsupported
+
+    panelState { configured = False, isPaid = False, permission = Default, standalone = Standalone, subscribed = False }
+    --> PanelUpgradeRequired
 
 -}
 panelState :
-    { isPaid : Bool
-    , permission : Permission
-    , standalone : StandaloneState
-    , subscribed : Bool
+    { a
+        | configured : Bool
+        , isPaid : Bool
+        , permission : Permission
+        , standalone : StandaloneState
+        , subscribed : Bool
     }
     -> PanelState
-panelState { isPaid, permission, standalone, subscribed } =
+panelState { configured, isPaid, permission, standalone, subscribed } =
     if permission == Unsupported then
         PanelUnsupported
 
     else if not isPaid then
         PanelUpgradeRequired
+
+    else if not configured then
+        -- Ranked third — behind the browser check and the tier check, ahead of
+        -- everything below it. `PanelUnsupported` and `PanelUpgradeRequired`
+        -- are facts about the user's browser and account that hold on every
+        -- build, so they still win. But an unconfigured build cannot mint a
+        -- subscription at all, which makes every state BELOW this one a dead
+        -- end: `PanelNeedsInstall` would send the user through
+        -- Add-to-Home-Screen for nothing, `PanelBlocked` would send them into
+        -- iOS Settings for nothing, and `PanelCanEnable` would offer a button
+        -- whose only possible outcome is the error this PR now surfaces.
+        -- Telling them the environment can't do it is the honest answer.
+        --
+        -- The one branch it can mask is `PanelSubscribed`. That needs a live
+        -- subscription minted by an earlier, configured deploy — and push
+        -- subscriptions are per-origin, so an origin that has never shipped a
+        -- key has none to mask. Acceptable.
+        PanelNotConfigured
 
     else if standalone == InBrowser then
         PanelNeedsInstall

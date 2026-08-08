@@ -350,6 +350,30 @@ port. `showInstallPrompt` is driven by the
 `beforeinstallprompt` (stashed JS-side), back to `False` after the
 user accepts/dismisses the prompt or after `appinstalled`. The
 Settings tab renders an "Install app" button only when it's `True`.
+The Settings → Notifications pane reads four `AuthState` fields:
+`notificationPermission : Data.Notifications.Permission`, `standalone :
+Data.Notifications.StandaloneState`, `pushSubscribed : Bool`, and `pushError :
+Maybe String`. The first three come from the `notificationState` port; the
+fourth is set by `PushSubscribeReceived` when the JS handler reports `ok:false`
+(an empty `error` string collapses to `Nothing` so a malformed payload can't
+render a blank line) and cleared again by `RequestPushPermission` so a retry
+starts from a clean pane. Before `pushError` existed, `PushSubscribeReceived`
+read only `.ok`, so a denied permission, a rejected `pushManager.subscribe`, a
+missing VAPID key, or a network failure all rendered as an inert button and no
+feedback whatsoever.
+
+Which of the pane's seven branches renders is decided by the one pure function
+`Data.Notifications.panelState`, shared by `Pages.Settings.viewNotificationsBody`
+and `Verify.Specs.NotificationsPaywall.surface`. Alongside tier, permission,
+standalone, and subscribed it takes `configured` — `AppConfig.vapidPublicKey /=
+""`. A build with no key cannot call `pushManager.subscribe` at all, so it
+renders `PanelNotConfigured` instead of a button; that branch ranks behind
+`PanelUnsupported` and `PanelUpgradeRequired` (facts about the browser and the
+account, true on every build) and ahead of everything else, which would
+otherwise send the user down a dead end. `Main.applyUnitSeed` seeds a synthetic
+`vapidPublicKey` per fixture so the DOM tier does not depend on whether the CI
+build had `VITE_VAPID_PUBLIC_KEY` set.
+
 `swUpdate : Data.SwUpdate.UpdateState` is the service-worker update
 lifecycle (`NoUpdate` / `UpdateWaiting` / `Applying`), fed by the
 `swUpdateReady` port and read by `UI.Layout.viewUpdateToast` (the
