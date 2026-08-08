@@ -701,13 +701,30 @@ import './elements/tp-amount.js'
     const syncViewportOffset = () => {
       const vv = window.visualViewport
       if (!vv) return
-      const offset =
+      // SIGN MATTERS, and the first version had it backwards. Measured on
+      // device (iOS 26.5.2, standalone, no keyboard up):
+      //
+      //     inner 874   vv 566   vvTop 0   scale 1.00   navBottom 566
+      //
+      // The LAYOUT viewport was healthy at 874; the VISUAL viewport was the
+      // one stuck — 308px short, a phantom keyboard that had long since
+      // closed. The original formula read that as "the layout viewport
+      // overhangs the visible area", computed +308px, and shoved the nav up
+      // by exactly that. It caused the very misplacement it was meant to fix.
+      //
+      // Only ever push the bar DOWN, never up. A negative result means the
+      // layout viewport really is short and the bar would otherwise float
+      // above the screen edge — the case worth correcting. A positive result
+      // means `visualViewport` is reporting smaller than the layout viewport,
+      // which is either a real keyboard or a stuck reading; in both cases the
+      // bar belongs at the layout bottom, so clamp to 0 and leave it alone.
+      const raw =
         keyboardLikelyOpen() || (vv.scale && Math.abs(vv.scale - 1) > 0.01)
           ? 0
           : Math.round(window.innerHeight - vv.offsetTop - vv.height)
       document.documentElement.style.setProperty(
         '--vv-bottom-offset',
-        `${offset < 0 ? 0 : offset}px`,
+        `${Math.min(0, raw)}px`,
       )
     }
 
@@ -743,19 +760,32 @@ import './elements/tp-amount.js'
       const hud = document.createElement('div')
       hud.setAttribute(
         'style',
-        'position:fixed;top:0;left:0;z-index:2147483647;pointer-events:none;' +
+        'position:fixed;top:calc(env(safe-area-inset-top) + 60px);left:0;'+
+          'z-index:2147483647;pointer-events:none;' +
           'font:9px ui-monospace,monospace;line-height:1.25;white-space:pre;' +
           'background:rgba(0,0,0,.72);color:#7dd88f;padding:3px 5px;' +
           'border-bottom-right-radius:5px;max-width:60vw',
       )
       document.documentElement.appendChild(hud)
+      // Resolve a CSS viewport unit to px, so we can see whether lvh/dvh/svh
+      // agree with innerHeight or with the stuck visualViewport reading.
+      const probeEl = document.createElement('div')
+      probeEl.setAttribute('style', 'position:absolute;top:-9999px;width:1px')
+      document.documentElement.appendChild(probeEl)
+      const probe = (n, unit) => {
+        probeEl.style.height = `${n}${unit}`
+        return Math.round(probeEl.getBoundingClientRect().height)
+      }
+
       const paintHud = () => {
         const vv = window.visualViewport
         const nav = document.querySelector('nav')
         hud.textContent = [
           `inner ${window.innerHeight}  vv ${vv ? Math.round(vv.height) : '-'}`,
           `vvTop ${vv ? Math.round(vv.offsetTop) : '-'}  scale ${vv ? vv.scale.toFixed(2) : '-'}`,
-          `client ${document.documentElement.clientHeight}  screen ${window.screen.height}`,
+          `client ${document.documentElement.clientHeight}  outer ${window.outerHeight}`,
+          `screen ${window.screen.height}  avail ${window.screen.availHeight}`,
+          `lvh ${probe(100, 'lvh')}  dvh ${probe(100, 'dvh')}  svh ${probe(100, 'svh')}`,
           `short ${shortfall()}  offset ${getComputedStyle(document.documentElement).getPropertyValue('--vv-bottom-offset').trim() || '0px'}`,
           `navBottom ${nav ? Math.round(nav.getBoundingClientRect().bottom) : '-'}`,
         ].join('\n')
