@@ -108,6 +108,7 @@ import Data.SharedTripId
 import Data.SharedTripUi as SharedTripUi
 import Data.SharedTrips as SharedTrips
 import Data.StatsHover as StatsHover
+import Data.SwUpdate as SwUpdate
 import Data.Sync exposing (NetworkState(..), SyncState(..))
 import Data.Tier as Tier exposing (Tier)
 import Data.Trip as Trip exposing (Trip, TripField(..))
@@ -168,6 +169,7 @@ import Verify.Specs.MilepostScreen
 import Verify.Specs.NotificationsPaywall
 import Verify.Specs.ScanQueueCard
 import Verify.Specs.SharedTripCard
+import Verify.Specs.UpdateToast
 
 
 
@@ -247,6 +249,7 @@ toAuthState creds initialRoute gs =
     , storagePersisted = False
     , submitting = False
     , subscriptionStatus = creds.subscriptionStatus
+    , swUpdate = SwUpdate.NoUpdate
     , syncState = NotEnabled
     , tier = creds.tier
     , toast = Nothing
@@ -2165,6 +2168,22 @@ applyUnitSeed unit fixture as_ =
         "SharedTripCard" ->
             { as_ | sharedTrips = Verify.Specs.SharedTripCard.seededTrips fixture }
 
+        "UpdateToast" ->
+            let
+                input : Verify.Specs.UpdateToast.Input
+                input =
+                    Verify.Specs.UpdateToast.inputForFixture fixture
+            in
+            { as_
+                | swUpdate = input.swUpdate
+                , toast =
+                    if input.toastPresent then
+                        Just "Link copied"
+
+                    else
+                        Nothing
+            }
+
         "TierGating" ->
             -- The tier gate on shared-trip CREATION now lives in the new-trip
             -- form's "+ New shared trip" target (UI.TripFormModal), not in
@@ -3797,6 +3816,9 @@ updateAuth msg as_ =
         SetStatsGranularity g ->
             ( AuthModel { as_ | statsGranularity = Just g }, Cmd.none )
 
+        SwUpdateReady ready ->
+            ( AuthModel { as_ | swUpdate = SwUpdate.applyReady ready as_.swUpdate }, Cmd.none )
+
         ToastExpired ->
             ( AuthModel { as_ | toast = Nothing }, Cmd.none )
 
@@ -4522,6 +4544,12 @@ updateAuth msg as_ =
                         )
                     , Cmd.none
                     )
+
+        ApplySwUpdate ->
+            -- The JS side is defensive: no waiting worker → immediate reload,
+            -- and a ~4s fallback if `controllerchange` never arrives. So
+            -- `Applying` is always transient, never a stuck busy button.
+            ( AuthModel { as_ | swUpdate = SwUpdate.Applying }, Ports.applySwUpdate () )
 
         BillingCheckoutClicked plan ->
             ( AuthModel { as_ | billingCheckout = RemoteData.Loading }
@@ -5440,7 +5468,13 @@ viewAuth as_ =
                 RouteVerifyIndex ->
                     { actions = [], body = viewVerifyDashboard as_.basePath, hero = Html.Extra.nothing }
     in
-    Html.div []
+    -- `group` is the anchor for the update bar's keyboard suppression: in
+    -- standalone iOS the software keyboard shrinks the layout viewport, which
+    -- lifts a `fixed bottom-…` element up over the form fields. The bar has no
+    -- dismiss control, so `group-has-[input:focus]:hidden` (and friends, in
+    -- `UI.Layout.viewUpdateToast`) is what keeps it from parking itself over
+    -- the Add form while the user types.
+    Html.div [ Html.Attributes.class "group" ]
         [ UI.Layout.viewHeader as_
         , UI.Layout.viewOfflineBanner (Data.Sync.isOffline as_.network)
         , UI.Layout.viewErrorBanner as_.error
@@ -5468,7 +5502,8 @@ viewAuth as_ =
         , Pages.Settings.SharedTrips.viewModal as_
         , UI.ShareModal.view as_
         , UI.TripFormModal.view as_
-        , UI.Layout.viewToast as_.toast
+        , UI.Layout.viewToast as_
+        , UI.Layout.viewUpdateToast as_
         , UI.MilepostToast.view as_
         ]
 
@@ -5550,6 +5585,7 @@ main =
                     , Ports.scanQueueLoaded (AuthMsg << ScanQueueLoaded)
                     , Ports.scanItemSaved (AuthMsg << ScanItemSaved)
                     , Ports.storageStatus (AuthMsg << StorageStatusReceived)
+                    , Ports.swUpdateReady (AuthMsg << SwUpdateReady)
                     , Ports.nativeShareResult (AuthMsg << ShareResultReceived)
                     ]
         , update = update
