@@ -12,6 +12,7 @@ module Data.Scan exposing
     , captureRoute
     , cardState
     , currentSchemaVersion
+    , dedupeParsedReceipts
     , effectiveLocation
     , hostedFailureKind
     , idsWithExpectedExpense
@@ -343,6 +344,76 @@ mergeOcrIntoDraft draft ocr =
     , note = Maybe.Extra.or draft.note ocr.note
     , paymentMethod = Maybe.Extra.or draft.paymentMethod ocr.paymentMethod
     }
+
+
+{-| Collapse parsed OCR results that describe the same physical receipt.
+
+The OCR prompt asks for "every receipt visible", and on a photo of a
+single receipt the model sometimes returns that receipt twice (or reads
+one region two ways). Fanning those out through the multi-receipt split
+shows the user the same receipt twice for review. Two results count as
+the same receipt when they are structurally identical, or when they
+agree on a real (non-`Nothing`) amount plus the merchant and date. Two
+results that differ with unreadable amounts are both kept — they may be
+genuinely different receipts the model half-read.
+
+Order is preserved; the first of a duplicate pair wins.
+
+    import Data.Money as Money
+
+    blank : OcrData
+    blank =
+        { address = Nothing, amount = Nothing, category = Nothing, currency = Nothing, date = Nothing, fuelDetail = Nothing, longNote = Nothing, merchant = Nothing, note = Nothing, paymentMethod = Nothing }
+
+    -- The same receipt read twice collapses to one.
+    dedupeParsedReceipts
+        [ { blank | amount = Just (Money.fromCents 3568), merchant = Just "Denali Diner" }
+        , { blank | amount = Just (Money.fromCents 3568), merchant = Just "Denali Diner", note = Just "2ppl Lunch" }
+        ]
+        |> List.length
+    --> 1
+
+    -- Different receipts survive.
+    dedupeParsedReceipts
+        [ { blank | amount = Just (Money.fromCents 3568), merchant = Just "Denali Diner" }
+        , { blank | amount = Just (Money.fromCents 1200), merchant = Just "Denali Diner" }
+        ]
+        |> List.length
+    --> 2
+
+    -- Unreadable amounts never collapse distinct results…
+    dedupeParsedReceipts [ { blank | merchant = Just "A" }, { blank | merchant = Just "B" } ]
+        |> List.length
+    --> 2
+
+    -- …but structurally identical results still do.
+    dedupeParsedReceipts [ blank, blank ]
+        |> List.length
+    --> 1
+
+-}
+dedupeParsedReceipts : List OcrData -> List OcrData
+dedupeParsedReceipts results =
+    let
+        sameReceipt : OcrData -> OcrData -> Bool
+        sameReceipt a b =
+            (a == b)
+                || ((a.amount /= Nothing)
+                        && (a.amount == b.amount)
+                        && (a.merchant == b.merchant)
+                        && (a.date == b.date)
+                   )
+    in
+    List.foldl
+        (\candidate kept ->
+            if List.any (sameReceipt candidate) kept then
+                kept
+
+            else
+                kept ++ [ candidate ]
+        )
+        []
+        results
 
 
 {-| Project the scan item's EXIF + geocode phases into the
