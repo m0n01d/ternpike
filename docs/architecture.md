@@ -470,7 +470,7 @@ to `… -> Page.Scan.Model -> ( Page.Scan.Model, Effect )`. Two changes, one pur
   `NoUnused.CustomTypeConstructors` requires): `Batch (List Effect)`,
   `DeleteScanItem String` (remove one durable row — multi-receipt split source
   + `ClearDoneItems`, #374), `ExtractExifGps`, `FetchFileUrl File`,
-  `Geocode Creds itemId address`,
+  `Geocode { address, backendUrl, creds, itemId }`,
   `MakeOcrCall { backendUrl, body, itemId, path }`,
   `MintIdsThen String (List OcrData)` (run `Time.now` so a multi-receipt split
   can mint durable child ids from real capture millis → `GotMintedScanIds`,

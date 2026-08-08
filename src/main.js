@@ -296,9 +296,11 @@ import './elements/tp-amount.js'
   const flags = {
     authCreds:      authCreds,
     anthropicKey:   anthropicKey  || '',
-    // Overridable so a local app can drive the staging Worker
-    // (see docs/key-rotation.md §8): VITE_BACKEND_URL=https://ternpike-auth-staging.<subdomain>.workers.dev
-    backendUrl:     import.meta.env.VITE_BACKEND_URL || 'https://api.ternpike.com',
+    // Resolved at build time in `vite.config.js` — the single place an API
+    // hostname is allowed to appear. `VITE_BACKEND_URL` still overrides it
+    // (see docs/key-rotation.md §8 / `npm run dev:staging`), and CI branch
+    // builds other than `main` bake staging.
+    backendUrl:     __BACKEND_URL__,
     basePath:       import.meta.env.BASE_URL,
     colorScheme:    localStorage.getItem('color_scheme') || 'auto',
     demoMode:       isDemo,
