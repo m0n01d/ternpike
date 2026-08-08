@@ -251,6 +251,61 @@ wrangler secret put TIER_WEBHOOK_SECRET --env staging   # openssl rand -hex 32
 # TURNSTILE_SECRET_KEY: skip — dead code.
 ```
 
+**2b. Give the CLIENT build the VAPID public key.** This step is easy to miss
+and fails silently.
+
+A VAPID keypair installs in **two different places**, and `wrangler secret put`
+only covers one of them:
+
+| Half | Where it goes | Used for |
+|---|---|---|
+| `VAPID_PRIVATE_KEY` (+ `VAPID_PUBLIC_KEY`) | Worker secret, above | **sending** a push |
+| `VITE_VAPID_PUBLIC_KEY` | baked into the **client bundle** at build time | **subscribing** in the browser |
+
+Setting only the Worker secrets leaves the browser with an empty
+`applicationServerKey`. `subscribePush` in `src/main.js` then bails *before*
+prompting, so Settings → "Enable notifications" looks completely dead — no iOS
+permission sheet, nothing. That is exactly what happened after the first
+staging bring-up.
+
+A VAPID *public* key ships inside the client bundle by definition, so it is
+**not confidential** and does not need secret handling. Two ways to supply it,
+in preference order:
+
+**Option A — bake it into `build:staging` (preferred).** Same treatment
+`VITE_BACKEND_URL` already gets, so the staging build is self-contained and a
+local `npm run deploy:staging` behaves identically to CI:
+
+```jsonc
+// package.json
+"build:staging": "rescript build && VITE_BACKEND_URL=https://ternpike-auth-staging.dwightdoane.workers.dev VITE_VAPID_PUBLIC_KEY=<staging public key> vite build",
+```
+
+**Option B — a repo variable.** Add `VITE_VAPID_PUBLIC_KEY_STAGING` under
+Settings → Secrets and variables → Actions → **Variables** (not Secrets), then
+add to the `env:` block of `.github/workflows/deploy-staging.yml`:
+
+```yaml
+  VITE_VAPID_PUBLIC_KEY: ${{ vars.VITE_VAPID_PUBLIC_KEY_STAGING }}
+```
+
+Note that editing anything under `.github/workflows/` needs a token with
+`workflow` scope — an agent without it cannot make this change for you, which
+is a point in Option A's favour.
+
+Either way, verify the key actually landed — a missing build-time env var is
+invisible in the deploy log:
+
+```bash
+curl -s https://staging-ternpike.dwightdoane.workers.dev/ \
+  | grep -o '/assets/index\.[a-z0-9]*\.js' | head -1        # find the bundle
+curl -s https://staging-ternpike.dwightdoane.workers.dev/assets/index.<sha>.js \
+  | grep -o 'vapidPublicKey:`[^`]*`'                          # must NOT be empty
+```
+
+Production gets its copy from a Cloudflare Workers Builds env var configured in
+the dashboard, which is why prod worked while a CI-built staging did not.
+
 **3. Deploy staging:**
 
 ```bash
