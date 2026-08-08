@@ -1,0 +1,54 @@
+# Auto-deploy the staging bed on every push to the `staging` branch.
+#
+# Deploys BOTH staging Workers (nothing here can touch prod):
+#   • staging-ternpike        — the app, built with the staging API baked in
+#                               (root `npm run deploy:staging`)
+#   • ternpike-auth-staging   — the API (`server` `npm run deploy:staging`;
+#                               routes/crons pinned empty in wrangler.toml)
+#
+# Requires one repo secret: CLOUDFLARE_API_TOKEN (template "Edit Cloudflare
+# Workers"). Until it's set, runs fail harmlessly at the deploy step.
+# See docs/key-rotation.md §8.
+
+name: Deploy staging
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: c1dc70a9a8f8883b7339b5053a805f53
+
+jobs:
+  deploy-app:
+    name: App (staging-ternpike)
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'm0n01d'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run deploy:staging
+
+  deploy-api:
+    name: API (ternpike-auth-staging)
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'm0n01d'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --prefix server
+      - run: npm run deploy:staging --prefix server

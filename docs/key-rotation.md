@@ -299,6 +299,17 @@ without localhost:
 - Local alternative: `npm run dev:staging` (dev server on localhost:3000
   against the staging API).
 
+**Branch-based auto-deploy:** every push to the `staging` branch deploys both
+staging Workers via `.github/workflows/deploy-staging.yml` (the one exception
+to "no deploy credentials in CI" — the token can only reach the staging bed's
+Workers by construction of the npm scripts it runs, and prod deploys remain
+manual). One-time setup: create a Cloudflare API token (dashboard → My Profile
+→ API Tokens → template **"Edit Cloudflare Workers"**, scope it to this
+account) and store it as the repo secret `CLOUDFLARE_API_TOKEN`
+(`gh secret set CLOUDFLARE_API_TOKEN`). Flow: merge work into `staging`, push,
+log in at the staging app URL a minute later; merge to `main` + manual deploy
+when it's ready for prod.
+
 ### Verify / list staging secrets
 
 ```bash
