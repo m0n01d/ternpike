@@ -81,6 +81,30 @@ async function readJsonBody(c) {
 }
 
 export function registerNotificationRoutes(app) {
+  // GET /notifications/vapid-public-key
+  //
+  // Hands the caller THIS deployment's VAPID public key, so the browser
+  // subscribes against the same keypair this Worker will later sign pushes
+  // with. Unauthenticated on purpose: the public half is transmitted to the
+  // push service on every `pushManager.subscribe()` and is embedded in the
+  // client bundle wherever it is baked at build time — it is public by
+  // construction, not a secret.
+  //
+  // Exists because build-time injection could not keep the halves together.
+  // The private half is a Worker secret set per environment; the public half
+  // was a Vite env var, and staging is the one deployment built by GitHub
+  // Actions rather than Cloudflare Workers Builds, so it never received one.
+  // The result was an empty key and a dead "Enable notifications" button.
+  // Hardcoding a key per environment only moves the problem: a value that
+  // does not match the environment's private key still subscribes fine and
+  // then fails at SEND time, which is far harder to trace. Serving it from
+  // the API that owns the private half makes the two structurally
+  // inseparable.
+  app.get('/notifications/vapid-public-key', (c) => {
+    const publicKey = c.env.VAPID_PUBLIC_KEY || ''
+    return c.json({ ok: Boolean(publicKey), publicKey })
+  })
+
   // POST /notifications/subscribe
   //
   // Register (or re-register) a device's push subscription. Body:

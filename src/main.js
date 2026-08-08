@@ -1293,10 +1293,35 @@ import './elements/tp-amount.js'
 
   if (notificationsSupported && app.ports.subscribePush) {
     app.ports.subscribePush.subscribe(async ({ prefs, vapidPublicKey }) => {
-      if (!vapidPublicKey) {
+      // Ask the API for ITS public key rather than trusting a build-time one.
+      //
+      // The keypair's private half is a Worker secret set per environment;
+      // the public half used to arrive as a Vite env var. Those two can drift,
+      // and did: staging is the only deployment built by GitHub Actions rather
+      // than Cloudflare Workers Builds, so it never received the var at all —
+      // empty key, and `subscribePush` bailed below before ever prompting, so
+      // "Enable notifications" looked completely dead.
+      //
+      // Hardcoding a per-environment value only moves the failure: a key that
+      // doesn't match the environment's private half subscribes successfully
+      // and then fails at SEND time, with nothing surfaced at subscribe time.
+      // Sourcing it from the API that holds the private half makes a mismatch
+      // structurally impossible. The build-time value stays as a fallback for
+      // when the endpoint is unreachable (offline, or an older API deploy).
+      let key = ''
+      try {
+        const resp = await fetch(`${__BACKEND_URL__}/notifications/vapid-public-key`)
+        if (resp.ok) key = (await resp.json()).publicKey || ''
+      } catch (err) {
+        console.warn('[notifications] vapid key fetch failed, using build-time value:', err)
+      }
+      if (!key) key = vapidPublicKey || ''
+
+      if (!key) {
         app.ports.pushSubscribeResult.send({
           ok: false,
-          error: 'VAPID public key not configured',
+          error:
+            'Push isn\'t configured for this environment — the server has no VAPID key.',
         })
         return
       }
@@ -1323,7 +1348,7 @@ import './elements/tp-amount.js'
       try {
         const reg = await navigator.serviceWorker.ready
         const sub = await reg.pushManager.subscribe({
-          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+          applicationServerKey: urlBase64ToUint8Array(key),
           userVisibleOnly: true,
         })
         const auth = basicAuthHeader()
