@@ -31,6 +31,32 @@ import Html.Attributes
 import Time
 
 
+{-| Render a calendar date as ISO **local** midnight, not a bare `YYYY-MM-DD`.
+
+A `DateField` is a calendar day with no instant attached — "the 9th" means
+the 9th wherever the traveler is standing. But per ECMA-262, a bare
+date-only string is parsed as **UTC** midnight, while a date-_time_ string
+with no offset is parsed as local. `<relative-time>` then formats in the
+device zone, so `"2026-06-09"` renders as "Jun 8" for every user west of
+Greenwich — a receipt dated the 9th filed under the 8th in Idaho.
+
+Appending `T00:00:00` moves the parse into local time, so the rendered day
+is always the day that was stored.
+
+    -- with the bare date, in America/Denver:  "Jun 8"   ✗
+    -- with T00:00:00,     in America/Denver:  "Jun 9"   ✓
+
+
+
+Only `DateField` needs this. `dateOf` / `timeOf` take a `Time.Posix`, which
+is a real instant and correctly zone-converted already.
+
+-}
+localMidnight : DateField -> String
+localMidnight df =
+    DateField.toIso df ++ "T00:00:00"
+
+
 {-| Long absolute shape — "May 21, 2024" in en-US, locale-adapted elsewhere.
 
 Replaces `Html.text (DateField.formatDisplay df)` on the DOM-render path.
@@ -44,7 +70,7 @@ string is the documented way to suppress it.
 short : DateField -> Html msg
 short df =
     Html.node "relative-time"
-        [ Html.Attributes.attribute "datetime" (DateField.toIso df)
+        [ Html.Attributes.attribute "datetime" (localMidnight df)
         , Html.Attributes.attribute "format" "datetime"
         , Html.Attributes.attribute "weekday" ""
         , Html.Attributes.attribute "day" "numeric"
@@ -67,7 +93,7 @@ behavior is suppressed — this helper is the canonical month+day shape.
 monthDay : DateField -> Html msg
 monthDay df =
     Html.node "relative-time"
-        [ Html.Attributes.attribute "datetime" (DateField.toIso df)
+        [ Html.Attributes.attribute "datetime" (localMidnight df)
         , Html.Attributes.attribute "format" "datetime"
         , Html.Attributes.attribute "weekday" ""
         , Html.Attributes.attribute "day" "numeric"

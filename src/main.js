@@ -621,9 +621,34 @@ import './elements/tp-amount.js'
       return !!el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)
     }
 
+    // How short is the layout viewport right now?
+    //
+    // The original detector compared `innerHeight` against a running max
+    // seeded at page load — which cannot fire when the app BOOTS into the
+    // stuck state (relaunched from a suspended standalone app). The baseline
+    // is then the broken value, the delta is 0, and the heal never runs. That
+    // is exactly the state reported on device: nav parked mid-screen, at rest,
+    // from first paint.
+    //
+    // `visualViewport.height` is an absolute reference that needs no history:
+    // it is what the user can actually SEE. When the layout viewport is stuck
+    // short, the page still paints into the full visual viewport, so
+    // `visualViewport.height` exceeds `innerHeight` — that gap IS the bug, and
+    // it is measurable on the first frame. The running max stays as a
+    // secondary signal for browsers without `visualViewport`.
+    const shortfall = () => {
+      const vv = window.visualViewport
+      const byHistory = maxVH - window.innerHeight
+      if (!vv) return byHistory
+      // A pinch-zoomed viewport legitimately reports a smaller height; don't
+      // read that as the bug.
+      if (vv.scale && Math.abs(vv.scale - 1) > 0.01) return 0
+      return Math.max(byHistory, vv.height - window.innerHeight)
+    }
+
     const healViewport = () => {
       if (keyboardLikelyOpen()) return
-      if (maxVH - window.innerHeight <= 4) return
+      if (shortfall() <= 4) return
       const y = window.scrollY
       document.body.style.display = 'none'
       void document.body.offsetHeight
@@ -655,6 +680,35 @@ import './elements/tp-amount.js'
       if (!document.hidden) healSoon()
     })
     window.addEventListener('pageshow', healSoon)
+
+    // Heal at BOOT, not only on later events. A standalone app relaunched
+    // from a suspended state can paint its first frame already stuck, and
+    // every listener above is change-driven — so without this the app just
+    // sits broken until the user happens to open and dismiss a keyboard.
+    // Retried a few times because iOS reports the settled viewport a beat
+    // after first paint, and the first reading can be transient.
+    ;[0, 300, 1000, 2500].forEach((delay) => setTimeout(healViewport, delay))
+
+    // Diagnostic for Safari Web Inspector (Mac → connected iPhone → console):
+    // `__ternpikeViewport()`. Reports the two heights whose disagreement IS
+    // the bug, plus where the nav actually rendered, so a device report can be
+    // a measurement instead of a screenshot.
+    window.__ternpikeViewport = () => {
+      const vv = window.visualViewport
+      const nav = document.querySelector('nav')
+      return {
+        innerHeight: window.innerHeight,
+        visualViewportHeight: vv ? vv.height : null,
+        visualViewportOffsetTop: vv ? vv.offsetTop : null,
+        visualViewportScale: vv ? vv.scale : null,
+        clientHeight: document.documentElement.clientHeight,
+        screenHeight: window.screen.height,
+        maxVHSeen: maxVH,
+        shortfall: shortfall(),
+        navBottom: nav ? Math.round(nav.getBoundingClientRect().bottom) : null,
+        standalone: runningStandalone,
+      }
+    }
   }
 
   // Token-expiry logout: drop creds but LEAVE the durable scan queue intact
