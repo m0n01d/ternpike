@@ -33,6 +33,25 @@ If you do ship something unverified because there is genuinely no alternative,
 **label it a hypothesis in the PR title and body, and say what evidence would
 falsify it.** Do not describe it as a fix.
 
+### Before merging two related PRs, check whether they interact
+
+Rule zero covers unverified *changes*. This covers unverified *combinations*.
+
+If two open PRs touch the same feature, read the one line where they meet
+before merging the second. Not the diffs — the actual decision point they
+share.
+
+#488 hid the notifications button when `configured` was false, computed from
+the build-time `vapidPublicKey`. #490 then moved that key to a runtime fetch
+*because the build-time value was unreliable*. Merged minutes apart, each green
+on its own, they produced a pane insisting push "isn't configured" on an
+environment where the API was serving a perfectly good key — so the owner
+couldn't even attempt it. Opening `Pages.Settings.notificationsInput` before
+the second merge would have taken seconds.
+
+Green CI on each PR says nothing about the pair: neither diff was wrong, their
+combination was.
+
 ### Receipts
 
 - **The floating bottom nav took six attempts.** Five tried to correct the
