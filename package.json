@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "concurrently -n res,vite,api -c yellow,blue,magenta \"rescript watch\" \"vite\" \"npm --prefix server run dev\"",
     "dev:vite": "rescript build && vite",
+    "dev:staging": "rescript build && VITE_BACKEND_URL=https://ternpike-auth-staging.dwightdoane.workers.dev vite",
     "dev:server": "npm --prefix server run dev",
     "res:build": "rescript build",
     "res:clean": "rescript clean",

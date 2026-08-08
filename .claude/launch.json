@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "ternpike-staging",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:staging"],
+      "port": 3000
+    },
+    {
       "name": "alaska-tracker",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "3000"],
