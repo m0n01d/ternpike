@@ -3,14 +3,23 @@ module Verify.Specs.UpdateToast exposing (Input, honest, surface, inputForFixtur
 {-| Verification unit for the "New version available" update bar (#477).
 
 Covers every branch of `UI.Layout.viewUpdateToast` plus the one interaction it
-has with the ordinary toast: the two are both `fixed` bottom-anchored bars, and
-if they ever share an offset the persistent update bar hides every ordinary
+has with the ordinary toast: the two share the bottom-anchored stack, and if
+they ever occupy the same slot the persistent update bar hides every ordinary
 toast ("Link copied", share errors, ~10 `toastFor` sites) for the rest of the
 session. Both the view and this surface read the slot decision from
 `Data.SwUpdate.isShowing`, so neither can re-derive it independently.
 
 `corrupt = True` models exactly that regression — the ordinary toast failing to
 shift up while the update bar is on screen.
+
+The two bars are ordinary flow children of `UI.Layout.viewBottomStack`, so the
+"lower"/"upper" this surface reports is now which ROW of that bottom-anchored
+column each bar occupies, not a `bottom-[calc(…)]` offset each carries. The
+slot names, the fixtures, and the invariant are unchanged: "lower" is still
+"directly on the nav" and "upper" is still "one row up". Flow makes the probe's
+regression unreachable in the real view rather than merely guarded against —
+that is a strengthening, and the probe stays because the surface (which is what
+`slotsAreDistinct` reads) can still express it.
 
 @docs Input, honest, surface, inputForFixture, results
 
