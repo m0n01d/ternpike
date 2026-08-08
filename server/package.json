@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "build": "node --check index.js && node --check qr.js && node --check qrPdf.js && node --check qrSvg.js && node --check sharedTrips.js && node --check scan.js && node --check notifications.js && node --check geocode.js && node --check rates.js && node --check inviteFunnel.js && node --check admin.js && node --check auth.js && node --check billing.js && node --check billingWebhook.js && node --check jwt.js && node --check users.js && node --check trailblazerSlots.js",
-    "dev": "wrangler dev --port 4000",
-    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --config wrangler.toml --port 4000",
+    "deploy": "wrangler deploy --config wrangler.toml",
+    "deploy:staging": "wrangler deploy --config wrangler.toml --env staging",
     "test": "node --test --test-concurrency=1 'test/**/*.spec.js'",
     "test:server": "node --test --test-concurrency=1 'test/**/*.spec.js'"
   },
@@ -17,6 +18,6 @@
     "resend": "^4.0.0"
   },
   "devDependencies": {
-    "wrangler": "^3.90.0"
+    "wrangler": "^4.120.0"
   }
 }

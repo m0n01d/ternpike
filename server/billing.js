@@ -31,6 +31,7 @@ const VALID_PLANS = new Set(['osprey_monthly', 'osprey_yearly', 'trailblazer'])
 const ALLOWED_ORIGINS = new Set([
   'http://localhost:3000',
   'https://app.ternpike.com',
+  'https://staging-ternpike.dwightdoane.workers.dev',
 ])
 
 const TRAILBLAZER_CHECKOUT_EXPIRES_SECONDS = 29 * 60
