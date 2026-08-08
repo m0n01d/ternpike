@@ -92,7 +92,7 @@ port subscribePush : { prefs : Json.Decode.Value, vapidPublicKey : String } -> C
 port unsubscribePush : () -> Cmd msg
 
 
-port notificationState : ({ permission : String, prefs : Json.Decode.Value, standalone : Bool, subscribed : Bool } -> msg) -> Sub msg
+port notificationState : ({ configured : Bool, permission : String, prefs : Json.Decode.Value, standalone : Bool, subscribed : Bool } -> msg) -> Sub msg
 
 
 port pushSubscribeResult : ({ error : String, ok : Bool } -> msg) -> Sub msg

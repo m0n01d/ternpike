@@ -232,6 +232,7 @@ toAuthState creds initialRoute gs =
     , openLedgerMenu = Nothing
     , postJoinPrompt = False
     , pwaInstalled = False
+    , pushConfigured = False
     , pushError = Nothing
     , pushSubscribed = False
     , route = initialRoute
@@ -2093,26 +2094,14 @@ applyUnitSeed unit fixture as_ =
                 input : Verify.Specs.NotificationsPaywall.Input
                 input =
                     Verify.Specs.NotificationsPaywall.inputForFixture fixture
-
-                -- `configured` is read off the real `AppConfig`, which on a
-                -- local or CI build has no VITE_VAPID_PUBLIC_KEY at all. Seed
-                -- it from the fixture so the DOM tier is deterministic
-                -- regardless of the environment it was built in.
-                seedConfig : AppConfig
-                seedConfig =
-                    { anthropicKey = as_.config.anthropicKey
-                    , backendUrl = as_.config.backendUrl
-                    , vapidPublicKey =
-                        if input.configured then
-                            "verify-fixture-vapid-public-key"
-
-                        else
-                            ""
-                    }
             in
+            -- `configured` normally arrives on the `notificationState` port,
+            -- which never fires on a `/verify` route (see the `isVerify` skip
+            -- in `src/main.js`). Seed it straight from the fixture so the DOM
+            -- tier is deterministic and needs no backend to answer.
             { as_
-                | config = seedConfig
-                , notificationPermission = input.permission
+                | notificationPermission = input.permission
+                , pushConfigured = input.configured
                 , pushError = input.error
                 , pushSubscribed = input.subscribed
                 , standalone = input.standalone
@@ -4951,10 +4940,16 @@ updateAuth msg as_ =
 
         -- PWA notifications (foundation #175): the `Ports.notificationState`
         -- port reports the browser's permission state, the subscribe
-        -- flag, the standalone-PWA flag, and the persisted prefs blob
-        -- on every relevant event. We mirror all four into AuthState
-        -- here. Hydration via the JS handler + persistence via PouchDB
-        -- land in the downstream port-wiring + Settings issues.
+        -- flag, the standalone-PWA flag, whether the API serves a VAPID
+        -- public key, and the persisted prefs blob on every relevant
+        -- event. We mirror all five into AuthState here.
+        --
+        -- `configured` is API-sourced rather than build-time (#488 vs #490):
+        -- the build-time `VITE_VAPID_PUBLIC_KEY` stopped deciding whether
+        -- push can work the moment the subscribe path started asking the API
+        -- for the key, so gating the pane on it stranded staging — an empty
+        -- build-time value, a live server key, and a pane insisting push was
+        -- unavailable.
         NotificationStateChanged payload ->
             let
                 prefs =
@@ -4976,6 +4971,7 @@ updateAuth msg as_ =
                 { as_
                     | notificationPermission = Notifications.permissionFromString payload.permission
                     , notificationPrefs = prefs
+                    , pushConfigured = payload.configured
                     , pushSubscribed = payload.subscribed
                     , standalone = standalone
                 }
