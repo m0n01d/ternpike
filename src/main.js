@@ -682,10 +682,13 @@ import './elements/tp-amount.js'
     window.addEventListener('pageshow', healSoon)
 
     // The `--vv-bottom-offset` writer that used to live here is GONE, and so
-    // is the `position: fixed` bottom nav it existed to reposition. Both the
-    // nav and the two bottom bars are now laid out inside the app-shell flex
-    // column (`Main.view`), so nothing in the app resolves its position
-    // against `visualViewport` and there is no offset left to compute.
+    // is the `position: fixed` bottom nav it existed to reposition. The nav
+    // and both bottom bars now ride one `position: sticky` wrapper
+    // (`UI.Layout.viewBottomStack`), so nothing in the app resolves its
+    // position against `visualViewport` and there is no offset left to
+    // compute. Sticky resolves against the SCROLLPORT — which is the document
+    // again, and which reads the healthy 874 below — rather than against the
+    // one number iOS corrupts.
     //
     // Why the whole approach was abandoned, from the device measurement that
     // settled it (iOS 26.5.2, standalone, right after the photo picker

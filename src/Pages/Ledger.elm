@@ -437,12 +437,20 @@ viewDayTotal currency total =
 
 viewDayKicker : Maybe Entry.Band -> Int -> DateField -> Html Msg
 viewDayKicker maybeBand dayN date =
-    -- `top-0`, not `top-14`. The 56px used to clear the app header, because
-    -- the sticky context was the body scroll and the header floated over it.
-    -- The scroller is now the content row of the app shell, which starts
-    -- BELOW the header — 56px there would strand the day kicker in mid-air
-    -- with rows scrolling visibly behind the gap.
-    Html.div [ Html.Attributes.class "sticky top-0 z-[9] bg-parchment dark:bg-cream border-t border-tan/40 -mx-5 px-5 py-3 flex items-center gap-3" ]
+    -- Offset by the app header's FULL height, because the scrollport is the
+    -- document again and `UI.Layout.viewHeader` is `sticky top-0` floating over
+    -- it. `top-0` here (#483, correct while an inner div was the scroller and
+    -- started below the header) would slide the kicker under the header.
+    --
+    -- The value is the header's own height expression, not the `top-14` literal
+    -- that preceded #483: the header is
+    -- `h-[calc(env(safe-area-inset-top)+3.5rem)]`, so on a notched device
+    -- `top-14` was 56px against a taller header and left the kicker partly
+    -- buried. Identical to `top-14` wherever the inset is 0.
+    -- `UI.Layout.viewOfflineBanner` already sticks at this same expression.
+    --
+    -- `z-[9]` stays below the header's `z-10` so it slides under, not over.
+    Html.div [ Html.Attributes.class "sticky top-[calc(env(safe-area-inset-top)+3.5rem)] z-[9] bg-parchment dark:bg-cream border-t border-tan/40 -mx-5 px-5 py-3 flex items-center gap-3" ]
         [ Html.span
             [ Html.Attributes.class "text-xs font-mono uppercase tracking-widest text-rust" ]
             [ Html.text ("DAY " ++ String.fromInt dayN) ]
