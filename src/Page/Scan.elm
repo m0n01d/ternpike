@@ -192,9 +192,23 @@ update msg as_ =
                     -- No scannable path (free tier, no BYO key): land in
                     -- `ScanReady` so the user fills the form by hand. Same
                     -- as today's online `Unscannable` behavior; no OCR.
+                    -- Record WHY on `ocrError` — without it the card's
+                    -- failure state reads "OCR failed" even though OCR
+                    -- never ran, which sends the user (and the developer)
+                    -- hunting for a scan failure that doesn't exist.
                     let
                         updatedQueue =
-                            Dict.update itemId (Maybe.map (\i -> { i | imageUrl = dataUrl, status = ScanReady })) as_.scanQueue
+                            Dict.update itemId
+                                (Maybe.map
+                                    (\i ->
+                                        { i
+                                            | imageUrl = dataUrl
+                                            , ocrError = Just "Automatic scanning isn't set up on this device — add your Anthropic key in Settings, or upgrade for hosted scanning. The photo is saved; fill in the details by hand."
+                                            , status = ScanReady
+                                        }
+                                    )
+                                )
+                                as_.scanQueue
                     in
                     ( { as_ | scanQueue = updatedQueue }
                     , exifEffect
@@ -368,7 +382,9 @@ update msg as_ =
                     -- Source cleared / submitted while `Time.now` was in
                     -- flight — nothing to split. Drop the source row anyway
                     -- (idempotent delete) so no orphan can resurface.
-                    ( as_, Effect.DeleteScanItem itemId )
+                    ( { as_ | scanTombstones = Set.insert itemId as_.scanTombstones }
+                    , Effect.DeleteScanItem itemId
+                    )
 
                 Just source ->
                     let
@@ -435,6 +451,13 @@ update msg as_ =
                     ( { as_
                         | scanQueue = newQueue
                         , scanSeq = as_.scanSeq + List.length results
+
+                        -- Tombstone the consumed source (the invariant
+                        -- `mergeHydratedQueue` documents): a `getAll`
+                        -- snapshot taken before the durable delete lands
+                        -- must not rehydrate the source next to child 0 —
+                        -- that's the same receipt twice in the review queue.
+                        , scanTombstones = Set.insert itemId as_.scanTombstones
                       }
                     , Batch (Effect.DeleteScanItem itemId :: persistEffects)
                     )
@@ -1085,11 +1108,24 @@ cases stay inline here.
 
 -}
 finishOcr : String -> OcrOutcome -> Model -> ( Model, Effect )
-finishOcr itemId outcome as_ =
+finishOcr itemId rawOutcome as_ =
     let
         inFlightCleared : Set.Set String
         inFlightCleared =
             Set.remove itemId as_.ocrInFlight
+
+        -- The model sometimes returns the same receipt twice for a photo of
+        -- one receipt; collapsing duplicates BEFORE branching means a
+        -- "multi" of two identical reads takes the single-receipt path (same
+        -- item id, no split) instead of fanning out twin review cards.
+        outcome : OcrOutcome
+        outcome =
+            case rawOutcome of
+                OcrSucceeded results ->
+                    OcrSucceeded (Scan.dedupeParsedReceipts results)
+
+                OcrFailed _ _ ->
+                    rawOutcome
     in
     case outcome of
         OcrSucceeded ((_ :: _ :: _) as multi) ->

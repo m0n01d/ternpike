@@ -588,6 +588,75 @@ import './elements/tp-amount.js'
     })
   }
 
+  // ── iOS standalone viewport heal (floating bottom-nav fix) ─────────────
+  //
+  // In the installed (standalone) iOS web app, opening the software keyboard
+  // shrinks the layout viewport — and iOS sometimes never grows it back after
+  // the keyboard closes (observed through iOS 26.x). `window.innerHeight`
+  // stays stuck at the shrunken value, so every `position: fixed` element
+  // (the bottom nav) anchors to a phantom viewport bottom a keyboard-height
+  // up the screen, and the `sticky` header drifts the same way. The only
+  // user-side cure is force-quitting the app.
+  //
+  // The heal: remember the tallest innerHeight seen for the current
+  // orientation; whenever the viewport is stuck short of it while no input
+  // is focused (keyboard closed), force a full re-layout by toggling
+  // `display` on <body> for one frame so WebKit re-measures the viewport and
+  // snaps fixed/sticky elements back to the real screen edges. <body>'s own
+  // style attribute is not managed by Elm (Browser.application patches only
+  // its children), so the toggle can't fight the virtual DOM.
+  const runningStandalone =
+    window.navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+  const onIosDevice =
+    typeof window.navigator.standalone !== 'undefined' ||
+    (/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.MSStream)
+
+  if (runningStandalone && onIosDevice) {
+    let maxVH = window.innerHeight
+    let baseVW = window.innerWidth
+
+    const keyboardLikelyOpen = () => {
+      const el = document.activeElement
+      return !!el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)
+    }
+
+    const healViewport = () => {
+      if (keyboardLikelyOpen()) return
+      if (maxVH - window.innerHeight <= 4) return
+      const y = window.scrollY
+      document.body.style.display = 'none'
+      void document.body.offsetHeight
+      document.body.style.display = ''
+      window.scrollTo(0, y)
+    }
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth !== baseVW) {
+        // Rotation: re-baseline instead of "healing" toward the other
+        // orientation's taller height.
+        baseVW = window.innerWidth
+        maxVH = window.innerHeight
+        return
+      }
+      maxVH = Math.max(maxVH, window.innerHeight)
+    })
+
+    // Keyboard dismissal lands as a focusout and the viewport settles a beat
+    // later; keyboard animations report on visualViewport first. Returning
+    // from the camera / app switcher (visibilitychange, pageshow) can land in
+    // the stuck state too.
+    const healSoon = () => setTimeout(healViewport, 250)
+    document.addEventListener('focusout', healSoon)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', healSoon)
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) healSoon()
+    })
+    window.addEventListener('pageshow', healSoon)
+  }
+
   // Token-expiry logout: drop creds but LEAVE the durable scan queue intact
   // (#371) — an unsent receipt captured offline must survive a 401 so it's
   // still there after the user re-authenticates.
