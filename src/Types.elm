@@ -287,6 +287,7 @@ type alias AuthState =
     , openLedgerMenu : Maybe ExpenseId
     , postJoinPrompt : Bool
     , pwaInstalled : Bool
+    , pushError : Maybe String
     , pushSubscribed : Bool
     , route : Route
     , scanQueue : Dict String ScanItem

@@ -316,35 +316,71 @@ viewShareSection =
         ]
 
 
+{-| The key-free projection of `AuthState` that both the notifications panel
+and its verification surface read. One helper so the two can't disagree about
+what they're looking at.
+
+`configured` is the build's VAPID public key being non-empty: without one,
+`pushManager.subscribe` cannot be called, so no amount of tapping can produce
+a subscription.
+
+-}
+notificationsInput :
+    AuthState
+    ->
+        { configured : Bool
+        , error : Maybe String
+        , isPaid : Bool
+        , permission : Notifications.Permission
+        , standalone : Notifications.StandaloneState
+        , subscribed : Bool
+        }
+notificationsInput as_ =
+    { configured = as_.config.vapidPublicKey /= ""
+    , error = as_.pushError
+    , isPaid = Tier.isPaid as_.tier
+    , permission = as_.notificationPermission
+    , standalone = as_.standalone
+    , subscribed = as_.pushSubscribed
+    }
+
+
 viewNotificationsSection : AuthState -> Html Msg
 viewNotificationsSection as_ =
     Html.div
         (Verify.Contract.verifyAttrs "NotificationsPaywall"
             (Verify.Specs.NotificationsPaywall.surface
-                (Verify.Specs.NotificationsPaywall.honest
-                    { isPaid = Tier.isPaid as_.tier
-                    , permission = as_.notificationPermission
-                    , standalone = as_.standalone
-                    , subscribed = as_.pushSubscribed
-                    }
-                )
+                (Verify.Specs.NotificationsPaywall.honest (notificationsInput as_))
             )
         )
         [ UI.Rule.kicker "NOTIFICATIONS"
-        , UI.Card.subCard (viewNotificationsBody as_)
+        , UI.Card.subCard (viewNotificationsBody as_ ++ viewPushError as_.pushError)
         ]
+
+
+{-| The reason the last subscribe attempt failed, rendered in the pane itself
+rather than as a toast — the complaint this fixes is "I tapped Enable and
+nothing appeared," so the feedback has to live where the button is and stay
+there. Appended after the panel body so it sits directly below the button in
+the `PanelCanEnable` branch, and still shows if the failure moved the panel to
+`PanelBlocked` (a denied prompt does exactly that).
+-}
+viewPushError : Maybe String -> List (Html Msg)
+viewPushError maybeReason =
+    case maybeReason of
+        Nothing ->
+            []
+
+        Just reason ->
+            [ Html.p
+                [ Html.Attributes.class "text-xs text-rust mt-3" ]
+                [ Html.text ("Couldn't enable notifications: " ++ reason) ]
+            ]
 
 
 viewNotificationsBody : AuthState -> List (Html Msg)
 viewNotificationsBody as_ =
-    case
-        Notifications.panelState
-            { isPaid = Tier.isPaid as_.tier
-            , permission = as_.notificationPermission
-            , standalone = as_.standalone
-            , subscribed = as_.pushSubscribed
-            }
-    of
+    case Notifications.panelState (notificationsInput as_) of
         Notifications.PanelUnsupported ->
             [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
                 [ Html.text "Notifications aren't available in this browser. On iPhone or iPad, install Ternpike to your home screen first — tap the Share button in Safari, then choose Add to Home Screen." ]
@@ -361,6 +397,11 @@ viewNotificationsBody as_ =
                     ]
                     [ Html.text "Enable notifications" ]
                 ]
+            ]
+
+        Notifications.PanelNotConfigured ->
+            [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
+                [ Html.text "Push notifications aren't configured in this build of Ternpike, so there's nothing to turn on here. This is an environment setting, not something you can change from the app." ]
             ]
 
         Notifications.PanelNeedsInstall ->
