@@ -37,7 +37,10 @@ viewHeader as_ =
                 as_.basePath ++ "settings"
     in
     Html.div
-        [ Html.Attributes.class "sticky top-0 z-10 h-[calc(env(safe-area-inset-top)+3.5rem)] pt-[env(safe-area-inset-top)] flex items-center justify-between px-5 border-b bg-cream border-moss/25" ]
+        [ -- `transform-gpu` for the same iOS 26 paint-offset reason as the
+          -- bottom nav (see `viewBottomNav`) — sticky drifts the same way.
+          Html.Attributes.class "sticky top-0 z-10 transform-gpu h-[calc(env(safe-area-inset-top)+3.5rem)] pt-[env(safe-area-inset-top)] flex items-center justify-between px-5 border-b bg-cream border-moss/25"
+        ]
         [ Html.div [ Html.Attributes.class "flex items-center gap-2" ]
             [ Html.span
                 [ Html.Attributes.class "inline-block hover:rotate-[-3deg] transition-transform duration-200" ]
@@ -153,7 +156,12 @@ viewOfflineBanner networkOffline =
 viewBottomNav : AuthState -> Html Msg
 viewBottomNav as_ =
     Html.nav
-        [ Html.Attributes.class "fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10 pb-[env(safe-area-inset-bottom)] sm:border-x sm:border-tan/40 sm:dark:border-moss/20" ]
+        [ -- `transform-gpu` promotes the nav to its own compositing layer:
+          -- iOS 26 WebKit can paint `fixed` elements offset from their
+          -- computed position during body scroll, and an owned layer keeps
+          -- the paint anchored to the real viewport.
+          Html.Attributes.class "fixed bottom-0 left-1/2 -translate-x-1/2 transform-gpu w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10 pb-[env(safe-area-inset-bottom)] sm:border-x sm:border-tan/40 sm:dark:border-moss/20"
+        ]
         (List.map (viewNavTab as_)
             [ ( ScanTab, UI.Icons.camera, "Scan" )
             , ( AddTab, UI.Icons.plus, "Add" )
