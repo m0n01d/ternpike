@@ -44,6 +44,40 @@ npm run review:fix    # elm-review --fix-all
 The build injects `__BUILD_SHA__` from `WORKERS_CI_COMMIT_SHA`, `CF_PAGES_COMMIT_SHA`, or
 `GITHUB_SHA` (in that precedence order) so the settings screen can show a commit hash.
 
+## Branch flow — staging comes before main
+
+**`main` is production.** Cloudflare Workers Builds deploys it to
+`app.ternpike.com` on every push. **`staging` is the integration branch**, and
+it deploys to `staging-ternpike.dwightdoane.workers.dev` (plus the
+`ternpike-auth-staging` API) via `.github/workflows/deploy-staging.yml`.
+
+Work flows **branch → `staging` → device → `main`**, never branch → `main`:
+
+1. Branch off **`origin/staging`**, not `origin/main`.
+2. Open the PR with **base `staging`**. CI runs there exactly as it does on main.
+3. Merge; the staging Workers deploy fires automatically.
+4. **Verify on the actual device** — that is the step the whole flow exists for.
+5. Promote with a PR **`staging` → `main`**, which is the only way code reaches
+   production.
+
+**Why this ordering is not optional.** For anything touching the PWA, iOS
+layout, or the service worker, CI green means very little — none of it
+reproduces in headless Chromium. PR #480 is the cautionary tale: it shipped a
+`visualViewport` offset with an inverted sign, passed all three tiers, landed
+on `main`, and turned out to be *causing* the exact nav misplacement it was
+written to fix. #481 had to undo it. Had it gone to staging first, the device
+would have caught it before production ever saw it.
+
+Two corollaries:
+
+- **Never merge to `main` on CI-green alone** when the diff touches
+  `src/main.js`, `public/sw.js`, `UI/Layout.elm`, or anything viewport- or
+  service-worker-shaped. Green CI is necessary, not sufficient.
+- **Don't merge `main` into `staging` as the routine direction.** That was the
+  old habit and it is what let unverified work reach production first. If they
+  genuinely diverge (a hotfix landed on `main`), merging `main` → `staging` to
+  reconcile is fine — just never as the normal path for new work.
+
 ## Git discipline
 Never use `git checkout <branch> -- <file>` to resolve a stash conflict — it silently replaces the file with the committed version, discarding all stash changes.
 
