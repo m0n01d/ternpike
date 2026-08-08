@@ -254,8 +254,18 @@ wrangler secret put TIER_WEBHOOK_SECRET --env staging   # openssl rand -hex 32
 **3. Deploy staging:**
 
 ```bash
-npm run deploy:staging          # == wrangler deploy --env staging
+npm run deploy:staging          # == wrangler deploy --config wrangler.toml --env staging
 ```
+
+> **Why the scripts pin `--config wrangler.toml`:** this repo has TWO wrangler
+> configs — the root `wrangler.jsonc` (the Elm app, name `ternpike`) and
+> `server/wrangler.toml` (this Worker, name `ternpike-auth`). Wrangler 3.x
+> resolved the *root* `wrangler.jsonc` even when run from `server/` with a
+> `wrangler.toml` in cwd, so `wrangler deploy --env staging` silently created a
+> junk assets-only Worker named `ternpike-staging` (this happened twice). The
+> server now pins wrangler 4 and every npm script passes `--config
+> wrangler.toml` explicitly. Any ad-hoc wrangler command for the auth server
+> must do the same (or target by `--name ternpike-auth[-staging]`).
 
 Note the printed URL: `https://ternpike-auth-staging.<your-subdomain>.workers.dev`.
 
