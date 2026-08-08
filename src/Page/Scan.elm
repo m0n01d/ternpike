@@ -192,9 +192,23 @@ update msg as_ =
                     -- No scannable path (free tier, no BYO key): land in
                     -- `ScanReady` so the user fills the form by hand. Same
                     -- as today's online `Unscannable` behavior; no OCR.
+                    -- Record WHY on `ocrError` — without it the card's
+                    -- failure state reads "OCR failed" even though OCR
+                    -- never ran, which sends the user (and the developer)
+                    -- hunting for a scan failure that doesn't exist.
                     let
                         updatedQueue =
-                            Dict.update itemId (Maybe.map (\i -> { i | imageUrl = dataUrl, status = ScanReady })) as_.scanQueue
+                            Dict.update itemId
+                                (Maybe.map
+                                    (\i ->
+                                        { i
+                                            | imageUrl = dataUrl
+                                            , ocrError = Just "Automatic scanning isn't set up on this device — add your Anthropic key in Settings, or upgrade for hosted scanning. The photo is saved; fill in the details by hand."
+                                            , status = ScanReady
+                                        }
+                                    )
+                                )
+                                as_.scanQueue
                     in
                     ( { as_ | scanQueue = updatedQueue }
                     , exifEffect
