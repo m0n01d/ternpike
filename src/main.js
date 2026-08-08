@@ -681,6 +681,46 @@ import './elements/tp-amount.js'
     })
     window.addEventListener('pageshow', healSoon)
 
+    // Anchor the bottom chrome to the VISIBLE viewport, not the layout one.
+    //
+    // Healing has now failed four times, so stop depending on it. `position:
+    // fixed` resolves against the layout viewport; iOS standalone can leave
+    // that stuck a keyboard-height short, which parks the nav mid-screen with
+    // page content scrolling past underneath. Rather than try to force the
+    // layout viewport to correct itself, measure the gap and offset the bar
+    // by it:
+    //
+    //   visible bottom (in layout coords) = vv.offsetTop + vv.height
+    //   `bottom: X` puts the element's bottom at  innerHeight - X
+    //   so                                   X = innerHeight - offsetTop - height
+    //
+    // When the two viewports agree — every healthy browser — X is 0px and
+    // nothing moves, so this cannot regress the working case. While the
+    // keyboard is up the gap is genuinely the keyboard, and the bar should
+    // stay behind it as it does today, so hold the offset at 0 then.
+    const syncViewportOffset = () => {
+      const vv = window.visualViewport
+      if (!vv) return
+      const offset =
+        keyboardLikelyOpen() || (vv.scale && Math.abs(vv.scale - 1) > 0.01)
+          ? 0
+          : Math.round(window.innerHeight - vv.offsetTop - vv.height)
+      document.documentElement.style.setProperty(
+        '--vv-bottom-offset',
+        `${offset < 0 ? 0 : offset}px`,
+      )
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncViewportOffset)
+      window.visualViewport.addEventListener('scroll', syncViewportOffset)
+    }
+    window.addEventListener('resize', syncViewportOffset)
+    document.addEventListener('focusin', syncViewportOffset)
+    document.addEventListener('focusout', () => setTimeout(syncViewportOffset, 300))
+    document.addEventListener('visibilitychange', syncViewportOffset)
+    ;[0, 300, 1000, 2500].forEach((delay) => setTimeout(syncViewportOffset, delay))
+
     // Heal at BOOT, not only on later events. A standalone app relaunched
     // from a suspended state can paint its first frame already stuck, and
     // every listener above is change-driven — so without this the app just
@@ -688,6 +728,41 @@ import './elements/tp-amount.js'
     // Retried a few times because iOS reports the settled viewport a beat
     // after first paint, and the first reading can be transient.
     ;[0, 300, 1000, 2500].forEach((delay) => setTimeout(healViewport, delay))
+
+    // On-screen readout, STAGING ONLY. Four fixes have missed because every
+    // device report is a screenshot rather than a measurement, and asking for
+    // Web Inspector over USB is too much friction to actually happen. This
+    // paints the numbers into the corner so a screenshot IS the measurement.
+    // Attached to <html>, not <body>, because Elm owns body's children and
+    // would clobber it on the next render.
+    const onStaging =
+      /^staging-/.test(window.location.host) ||
+      String(__BACKEND_URL__).includes('staging')
+
+    if (onStaging) {
+      const hud = document.createElement('div')
+      hud.setAttribute(
+        'style',
+        'position:fixed;top:0;left:0;z-index:2147483647;pointer-events:none;' +
+          'font:9px ui-monospace,monospace;line-height:1.25;white-space:pre;' +
+          'background:rgba(0,0,0,.72);color:#7dd88f;padding:3px 5px;' +
+          'border-bottom-right-radius:5px;max-width:60vw',
+      )
+      document.documentElement.appendChild(hud)
+      const paintHud = () => {
+        const vv = window.visualViewport
+        const nav = document.querySelector('nav')
+        hud.textContent = [
+          `inner ${window.innerHeight}  vv ${vv ? Math.round(vv.height) : '-'}`,
+          `vvTop ${vv ? Math.round(vv.offsetTop) : '-'}  scale ${vv ? vv.scale.toFixed(2) : '-'}`,
+          `client ${document.documentElement.clientHeight}  screen ${window.screen.height}`,
+          `short ${shortfall()}  offset ${getComputedStyle(document.documentElement).getPropertyValue('--vv-bottom-offset').trim() || '0px'}`,
+          `navBottom ${nav ? Math.round(nav.getBoundingClientRect().bottom) : '-'}`,
+        ].join('\n')
+      }
+      setInterval(paintHud, 500)
+      paintHud()
+    }
 
     // Diagnostic for Safari Web Inspector (Mac → connected iPhone → console):
     // `__ternpikeViewport()`. Reports the two heights whose disagreement IS

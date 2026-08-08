@@ -164,7 +164,15 @@ viewBottomNav as_ =
           -- iOS 26 WebKit can paint `fixed` elements offset from their
           -- computed position during body scroll, and an owned layer keeps
           -- the paint anchored to the real viewport.
-          Html.Attributes.class "fixed bottom-0 left-1/2 -translate-x-1/2 transform-gpu w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10 pb-[env(safe-area-inset-bottom)] sm:border-x sm:border-tan/40 sm:dark:border-moss/20"
+          -- `bottom` is driven by `--vv-bottom-offset`, set from
+          -- `visualViewport` in `src/main.js`. `position: fixed` resolves
+          -- against the LAYOUT viewport, which iOS standalone can leave stuck
+          -- short after a keyboard — parking this bar a keyboard-height above
+          -- the screen. The custom property is the gap between the layout
+          -- viewport's bottom and the visible one, so the bar lands on the
+          -- real screen edge. It computes to `0px` whenever the two agree,
+          -- which is every healthy browser, so this cannot regress them.
+          Html.Attributes.class "fixed bottom-[var(--vv-bottom-offset,0px)] left-1/2 -translate-x-1/2 transform-gpu w-full max-w-[480px] backdrop-blur-sm bg-cream/90 border-t border-moss/25 flex z-10 pb-[env(safe-area-inset-bottom)] sm:border-x sm:border-tan/40 sm:dark:border-moss/20"
         ]
         (List.map (viewNavTab as_)
             [ ( ScanTab, UI.Icons.camera, "Scan" )
@@ -335,14 +343,14 @@ hit-testing, eating taps across the whole nav.
 -}
 lowerSlot : String
 lowerSlot =
-    "bottom-[calc(env(safe-area-inset-bottom)+4.5rem)]"
+    "bottom-[calc(env(safe-area-inset-bottom)+4.5rem+var(--vv-bottom-offset,0px))]"
 
 
 {-| One slot up: clears the ~70px update bar plus a gap.
 -}
 upperSlot : String
 upperSlot =
-    "bottom-[calc(env(safe-area-inset-bottom)+10rem)]"
+    "bottom-[calc(env(safe-area-inset-bottom)+10rem+var(--vv-bottom-offset,0px))]"
 
 
 {-| Hide the bar while a text field is focused.
