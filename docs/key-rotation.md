@@ -298,6 +298,14 @@ without localhost:
   script rebuilds for prod first, so always deploy through the npm scripts.
 - Local alternative: `npm run dev:staging` (dev server on localhost:3000
   against the staging API).
+- **CI preview builds pick staging automatically (#474).** `vite.config.js`
+  resolves one `__BACKEND_URL__` at build time and bakes it into
+  `AppConfig.backendUrl`; every client HTTP module reads it from there, so no
+  API hostname is hardcoded anywhere else in `src/`. Precedence:
+  `VITE_BACKEND_URL` (explicit — `dev:staging` / `build:staging`) → no CI
+  branch, i.e. a local build → prod → `WORKERS_CI_BRANCH=main` → prod → any
+  other CI branch (the `staging` branch and every PR preview) → staging. The
+  resolved URL is echoed as a `[ternpike] backendUrl=…` line in the build log.
 
 **Branch-based auto-deploy:** every push to the `staging` branch deploys both
 staging Workers via `.github/workflows/deploy-staging.yml` (the one exception

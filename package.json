@@ -14,7 +14,7 @@
     "deploy": "npm run build && wrangler deploy",
     "deploy:staging": "npm run build:staging && wrangler deploy --env staging",
     "preview": "rescript build && vite preview",
-    "test": "elm-verify-examples && npx elm-test",
+    "test": "elm-verify-examples && elm-test",
     "test:server": "npm --prefix server run test:server",
     "format": "elm-format src --yes",
     "format:check": "elm-format src --validate",

@@ -55,7 +55,9 @@ import Types
     item. Idempotent — a `delete` on an absent key is a no-op.
   - `ExtractExifGps` — outbound port: pull EXIF GPS for a queued image.
   - `FetchFileUrl` — `File.toUrl` task, tagged back as `GotFileUrl`.
-  - `Geocode` — `POST /geocode` for an OCR-extracted address.
+  - `Geocode` — `POST {backendUrl}/geocode` for an OCR-extracted address.
+    Carries `backendUrl` for the same reason `MakeOcrCall` does: the host is
+    build-resolved (`AppConfig.backendUrl`), not a constant.
   - `MakeOcrCall` — the OCR request: direct Anthropic HTTP (`ByoPath`),
     the hosted proxy port (`HostedPath`), or nothing (`Unscannable`).
   - `MintIdsThen` — run `Time.now` so a multi-receipt split can mint durable
@@ -78,7 +80,7 @@ type Effect
     | DeleteScanItem String
     | ExtractExifGps { dataUrl : String, id : String }
     | FetchFileUrl String File
-    | Geocode Creds String String
+    | Geocode { address : String, backendUrl : String, creds : Creds, itemId : String }
     | MakeOcrCall { backendUrl : String, body : Json.Encode.Value, itemId : String, path : OcrPath }
     | MintIdsThen String (List Data.Scan.OcrData)
     | Navigate String
@@ -107,8 +109,8 @@ perform key effect =
         FetchFileUrl itemId file ->
             Task.perform (scanMsg << Msg.Scan.GotFileUrl itemId) (File.toUrl file)
 
-        Geocode creds itemId address ->
-            Http.GeocodeApi.geocode creds { address = address } (scanMsg << Msg.Scan.GotGeocodeResult itemId)
+        Geocode { address, backendUrl, creds, itemId } ->
+            Http.GeocodeApi.geocode backendUrl creds { address = address } (scanMsg << Msg.Scan.GotGeocodeResult itemId)
 
         MakeOcrCall { backendUrl, body, itemId, path } ->
             case path of
