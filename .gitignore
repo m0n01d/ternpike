@@ -23,3 +23,4 @@ marketing/.wrangler/
 scripts/admin/.env
 scripts/admin/node_modules/
 server/.dev.vars
+server/.secrets.*.json
