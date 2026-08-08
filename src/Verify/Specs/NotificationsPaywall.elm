@@ -8,11 +8,16 @@ surface can't drift from the view. The input is a key-free projection of
 `(configured, error, isPaid, permission, standalone, subscribed)` plus a
 `corrupt` knob used only by the adversarial probe.
 
-`configured` is "the build has a non-empty VAPID public key"; `error` is
-`AuthState.pushError`, the reason a subscribe attempt failed. Both exist
-because "Enable notifications" could previously fail in total silence — the JS
-handler reported a reason, `PushSubscribeReceived` discarded it, and a build
-with no key still rendered a live button.
+`configured` is `AuthState.pushConfigured` — "the API this deployment talks to
+serves a non-empty VAPID public key", reported over the `notificationState`
+port at boot. `error` is `AuthState.pushError`, the reason a subscribe attempt
+failed. Both exist because "Enable notifications" could previously fail in
+total silence — the JS handler reported a reason, `PushSubscribeReceived`
+discarded it, and a deployment with no key still rendered a live button.
+
+`configured` used to read the build-time `AppConfig.vapidPublicKey`. That is no
+longer what decides whether push can work: the subscribe path fetches the key
+from the API (#490), so the gate now follows suit.
 
 This retires `e2e/specs/notifications-paywall.spec.ts`: every assertion there is
 a deterministic function of this input, so it needs no backend.
@@ -112,7 +117,7 @@ inputForFixture name =
             honest { configured = True, error = Nothing, isPaid = True, permission = Notifications.Default, standalone = Notifications.Standalone, subscribed = False }
 
         "unconfigured" ->
-            -- Paid, installed, permission un-asked — and the bundle carries no
+            -- Paid, installed, permission un-asked — and the API reports no
             -- VAPID key, so there is nothing an Enable button could do.
             honest { configured = False, error = Nothing, isPaid = True, permission = Notifications.Default, standalone = Notifications.Standalone, subscribed = False }
 
@@ -157,7 +162,7 @@ spec =
         [ { name = "free tier shows upgrade + disabled button", check = freeShowsUpgrade }
         , { name = "unsupported hides the enable button", check = unsupportedHidesButton }
         , { name = "paid + standalone + not-subscribed can enable", check = canEnable }
-        , { name = "a build with no VAPID key offers no button", check = unconfiguredHidesButton }
+        , { name = "a deployment with no server VAPID key offers no button", check = unconfiguredHidesButton }
         , { name = "a failed subscribe surfaces its reason", check = errorIsSurfaced }
         ]
     , name = "NotificationsPaywall"
@@ -213,7 +218,7 @@ canEnable input observed =
 
 unconfiguredHidesButton : Input -> Contract.Surface -> Maybe String
 unconfiguredHidesButton input observed =
-    -- The browser check and the tier check outrank the build-config check, so
+    -- The browser check and the tier check outrank the server-config check, so
     -- this only bites once both of those have passed.
     if input.configured || not input.isPaid || input.permission == Notifications.Unsupported then
         Nothing
@@ -222,7 +227,7 @@ unconfiguredHidesButton input observed =
         Nothing
 
     else
-        Just "a build with no VAPID key still offered the enable button"
+        Just "a deployment with no server VAPID key still offered the enable button"
 
 
 errorIsSurfaced : Input -> Contract.Surface -> Maybe String

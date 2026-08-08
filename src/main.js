@@ -1194,13 +1194,55 @@ import './elements/tp-amount.js'
     'PushManager' in window &&
     'serviceWorker' in navigator
 
+  // Cached answer from `GET /notifications/vapid-public-key`, shared by the
+  // boot-time `configured` probe and the subscribe handler so the key is
+  // fetched once per page load rather than once per consumer.
+  //
+  //   undefined -> the API has not answered yet, or the last attempt failed
+  //                (network error / non-2xx, e.g. an API deploy that predates
+  //                the endpoint). Callers retry.
+  //   ''        -> the API answered and this deployment genuinely has no key.
+  //   '<key>'   -> the API answered with its public key.
+  //
+  // The undefined-vs-'' distinction is the whole point: "unreachable" and
+  // "server has no key" must not collapse into the same answer, because only
+  // the second one means push really cannot work here.
+  let apiVapidPublicKey
+
+  async function fetchApiVapidPublicKey() {
+    if (typeof apiVapidPublicKey === 'string') return apiVapidPublicKey
+    try {
+      const resp = await fetch(`${__BACKEND_URL__}/notifications/vapid-public-key`)
+      if (resp.ok) apiVapidPublicKey = (await resp.json()).publicKey || ''
+      else console.warn('[notifications] vapid key endpoint returned', resp.status)
+    } catch (err) {
+      console.warn('[notifications] vapid key fetch failed:', err)
+    }
+    return apiVapidPublicKey
+  }
+
+  // Is push actually configured where it matters — on the server that holds
+  // the private half of the keypair? Not "did this build receive a
+  // VITE_VAPID_PUBLIC_KEY", which is the question the Settings pane used to
+  // ask and which staging always answered "no" to while push worked fine.
+  //
+  // Fallback when the API is unreachable: `Boolean(build-time key)`. An
+  // offline boot, or an API deploy older than the endpoint, must not make the
+  // pane claim "not configured" — that state is reserved for an API that
+  // answered and told us it has no key.
+  async function pushConfigured() {
+    const key = await fetchApiVapidPublicKey()
+    return key === undefined ? Boolean(flags.vapidPublicKey) : key !== ''
+  }
+
   // Read the current per-device subscription (if any) and the persisted
   // server-side prefs, then emit a single `notificationState` event so
   // Elm hydrates `notificationPermission`, `notificationPrefs`,
-  // `pushSubscribed`, and `standalone` from frame zero.
+  // `pushConfigured`, `pushSubscribed`, and `standalone` from frame zero.
   async function emitNotificationState() {
     if (!notificationsSupported) {
       app.ports.notificationState.send({
+        configured: await pushConfigured(),
         permission: 'unsupported',
         prefs: { weeklyScanReminder: false },
         standalone: false,
@@ -1208,6 +1250,7 @@ import './elements/tp-amount.js'
       })
       return
     }
+    const configured = await pushConfigured()
     const standalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       window.navigator.standalone === true
@@ -1282,7 +1325,7 @@ import './elements/tp-amount.js'
         }
       }
     }
-    app.ports.notificationState.send({ permission, prefs, standalone, subscribed })
+    app.ports.notificationState.send({ configured, permission, prefs, standalone, subscribed })
   }
 
   // Fire-and-forget initial emit. The await chain is internal — we
@@ -1308,13 +1351,11 @@ import './elements/tp-amount.js'
       // Sourcing it from the API that holds the private half makes a mismatch
       // structurally impossible. The build-time value stays as a fallback for
       // when the endpoint is unreachable (offline, or an older API deploy).
-      let key = ''
-      try {
-        const resp = await fetch(`${__BACKEND_URL__}/notifications/vapid-public-key`)
-        if (resp.ok) key = (await resp.json()).publicKey || ''
-      } catch (err) {
-        console.warn('[notifications] vapid key fetch failed, using build-time value:', err)
-      }
+      //
+      // Shares `fetchApiVapidPublicKey`'s cache with the boot-time
+      // `configured` probe, so the key is fetched once per page load rather
+      // than again on every tap.
+      let key = await fetchApiVapidPublicKey()
       if (!key) key = vapidPublicKey || ''
 
       if (!key) {

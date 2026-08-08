@@ -179,8 +179,11 @@ type PanelState
 {-| Decide which notifications-panel branch applies. Mirrors the precedence in
 `Pages.Settings.viewNotificationsBody` exactly.
 
-`configured` is "this build has a VAPID public key" (`AppConfig.vapidPublicKey`
-is non-empty). Without one, `pushManager.subscribe` cannot be called at all.
+`configured` is "the API this deployment talks to serves a VAPID public key"
+(`AuthState.pushConfigured`, reported over the `notificationState` port).
+Without one, `pushManager.subscribe` cannot be called at all. It is deliberately
+not the build-time `AppConfig.vapidPublicKey`: staging never receives that var,
+yet its API serves a key and push works there.
 
     panelState { configured = True, isPaid = False, permission = Granted, standalone = Standalone, subscribed = False }
     --> PanelUpgradeRequired
@@ -232,8 +235,8 @@ panelState { configured, isPaid, permission, standalone, subscribed } =
         -- Ranked third — behind the browser check and the tier check, ahead of
         -- everything below it. `PanelUnsupported` and `PanelUpgradeRequired`
         -- are facts about the user's browser and account that hold on every
-        -- build, so they still win. But an unconfigured build cannot mint a
-        -- subscription at all, which makes every state BELOW this one a dead
+        -- deployment, so they still win. But a server with no VAPID key cannot
+        -- mint a subscription at all, which makes every state BELOW this a dead
         -- end: `PanelNeedsInstall` would send the user through
         -- Add-to-Home-Screen for nothing, `PanelBlocked` would send them into
         -- iOS Settings for nothing, and `PanelCanEnable` would offer a button
@@ -241,9 +244,9 @@ panelState { configured, isPaid, permission, standalone, subscribed } =
         -- Telling them the environment can't do it is the honest answer.
         --
         -- The one branch it can mask is `PanelSubscribed`. That needs a live
-        -- subscription minted by an earlier, configured deploy — and push
-        -- subscriptions are per-origin, so an origin that has never shipped a
-        -- key has none to mask. Acceptable.
+        -- subscription minted while the API still served a key — and push
+        -- subscriptions are per-origin, so an origin whose API has never
+        -- served one has none to mask. Acceptable.
         PanelNotConfigured
 
     else if standalone == InBrowser then

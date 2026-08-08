@@ -320,9 +320,16 @@ viewShareSection =
 and its verification surface read. One helper so the two can't disagree about
 what they're looking at.
 
-`configured` is the build's VAPID public key being non-empty: without one,
-`pushManager.subscribe` cannot be called, so no amount of tapping can produce
-a subscription.
+`configured` is `AuthState.pushConfigured` — whether the API this deployment
+talks to serves a VAPID public key, reported over the `notificationState` port
+at boot. Without one, `pushManager.subscribe` cannot be called, so no amount of
+tapping can produce a subscription.
+
+It deliberately does NOT read `config.vapidPublicKey` any more. That build-time
+value stopped deciding anything once the subscribe path began fetching the key
+from the API (#490), and staging — the one deployment built by GitHub Actions —
+never receives it, so gating on it declared push unavailable on an environment
+where it works.
 
 -}
 notificationsInput :
@@ -336,7 +343,7 @@ notificationsInput :
         , subscribed : Bool
         }
 notificationsInput as_ =
-    { configured = as_.config.vapidPublicKey /= ""
+    { configured = as_.pushConfigured
     , error = as_.pushError
     , isPaid = Tier.isPaid as_.tier
     , permission = as_.notificationPermission
@@ -401,7 +408,7 @@ viewNotificationsBody as_ =
 
         Notifications.PanelNotConfigured ->
             [ Html.p [ Html.Attributes.class "text-xs text-muted" ]
-                [ Html.text "Push notifications aren't configured in this build of Ternpike, so there's nothing to turn on here. This is an environment setting, not something you can change from the app." ]
+                [ Html.text "Push notifications aren't configured on the server this copy of Ternpike talks to, so there's nothing to turn on here. This is an environment setting, not something you can change from the app." ]
             ]
 
         Notifications.PanelNeedsInstall ->
