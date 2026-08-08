@@ -827,23 +827,30 @@ geocodeDispatch ids queue as_ =
                     False
     in
     if eligible then
-        List.foldl (geocodeDispatchOne as_.creds) ( queue, [] ) ids
+        List.foldl (geocodeDispatchOne as_.config.backendUrl as_.creds) ( queue, [] ) ids
 
     else
         ( queue, [] )
 
 
 geocodeDispatchOne :
-    Creds
+    String
+    -> Creds
     -> String
     -> ( Dict.Dict String ScanItem, List Effect )
     -> ( Dict.Dict String ScanItem, List Effect )
-geocodeDispatchOne creds id ( queue, effects ) =
+geocodeDispatchOne backendUrl creds id ( queue, effects ) =
     case Dict.get id queue |> Maybe.andThen (\item -> Maybe.andThen .address item.ocrData) of
         Just rawAddress ->
             if String.trim rawAddress /= "" then
                 ( Dict.update id (Maybe.map (\item -> { item | geocode = GeocodeRequested })) queue
-                , Effect.Geocode creds id rawAddress :: effects
+                , Effect.Geocode
+                    { address = rawAddress
+                    , backendUrl = backendUrl
+                    , creds = creds
+                    , itemId = id
+                    }
+                    :: effects
                 )
 
             else

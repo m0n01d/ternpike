@@ -18,14 +18,6 @@ import Json.Decode.Pipeline as Pipeline
 import Json.Encode
 
 
-{-| Same base URL as `Http.SharedTripApi`. Both endpoints live on the
-auth Worker at `api.ternpike.com`.
--}
-baseUrl : String
-baseUrl =
-    "https://api.ternpike.com"
-
-
 {-| `{lat, lon}` from Nominatim. Both are `Nothing` when the address
 returned no match — the server still 200s in that case so the client
 decodes successfully and the call site can decide what to do
@@ -44,20 +36,26 @@ geocodeResponseDecoder =
         |> Pipeline.optional "lon" (Json.Decode.nullable Json.Decode.float) Nothing
 
 
-{-| `POST /geocode` — request lat/lon for a merchant address. The
-server validates paid tier, rate-limits to 1 req/min/user, and caches
+{-| `POST {backendUrl}/geocode` — request lat/lon for a merchant address.
+The server validates paid tier, rate-limits to 1 req/min/user, and caches
 the result for 30 days.
+
+`backendUrl` is `AppConfig.backendUrl`, resolved at build time — the same
+auth Worker `Http.SharedTripApi` and `Http.Me` talk to, so a staging or
+preview build geocodes against staging rather than production.
+
 -}
 geocode :
-    Creds
+    String
+    -> Creds
     -> { address : String }
     -> (Result Http.Error GeocodeResponse -> msg)
     -> Cmd msg
-geocode creds { address } toMsg =
+geocode backendUrl creds { address } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/geocode"
+        , url = backendUrl ++ "/geocode"
         , body =
             Http.jsonBody
                 (Json.Encode.object

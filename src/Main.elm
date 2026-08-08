@@ -531,17 +531,19 @@ Returns `Cmd.none` for personal trips (no co-travelers to notify).
 
 -}
 notifySharedTripActivity :
-    Creds
+    AppConfig
+    -> Creds
     -> Trip.TripTarget
     -> { action : String, amount : Float, note : Maybe String }
     -> Cmd Msg
-notifySharedTripActivity creds target opts =
+notifySharedTripActivity config creds target opts =
     case target of
         Trip.Personal ->
             Cmd.none
 
         Trip.InFlock sharedTripId ->
             Http.SharedTripApi.notifyActivity
+                config
                 creds
                 sharedTripId
                 opts
@@ -3325,7 +3327,8 @@ updateAuth msg as_ =
                                 }
                             , Cmd.batch
                                 [ sendPouch (SaveAmend editTarget (Amendment.encoder amend))
-                                , notifySharedTripActivity as_.creds
+                                , notifySharedTripActivity as_.config
+                                    as_.creds
                                     editTarget
                                     { action = "edit"
                                     , amount = editAmountFloat
@@ -3421,7 +3424,8 @@ updateAuth msg as_ =
                             , Cmd.batch
                                 [ sendPouch (SaveExpense addTarget (Expense.encoder expense))
                                 , persistTagCmd
-                                , notifySharedTripActivity as_.creds
+                                , notifySharedTripActivity as_.config
+                                    as_.creds
                                     addTarget
                                     { action = "add"
                                     , amount = addAmountFloat
@@ -3482,7 +3486,8 @@ updateAuth msg as_ =
                             ]
                         )
                     )
-                , notifySharedTripActivity as_.creds
+                , notifySharedTripActivity as_.config
+                    as_.creds
                     voidTarget
                     { action = "void"
                     , amount = voidAmountFloat
@@ -4040,6 +4045,7 @@ updateAuth msg as_ =
                                     List.map
                                         (\email ->
                                             Http.SharedTripApi.inviteToSharedTrip
+                                                as_.config
                                                 as_.creds
                                                 response.sharedTripId
                                                 { email = email }
@@ -4117,7 +4123,7 @@ updateAuth msg as_ =
                                                         String.trim form.name
                                             in
                                             ( AuthModel { as_ | tripForm = Just { form | errors = [], sharedTripRequest = RemoteData.Loading, submitting = True } }
-                                            , Http.SharedTripApi.createSharedTrip as_.creds { name = groupName } (AuthMsg << TripCreateSharedTripResult)
+                                            , Http.SharedTripApi.createSharedTrip as_.config as_.creds { name = groupName } (AuthMsg << TripCreateSharedTripResult)
                                             )
 
                                         _ ->
@@ -4313,6 +4319,7 @@ updateAuth msg as_ =
         TakeOverBilling flockId ->
             ( AuthModel as_
             , Http.SharedTripApi.transferOwnership
+                as_.config
                 as_.creds
                 flockId
                 { newOwnerEmail = as_.creds.email }
@@ -4422,7 +4429,7 @@ updateAuth msg as_ =
                                 )
                                 as_
                             )
-                        , Http.SharedTripApi.createSharedTrip as_.creds { name = String.trim draft.groupName } (AuthMsg << ShareTripCreatedResult)
+                        , Http.SharedTripApi.createSharedTrip as_.config as_.creds { name = String.trim draft.groupName } (AuthMsg << ShareTripCreatedResult)
                         )
 
                 _ ->
@@ -4441,6 +4448,7 @@ updateAuth msg as_ =
                                     List.map
                                         (\email ->
                                             Http.SharedTripApi.inviteToSharedTrip
+                                                as_.config
                                                 as_.creds
                                                 response.sharedTripId
                                                 { email = email }
@@ -4457,6 +4465,7 @@ updateAuth msg as_ =
                                         }
                                     )
                                  , Http.SharedTripApi.adoptTrip
+                                    as_.config
                                     as_.creds
                                     response.sharedTripId
                                     { tripId = TripId.toString tripId }
@@ -4654,7 +4663,7 @@ updateAuth msg as_ =
                             )
                             as_
                         )
-                    , Http.SharedTripApi.inviteToSharedTrip as_.creds flockId { email = email } (AuthMsg << InviteToSharedTripResult)
+                    , Http.SharedTripApi.inviteToSharedTrip as_.config as_.creds flockId { email = email } (AuthMsg << InviteToSharedTripResult)
                     )
 
                 _ ->
@@ -4705,7 +4714,7 @@ updateAuth msg as_ =
                     (SharedTripUi.InviteCrewModal flockId { request = RemoteData.Loading })
                     as_
                 )
-            , Http.SharedTripApi.getShareLink as_.creds flockId (AuthMsg << GetShareLinkResult)
+            , Http.SharedTripApi.getShareLink as_.config as_.creds flockId (AuthMsg << GetShareLinkResult)
             )
 
         GetShareLinkResult result ->
@@ -4755,7 +4764,7 @@ updateAuth msg as_ =
                     )
                     as_
                 )
-            , Http.SharedTripApi.leaveSharedTrip as_.creds flockId (AuthMsg << LeaveSharedTripResult)
+            , Http.SharedTripApi.leaveSharedTrip as_.config as_.creds flockId (AuthMsg << LeaveSharedTripResult)
             )
 
         LeaveSharedTripResult result ->
@@ -4815,7 +4824,7 @@ updateAuth msg as_ =
                             )
                             as_
                         )
-                    , Http.SharedTripApi.transferOwnership as_.creds flockId { newOwnerEmail = target } (AuthMsg << TransferToSharedTripResult)
+                    , Http.SharedTripApi.transferOwnership as_.config as_.creds flockId { newOwnerEmail = target } (AuthMsg << TransferToSharedTripResult)
                     )
 
                 _ ->
@@ -4846,7 +4855,7 @@ updateAuth msg as_ =
 
         JoinSharedTripAccepted token ->
             ( AuthModel { as_ | joinSharedTripRequest = RemoteData.Loading }
-            , Http.SharedTripApi.joinSharedTrip as_.creds { token = token } (AuthMsg << JoinSharedTripResult)
+            , Http.SharedTripApi.joinSharedTrip as_.config as_.creds { token = token } (AuthMsg << JoinSharedTripResult)
             )
 
         JoinSharedTripDeclined ->
@@ -4980,7 +4989,7 @@ updateAuth msg as_ =
                     )
                     as_
                 )
-            , Http.SharedTripApi.resetShareLinks as_.creds flockId (AuthMsg << ResetLinksResult)
+            , Http.SharedTripApi.resetShareLinks as_.config as_.creds flockId (AuthMsg << ResetLinksResult)
             )
 
         ResetLinksResult result ->

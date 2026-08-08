@@ -79,9 +79,9 @@ simulate effect =
             SimulatedEffect.Task.perform (scanMsg << Msg.Scan.GotFileUrl itemId)
                 (SimulatedEffect.Task.succeed "data:image/jpeg;base64,SIMULATED")
 
-        Geocode _ itemId _ ->
+        Geocode { backendUrl, itemId } ->
             SimulatedEffect.Http.post
-                { url = "https://api.ternpike.com/geocode"
+                { url = backendUrl ++ "/geocode"
                 , body = SimulatedEffect.Http.emptyBody
                 , expect =
                     SimulatedEffect.Http.expectJson

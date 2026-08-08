@@ -16,17 +16,19 @@ module Http.SharedTripApi exposing
     )
 
 {-| HTTP client for the shared-trip-membership endpoints served by
-`api.ternpike.com`.
+the auth Worker.
 
-These wrap the endpoints introduced in #57 and extended in #339:
+These wrap the endpoints introduced in #57 and extended in #339, all
+relative to the configured `AppConfig.backendUrl` so dev / staging /
+preview / prod each hit their own Worker (#474):
 
-  - `POST /sharedtrips` — create.
-  - `POST /sharedtrips/:id/invite` — invite a user by email.
-  - `POST /sharedtrips/join` — redeem an invite JWT.
-  - `POST /sharedtrips/:id/leave` — leave a shared trip (non-owner only).
-  - `POST /sharedtrips/:id/transfer` — transfer ownership to another member.
-  - `POST /sharedtrips/:id/share-link` — mint a recipient-agnostic share link (owner-only).
-  - `POST /sharedtrips/:id/reset-links` — bump inviteEpoch to revoke all outstanding share links (owner-only).
+  - `POST {backendUrl}/sharedtrips` — create.
+  - `POST {backendUrl}/sharedtrips/:id/invite` — invite a user by email.
+  - `POST {backendUrl}/sharedtrips/join` — redeem an invite JWT.
+  - `POST {backendUrl}/sharedtrips/:id/leave` — leave a shared trip (non-owner only).
+  - `POST {backendUrl}/sharedtrips/:id/transfer` — transfer ownership to another member.
+  - `POST {backendUrl}/sharedtrips/:id/share-link` — mint a recipient-agnostic share link (owner-only).
+  - `POST {backendUrl}/sharedtrips/:id/reset-links` — bump inviteEpoch to revoke all outstanding share links (owner-only).
 
 Every request uses HTTP Basic with the per-user CouchDB credentials
 already stored in `Data.Auth.Creds` — same shape the app uses to talk
@@ -39,20 +41,12 @@ to confirm the action and (for create / join) hand back the shared trip id.
 
 -}
 
-import Data.Auth exposing (Creds)
+import Data.Auth exposing (AppConfig, Creds)
 import Data.SharedTripId as SharedTripId exposing (SharedTripId)
 import Http
 import Json.Decode
 import Json.Decode.Pipeline as Pipeline
 import Json.Encode
-
-
-{-| The base URL all shared trip endpoints sit beneath. Kept in one place so
-swapping environments only touches this module.
--}
-baseUrl : String
-baseUrl =
-    "https://api.ternpike.com"
 
 
 {-| Build the HTTP Basic `Authorization` header from `Creds`. Mirrors
@@ -156,19 +150,20 @@ joinSharedTripResponseDecoder =
         |> Pipeline.required "flockId" SharedTripId.decoder
 
 
-{-| `POST /sharedtrips` — create a shared trip. The server is responsible for
+{-| `POST {backendUrl}/sharedtrips` — create a shared trip. The server is responsible for
 checking the tier (Osprey+) and rejecting Tern creators.
 -}
 createSharedTrip :
-    Creds
+    AppConfig
+    -> Creds
     -> { name : String }
     -> (Result Http.Error CreateSharedTripResponse -> msg)
     -> Cmd msg
-createSharedTrip creds { name } toMsg =
+createSharedTrip config creds { name } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/sharedtrips"
+        , url = config.backendUrl ++ "/sharedtrips"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -180,7 +175,7 @@ createSharedTrip creds { name } toMsg =
         }
 
 
-{-| `POST /sharedtrips/:id/adopt-trip` — promote an existing personal trip
+{-| `POST {backendUrl}/sharedtrips/:id/adopt-trip` — promote an existing personal trip
 into this shared trip. The server moves the trip + its expenses, amendments,
 and voids out of the caller's personal CouchDB into the shared-trip DB and
 hard-deletes the originals. Owner-only, paid-tier, idempotent. We only need
@@ -188,16 +183,17 @@ to know success/failure here — the moved docs arrive via the live changes
 feed once the shared-trip handle syncs.
 -}
 adoptTrip :
-    Creds
+    AppConfig
+    -> Creds
     -> SharedTripId
     -> { tripId : String }
     -> (Result Http.Error () -> msg)
     -> Cmd msg
-adoptTrip creds sharedTripId { tripId } toMsg =
+adoptTrip config creds sharedTripId { tripId } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/adopt-trip"
+        , url = config.backendUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/adopt-trip"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -209,20 +205,21 @@ adoptTrip creds sharedTripId { tripId } toMsg =
         }
 
 
-{-| `POST /sharedtrips/:id/invite` — owner-only invite by email. Server
+{-| `POST {backendUrl}/sharedtrips/:id/invite` — owner-only invite by email. Server
 sends the JWT-bearing invite email via Resend and returns `204`.
 -}
 inviteToSharedTrip :
-    Creds
+    AppConfig
+    -> Creds
     -> SharedTripId
     -> { email : String }
     -> (Result Http.Error () -> msg)
     -> Cmd msg
-inviteToSharedTrip creds sharedTripId { email } toMsg =
+inviteToSharedTrip config creds sharedTripId { email } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/invite"
+        , url = config.backendUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/invite"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -234,20 +231,21 @@ inviteToSharedTrip creds sharedTripId { email } toMsg =
         }
 
 
-{-| `POST /sharedtrips/join` — redeem an invite JWT. The server validates
+{-| `POST {backendUrl}/sharedtrips/join` — redeem an invite JWT. The server validates
 the token's recipient against the calling user's email and 403s on
 mismatch.
 -}
 joinSharedTrip :
-    Creds
+    AppConfig
+    -> Creds
     -> { token : String }
     -> (Result Http.Error JoinSharedTripResponse -> msg)
     -> Cmd msg
-joinSharedTrip creds { token } toMsg =
+joinSharedTrip config creds { token } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/sharedtrips/join"
+        , url = config.backendUrl ++ "/sharedtrips/join"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -259,20 +257,21 @@ joinSharedTrip creds { token } toMsg =
         }
 
 
-{-| `POST /sharedtrips/:id/leave` — leave a shared trip. The server rejects the
+{-| `POST {backendUrl}/sharedtrips/:id/leave` — leave a shared trip. The server rejects the
 billing owner attempting to leave while other members remain (must
 `transferOwnership` first).
 -}
 leaveSharedTrip :
-    Creds
+    AppConfig
+    -> Creds
     -> SharedTripId
     -> (Result Http.Error () -> msg)
     -> Cmd msg
-leaveSharedTrip creds sharedTripId toMsg =
+leaveSharedTrip config creds sharedTripId toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/leave"
+        , url = config.backendUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/leave"
         , body = Http.emptyBody
         , expect = Http.expectWhatever toMsg
         , timeout = Nothing
@@ -280,7 +279,7 @@ leaveSharedTrip creds sharedTripId toMsg =
         }
 
 
-{-| `POST /sharedtrips/:id/notify-activity` — fire push notifications to
+{-| `POST {backendUrl}/sharedtrips/:id/notify-activity` — fire push notifications to
 co-travelers when an expense is added, edited, or voided. Fire-and-forget
 — the response is handled by a no-op `Msg` branch; any delivery failure
 is logged server-side and does not affect UI state.
@@ -290,16 +289,17 @@ the same user action without blocking the local write.
 
 -}
 notifyActivity :
-    Creds
+    AppConfig
+    -> Creds
     -> SharedTripId
     -> { action : String, amount : Float, note : Maybe String }
     -> (Result Http.Error () -> msg)
     -> Cmd msg
-notifyActivity creds sharedTripId { action, amount, note } toMsg =
+notifyActivity config creds sharedTripId { action, amount, note } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/notify-activity"
+        , url = config.backendUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/notify-activity"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -321,21 +321,22 @@ notifyActivity creds sharedTripId { action, amount, note } toMsg =
         }
 
 
-{-| `POST /sharedtrips/:id/transfer` — transfer ownership to another member
+{-| `POST {backendUrl}/sharedtrips/:id/transfer` — transfer ownership to another member
 by email. The server re-checks that the target is a current member
 and is on Osprey+ before accepting.
 -}
 transferOwnership :
-    Creds
+    AppConfig
+    -> Creds
     -> SharedTripId
     -> { newOwnerEmail : String }
     -> (Result Http.Error () -> msg)
     -> Cmd msg
-transferOwnership creds sharedTripId { newOwnerEmail } toMsg =
+transferOwnership config creds sharedTripId { newOwnerEmail } toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/transfer"
+        , url = config.backendUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/transfer"
         , body =
             Http.jsonBody
                 (Json.Encode.object
@@ -361,7 +362,7 @@ shareLinkResponseDecoder =
         |> Pipeline.required "url" Json.Decode.string
 
 
-{-| `POST /sharedtrips/:id/share-link` — owner-only. Mints a recipient-agnostic
+{-| `POST {backendUrl}/sharedtrips/:id/share-link` — owner-only. Mints a recipient-agnostic
 `typ:"share"` token (30-day exp) baked with the trip's current `inviteEpoch`
 and returns the funnel URL `https://app.ternpike.com/nest?token=<token>` for
 the inviter to hand to `navigator.share`.
@@ -371,15 +372,16 @@ can preview (and join) the shared trip.
 
 -}
 getShareLink :
-    Creds
+    AppConfig
+    -> Creds
     -> SharedTripId
     -> (Result Http.Error ShareLinkResponse -> msg)
     -> Cmd msg
-getShareLink creds sharedTripId toMsg =
+getShareLink config creds sharedTripId toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/share-link"
+        , url = config.backendUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/share-link"
         , body = Http.emptyBody
         , expect = Http.expectJson toMsg shareLinkResponseDecoder
         , timeout = Nothing
@@ -387,20 +389,21 @@ getShareLink creds sharedTripId toMsg =
         }
 
 
-{-| `POST /sharedtrips/:id/reset-links` — owner-only. Bumps
+{-| `POST {backendUrl}/sharedtrips/:id/reset-links` — owner-only. Bumps
 `sharedtrip:meta.inviteEpoch` by 1, which invalidates every outstanding
 share token at once. Returns `{ ok, inviteEpoch }` confirming the new epoch.
 -}
 resetShareLinks :
-    Creds
+    AppConfig
+    -> Creds
     -> SharedTripId
     -> (Result Http.Error () -> msg)
     -> Cmd msg
-resetShareLinks creds sharedTripId toMsg =
+resetShareLinks config creds sharedTripId toMsg =
     Http.request
         { method = "POST"
         , headers = [ authHeader creds ]
-        , url = baseUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/reset-links"
+        , url = config.backendUrl ++ "/sharedtrips/" ++ SharedTripId.toString sharedTripId ++ "/reset-links"
         , body = Http.emptyBody
         , expect = Http.expectWhatever toMsg
         , timeout = Nothing
@@ -408,7 +411,7 @@ resetShareLinks creds sharedTripId toMsg =
         }
 
 
-{-| Map a failed `POST /sharedtrips/join` into a user-facing message. Pulled out
+{-| Map a failed `POST {backendUrl}/sharedtrips/join` into a user-facing message. Pulled out
 of the JoinSharedTrip page so the status→copy mapping (the regression-prone bit
 the e2e sad-paths used to guard) is unit-testable without a browser.
 

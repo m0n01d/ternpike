@@ -8,8 +8,8 @@ module Http.Billing exposing
     , trailblazerStatus
     )
 
-{-| HTTP client for the three Stripe-fronted billing endpoints on
-`api.ternpike.com`.
+{-| HTTP client for the three Stripe-fronted billing endpoints on the
+auth Worker (`AppConfig.backendUrl`).
 
   - `POST /billing/checkout` — start a Stripe Checkout session for an
     Osprey subscription (`osprey_monthly` / `osprey_yearly`) or the
