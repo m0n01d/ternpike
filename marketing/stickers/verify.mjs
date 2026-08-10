@@ -32,7 +32,9 @@ import jsQR from 'jsqr'
 import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 
+import { bindingConstraint, monoProfile, thermalScale } from './lib/profiles.mjs'
 import { qrDestination, stickers } from './lib/stickers.mjs'
+import { loadFonts, resetTypeAudit, typeAudit } from './lib/type.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -77,6 +79,27 @@ const decodeThermalCell = async (file, plan) => {
 
 let failures = 0
 
+const fonts = await loadFonts()
+const UNITS_PER_POINT = 100 / 72
+
+/**
+ * The whole point of `thermalScale` is that a design's smallest line clears
+ * the 203 DPI legibility floor once scaled. Assert it actually does, rather
+ * than trusting the arithmetic — the first version rounded to nearest and
+ * put two designs a hundredth of a point under.
+ */
+const checkFloor = (sticker) => {
+  resetTypeAudit()
+  sticker.art(fonts, sticker.cut, monoProfile)
+  const audit = typeAudit()
+  const worst = bindingConstraint(audit)
+  const rendered = (worst.size * thermalScale(audit)) / UNITS_PER_POINT
+  const floor = (worst.needed * worst.size) / UNITS_PER_POINT
+  return rendered + 1e-9 >= floor
+    ? null
+    : `${worst.family} at ${rendered.toFixed(2)}pt < ${floor}pt`
+}
+
 /** Exactly 4×6in at 72pt/in, one page. Anything else will be rescaled. */
 const checkPdf = async (slug) => {
   const doc = await PDFDocument.load(await readFile(join(here, 'thermal', `${slug}.pdf`)))
@@ -99,10 +122,11 @@ for (const sticker of stickers) {
     // which is where the string is actually written.
     const printsUrl = /ternpike\.com/i.test(sticker.art.toString())
     const pdf = await checkPdf(sticker.slug)
-    const ok = printsUrl && !pdf
+    const floor = checkFloor(sticker)
+    const ok = printsUrl && !pdf && !floor
     if (!ok) failures++
     console.log(
-      `  ${sticker.slug.padEnd(16)} ${ok ? 'OK  ' : 'FAIL'} url only, no QR${pdf ? ` — pdf ${pdf}` : ''}`,
+      `  ${sticker.slug.padEnd(16)} ${ok ? 'OK  ' : 'FAIL'} url only, no QR${pdf ? ` — pdf ${pdf}` : ''}${floor ? ` — ${floor}` : ''}`,
     )
     continue
   }
@@ -117,11 +141,12 @@ for (const sticker of stickers) {
   )
 
   const pdf = await checkPdf(sticker.slug)
-  const ok = full === expected && small === expected && thermal === expected && !pdf
+  const floor = checkFloor(sticker)
+  const ok = full === expected && small === expected && thermal === expected && !pdf && !floor
   if (!ok) failures++
   const mark = (got) => (got === expected ? 'yes' : JSON.stringify(got))
   console.log(
-    `  ${sticker.slug.padEnd(16)} ${ok ? 'OK  ' : 'FAIL'} vinyl300=${mark(full)} vinyl${PHONE_PX_PER_INCH}=${mark(small)} thermal203-1bit=${mark(thermal)} pdf4x6=${pdf ? pdf : 'yes'}`,
+    `  ${sticker.slug.padEnd(16)} ${ok ? 'OK  ' : 'FAIL'} vinyl300=${mark(full)} vinyl${PHONE_PX_PER_INCH}=${mark(small)} thermal203-1bit=${mark(thermal)} pdf4x6=${pdf ? pdf : 'yes'}${floor ? ` FLOOR ${floor}` : ''}`,
   )
 }
 

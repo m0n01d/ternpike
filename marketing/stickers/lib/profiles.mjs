@@ -144,7 +144,11 @@ export function thermalScale(entries) {
     const needed = (floorFor(family) * UNITS_PER_POINT) / size
     if (needed > scale) scale = needed
   }
-  return Math.round(scale * 100) / 100
+  // Round UP to 2dp, never to nearest. Rounding to nearest can land a
+  // hair under the floor — `badge-tern` needed 1.1435× and got 1.14×,
+  // putting its smallest line at 6.98pt — which quietly defeats the one
+  // guarantee this function exists to make.
+  return Math.ceil(scale * 100) / 100
 }
 
 /** The run that forced the scale — useful for explaining a big number. */

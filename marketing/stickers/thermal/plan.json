@@ -11,27 +11,27 @@
       "slug": "badge-tern",
       "cols": 1,
       "count": 1,
-      "h": 341.99999999999994,
+      "h": 345,
       "rotated": false,
       "rows": 1,
-      "scale": 1.14,
-      "w": 341.99999999999994,
+      "scale": 1.15,
+      "w": 345,
       "shortfall": null,
-      "originX": 29.00000000000003,
-      "originY": 129.00000000000003
+      "originX": 27.5,
+      "originY": 127.5
     },
     {
       "slug": "wordmark-rust",
       "cols": 1,
       "count": 4,
-      "h": 118.80000000000001,
+      "h": 119.9,
       "rotated": false,
       "rows": 4,
-      "scale": 1.08,
-      "w": 345.6,
+      "scale": 1.09,
+      "w": 348.8,
       "shortfall": null,
-      "originX": 27.19999999999999,
-      "originY": 44.39999999999998
+      "originX": 25.599999999999994,
+      "originY": 42.19999999999999
     },
     {
       "slug": "milepost-zero",
