@@ -118,18 +118,3 @@ export function noSignal({ cx, cy, slash, stroke, weight = 3.4 }) {
     <path d="M${r2(cx - 18)} ${r2(cy + 12)}L${r2(cx + 18)} ${r2(cy - 22)}" stroke="${slash}" stroke-width="${weight + 0.6}" stroke-linecap="round"/>
   </g>`
 }
-
-/** Evenly spaced dots along a quadratic arc — the "route" motif. */
-export function dottedRoute({ bend, fill, from, opacity = 1, steps = 22, to }) {
-  const cxp = (from[0] + to[0]) / 2
-  const cyp = (from[1] + to[1]) / 2 - bend
-  const dots = []
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps
-    const mt = 1 - t
-    const px = mt * mt * from[0] + 2 * mt * t * cxp + t * t * to[0]
-    const py = mt * mt * from[1] + 2 * mt * t * cyp + t * t * to[1]
-    dots.push(`<circle cx="${r2(px)}" cy="${r2(py)}" r="1.5"/>`)
-  }
-  return `<g fill="${fill}" opacity="${opacity}">${dots.join('')}</g>`
-}

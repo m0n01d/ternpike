@@ -21,15 +21,18 @@ import {
   KEYLINE,
   bird,
   circle,
-  dottedRoute,
   ellipse,
   milepost,
   noSignal,
   receipt,
   roundedRect,
 } from './shapes.mjs'
+import { COPY } from './copy.mjs'
 import { qrCard, qrTarget } from './qr.mjs'
 import { arcText, text } from './type.mjs'
+
+/** Capitalise a fragment lifted from the middle of a sentence. */
+const sentence = (s) => s.charAt(0).toUpperCase() + s.slice(1)
 
 const line = (x1, y1, x2, y2, stroke, width = 1.4, extra = '') =>
   `<path d="M${x1} ${y1}H${x2}" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" ${extra}/>`
@@ -48,7 +51,7 @@ export const stickers = [
       <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
       <circle cx="150" cy="150" r="137" fill="none" stroke="${p.accent}" stroke-width="2.2"/>
       <circle cx="150" cy="150" r="102" fill="none" stroke="${p.onDark}" stroke-width="1.2" opacity="${p.dim(0.4)}"/>
-      ${arcText(f['DMMono-Medium'], 'TRACK EVERY TURN OF THE ROAD', {
+      ${arcText(f['DMMono-Medium'], COPY.taglineCaps, {
         centerDeg: 0,
         cx: 150,
         cy: 150,
@@ -72,16 +75,16 @@ export const stickers = [
         <path d="M253 150l7-7 7 7-7 7z"/>
       </g>
       ${bird({ dark: p.markDark, light: p.onDark, scale: 1.2, x: 150, y: 112 })}
-      <path d="${text(f['PlayfairDisplay-Black'], 'Ternpike', {
+      <path d="${text(f['PlayfairDisplay-Black'], COPY.brand, {
         anchor: 'middle',
         size: 40,
         x: 150,
         y: 172,
       })}" fill="${p.onDark}"/>
       ${line(104, 184, 196, 184, p.accent, 1.6)}
-      <path d="${text(f['DMMono-Medium'], 'ALASKA HIGHWAY · MILE 0', {
+      <path d="${text(f['DMMono-Medium'], COPY.madeOnCaps, {
         anchor: 'middle',
-        letterSpacing: 0.14,
+        letterSpacing: 0.1,
         size: 8.5,
         x: 150,
         y: 200,
@@ -101,7 +104,7 @@ export const stickers = [
     art: (f, cut, p) => `
       <path d="${cut(KEYLINE)}" fill="${p.brand}"/>
       <path d="${cut(15)}" fill="none" stroke="${p.onDark}" stroke-width="1" opacity="${p.dim(0.45)}"/>
-      <path d="${text(f['PlayfairDisplay-Black'], 'Ternpike', { size: 46, x: 28, y: 64 })}" fill="${p.onDark}"/>
+      <path d="${text(f['PlayfairDisplay-Black'], COPY.brand, { size: 46, x: 28, y: 64 })}" fill="${p.onDark}"/>
       <path d="${text(f['DMMono-Medium'], 'ternpike.com', {
         letterSpacing: 0.2,
         size: 9,
@@ -139,7 +142,7 @@ export const stickers = [
         y: 186,
       })}" fill="${p.onDark}"/>
       ${line(42, 204, 98, 204, p.accent, 1.8)}
-      <path d="${text(f['DMMono-Medium'], 'TERNPIKE', {
+      <path d="${text(f['DMMono-Medium'], COPY.brand.toUpperCase(), {
         anchor: 'middle',
         letterSpacing: 0.26,
         size: 11,
@@ -159,18 +162,18 @@ export const stickers = [
   // ── 4. No signal ─────────────────────────────────────────────────────
   {
     family: 'kit',
-    blurb: '2.6 × 1.2in. The offline-first pitch as a one-liner.',
+    blurb: '2.6 × 1.2in. The offline feature, by the name the site gives it.',
     cut: roundedRect(260, 120, 17),
     h: 120,
     slug: 'no-signal',
-    title: 'No signal, no problem',
+    title: 'Works without signal',
     w: 260,
     art: (f, cut, p) => `
       <path d="${cut(KEYLINE)}" fill="${p.light}"/>
       <path d="${cut(16)}" fill="none" stroke="${p.accent}" stroke-width="1.4"/>
       ${noSignal({ cx: 54, cy: 64, slash: p.accent, stroke: p.onLight })}
-      <path d="${text(f['PlayfairDisplay-Bold'], 'No signal,', { size: 26, x: 90, y: 56 })}" fill="${p.onLight}"/>
-      <path d="${text(f['PlayfairDisplay-Italic'], 'no problem.', { size: 26, x: 90, y: 82 })}" fill="${p.onLight}"/>
+      <path d="${text(f['PlayfairDisplay-Bold'], COPY.offlineLines[0], { size: 22, x: 90, y: 56 })}" fill="${p.onLight}"/>
+      <path d="${text(f['PlayfairDisplay-Italic'], COPY.offlineLines[1], { size: 22, x: 90, y: 82 })}" fill="${p.onLight}"/>
       <path d="${text(f['DMMono-Medium'], 'ternpike.com', {
         letterSpacing: 0.2,
         size: 7.5,
@@ -211,13 +214,13 @@ export const stickers = [
         .join('')
       return `
       <path d="${cut(KEYLINE)}" fill="${p.light}"/>
-      <path d="${text(f['PlayfairDisplay-Bold'], 'Ternpike', {
+      <path d="${text(f['PlayfairDisplay-Bold'], COPY.brand, {
         anchor: 'middle',
         size: 21,
         x: 80,
         y: 44,
       })}" fill="${p.onLight}"/>
-      <path d="${text(f['DMMono-Regular'], 'ALASKA HIGHWAY', {
+      <path d="${text(f['DMMono-Regular'], COPY.alaskaHighwayCaps, {
         anchor: 'middle',
         letterSpacing: 0.18,
         size: 6.5,
@@ -234,9 +237,9 @@ export const stickers = [
         x: 140,
         y: 179,
       })}" fill="${p.onLight}"/>
-      <path d="${text(f['DMMono-Medium'], 'LOGGED OFFLINE', {
+      <path d="${text(f['DMMono-Medium'], COPY.offlineCaps, {
         anchor: 'middle',
-        letterSpacing: 0.2,
+        letterSpacing: 0.14,
         size: 7,
         x: 81,
         y: 196,
@@ -256,7 +259,7 @@ export const stickers = [
   // ── 6. Orlando → Juneau ──────────────────────────────────────────────
   {
     family: 'kit',
-    blurb: '3.2 × 1.6in. The hero line, route plotted behind it, QR on the right.',
+    blurb: '3.2 × 1.6in. The hero headline in full, QR on the right.',
     cut: roundedRect(320, 160, 18),
     h: 160,
     qr: 'route',
@@ -265,42 +268,23 @@ export const stickers = [
     w: 320,
     art: (f, cut, p) => `
       <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
-      ${
-        // The route sits behind the headline, which works at 50% moss and
-        // does not work at 100% black: thermal has no opacity to push it
-        // back with, so the dots cross the italic descenders and read as
-        // dirt. Decoration that can't recede is decoration that goes.
-        p.mono
-          ? ''
-          : `${dottedRoute({
-              bend: 42,
-              fill: p.onDarkSoft,
-              from: [36, 128],
-              opacity: p.dim(0.5),
-              to: [190, 42],
-            })}
-      <circle cx="36" cy="128" r="3.5" fill="${p.onDark}" opacity="${p.dim(0.7)}"/>
-      <circle cx="190" cy="42" r="5" fill="${p.accent}"/>`
-      }
-      <path d="${text(f['PlayfairDisplay-Italic'], 'Every dollar,', {
+      ${COPY.heroLines
+        .map(
+          (heroLine, i) => `<path d="${text(f['PlayfairDisplay-Italic'], heroLine, {
         anchor: 'middle',
-        size: 24,
+        size: 21,
         x: 112,
-        y: 66,
-      })}" fill="${p.onDark}"/>
-      <path d="${text(f['PlayfairDisplay-Italic'], 'Orlando to Juneau.', {
-        anchor: 'middle',
-        size: 24,
-        x: 112,
-        y: 94,
-      })}" fill="${p.onDark}"/>
-      ${line(84, 110, 140, 110, p.accent, 1.5)}
+        y: 48 + i * 24,
+      })}" fill="${p.onDark}"/>`,
+        )
+        .join('\n      ')}
+      ${line(84, 112, 140, 112, p.accent, 1.5)}
       <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
         anchor: 'middle',
         letterSpacing: 0.26,
         size: 7.5,
         x: 113,
-        y: 128,
+        y: 130,
       })}" fill="${p.onDarkSoft}"/>
       ${qrCard({ dark: p.cardInk, light: p.card, size: 84, slug: 'route', x: 218, y: 38 })}
     `,
@@ -318,7 +302,7 @@ export const stickers = [
     art: (f, cut, p) => `
       <path d="${cut(KEYLINE)}" fill="${p.warm}"/>
       <path d="${cut(15)}" fill="none" stroke="${p.onLight}" stroke-width="1.1" opacity="${p.dim(0.5)}"/>
-      <path d="${text(f['PlayfairDisplay-Italic'], 'Splurge on the cabin', {
+      <path d="${text(f['PlayfairDisplay-Italic'], sentence(COPY.cabin), {
         anchor: 'middle',
         size: 22,
         x: 140,
@@ -333,7 +317,7 @@ export const stickers = [
         y: 81,
       })}" fill="${p.accent}"/>
       ${line(158, 78, 184, 78, p.accent, 1.2)}
-      <path d="${text(f['PlayfairDisplay-Italic'], 'sleep in the truck.', {
+      <path d="${text(f['PlayfairDisplay-Italic'], COPY.truck.replace(/^or /, ''), {
         anchor: 'middle',
         size: 22,
         x: 140,
@@ -393,13 +377,13 @@ export const stickers = [
     art: (f, cut, p) => `
       <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
       ${qrCard({ dark: p.cardInk, light: p.card, radius: 6, size: 150, slug: 'trailhead', x: 25, y: 24 })}
-      <path d="${text(f['PlayfairDisplay-Black'], 'Ternpike', {
+      <path d="${text(f['PlayfairDisplay-Black'], COPY.brand, {
         anchor: 'middle',
         size: 32,
         x: 100,
         y: 212,
       })}" fill="${p.onDark}"/>
-      <path d="${text(f['PlayfairDisplay-Italic'], 'Track every turn of the road.', {
+      <path d="${text(f['PlayfairDisplay-Italic'], COPY.tagline, {
         anchor: 'middle',
         size: 13,
         x: 100,
@@ -486,18 +470,18 @@ export const stickers = [
   // is doing the work here, not the mark.
   {
     family: 'scan',
-    blurb: '2.3 × 1.3in. Curiosity hook beside the code — 4 per 4×6 label.',
-    cut: roundedRect(230, 130, 12),
+    blurb: '2.4 × 1.3in. The waitlist headline beside the code — 4 per 4×6 label.',
+    cut: roundedRect(240, 130, 12),
     h: 130,
     qr: 'hook',
     slug: 'scan-hook',
     title: 'Scan hook',
-    w: 230,
+    w: 240,
     art: (f, cut, p) => `
       <path d="${cut(KEYLINE)}" fill="${p.light}"/>
       ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 104, slug: 'hook', x: 13, y: 13 })}
-      <path d="${text(f['PlayfairDisplay-Bold'], 'Where\u2019d the', { size: 13, x: 128, y: 46 })}" fill="${p.onLight}"/>
-      <path d="${text(f['PlayfairDisplay-Bold'], 'money go?', { size: 13, x: 128, y: 66 })}" fill="${p.onLight}"/>
+      <path d="${text(f['PlayfairDisplay-Bold'], COPY.mathLines[0], { size: 13, x: 128, y: 46 })}" fill="${p.onLight}"/>
+      <path d="${text(f['PlayfairDisplay-Bold'], COPY.mathLines[1], { size: 13, x: 128, y: 66 })}" fill="${p.onLight}"/>
       ${line(128, 82, 196, 82, p.accent, 1.6)}
       <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
         letterSpacing: 0.08,
@@ -545,12 +529,13 @@ export const stickers = [
     art: (f, cut, p) => `
       <path d="${cut(KEYLINE)}" fill="${p.light}"/>
       ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 80, slug: 'strip', x: 11, y: 10 })}
-      <path d="${text(f['PlayfairDisplay-Bold'], 'Where\u2019d it all go?', { size: 15, x: 102, y: 46 })}" fill="${p.onLight}"/>
+      <path d="${text(f['PlayfairDisplay-Bold'], COPY.spentLines[0], { size: 13, x: 102, y: 40 })}" fill="${p.onLight}"/>
+      <path d="${text(f['PlayfairDisplay-Bold'], COPY.spentLines[1], { size: 13, x: 102, y: 58 })}" fill="${p.onLight}"/>
       <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
-        letterSpacing: 0.14,
+        letterSpacing: 0.12,
         size: 10,
         x: 102,
-        y: 72,
+        y: 82,
       })}" fill="${p.onLight}"/>
     `,
   },

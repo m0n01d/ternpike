@@ -231,7 +231,7 @@ ${cells}
 // the build prints "whole pool placed", and anything else means this list
 // needs trimming rather than the label needing more room.
 const SCAN_POOL = [
-  ['scan-mini', 3],
+  ['scan-mini', 2],
   ['scan-dot', 1],
   ['scan-hook', 1],
   ['scan-post', 1],

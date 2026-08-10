@@ -39,12 +39,12 @@ tell you whether it survives at print size.
 | `scan-mini` | 1.3 × 1.3in | 0.88in | **8** | Smallest useful scan target. |
 | `scan-post` | 1.3 × 1.75in | 0.98in | **8** | Tern above the code. |
 | `scan-dot` | 1.7in round | 0.84in | **6** | Rounds sit better on poles and bin lids. |
-| `scan-strip` | 2.5 × 1in | 0.80in | **6** | "Where'd it all go?" — rims, edges, pump handles. |
-| `scan-hook` | 2.3 × 1.3in | 1.04in | **4** | "Where'd the money go?" beside the code. |
+| `scan-strip` | 2.5 × 1in | 0.80in | **6** | "How much have I spent?" — rims, edges, pump handles. |
+| `scan-hook` | 2.4 × 1.3in | 1.04in | **4** | "Stop doing math in your head." beside the code. |
 
-Plus `thermal/scan-assortment.pdf` — one 4 × 6 label with seven stickers,
-one of each shape plus extra minis. That's the one to print when you're
-packing rather than restocking.
+Plus `thermal/scan-assortment.pdf` — one 4 × 6 label with six stickers, one
+of each shape plus an extra mini. That's the one to print when you're packing
+rather than restocking.
 
 Three rules these follow that the kit doesn't, all in service of getting
 scanned by someone who wasn't looking for you:
@@ -56,11 +56,45 @@ scanned by someone who wasn't looking for you:
   gangs the maximum. Designing above the floor is free; scaling up to reach
   it costs stickers per label.
 - **A reason to scan.** A bare QR gets ignored. `scan-hook` and `scan-strip`
-  lead with a question because curiosity is what converts a glance.
+  lead with a hook — the waitlist headline and the question the origin story
+  opens with — because curiosity is what converts a glance.
 
 Each design has its own QR slug (`mini`, `dot`, `hook`, `post`, `strip`), so
 `GET /admin/qr` tells you which shape and which line actually earn scans —
 and, from the edge geo, roughly where.
+
+## Copy comes from `content.yaml`
+
+**No sticker retypes a line.** Every word is pulled from
+`marketing/src/content.yaml` — the same file that renders ternpike.com — via
+`lib/copy.mjs`, and every shortened version is checked against its source.
+Reword `hero.headline` and this build *fails* rather than quietly shipping
+last season's headline on stock that outlives the edit. Same bargain
+`marketing/test/pricing.matrix.spec.mjs` makes for the pricing bullets.
+
+| Sticker text | Source |
+|---|---|
+| "Track every turn of the road." | `brand.tagline` |
+| "Every dollar, from Orlando to Juneau." | `hero.headline` |
+| "Works without signal" | `features.items[0].title` |
+| "Stop doing math in your head." | `emailCapture.headlineHtml` (broken where the site breaks it) |
+| "How much have I spent?" | `origin.paragraphs[0]` |
+| "Splurge on a cabin … or sleep in the truck" | `howItWorks.steps[2].body` |
+| "MADE ON THE ALASKA HIGHWAY" | `footer.legal` |
+| "Ternpike" | `brand.name` |
+
+Three guards, all in `lib/copy.mjs`:
+
+- `line(path)` — whole line, verbatim; throws if the path is gone.
+- `fragment(path, text)` — a shorter line lifted out of a longer one; throws
+  unless it's still a substring.
+- `split(path, parts)` / `wrap(source, parts)` — a line broken across a
+  narrow column; the parts must rejoin into exactly the source, which is what
+  stops a "line break" becoming a rewrite.
+
+**The one thing not sourced is "MILE 0"** on the milepost sticker. That's a
+visual device — a highway marker needs a number — not a claim about the
+product.
 
 ## What's in here
 
@@ -71,7 +105,7 @@ sheets/print-sheet.svg    US Letter gang sheet, 11 stickers, dashed cut guides
 thermal/<slug>.pdf  4×6 label, print THIS — exactly 4×6in, no rescaling
 thermal/<slug>.svg  the same as vector, if you want to edit it
 thermal/<slug>.png  the same at 203 DPI, hard-thresholded to one bit
-thermal/scan-assortment.{pdf,svg,png}   mixed 4×6 label, 7 scan stickers
+thermal/scan-assortment.{pdf,svg,png}   mixed 4×6 label, 6 scan stickers
 thermal/plan.json   per-design scale and cell geometry
 sheets/contact-sheet.svg  the review image above
 ```
