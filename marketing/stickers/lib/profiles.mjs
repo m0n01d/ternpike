@@ -138,8 +138,8 @@ const floorFor = (family) => (FLOOR_PT.find(([re]) => re.test(family)) ?? [null,
  * multiply the whole sticker by — scaling uniformly keeps the composition
  * intact, where bumping individual runs would reflow it.
  */
-export function thermalScale(entries) {
-  let scale = 1
+export function minLegibleScale(entries) {
+  let scale = 0
   for (const { family, size } of entries) {
     const needed = (floorFor(family) * UNITS_PER_POINT) / size
     if (needed > scale) scale = needed
@@ -150,6 +150,18 @@ export function thermalScale(entries) {
   // guarantee this function exists to make.
   return Math.ceil(scale * 100) / 100
 }
+
+/**
+ * The scale a design must print at to be legible, never shrinking it below
+ * its authored size.
+ *
+ * This is the right answer for the per-design labels, which print a design
+ * at its natural size or larger. It is the WRONG answer for the size
+ * sheets: a design whose type is generous only needs 0.85× to stay legible,
+ * and clamping that to 1 refuses a smaller print that would have been
+ * perfectly readable. Those call `minLegibleScale` directly.
+ */
+export const thermalScale = (entries) => Math.max(1, minLegibleScale(entries))
 
 /** The run that forced the scale — useful for explaining a big number. */
 export function bindingConstraint(entries) {

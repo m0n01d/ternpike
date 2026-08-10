@@ -27,6 +27,7 @@ import {
   BRAND,
   bindingConstraint,
   colorProfile,
+  minLegibleScale,
   monoProfile,
   thermalScale,
 } from './lib/profiles.mjs'
@@ -47,10 +48,10 @@ const label = (s) => `${inches(s.w)}in × ${inches(s.h)}in`
  * used. The thermal profile needs the sizes to work out how far the design
  * must be scaled up; nothing else looks at them.
  */
-function renderArt(sticker, fonts, profile) {
+function renderArt(sticker, fonts, profile, ctx = { scale: Infinity }) {
   resetTypeAudit()
   resetQrAudit()
-  const body = sticker.art(fonts, sticker.cut, profile).trim()
+  const body = sticker.art(fonts, sticker.cut, profile, ctx).trim()
   return { body, qr: qrAudit(), type: typeAudit() }
 }
 
@@ -212,7 +213,7 @@ function bestGrid(sticker, n) {
 }
 
 function sizeSheet(fonts, sticker, n, plan) {
-  const { body } = renderArt(sticker, fonts, monoProfile)
+  const { body } = renderArt(sticker, fonts, monoProfile, { scale: plan.scale })
   const usableW = LABEL.w - LABEL.margin * 2
   const usableH = LABEL.h - LABEL.margin * 2 - CAPTION_BAND
   const blockW = plan.cols * plan.cellW + (plan.cols - 1) * LABEL.gap
@@ -586,10 +587,18 @@ for (const sticker of stickers) {
   // size, 4-up is strictly better — one fewer choice, one more sticker.
   const steps = SIZE_STEPS.map((n) => {
     const plan = bestGrid(sticker, n)
+    // Render AT the intended scale before judging it: a design that
+    // reflows draws different type at 0.9x than at 1.4x, so the floor has
+    // to be measured against what will actually print.
+    const atScale = renderArt(sticker, fonts, monoProfile, { scale: plan.scale })
+    // minLegibleScale, not thermalScale: a design may be perfectly readable
+    // below 1×, and clamping there would refuse a print that works.
+    const floorAtScale = minLegibleScale(atScale.type)
+    const qrAtScale = atScale.qr.length > 0 ? Math.min(...atScale.qr) : null
     const reason =
-      plan.scale < floorScale
+      plan.scale < floorAtScale
         ? 'type'
-        : minQr !== null && (minQr * plan.scale) / UNITS_PER_INCH < MIN_QR_INCHES
+        : qrAtScale !== null && (qrAtScale * plan.scale) / UNITS_PER_INCH < MIN_QR_INCHES
           ? 'qr'
           : null
     return { n, plan, reason }
@@ -611,6 +620,8 @@ for (const sticker of stickers) {
     // PDF only. A size sheet is the base design tiled and scaled, so its
     // SVG is 2.5MB of duplicated artwork that nothing prints — the vector
     // source lives in svg/ and thermal/<slug>.svg, and this regenerates.
+    // SIZE_SVG=1 writes them anyway, for eyeballing a reflowed layout.
+    if (process.env.SIZE_SVG) await writeFile(join(sizesDir, `${file}.svg`), svg)
     const png = await rasterBuffer(svg, THERMAL_DPI / 100, { bilevel: true })
     if (png) {
       const pdf = await thermalPdf(png)

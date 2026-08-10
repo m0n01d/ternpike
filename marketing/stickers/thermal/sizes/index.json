@@ -7,6 +7,11 @@
       "slug": "badge-tern"
     },
     {
+      "file": "badge-tern-2up",
+      "n": 2,
+      "slug": "badge-tern"
+    },
+    {
       "file": "wordmark-rust-2up",
       "n": 2,
       "slug": "wordmark-rust"
@@ -27,6 +32,11 @@
       "slug": "milepost-zero"
     },
     {
+      "file": "milepost-zero-4up",
+      "n": 4,
+      "slug": "milepost-zero"
+    },
+    {
       "file": "no-signal-1up",
       "n": 1,
       "slug": "no-signal"
@@ -37,13 +47,28 @@
       "slug": "no-signal"
     },
     {
+      "file": "no-signal-4up",
+      "n": 4,
+      "slug": "no-signal"
+    },
+    {
       "file": "receipt-1up",
       "n": 1,
       "slug": "receipt"
     },
     {
+      "file": "receipt-3up",
+      "n": 3,
+      "slug": "receipt"
+    },
+    {
       "file": "orlando-juneau-1up",
       "n": 1,
+      "slug": "orlando-juneau"
+    },
+    {
+      "file": "orlando-juneau-3up",
+      "n": 3,
       "slug": "orlando-juneau"
     },
     {
@@ -54,6 +79,16 @@
     {
       "file": "cabin-or-truck-2up",
       "n": 2,
+      "slug": "cabin-or-truck"
+    },
+    {
+      "file": "cabin-or-truck-3up",
+      "n": 3,
+      "slug": "cabin-or-truck"
+    },
+    {
+      "file": "cabin-or-truck-4up",
+      "n": 4,
       "slug": "cabin-or-truck"
     },
     {
@@ -79,6 +114,11 @@
     {
       "file": "qr-trailhead-2up",
       "n": 2,
+      "slug": "qr-trailhead"
+    },
+    {
+      "file": "qr-trailhead-4up",
+      "n": 4,
       "slug": "qr-trailhead"
     },
     {

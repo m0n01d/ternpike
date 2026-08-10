@@ -90,7 +90,9 @@ const UNITS_PER_POINT = 100 / 72
  */
 const checkFloor = (sticker) => {
   resetTypeAudit()
-  sticker.art(fonts, sticker.cut, monoProfile)
+  // Infinity = no size pressure, i.e. the full-size layout — which is what
+  // the per-design labels print.
+  sticker.art(fonts, sticker.cut, monoProfile, { scale: Infinity })
   const audit = typeAudit()
   const worst = bindingConstraint(audit)
   const rendered = (worst.size * thermalScale(audit)) / UNITS_PER_POINT

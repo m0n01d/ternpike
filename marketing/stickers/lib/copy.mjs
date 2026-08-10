@@ -105,6 +105,9 @@ export const COPY = {
   tagline: line('brand.tagline'),
   taglineCaps: dropPeriod(line('brand.tagline')).toUpperCase(),
 
+  /** The tagline over two lines, for a narrow sticker. */
+  taglineLines: wrap(line('brand.tagline'), ['Track every turn', 'of the road.']),
+
   /** "Every dollar, from Orlando to Juneau." — set as three lines. */
   heroLines: split('hero.headline', ['Every dollar,', 'from Orlando', 'to Juneau.']),
 

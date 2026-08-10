@@ -10,6 +10,13 @@
 // in when you're deciding whether a line of type will survive at 2 inches
 // wide.
 //
+// **Designs may reflow for size.** `art` receives a `ctx` whose `scale` is
+// the factor the sticker is about to print at. Most designs ignore it. One
+// that carries a long line at a small size can't: "Track every turn of the
+// road." needs ~2in of width at 11pt, so below a certain scale the choice
+// is to set it on two lines at a larger size or not to offer that size at
+// all. Reflowing is better than refusing.
+//
 // **Designs name roles, never colours.** `art` receives a profile `p` and
 // paints with `p.dark` / `p.onDark` / `p.accent` and friends. That is what
 // lets the identical design render as full-colour vinyl and as black-on-
@@ -31,6 +38,19 @@ import { COPY } from './copy.mjs'
 import { qrCard, qrTarget } from './qr.mjs'
 import { arcText, text } from './type.mjs'
 
+// 7pt in design units, with a hair of slack for the 2dp scale rounding.
+const FLOOR_UNITS = 9.9
+
+/**
+ * Size for a sticker's smallest line, given the scale it's about to print
+ * at. `ctx.scale` is Infinity for a full-size render, so this is a no-op
+ * unless something is deliberately printing the design small — in which
+ * case the design-unit size grows to hold the physical size above the
+ * 203 DPI floor. That's what lets a design offer a smaller print instead
+ * of refusing one.
+ */
+const smallest = (ctx, base) => Math.max(base, FLOOR_UNITS / Math.min(ctx.scale, 4))
+
 /** Capitalise a fragment lifted from the middle of a sentence. */
 const sentence = (s) => s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -47,7 +67,7 @@ export const stickers = [
     slug: 'badge-tern',
     title: 'Tern badge',
     w: 300,
-    art: (f, cut, p) => `
+    art: (f, cut, p, ctx) => `
       <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
       <circle cx="150" cy="150" r="137" fill="none" stroke="${p.accent}" stroke-width="2.2"/>
       <circle cx="150" cy="150" r="102" fill="none" stroke="${p.onDark}" stroke-width="1.2" opacity="${p.dim(0.4)}"/>
@@ -82,13 +102,20 @@ export const stickers = [
         y: 172,
       })}" fill="${p.onDark}"/>
       ${line(104, 184, 196, 184, p.accent, 1.6)}
-      <path d="${text(f['DMMono-Medium'], COPY.madeOnCaps, {
-        anchor: 'middle',
-        letterSpacing: 0.1,
-        size: 8.5,
-        x: 150,
-        y: 200,
-      })}" fill="${p.onDarkSoft}"/>
+      <path d="${text(
+        f['DMMono-Medium'],
+        // Growing "MADE ON THE ALASKA HIGHWAY" to clear the floor pushes it
+        // outside the inner ring, so a small print takes the shorter
+        // fragment. Both come from footer.legal.
+        ctx.scale < 1 ? COPY.alaskaHighwayCaps : COPY.madeOnCaps,
+        {
+          anchor: 'middle',
+          letterSpacing: 0.1,
+          size: smallest(ctx, 8.5),
+          x: 150,
+          y: 200,
+        },
+      )}" fill="${p.onDarkSoft}"/>
     `,
   },
 
@@ -124,7 +151,7 @@ export const stickers = [
     slug: 'milepost-zero',
     title: 'Milepost',
     w: 140,
-    art: (f, cut, p) => `
+    art: (f, cut, p, ctx) => `
       <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
       <path d="${cut(16)}" fill="none" stroke="${p.onDark}" stroke-width="1.1" opacity="${p.dim(0.35)}"/>
       ${bird({ dark: p.markDark, light: p.onDark, scale: 0.44, x: 70, y: 50 })}
@@ -152,7 +179,7 @@ export const stickers = [
       <path d="${text(f['DMMono-Regular'], 'ternpike.com', {
         anchor: 'middle',
         letterSpacing: 0.1,
-        size: 8,
+        size: smallest(ctx, 8),
         x: 71,
         y: 268,
       })}" fill="${p.onDark}" opacity="${p.dim(0.6)}"/>
@@ -168,7 +195,7 @@ export const stickers = [
     slug: 'no-signal',
     title: 'Works without signal',
     w: 260,
-    art: (f, cut, p) => `
+    art: (f, cut, p, ctx) => `
       <path d="${cut(KEYLINE)}" fill="${p.light}"/>
       <path d="${cut(16)}" fill="none" stroke="${p.accent}" stroke-width="1.4"/>
       ${noSignal({ cx: 54, cy: 64, slash: p.accent, stroke: p.onLight })}
@@ -176,7 +203,7 @@ export const stickers = [
       <path d="${text(f['PlayfairDisplay-Italic'], COPY.offlineLines[1], { size: 22, x: 90, y: 82 })}" fill="${p.onLight}"/>
       <path d="${text(f['DMMono-Medium'], 'ternpike.com', {
         letterSpacing: 0.2,
-        size: 7.5,
+        size: smallest(ctx, 7.5),
         x: 91,
         y: 101,
       })}" fill="${p.accent}"/>
@@ -193,7 +220,7 @@ export const stickers = [
     slug: 'receipt',
     title: 'Receipt',
     w: 160,
-    art: (f, cut, p) => {
+    art: (f, cut, p, ctx) => {
       const rows = [
         ['FUEL', '62.40'],
         ['CAMPGROUND', '28.00'],
@@ -223,7 +250,7 @@ export const stickers = [
       <path d="${text(f['DMMono-Regular'], COPY.alaskaHighwayCaps, {
         anchor: 'middle',
         letterSpacing: 0.18,
-        size: 6.5,
+        size: smallest(ctx, 6.5),
         x: 81,
         y: 58,
       })}" fill="${p.onLightSoft}"/>
@@ -240,7 +267,7 @@ export const stickers = [
       <path d="${text(f['DMMono-Medium'], COPY.offlineCaps, {
         anchor: 'middle',
         letterSpacing: 0.14,
-        size: 7,
+        size: smallest(ctx, 7),
         x: 81,
         y: 196,
       })}" fill="${p.accent}"/>
@@ -248,7 +275,7 @@ export const stickers = [
       <path d="${text(f['DMMono-Regular'], 'ternpike.com', {
         anchor: 'middle',
         letterSpacing: 0.14,
-        size: 8,
+        size: smallest(ctx, 8),
         x: 81,
         y: 296,
       })}" fill="${p.onLight}"/>
@@ -266,7 +293,7 @@ export const stickers = [
     slug: 'orlando-juneau',
     title: 'Orlando to Juneau',
     w: 320,
-    art: (f, cut, p) => `
+    art: (f, cut, p, ctx) => `
       <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
       ${COPY.heroLines
         .map(
@@ -282,7 +309,7 @@ export const stickers = [
       <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
         anchor: 'middle',
         letterSpacing: 0.26,
-        size: 7.5,
+        size: smallest(ctx, 7.5),
         x: 113,
         y: 130,
       })}" fill="${p.onDarkSoft}"/>
@@ -299,7 +326,7 @@ export const stickers = [
     slug: 'cabin-or-truck',
     title: 'Cabin or truck',
     w: 280,
-    art: (f, cut, p) => `
+    art: (f, cut, p, ctx) => `
       <path d="${cut(KEYLINE)}" fill="${p.warm}"/>
       <path d="${cut(15)}" fill="none" stroke="${p.onLight}" stroke-width="1.1" opacity="${p.dim(0.5)}"/>
       <path d="${text(f['PlayfairDisplay-Italic'], sentence(COPY.cabin), {
@@ -312,7 +339,7 @@ export const stickers = [
       <path d="${text(f['DMMono-Medium'], 'OR', {
         anchor: 'middle',
         letterSpacing: 0.3,
-        size: 8,
+        size: smallest(ctx, 8),
         x: 141,
         y: 81,
       })}" fill="${p.accent}"/>
@@ -326,7 +353,7 @@ export const stickers = [
       <path d="${text(f['DMMono-Regular'], 'ternpike.com', {
         anchor: 'middle',
         letterSpacing: 0.16,
-        size: 7.5,
+        size: smallest(ctx, 7.5),
         x: 141,
         y: 126,
       })}" fill="${p.onLight}" opacity="${p.dim(0.65)}"/>
@@ -374,7 +401,41 @@ export const stickers = [
     slug: 'qr-trailhead',
     title: 'Trailhead scan card',
     w: 200,
-    art: (f, cut, p) => `
+    // Below ~1.05x the tagline can't hold one line at 11pt — it wants two
+    // inches of width and the sticker is under two inches wide. So the
+    // small layout sets it on two lines at a size that survives, drops the
+    // rule for the room, and grows the URL to clear the floor too. Same
+    // words either way; only the setting changes.
+    art: (f, cut, p, ctx) =>
+      ctx.scale < 1.05
+        ? `
+      <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 6, size: 150, slug: 'trailhead', x: 25, y: 22 })}
+      <path d="${text(f['PlayfairDisplay-Black'], COPY.brand, {
+        anchor: 'middle',
+        size: 28,
+        x: 100,
+        y: 205,
+      })}" fill="${p.onDark}"/>
+      ${COPY.taglineLines
+        .map(
+          (part, i) => `<path d="${text(f['PlayfairDisplay-Italic'], part, {
+        anchor: 'middle',
+        size: 18,
+        x: 100,
+        y: 230 + i * 21,
+      })}" fill="${p.onDark}"/>`,
+        )
+        .join('\n      ')}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.16,
+        size: 11.5,
+        x: 101,
+        y: 280,
+      })}" fill="${p.onDarkSoft}"/>
+    `
+        : `
       <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
       ${qrCard({ dark: p.cardInk, light: p.card, radius: 6, size: 150, slug: 'trailhead', x: 25, y: 24 })}
       <path d="${text(f['PlayfairDisplay-Black'], COPY.brand, {

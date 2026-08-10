@@ -60,20 +60,33 @@ The caption strap along the bottom names the design, the count and the
 finished size, so a stack of printed labels stays sortable. `index.json`
 lists everything generated.
 
-**Not every count exists for every design**, and the gaps are the point:
+**Designs reflow rather than refuse.** `art` receives a `ctx` whose `scale`
+is the factor the sticker is about to print at (`Infinity` for a full-size
+render, so the full layout is the default). A design that would otherwise
+be illegible small can respond:
 
-- `2:type` — at that size the smallest line drops under the 203 DPI floor.
-  `badge-tern` and `receipt` are 1-up only; they're already large designs,
-  and halving them makes them unreadable rather than small.
-- `2:qr` — the QR would fall under 0.75in, the size a phone stops picking
+- `qr-trailhead` sets "Track every turn of the road." on **two** lines
+  below ~1.05×. One line needs about two inches at 11pt and the sticker is
+  under two inches wide, so the choice was two lines or no small size.
+- `badge-tern` swaps "MADE ON THE ALASKA HIGHWAY" for "ALASKA HIGHWAY"
+  below 1×. Growing the long line to clear the floor pushes it outside the
+  inner ring; both fragments come from `footer.legal`.
+- Most designs just grow their smallest line via `smallest(ctx, base)` —
+  the URL is the smallest thing on nearly every sticker and therefore the
+  usual blocker.
+
+**Some counts still don't exist**, and the build reports why:
+
+- `3:type` — even reflowed, the smallest line drops under the 203 DPI
+  floor. The dense designs bottom out first.
+- `4:qr` — the QR would fall under 0.75in, where a phone stops picking it
   up casually.
-- `3:=4up` — 3-up and 4-up would print the same size, so only 4-up ships.
-  Three stacked rows and a 2×2 grid land within a few percent for a square
-  sticker, and at equal size more stickers strictly wins.
+- `3:=4up` — the step would print the same size as the next, so only the
+  higher count ships. Three stacked rows and a 2×2 grid land within a few
+  percent for a square sticker, and at equal size more stickers wins.
 
 A sticker that prints but can't be read or scanned is worse than one that
-isn't offered, so those steps are reported by the build and skipped rather
-than silently shrunk.
+isn't offered, so those steps are skipped rather than silently shrunk.
 
 PDF only here. A size sheet is just the base design tiled and scaled — its
 SVG is megabytes of duplicated artwork that nothing prints, and the vector
