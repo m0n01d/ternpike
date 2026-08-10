@@ -34,7 +34,8 @@ tell you whether it survives at print size.
 svg/<slug>.svg      colour, one sticker each — artwork only, no cut guides
 png/<slug>.png      the same at 300 DPI, for portals that only take raster
 sheets/print-sheet.svg    US Letter gang sheet, 11 stickers, dashed cut guides
-thermal/<slug>.svg  black-on-white, ganged onto a 4×6 label — see below
+thermal/<slug>.pdf  4×6 label, print THIS — exactly 4×6in, no rescaling
+thermal/<slug>.svg  the same as vector, if you want to edit it
 thermal/<slug>.png  the same at 203 DPI, hard-thresholded to one bit
 thermal/plan.json   per-design scale and cell geometry
 sheets/contact-sheet.svg  the review image above
@@ -67,9 +68,21 @@ below 100% or that line closes up.
 
 ## Printing on a thermal label printer
 
-`thermal/` is the same nine designs rendered for a direct thermal head
-(Munbyn RW403B and friends): **pure black on white, one sticker design per
-4 × 6 label, ganged to fill it.** Print the SVG (or the PNG) at 100%.
+`thermal/` is the same nine designs rendered for a direct thermal head:
+**pure black on white, one sticker design per 4 × 6 label, ganged to fill
+it.**
+
+**Print `thermal/<slug>.pdf`, not the SVG** — especially from an iPhone or
+iPad. iOS Safari ignores `@page size` and renders any HTML/SVG print job onto
+the system paper default, so an SVG label arrives letterboxed on US Letter
+and comes out scaled down. A PDF that already declares 288 × 432pt can't be
+reinterpreted. (`server/qrPdf.js` exists for the same reason; the constraint
+doesn't change just because these labels are generated ahead of time.)
+
+The PDF embeds the already-thresholded bitmap rather than vector art. The
+head reduces everything to one bit at 203 DPI regardless, so embedding the
+bilevel image is what makes the proof and the print the same object. The SVG
+is there if you want to edit a design; the PNG is the proof.
 
 | Design | Scale | Per 4×6 label |
 |---|---|---|
@@ -99,9 +112,14 @@ Three things drive that table, and none of them are stylistic:
   so the composition holds. That's the Scale column, and it's computed from
   the type actually drawn, not guessed.
 
-203 DPI is the conservative assumption; a 300 DPI head prints these strictly
-better. The dashed outline on each is a scissor guide — cut on it and it's
-gone.
+203 DPI is the conservative assumption — the common Munbyn head resolution.
+A 300 DPI model prints these strictly better; nothing breaks, the scale
+factors are simply more generous than they need to be, so you get fewer
+stickers per label than that printer could manage. If you know you're on
+300 DPI, drop the `DM Mono` floor in `FLOOR_PT` (lib/profiles.mjs) from 7pt
+to ~5pt and rebuild to gang more per label.
+
+The dashed outline on each is a scissor guide — cut on it and it's gone.
 
 **For plain tracked QR labels, you may not want this kit at all.**
 `server/qrPdf.js` already serves purpose-built 4×6 PDFs for this printer at
@@ -132,7 +150,7 @@ want a cheap tracked label rather than a keepsake. Hand out both.
 ## Regenerating
 
 ```sh
-npm i --no-save opentype.js sharp qrcode-generator jsqr
+npm i --no-save opentype.js sharp qrcode-generator jsqr pdf-lib
 node marketing/stickers/build.mjs          # SVG + PNG + sheets
 node marketing/stickers/build.mjs --no-png # vectors only, skips sharp
 node marketing/stickers/verify.mjs         # decode every QR out of the PNGs
@@ -145,13 +163,17 @@ the 1-bit thermal label. A quiet zone eaten by a nudged coordinate produces a
 picture that looks like a QR and scans like a smudge; this is the only check
 that catches it before the print run.
 
+It also asserts every thermal PDF is exactly one 4 × 6in page, since a label
+PDF at any other size gets scaled to fit by the print path — the precise
+failure the PDF format is there to prevent.
+
 It crops to a single cell before decoding a thermal label, because a ganged
 label carries several finder-pattern triples and jsQR resolves none of them.
 That's a decoder limitation rather than a print defect — but the two are
 indistinguishable from a pass/fail line, which is why the crop uses the real
 cell geometry from `thermal/plan.json` instead of a guess.
 
-Neither dependency is in any `package.json`. Nothing in CI runs this — the
+None of these are in any `package.json`. Nothing in CI runs this — the
 generated files are committed, and the kit changes about as often as the logo
 does. Fonts are fetched from Google Fonts on first run and cached in `.fonts/`
 (gitignored); both families are SIL OFL 1.1, which permits outlining and

@@ -18,13 +18,18 @@
 // that only survives with anti-aliased edges fails here — which is exactly
 // what would happen coming off the label printer.
 //
-// Needs `npm i --no-save sharp jsqr`.
+// The thermal PDFs are checked too — not their contents, but their page
+// geometry. A label PDF that isn't exactly 4×6 gets scaled to fit by the
+// print path, which is the whole failure this format exists to avoid.
+//
+// Needs `npm i --no-save sharp jsqr pdf-lib`.
 
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import jsQR from 'jsqr'
+import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 
 import { qrDestination, stickers } from './lib/stickers.mjs'
@@ -72,6 +77,17 @@ const decodeThermalCell = async (file, plan) => {
 
 let failures = 0
 
+/** Exactly 4×6in at 72pt/in, one page. Anything else will be rescaled. */
+const checkPdf = async (slug) => {
+  const doc = await PDFDocument.load(await readFile(join(here, 'thermal', `${slug}.pdf`)))
+  const pages = doc.getPages()
+  if (pages.length !== 1) return `${pages.length} pages`
+  const { height, width } = pages[0].getSize()
+  return width === 288 && height === 432
+    ? null
+    : `${(width / 72).toFixed(2)}×${(height / 72).toFixed(2)}in`
+}
+
 for (const sticker of stickers) {
   const expected = qrDestination(sticker)
   const file = join(here, 'png', `${sticker.slug}.png`)
@@ -82,9 +98,11 @@ for (const sticker of stickers) {
     // be grepped (type is outlined to paths), so check the design source,
     // which is where the string is actually written.
     const printsUrl = /ternpike\.com/i.test(sticker.art.toString())
-    if (!printsUrl) failures++
+    const pdf = await checkPdf(sticker.slug)
+    const ok = printsUrl && !pdf
+    if (!ok) failures++
     console.log(
-      `  ${sticker.slug.padEnd(16)} ${printsUrl ? 'OK  ' : 'FAIL'} url only, no QR`,
+      `  ${sticker.slug.padEnd(16)} ${ok ? 'OK  ' : 'FAIL'} url only, no QR${pdf ? ` — pdf ${pdf}` : ''}`,
     )
     continue
   }
@@ -98,16 +116,17 @@ for (const sticker of stickers) {
     planFor(sticker.slug),
   )
 
-  const ok = full === expected && small === expected && thermal === expected
+  const pdf = await checkPdf(sticker.slug)
+  const ok = full === expected && small === expected && thermal === expected && !pdf
   if (!ok) failures++
   const mark = (got) => (got === expected ? 'yes' : JSON.stringify(got))
   console.log(
-    `  ${sticker.slug.padEnd(16)} ${ok ? 'OK  ' : 'FAIL'} vinyl300=${mark(full)} vinyl${PHONE_PX_PER_INCH}=${mark(small)} thermal203-1bit=${mark(thermal)}`,
+    `  ${sticker.slug.padEnd(16)} ${ok ? 'OK  ' : 'FAIL'} vinyl300=${mark(full)} vinyl${PHONE_PX_PER_INCH}=${mark(small)} thermal203-1bit=${mark(thermal)} pdf4x6=${pdf ? pdf : 'yes'}`,
   )
 }
 
 const withQr = stickers.filter(qrDestination).length
 console.log(
-  `\n${stickers.length} stickers · ${withQr} with a QR (colour + 1-bit thermal) · every one carries ternpike.com · ${failures} failing`,
+  `\n${stickers.length} stickers · ${withQr} with a QR (colour + 1-bit thermal) · every one carries ternpike.com · all thermal PDFs exactly 4×6in · ${failures} failing`,
 )
 process.exit(failures === 0 ? 0 : 1)

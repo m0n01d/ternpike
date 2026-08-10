@@ -10,6 +10,8 @@
 //   thermal/<slug>.svg      black-on-white, ganged onto a 4×6 label
 //   thermal/<slug>.png      the same at 203 DPI, hard-thresholded to 1 bit
 //                           — what a direct thermal head actually lays down
+//   thermal/<slug>.pdf      that bitmap on an exactly-4×6 page — print THIS
+//                           from an iPhone or iPad
 //
 // PNG output needs `sharp`, which is not a repo dependency — it pulls a
 // platform binary and nothing else here rasterizes. Run
@@ -359,15 +361,54 @@ if (wantPng) {
 
 const widthOf = (svg) => Number(/viewBox="0 0 ([\d.]+)/.exec(svg)[1])
 
+let PDFDocument = null
+try {
+  ;({ PDFDocument } = await import('pdf-lib'))
+} catch {
+  console.warn('! pdf-lib not installed — skipping thermal PDFs (npm i --no-save pdf-lib)')
+}
+
+/**
+ * Wrap a thermal bitmap in a PDF page that is exactly 4×6 inches.
+ *
+ * iOS Safari ignores `@page size` and renders any HTML/SVG print job onto
+ * the system paper default, so an SVG label printed from an iPhone arrives
+ * letterboxed on US Letter and comes out of the printer scaled down. A PDF
+ * that already declares 288×432pt cannot be reinterpreted. This is the same
+ * reason `server/qrPdf.js` exists — the constraint hasn't changed just
+ * because these labels are generated ahead of time.
+ *
+ * The page embeds the already-thresholded bitmap rather than vector art:
+ * the head is going to reduce everything to one bit at 203 DPI anyway, so
+ * embedding the bilevel image is what makes the proof and the print the
+ * same object.
+ */
+async function thermalPdf(png) {
+  if (!PDFDocument) return null
+  const doc = await PDFDocument.create()
+  doc.setTitle('Ternpike thermal label')
+  doc.setCreator('Ternpike')
+  const page = doc.addPage([288, 432]) // 4×6in at 72pt/in
+  const image = await doc.embedPng(png)
+  page.drawImage(image, { height: 432, width: 288, x: 0, y: 0 })
+  return Buffer.from(await doc.save())
+}
+
 // Viewbox units are 1/100in, so pxPerUnit is DPI/100. `bilevel` reproduces
 // what a thermal head does: no anti-aliasing, no grey, every dot on or off.
-const raster = async (svg, out, pxPerUnit = 3, { bilevel = false } = {}) => {
-  if (!sharp) return
+const rasterBuffer = async (svg, pxPerUnit, { bilevel = false } = {}) => {
+  if (!sharp) return null
   let pipe = sharp(Buffer.from(svg), { density: 96 * pxPerUnit }).resize({
     width: Math.round(widthOf(svg) * pxPerUnit),
   })
   if (bilevel) pipe = pipe.greyscale().threshold(128)
-  await pipe.png({ compressionLevel: 9 }).toFile(out)
+  return await pipe.png({ compressionLevel: 9 }).toBuffer()
+}
+
+const raster = async (svg, out, pxPerUnit = 3, opts = {}) => {
+  const buf = await rasterBuffer(svg, pxPerUnit, opts)
+  if (buf) await writeFile(out, buf)
+  return buf
 }
 
 console.log('colour (die-cut vinyl)')
@@ -399,9 +440,13 @@ const thermalPlans = []
 for (const sticker of stickers) {
   const { plan, svg, type } = thermalSvg(sticker, fonts)
   await writeFile(join(thermalDir, `${sticker.slug}.svg`), svg)
-  await raster(svg, join(thermalDir, `${sticker.slug}.png`), THERMAL_DPI / 100, {
+  const png = await raster(svg, join(thermalDir, `${sticker.slug}.png`), THERMAL_DPI / 100, {
     bilevel: true,
   })
+  if (png) {
+    const pdf = await thermalPdf(png)
+    if (pdf) await writeFile(join(thermalDir, `${sticker.slug}.pdf`), pdf)
+  }
   const per = `${plan.count} per label`
   const geometry = `${plan.cols}×${plan.rows}${plan.rotated ? ' rotated' : ''}`
   let note = ''
