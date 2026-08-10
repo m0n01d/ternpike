@@ -125,6 +125,12 @@ for (const sticker of stickers) {
   )
 }
 
+// The assortment label isn't a design, so the per-design loop misses it —
+// and it's the one most likely to actually get printed.
+const assortment = await checkPdf('scan-assortment')
+if (assortment) failures++
+console.log(`  ${'scan-assortment'.padEnd(16)} ${assortment ? `FAIL pdf ${assortment}` : 'OK   mixed label, pdf4x6=yes'}`)
+
 const withQr = stickers.filter(qrDestination).length
 console.log(
   `\n${stickers.length} stickers · ${withQr} with a QR (colour + 1-bit thermal) · every one carries ternpike.com · all thermal PDFs exactly 4×6in · ${failures} failing`,

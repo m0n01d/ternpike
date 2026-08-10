@@ -155,6 +155,89 @@ ${cells.join('\n')}
   }
 }
 
+/**
+ * A mixed 4×6 label: an assortment of the scan family rather than N copies
+ * of one design.
+ *
+ * The per-design labels are right when you know which sticker you want a
+ * stack of. This is right when you're packing for a trip and want a bit of
+ * everything on one label.
+ *
+ * Shelf packing over pre-scaled boxes — each design carries its own thermal
+ * scale, so the boxes are heterogeneous and the simple sticker.w/h packer
+ * below can't be reused.
+ */
+function scanSamplerSvg(fonts, pool) {
+  const availRight = LABEL.w - LABEL.margin
+  const floor = LABEL.h - LABEL.margin
+
+  const boxes = pool.flatMap(([slug, count]) => {
+    const sticker = stickers.find((s) => s.slug === slug)
+    if (!sticker) throw new Error(`unknown sticker in scan pool: ${slug}`)
+    const { type } = renderArt(sticker, fonts, monoProfile)
+    const scale = thermalScale(type)
+    return Array.from({ length: count }, () => ({
+      h: sticker.h * scale,
+      scale,
+      sticker,
+      w: sticker.w * scale,
+    }))
+  })
+  boxes.sort((a, b) => b.h - a.h || b.w - a.w)
+
+  const placed = []
+  let shelfY = LABEL.margin
+  let shelfH = 0
+  let x = LABEL.margin
+  while (boxes.length > 0) {
+    const idx = boxes.findIndex((b) => x + b.w <= availRight && shelfY + b.h <= floor)
+    if (idx === -1) {
+      const nextY = shelfY + (shelfH === 0 ? 0 : shelfH + LABEL.gap)
+      if (shelfH === 0 || !boxes.some((b) => nextY + b.h <= floor)) break
+      shelfY = nextY
+      shelfH = 0
+      x = LABEL.margin
+      continue
+    }
+    const [box] = boxes.splice(idx, 1)
+    placed.push({ ...box, x, y: shelfY })
+    x += box.w + LABEL.gap
+    shelfH = Math.max(shelfH, box.h)
+  }
+
+  const cells = placed
+    .map(({ scale, sticker, x: bx, y: by }) => `  <g transform="translate(${round(bx)} ${round(by)}) scale(${scale})">
+    ${renderArt(sticker, fonts, monoProfile).body}
+    <path d="${sticker.cut(0)}" fill="none" stroke="#000000" stroke-width="${round(0.6 / scale)}" stroke-dasharray="${round(5 / scale)} ${round(4 / scale)}"/>
+  </g>`)
+    .join('\n')
+
+  return {
+    count: placed.length,
+    dropped: boxes.length,
+    svg: `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="4in" height="6in" viewBox="0 0 ${LABEL.w} ${LABEL.h}">
+  <title>Ternpike — scan assortment — 4×6 thermal label</title>
+  <rect width="${LABEL.w}" height="${LABEL.h}" fill="#ffffff"/>
+${cells}
+</svg>
+`,
+  }
+}
+
+// What goes on the assortment label. Weighted toward the small ones, which
+// are the ones you actually get through.
+// One of each shape plus extra minis. Sized so the whole pool places —
+// the build prints "whole pool placed", and anything else means this list
+// needs trimming rather than the label needing more room.
+const SCAN_POOL = [
+  ['scan-mini', 3],
+  ['scan-dot', 1],
+  ['scan-hook', 1],
+  ['scan-post', 1],
+  ['scan-strip', 1],
+]
+
 // ── Gang sheet (colour, US Letter) ───────────────────────────────────────
 
 const SHEET = { gap: 22, h: 1100, margin: 40, w: 850 }
@@ -266,8 +349,7 @@ ${guides}
 
 // ── Contact sheet (review image) ─────────────────────────────────────────
 
-function contactSheet(fonts, { profile, subtitle, title }) {
-  const cols = 3
+function contactSheet(fonts, { cols = 3, profile, subset, subtitle, title }) {
   const cellW = 420
   const cellH = 400
   const artW = 350
@@ -275,7 +357,7 @@ function contactSheet(fonts, { profile, subtitle, title }) {
   const pad = 26
   const margin = 54
   const headerH = 190
-  const rows = Math.ceil(stickers.length / cols)
+  const rows = Math.ceil(subset.length / cols)
   const w = margin * 2 + cols * cellW + (cols - 1) * pad
   const h = headerH + rows * cellH + (rows - 1) * pad + margin
   const paper = profile.mono ? '#ffffff' : BRAND.cream
@@ -284,7 +366,7 @@ function contactSheet(fonts, { profile, subtitle, title }) {
   const sub = profile.mono ? '#000000' : BRAND.moss
   const cap = profile.mono ? '#000000' : BRAND.rust
 
-  const cells = stickers
+  const cells = subset
     .map((sticker, i) => {
       const col = i % cols
       const row = Math.floor(i / cols)
@@ -468,6 +550,22 @@ for (const sticker of stickers) {
   )
 }
 
+const sampler = scanSamplerSvg(fonts, SCAN_POOL)
+await writeFile(join(thermalDir, 'scan-assortment.svg'), sampler.svg)
+const samplerPng = await raster(
+  sampler.svg,
+  join(thermalDir, 'scan-assortment.png'),
+  THERMAL_DPI / 100,
+  { bilevel: true },
+)
+if (samplerPng) {
+  const pdf = await thermalPdf(samplerPng)
+  if (pdf) await writeFile(join(thermalDir, 'scan-assortment.pdf'), pdf)
+}
+console.log(
+  `  ${'scan-assortment'.padEnd(16)} mixed   ${String(sampler.count + ' per label').padEnd(14)} ${sampler.dropped ? `${sampler.dropped} didn't fit` : 'whole pool placed'}`,
+)
+
 // Cell geometry so verify.mjs can decode ONE sticker per label. A ganged
 // label holds several finder-pattern triples and jsQR resolves none of
 // them — a decoder limitation, not a print defect, but the two look
@@ -477,32 +575,47 @@ await writeFile(
   `${JSON.stringify({ dpi: THERMAL_DPI, label: LABEL, designs: thermalPlans }, null, 2)}\n`,
 )
 
-await writeFile(
-  join(sheetDir, 'contact-sheet.svg'),
-  contactSheet(fonts, {
-    profile: colorProfile,
-    subtitle: 'Die-cut vinyl. Vector, outlined, print at actual size.',
-    title: 'Ternpike sticker kit',
-  }),
-)
-await raster(
-  contactSheet(fonts, {
-    profile: colorProfile,
-    subtitle: 'Die-cut vinyl. Vector, outlined, print at actual size.',
-    title: 'Ternpike sticker kit',
-  }),
-  join(shotDir, 'stickers-contact-sheet.png'),
-  1,
-)
+const kit = stickers.filter((s) => s.family === 'kit')
+const scan = stickers.filter((s) => s.family === 'scan')
 
-const monoContact = contactSheet(fonts, {
-  profile: monoProfile,
-  subtitle: 'The same designs, black on white, for a thermal label printer.',
-  title: 'Thermal profile',
-})
-await writeFile(join(sheetDir, 'contact-sheet-thermal.svg'), monoContact)
-await raster(monoContact, join(shotDir, 'stickers-contact-sheet-thermal.png'), 1, {
-  bilevel: true,
-})
+const contacts = [
+  {
+    bilevel: false,
+    file: 'contact-sheet',
+    opts: {
+      profile: colorProfile,
+      subset: kit,
+      subtitle: 'Die-cut vinyl. Vector, outlined, print at actual size.',
+      title: 'Ternpike sticker kit',
+    },
+  },
+  {
+    bilevel: true,
+    file: 'contact-sheet-thermal',
+    opts: {
+      profile: monoProfile,
+      subset: kit,
+      subtitle: 'The same designs, black on white, for a thermal label printer.',
+      title: 'Thermal profile',
+    },
+  },
+  {
+    bilevel: true,
+    file: 'contact-sheet-scan',
+    opts: {
+      cols: 3,
+      profile: monoProfile,
+      subset: scan,
+      subtitle: 'Small, QR-first, many per label. For sticking on things out there.',
+      title: 'Scan family',
+    },
+  },
+]
+
+for (const { bilevel, file, opts } of contacts) {
+  const svg = contactSheet(fonts, opts)
+  await writeFile(join(sheetDir, `${file}.svg`), svg)
+  await raster(svg, join(shotDir, `stickers-${file}.png`), 1, { bilevel })
+}
 
 console.log(`\n${stickers.length} designs · 2 profiles · keyline ${KEYLINE / 100}in`)

@@ -1,10 +1,14 @@
 # Ternpike sticker kit
 
-Nine die-cut stickers for handing out — trailhead kiosks, campground boards,
-gas-pump tops, the back of a laptop at a coffee shop with wifi.
+Fourteen die-cut stickers in two families.
 
-**Every sticker gets someone to the site.** All nine print `ternpike.com`;
-three also carry a scannable QR. `verify.mjs` enforces both — it decodes each
+**The kit** (nine) are keepsakes — things someone puts on a laptop or a water
+bottle. **The scan family** (five) are small, QR-dominant, and cheap to print
+by the dozen: for sticking on things out in the world where the QR *is* the
+message and you get about one second of someone's attention.
+
+**Every sticker gets someone to the site.** All fourteen print `ternpike.com`;
+eight also carry a scannable QR. `verify.mjs` enforces both — it decodes each
 QR back out of the rendered pixels and fails the build if a URL-only design
 stops printing its URL.
 
@@ -28,6 +32,36 @@ enough to read would leave no bird. If you want one anyway, add
 `qr: '<slug>'` to the design and a `qrCard({...})` call; `verify.mjs` will
 tell you whether it survives at print size.
 
+## The scan family
+
+| Slug | Size | QR | Per 4×6 label | What it is |
+|---|---|---|---|---|
+| `scan-mini` | 1.3 × 1.3in | 0.88in | **8** | Smallest useful scan target. |
+| `scan-post` | 1.3 × 1.75in | 0.98in | **8** | Tern above the code. |
+| `scan-dot` | 1.7in round | 0.84in | **6** | Rounds sit better on poles and bin lids. |
+| `scan-strip` | 2.5 × 1in | 0.80in | **6** | "Where'd it all go?" — rims, edges, pump handles. |
+| `scan-hook` | 2.3 × 1.3in | 1.04in | **4** | "Where'd the money go?" beside the code. |
+
+Plus `thermal/scan-assortment.pdf` — one 4 × 6 label with seven stickers,
+one of each shape plus extra minis. That's the one to print when you're
+packing rather than restocking.
+
+Three rules these follow that the kit doesn't, all in service of getting
+scanned by someone who wasn't looking for you:
+
+- **QR ≥ 0.78in.** Below that a phone has to be aimed deliberately, and
+  nobody is deliberate about a sticker on a bin.
+- **Type authored at or above the thermal floor** (mono ≥ 10 units, Playfair
+  Bold ≥ 13). Every scan design reports `1.00×` — no scale-up, so the label
+  gangs the maximum. Designing above the floor is free; scaling up to reach
+  it costs stickers per label.
+- **A reason to scan.** A bare QR gets ignored. `scan-hook` and `scan-strip`
+  lead with a question because curiosity is what converts a glance.
+
+Each design has its own QR slug (`mini`, `dot`, `hook`, `post`, `strip`), so
+`GET /admin/qr` tells you which shape and which line actually earn scans —
+and, from the edge geo, roughly where.
+
 ## What's in here
 
 ```
@@ -37,6 +71,7 @@ sheets/print-sheet.svg    US Letter gang sheet, 11 stickers, dashed cut guides
 thermal/<slug>.pdf  4×6 label, print THIS — exactly 4×6in, no rescaling
 thermal/<slug>.svg  the same as vector, if you want to edit it
 thermal/<slug>.png  the same at 203 DPI, hard-thresholded to one bit
+thermal/scan-assortment.{pdf,svg,png}   mixed 4×6 label, 7 scan stickers
 thermal/plan.json   per-design scale and cell geometry
 sheets/contact-sheet.svg  the review image above
 ```
@@ -88,6 +123,11 @@ is there if you want to edit a design; the PNG is the proof.
 
 | Design | Scale | Per 4×6 label |
 |---|---|---|
+| `scan-mini` | 1.00× | 8 |
+| `scan-post` | 1.00× | 8 (rotated) |
+| `scan-dot` | 1.00× | 6 |
+| `scan-strip` | 1.00× | 6 (rotated) |
+| `scan-hook` | 1.00× | 4 |
 | `tern-mark` | 1.00× | 6 |
 | `wordmark-rust` | 1.08× | 4 |
 | `no-signal` | 1.30× | 3 |

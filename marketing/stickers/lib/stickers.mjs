@@ -37,6 +37,7 @@ const line = (x1, y1, x2, y2, stroke, width = 1.4, extra = '') =>
 export const stickers = [
   // ── 1. Park badge ────────────────────────────────────────────────────
   {
+    family: 'kit',
     blurb: '3in round. The flagship — national-park badge, arc-set type.',
     cut: circle(300),
     h: 300,
@@ -90,6 +91,7 @@ export const stickers = [
 
   // ── 2. Wordmark bar ──────────────────────────────────────────────────
   {
+    family: 'kit',
     blurb: '3.2 × 1.1in. Bumper/laptop-edge wordmark with the tern soaring off the end.',
     cut: roundedRect(320, 110, 20),
     h: 110,
@@ -112,6 +114,7 @@ export const stickers = [
 
   // ── 3. Milepost ──────────────────────────────────────────────────────
   {
+    family: 'kit',
     blurb: '1.4 × 3in. Highway milepost — every trip starts at mile zero.',
     cut: milepost(140, 300),
     h: 300,
@@ -155,6 +158,7 @@ export const stickers = [
 
   // ── 4. No signal ─────────────────────────────────────────────────────
   {
+    family: 'kit',
     blurb: '2.6 × 1.2in. The offline-first pitch as a one-liner.',
     cut: roundedRect(260, 120, 17),
     h: 120,
@@ -178,6 +182,7 @@ export const stickers = [
 
   // ── 5. Receipt ───────────────────────────────────────────────────────
   {
+    family: 'kit',
     blurb: '1.6 × 3.2in. Die-cut receipt with a torn edge — the product in one object.',
     cut: receipt(160, 320, 7),
     h: 320,
@@ -250,6 +255,7 @@ export const stickers = [
 
   // ── 6. Orlando → Juneau ──────────────────────────────────────────────
   {
+    family: 'kit',
     blurb: '3.2 × 1.6in. The hero line, route plotted behind it, QR on the right.',
     cut: roundedRect(320, 160, 18),
     h: 160,
@@ -302,6 +308,7 @@ export const stickers = [
 
   // ── 7. Cabin or truck ────────────────────────────────────────────────
   {
+    family: 'kit',
     blurb: '2.8 × 1.5in oval. The joke sticker — the decision the app exists to inform.',
     cut: ellipse(280, 150),
     h: 150,
@@ -344,6 +351,7 @@ export const stickers = [
 
   // ── 8. Tern mark ─────────────────────────────────────────────────────
   {
+    family: 'kit',
     blurb: '1.5in round. The smallest one — mark plus URL, nothing else.',
     cut: circle(150),
     h: 150,
@@ -374,6 +382,7 @@ export const stickers = [
   // is a brand object that happens to carry a URL; this is a call to
   // action that happens to be pretty.
   {
+    family: 'kit',
     blurb: '2 × 3in. QR-first — 1.5in symbol, for kiosk and bulletin boards.',
     cut: roundedRect(200, 300, 18),
     h: 300,
@@ -406,7 +415,145 @@ export const stickers = [
       })}" fill="${p.onDarkSoft}"/>
     `,
   },
-]
 
+  // ══ Scan family ══════════════════════════════════════════════════════
+  //
+  // Small, QR-dominant, high yield per label. These are for slapping on
+  // things in the wild — the QR is the whole message and the type is a
+  // caption, which is the inverse of the kit above.
+  //
+  // Three rules the kit designs don't follow:
+  //
+  //   - QR ≥ 0.78in, always. Below that a phone has to be deliberate
+  //     about it, and nobody is deliberate about a sticker on a bin.
+  //   - Type is authored at or above the 203 DPI thermal floor (mono ≥ 10
+  //     units, Playfair Bold ≥ 13), so `thermalScale` stays 1.00× and the
+  //     label gangs the maximum number of copies. Scaling a design up to
+  //     make it legible costs stickers per label; designing above the
+  //     floor costs nothing.
+  //   - Light field. A utility sticker spends no ink on a background, and
+  //     a light field means the colour and mono renders barely differ.
+
+  // ── 10. Scan mini ────────────────────────────────────────────────────
+  {
+    family: 'scan',
+    blurb: '1.3in square. Smallest useful scan target — 8 per 4×6 label.',
+    cut: roundedRect(130, 130, 12),
+    h: 130,
+    qr: 'mini',
+    slug: 'scan-mini',
+    title: 'Scan mini',
+    w: 130,
+    art: (f, cut, p) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 88, slug: 'mini', x: 21, y: 13 })}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.1,
+        size: 10,
+        x: 65,
+        y: 118,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 11. Scan dot ─────────────────────────────────────────────────────
+  {
+    family: 'scan',
+    blurb: '1.7in round. Circles sit better on poles and bin lids than squares.',
+    cut: circle(170),
+    h: 170,
+    qr: 'dot',
+    slug: 'scan-dot',
+    title: 'Scan dot',
+    w: 170,
+    art: (f, cut, p) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 84, slug: 'dot', x: 43, y: 24 })}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.1,
+        size: 10,
+        x: 85,
+        y: 134,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 12. Scan hook ────────────────────────────────────────────────────
+  //
+  // A bare QR gets ignored; a QR with a reason gets scanned. The question
+  // is doing the work here, not the mark.
+  {
+    family: 'scan',
+    blurb: '2.3 × 1.3in. Curiosity hook beside the code — 4 per 4×6 label.',
+    cut: roundedRect(230, 130, 12),
+    h: 130,
+    qr: 'hook',
+    slug: 'scan-hook',
+    title: 'Scan hook',
+    w: 230,
+    art: (f, cut, p) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 104, slug: 'hook', x: 13, y: 13 })}
+      <path d="${text(f['PlayfairDisplay-Bold'], 'Where\u2019d the', { size: 13, x: 128, y: 46 })}" fill="${p.onLight}"/>
+      <path d="${text(f['PlayfairDisplay-Bold'], 'money go?', { size: 13, x: 128, y: 66 })}" fill="${p.onLight}"/>
+      ${line(128, 82, 196, 82, p.accent, 1.6)}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        letterSpacing: 0.08,
+        size: 10,
+        x: 128,
+        y: 102,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 13. Scan post ────────────────────────────────────────────────────
+  {
+    family: 'scan',
+    blurb: '1.3 × 1.75in. Tall enough to read the mark, small enough for 6 per label.',
+    cut: roundedRect(130, 175, 12),
+    h: 175,
+    qr: 'post',
+    slug: 'scan-post',
+    title: 'Scan post',
+    w: 130,
+    art: (f, cut, p) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${bird({ dark: p.markDark, light: p.onLight, scale: 0.46, x: 65, y: 26 })}
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 98, slug: 'post', x: 16, y: 42 })}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.1,
+        size: 10,
+        x: 65,
+        y: 158,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 14. Scan strip ───────────────────────────────────────────────────
+  {
+    family: 'scan',
+    blurb: '2.5 × 1in. Strip shape for bin rims, sign edges, pump handles.',
+    cut: roundedRect(250, 100, 12),
+    h: 100,
+    qr: 'strip',
+    slug: 'scan-strip',
+    title: 'Scan strip',
+    w: 250,
+    art: (f, cut, p) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 80, slug: 'strip', x: 11, y: 10 })}
+      <path d="${text(f['PlayfairDisplay-Bold'], 'Where\u2019d it all go?', { size: 15, x: 102, y: 46 })}" fill="${p.onLight}"/>
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        letterSpacing: 0.14,
+        size: 10,
+        x: 102,
+        y: 72,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+]
 /** Where a design's QR sends a scanner, or null if it carries only a URL. */
 export const qrDestination = (sticker) => (sticker.qr ? qrTarget(sticker.qr) : null)

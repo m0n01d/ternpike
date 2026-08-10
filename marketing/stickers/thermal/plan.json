@@ -123,6 +123,71 @@
       "shortfall": null,
       "originX": 23,
       "originY": 58
+    },
+    {
+      "slug": "scan-mini",
+      "cols": 2,
+      "count": 8,
+      "h": 130,
+      "rotated": false,
+      "rows": 4,
+      "scale": 1,
+      "w": 130,
+      "shortfall": null,
+      "originX": 64,
+      "originY": 22
+    },
+    {
+      "slug": "scan-dot",
+      "cols": 2,
+      "count": 6,
+      "h": 170,
+      "rotated": false,
+      "rows": 3,
+      "scale": 1,
+      "w": 170,
+      "shortfall": null,
+      "originX": 24,
+      "originY": 33
+    },
+    {
+      "slug": "scan-hook",
+      "cols": 1,
+      "count": 4,
+      "h": 130,
+      "rotated": false,
+      "rows": 4,
+      "scale": 1,
+      "w": 230,
+      "shortfall": null,
+      "originX": 85,
+      "originY": 22
+    },
+    {
+      "slug": "scan-post",
+      "cols": 2,
+      "count": 8,
+      "h": 130,
+      "rotated": true,
+      "rows": 4,
+      "scale": 1,
+      "w": 175,
+      "shortfall": null,
+      "originX": 19,
+      "originY": 22
+    },
+    {
+      "slug": "scan-strip",
+      "cols": 3,
+      "count": 6,
+      "h": 250,
+      "rotated": true,
+      "rows": 2,
+      "scale": 1,
+      "w": 100,
+      "shortfall": null,
+      "originX": 38,
+      "originY": 44
     }
   ]
 }
