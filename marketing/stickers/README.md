@@ -42,34 +42,42 @@ tell you whether it survives at print size.
 | `scan-strip` | 2.5 × 1in | 0.80in | **6** | "How much have I spent?" — rims, edges, pump handles. |
 | `scan-hook` | 2.4 × 1.3in | 1.04in | **4** | "Stop doing math in your head." beside the code. |
 
-### Pick a sheet, pick a size
+### Print any design bigger or smaller
 
-`thermal/sheets/` is four numbered 4 × 6 labels, smallest sticker to
-largest. Printing one is how you choose a size — no options to set, no
-scaling to get wrong.
+A label printer has one page size, so "print it bigger" has to mean "print
+fewer per page". `thermal/sizes/` is that dial — for every design, a 4 × 6
+PDF at each count that's worth offering:
 
-| Sheet | Size | Stickers | Contents |
-|---|---|---|---|
-| `1-small.pdf` | 1.3in square | **8** | `scan-mini` |
-| `2-round.pdf` | 1.7in round | **6** | `scan-dot` |
-| `3-tall.pdf` | 1.3 × 1.75in | **8** | `scan-post` |
-| `4-large.pdf` | 2.4 – 2.5in | **5** | `scan-hook` × 2, `scan-strip` × 3 |
+```
+thermal/sizes/scan-mini-1up.pdf    one 3.72in sticker,  fills the label
+thermal/sizes/scan-mini-2up.pdf    two 2.74in stickers, half each
+thermal/sizes/scan-mini-4up.pdf    four 1.8in stickers, a quarter each
+```
 
-Each carries a caption strap in the bottom margin — `1 · SMALL · 1.3in
-square · 8 stickers · print at 100%` — so a stack of printed labels is
-still sortable. It's outside the sticker area, so it's scrap once you've
-cut.
+Each cell is filled as fully as the sticker's aspect allows, rotating and
+choosing the grid (4 stacked rows vs a 2×2) to whichever prints biggest.
+The caption strap along the bottom names the design, the count and the
+finished size, so a stack of printed labels stays sortable. `index.json`
+lists everything generated.
 
-Stickers are turned sideways where that fits more per sheet: sheets 3 and 4
-are packed rotated because upright fits three shelves and sideways fits
-four. A turned sticker peels exactly the same. Each sheet is packed twice,
-once favouring each orientation, and the better result wins — on a tie the
-tidier all-one-way sheet wins, because a mixed shelf leaves dead space
-under the shorter orientation.
+**Not every count exists for every design**, and the gaps are the point:
 
-The per-design labels in `thermal/` are still there for when you know which
-design you want a stack of; the numbered sheets are for when you know what
-*size* you want.
+- `2:type` — at that size the smallest line drops under the 203 DPI floor.
+  `badge-tern` and `receipt` are 1-up only; they're already large designs,
+  and halving them makes them unreadable rather than small.
+- `2:qr` — the QR would fall under 0.75in, the size a phone stops picking
+  up casually.
+- `3:=4up` — 3-up and 4-up would print the same size, so only 4-up ships.
+  Three stacked rows and a 2×2 grid land within a few percent for a square
+  sticker, and at equal size more stickers strictly wins.
+
+A sticker that prints but can't be read or scanned is worse than one that
+isn't offered, so those steps are reported by the build and skipped rather
+than silently shrunk.
+
+PDF only here. A size sheet is just the base design tiled and scaled — its
+SVG is megabytes of duplicated artwork that nothing prints, and the vector
+source is already in `svg/` and `thermal/<slug>.svg`.
 
 Three rules these follow that the kit doesn't, all in service of getting
 scanned by someone who wasn't looking for you:
@@ -130,7 +138,8 @@ sheets/print-sheet.svg    US Letter gang sheet, 11 stickers, dashed cut guides
 thermal/<slug>.pdf  4×6 label, print THIS — exactly 4×6in, no rescaling
 thermal/<slug>.svg  the same as vector, if you want to edit it
 thermal/<slug>.png  the same at 203 DPI, hard-thresholded to one bit
-thermal/sheets/N-*.{pdf,svg,png}   four numbered 4×6 sheets, small → large
+thermal/sizes/<slug>-Nup.pdf       every design at every workable size
+thermal/sizes/index.json           what got generated
 thermal/plan.json   per-design scale and cell geometry
 sheets/contact-sheet.svg  the review image above
 ```

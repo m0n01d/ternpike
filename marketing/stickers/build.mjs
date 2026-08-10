@@ -30,6 +30,7 @@ import {
   monoProfile,
   thermalScale,
 } from './lib/profiles.mjs'
+import { qrAudit, resetQrAudit } from './lib/qr.mjs'
 import { qrDestination, stickers } from './lib/stickers.mjs'
 import { loadFonts, resetTypeAudit, round, text, typeAudit } from './lib/type.mjs'
 
@@ -48,8 +49,9 @@ const label = (s) => `${inches(s.w)}in × ${inches(s.h)}in`
  */
 function renderArt(sticker, fonts, profile) {
   resetTypeAudit()
+  resetQrAudit()
   const body = sticker.art(fonts, sticker.cut, profile).trim()
-  return { body, type: typeAudit() }
+  return { body, qr: qrAudit(), type: typeAudit() }
 }
 
 // ── One sticker (colour) ─────────────────────────────────────────────────
@@ -155,123 +157,96 @@ ${cells.join('\n')}
   }
 }
 
-/**
- * A numbered 4×6 sheet: whatever mix of designs the pool asks for, packed
- * at each design's own thermal scale, with a caption in the bottom margin.
- *
- * The per-design labels answer "give me a stack of THIS". These answer
- * "give me stickers about THIS BIG" — which is the question you actually
- * have standing at the printer, so the set is numbered smallest to largest
- * and the caption says the size out loud.
- *
- * Shelf packing over pre-scaled boxes: designs carry their own thermal
- * scale, so the boxes are heterogeneous and the sticker.w/h packer below
- * can't be reused.
- */
-function labelSheet(fonts, { caption, pool }) {
-  const availRight = LABEL.w - LABEL.margin
-  const floor = LABEL.h - LABEL.margin - CAPTION_BAND
+// ── Size sheets: one design, N per label ─────────────────────────────────
+//
+// A label printer has one page size, so "print it bigger" has to mean
+// "print fewer per page". These sheets are that dial: 1-up fills the
+// label, 2-up is half each, 3-up a third, 4-up a quarter. Pick a design,
+// pick a number, get that size.
+//
+// Not every step exists for every design. Scaling down eventually puts the
+// smallest type under the 203 DPI floor or the QR under the size a phone
+// resolves, and a sticker that prints but can't be read or scanned is
+// worse than one that isn't offered — so unavailable steps are reported,
+// not silently shrunk.
 
-  const boxes = pool.flatMap(([slug, count]) => {
-    const sticker = stickers.find((s) => s.slug === slug)
-    if (!sticker) throw new Error(`unknown sticker in sheet pool: ${slug}`)
-    const { type } = renderArt(sticker, fonts, monoProfile)
-    const scale = thermalScale(type)
-    return Array.from({ length: count }, () => ({
-      long: Math.max(sticker.w, sticker.h) * scale,
-      scale,
-      sticker,
-      tall: sticker.h * scale,
-      wide: sticker.w * scale,
-    }))
-  })
-  boxes.sort((a, b) => b.long - a.long || b.wide - a.wide)
+const SIZE_STEPS = [1, 2, 3, 4]
 
-  // A turned sticker peels exactly the same, so orientation is free — but
-  // choosing it per-sticker is a local decision that loses globally:
-  // preferring upright fits two 1.3×1.75in posts per shelf and three
-  // shelves, where turning them all sideways fits two per shelf and FOUR.
-  // So pack the sheet twice, once favouring each orientation, and keep
-  // whichever placed more.
-  const orientations = (box, preferRotated) => {
-    const upright = { h: box.tall, rotated: false, w: box.wide }
-    const sideways = { h: box.wide, rotated: true, w: box.tall }
-    return preferRotated ? [sideways, upright] : [upright, sideways]
-  }
+// Room at the bottom of every sheet for the caption strap. Outside the
+// sticker area, so it's scrap once you've cut — but it's what tells you
+// which sheet you're holding after a few come off the printer.
+const CAPTION_BAND = 12
 
-  const packOnce = (preferRotated) => {
-    const queue = boxes.slice()
-    const out = []
-    let shelfY = LABEL.margin
-    let shelfH = 0
-    let x = LABEL.margin
-    while (queue.length > 0) {
-      let choice = null
-      for (let i = 0; i < queue.length && !choice; i++) {
-        for (const o of orientations(queue[i], preferRotated)) {
-          if (x + o.w <= availRight && shelfY + o.h <= floor) {
-            choice = { ...queue[i], ...o, index: i }
-            break
-          }
-        }
+// A QR below this stops being something a phone picks up casually.
+const MIN_QR_INCHES = 0.75
+
+// Ways to divide a label into N cells. Which one wins depends on the
+// sticker's aspect: a 2.5×1in strip wants four stacked rows, a 1.3in
+// square wants a 2×2.
+const GRIDS = {
+  1: [[1, 1]],
+  2: [[1, 2], [2, 1]],
+  3: [[1, 3], [3, 1]],
+  4: [[1, 4], [2, 2], [4, 1]],
+}
+
+/** The largest this design can print at, N to a label. */
+function bestGrid(sticker, n) {
+  const usableW = LABEL.w - LABEL.margin * 2
+  const usableH = LABEL.h - LABEL.margin * 2 - CAPTION_BAND
+  let best = null
+
+  for (const [rows, cols] of GRIDS[n]) {
+    const cellW = (usableW - (cols - 1) * LABEL.gap) / cols
+    const cellH = (usableH - (rows - 1) * LABEL.gap) / rows
+    for (const rotated of [false, true]) {
+      const w = rotated ? sticker.h : sticker.w
+      const h = rotated ? sticker.w : sticker.h
+      const scale = Math.min(cellW / w, cellH / h)
+      if (!best || scale > best.scale) {
+        best = { cellH, cellW, cols, h, rotated, rows, scale, w }
       }
-      if (!choice) {
-        const nextY = shelfY + (shelfH === 0 ? 0 : shelfH + LABEL.gap)
-        const anyFits = queue.some((b) =>
-          orientations(b, preferRotated).some(
-            (o) => nextY + o.h <= floor && LABEL.margin + o.w <= availRight,
-          ),
-        )
-        if (shelfH === 0 || !anyFits) break
-        shelfY = nextY
-        shelfH = 0
-        x = LABEL.margin
-        continue
-      }
-      queue.splice(choice.index, 1)
-      out.push({ ...choice, x, y: shelfY })
-      x += choice.w + LABEL.gap
-      shelfH = Math.max(shelfH, choice.h)
     }
-    return out
   }
+  return best
+}
 
-  // More placed wins. On a tie, prefer the tidier sheet — one where every
-  // sticker faces the same way — over a mixture, since a mixed shelf
-  // leaves dead space under the shorter orientation.
-  const mixed = (out) => new Set(out.map((o) => o.rotated)).size > 1
-  const upright = packOnce(false)
-  const sideways = packOnce(true)
-  const placed =
-    sideways.length > upright.length ||
-    (sideways.length === upright.length && mixed(upright) && !mixed(sideways))
-      ? sideways
-      : upright
+function sizeSheet(fonts, sticker, n, plan) {
+  const { body } = renderArt(sticker, fonts, monoProfile)
+  const usableW = LABEL.w - LABEL.margin * 2
+  const usableH = LABEL.h - LABEL.margin * 2 - CAPTION_BAND
+  const blockW = plan.cols * plan.cellW + (plan.cols - 1) * LABEL.gap
+  const blockH = plan.rows * plan.cellH + (plan.rows - 1) * LABEL.gap
+  const originX = LABEL.margin + (usableW - blockW) / 2
+  const originY = LABEL.margin + (usableH - blockH) / 2
 
-  const cells = placed
-    .map(({ rotated, scale, sticker, w, x: bx, y: by }) => {
+  const cells = []
+  for (let r = 0; r < plan.rows; r++) {
+    for (let c = 0; c < plan.cols; c++) {
+      const w = plan.w * plan.scale
+      const h = plan.h * plan.scale
+      const x = originX + c * (plan.cellW + LABEL.gap) + (plan.cellW - w) / 2
+      const y = originY + r * (plan.cellH + LABEL.gap) + (plan.cellH - h) / 2
       // Rotating clockwise about the cell: local (u,v) lands at
       // (x + w - v*scale, y + u*scale), so the footprint is h×w.
-      const transform = rotated
-        ? `translate(${round(bx + w)} ${round(by)}) rotate(90) scale(${scale})`
-        : `translate(${round(bx)} ${round(by)}) scale(${scale})`
-      return `  <g transform="${transform}">
-    ${renderArt(sticker, fonts, monoProfile).body}
-    <path d="${sticker.cut(0)}" fill="none" stroke="#000000" stroke-width="${round(0.6 / scale)}" stroke-dasharray="${round(5 / scale)} ${round(4 / scale)}"/>
-  </g>`
-    })
-    .join('\n')
+      const transform = plan.rotated
+        ? `translate(${round(x + w)} ${round(y)}) rotate(90) scale(${round(plan.scale)})`
+        : `translate(${round(x)} ${round(y)}) scale(${round(plan.scale)})`
+      cells.push(`  <g transform="${transform}">
+    ${body}
+    <path d="${sticker.cut(0)}" fill="none" stroke="#000000" stroke-width="${round(0.6 / plan.scale)}" stroke-dasharray="${round(5 / plan.scale)} ${round(4 / plan.scale)}"/>
+  </g>`)
+    }
+  }
 
-  const strap = `${caption}  ·  ${placed.length} stickers  ·  print at 100%`
+  const size = `${inches(sticker.w * plan.scale)} x ${inches(sticker.h * plan.scale)}in`
+  const strap = `${sticker.slug}  ·  ${n}-up  ·  ${size}  ·  print at 100%`
 
-  return {
-    count: placed.length,
-    dropped: boxes.length - placed.length,
-    svg: `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="4in" height="6in" viewBox="0 0 ${LABEL.w} ${LABEL.h}">
-  <title>Ternpike — ${caption} — 4×6 thermal label</title>
+  <title>Ternpike — ${sticker.title} — ${n} per 4×6 label</title>
   <rect width="${LABEL.w}" height="${LABEL.h}" fill="#ffffff"/>
-${cells}
+${cells.join('\n')}
   <path d="${text(fonts['DMMono-Medium'], strap, {
     anchor: 'middle',
     letterSpacing: 0.04,
@@ -280,34 +255,8 @@ ${cells}
     y: LABEL.h - 12,
   })}" fill="#000000"/>
 </svg>
-`,
-  }
+`
 }
-
-// Room at the bottom of every sheet for the caption strap. It sits outside
-// the sticker area, so it's scrap once you've cut — but it's what tells you
-// which sheet you're holding after four of them come off the printer.
-const CAPTION_BAND = 12
-
-/**
- * The numbered set, smallest sticker to largest. Pools are sized so every
- * sheet places its whole pool — the build says "whole pool placed", and
- * anything else means a pool needs trimming rather than the label needing
- * more room.
- */
-const SHEETS = [
-  { caption: '1 · SMALL · 1.3in square', file: '1-small', pool: [['scan-mini', 8]] },
-  { caption: '2 · ROUND · 1.7in', file: '2-round', pool: [['scan-dot', 6]] },
-  { caption: '3 · TALL · 1.3 x 1.75in', file: '3-tall', pool: [['scan-post', 8]] },
-  {
-    caption: '4 · LARGE · 2.4-2.5in',
-    file: '4-large',
-    pool: [
-      ['scan-hook', 2],
-      ['scan-strip', 3],
-    ],
-  },
-]
 
 // ── Gang sheet (colour, US Letter) ───────────────────────────────────────
 
@@ -495,7 +444,7 @@ const svgDir = join(here, 'svg')
 const pngDir = join(here, 'png')
 const sheetDir = join(here, 'sheets')
 const thermalDir = join(here, 'thermal')
-const sheetsDir = join(thermalDir, 'sheets')
+const sizesDir = join(thermalDir, 'sizes')
 const shotDir = join(repoRoot, 'docs', 'screenshots')
 
 for (const dir of [svgDir, pngDir, sheetDir, thermalDir]) {
@@ -622,25 +571,60 @@ for (const sticker of stickers) {
   )
 }
 
-console.log('\nnumbered 4×6 sheets (pick a sheet, pick a size)')
-await mkdir(sheetsDir, { recursive: true })
-for (const sheet of SHEETS) {
-  const built = labelSheet(fonts, sheet)
-  await writeFile(join(sheetsDir, `${sheet.file}.svg`), built.svg)
-  const png = await raster(
-    built.svg,
-    join(sheetsDir, `${sheet.file}.png`),
-    THERMAL_DPI / 100,
-    { bilevel: true },
-  )
-  if (png) {
-    const pdf = await thermalPdf(png)
-    if (pdf) await writeFile(join(sheetsDir, `${sheet.file}.pdf`), pdf)
+console.log('\nsize sheets — one design per label, N up (4×6)')
+await mkdir(sizesDir, { recursive: true })
+const sizeIndex = []
+for (const sticker of stickers) {
+  const { qr, type } = renderArt(sticker, fonts, monoProfile)
+  const floorScale = thermalScale(type)
+  const minQr = qr.length > 0 ? Math.min(...qr) : null
+  const offered = []
+
+  // Work out every step first, then drop the ones that aren't worth
+  // offering. Three stacked rows and a 2×2 grid land at almost the same
+  // scale for a square sticker, and when 3-up and 4-up print the same
+  // size, 4-up is strictly better — one fewer choice, one more sticker.
+  const steps = SIZE_STEPS.map((n) => {
+    const plan = bestGrid(sticker, n)
+    const reason =
+      plan.scale < floorScale
+        ? 'type'
+        : minQr !== null && (minQr * plan.scale) / UNITS_PER_INCH < MIN_QR_INCHES
+          ? 'qr'
+          : null
+    return { n, plan, reason }
+  })
+  for (let i = 0; i < steps.length - 1; i++) {
+    const next = steps[i + 1]
+    if (!steps[i].reason && !next.reason && steps[i].plan.scale < next.plan.scale * 1.08) {
+      steps[i].reason = `=${next.n}up`
+    }
   }
-  console.log(
-    `  ${sheet.file.padEnd(16)} ${sheet.caption.padEnd(22)} ${String(built.count + ' stickers').padEnd(14)} ${built.dropped ? `${built.dropped} DIDN'T FIT` : 'whole pool placed'}`,
-  )
+
+  for (const { n, plan, reason } of steps) {
+    if (reason) {
+      offered.push(`${n}:${reason}`)
+      continue
+    }
+    const svg = sizeSheet(fonts, sticker, n, plan)
+    const file = `${sticker.slug}-${n}up`
+    // PDF only. A size sheet is the base design tiled and scaled, so its
+    // SVG is 2.5MB of duplicated artwork that nothing prints — the vector
+    // source lives in svg/ and thermal/<slug>.svg, and this regenerates.
+    const png = await rasterBuffer(svg, THERMAL_DPI / 100, { bilevel: true })
+    if (png) {
+      const pdf = await thermalPdf(png)
+      if (pdf) await writeFile(join(sizesDir, `${file}.pdf`), pdf)
+    }
+    offered.push(`${n}:${inches(sticker.w * plan.scale)}x${inches(sticker.h * plan.scale)}in`)
+    sizeIndex.push({ file, n, slug: sticker.slug })
+  }
+  console.log(`  ${sticker.slug.padEnd(16)} ${offered.join('  ')}`)
 }
+await writeFile(
+  join(sizesDir, 'index.json'),
+  `${JSON.stringify({ minQrInches: MIN_QR_INCHES, sheets: sizeIndex }, null, 2)}\n`,
+)
 
 // Cell geometry so verify.mjs can decode ONE sticker per label. A ganged
 // label holds several finder-pattern triples and jsQR resolves none of

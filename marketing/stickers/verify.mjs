@@ -150,13 +150,20 @@ for (const sticker of stickers) {
   )
 }
 
-// The numbered sheets aren't designs, so the per-design loop misses them —
-// and they're the ones most likely to actually get printed.
-for (const file of ['1-small', '2-round', '3-tall', '4-large']) {
-  const bad = await checkPdf(join('sheets', file))
-  if (bad) failures++
-  console.log(`  ${`sheet ${file}`.padEnd(16)} ${bad ? `FAIL pdf ${bad}` : 'OK   4x6 sheet, pdf4x6=yes'}`)
+// The size sheets aren't designs, so the per-design loop misses them — and
+// they're the ones most likely to actually get printed. Every one has to be
+// a true 4×6 page, or the print path rescales it and the size ladder the
+// whole feature is built on stops meaning anything.
+const sizes = JSON.parse(await readFile(join(here, 'thermal', 'sizes', 'index.json'), 'utf8'))
+const badSheets = []
+for (const sheet of sizes.sheets) {
+  const bad = await checkPdf(join('sizes', sheet.file))
+  if (bad) badSheets.push(`${sheet.file} ${bad}`)
 }
+if (badSheets.length > 0) failures++
+console.log(
+  `  ${'size sheets'.padEnd(16)} ${badSheets.length ? `FAIL ${badSheets.join(', ')}` : `OK   ${sizes.sheets.length} sheets, all pdf4x6=yes`}`,
+)
 
 const withQr = stickers.filter(qrDestination).length
 console.log(

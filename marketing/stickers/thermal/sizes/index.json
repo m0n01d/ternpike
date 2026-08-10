@@ -1,0 +1,170 @@
+{
+  "minQrInches": 0.75,
+  "sheets": [
+    {
+      "file": "badge-tern-1up",
+      "n": 1,
+      "slug": "badge-tern"
+    },
+    {
+      "file": "wordmark-rust-2up",
+      "n": 2,
+      "slug": "wordmark-rust"
+    },
+    {
+      "file": "wordmark-rust-4up",
+      "n": 4,
+      "slug": "wordmark-rust"
+    },
+    {
+      "file": "milepost-zero-1up",
+      "n": 1,
+      "slug": "milepost-zero"
+    },
+    {
+      "file": "milepost-zero-3up",
+      "n": 3,
+      "slug": "milepost-zero"
+    },
+    {
+      "file": "no-signal-1up",
+      "n": 1,
+      "slug": "no-signal"
+    },
+    {
+      "file": "no-signal-3up",
+      "n": 3,
+      "slug": "no-signal"
+    },
+    {
+      "file": "receipt-1up",
+      "n": 1,
+      "slug": "receipt"
+    },
+    {
+      "file": "orlando-juneau-1up",
+      "n": 1,
+      "slug": "orlando-juneau"
+    },
+    {
+      "file": "cabin-or-truck-1up",
+      "n": 1,
+      "slug": "cabin-or-truck"
+    },
+    {
+      "file": "cabin-or-truck-2up",
+      "n": 2,
+      "slug": "cabin-or-truck"
+    },
+    {
+      "file": "tern-mark-1up",
+      "n": 1,
+      "slug": "tern-mark"
+    },
+    {
+      "file": "tern-mark-2up",
+      "n": 2,
+      "slug": "tern-mark"
+    },
+    {
+      "file": "tern-mark-4up",
+      "n": 4,
+      "slug": "tern-mark"
+    },
+    {
+      "file": "qr-trailhead-1up",
+      "n": 1,
+      "slug": "qr-trailhead"
+    },
+    {
+      "file": "qr-trailhead-2up",
+      "n": 2,
+      "slug": "qr-trailhead"
+    },
+    {
+      "file": "scan-mini-1up",
+      "n": 1,
+      "slug": "scan-mini"
+    },
+    {
+      "file": "scan-mini-2up",
+      "n": 2,
+      "slug": "scan-mini"
+    },
+    {
+      "file": "scan-mini-4up",
+      "n": 4,
+      "slug": "scan-mini"
+    },
+    {
+      "file": "scan-dot-1up",
+      "n": 1,
+      "slug": "scan-dot"
+    },
+    {
+      "file": "scan-dot-2up",
+      "n": 2,
+      "slug": "scan-dot"
+    },
+    {
+      "file": "scan-dot-4up",
+      "n": 4,
+      "slug": "scan-dot"
+    },
+    {
+      "file": "scan-hook-1up",
+      "n": 1,
+      "slug": "scan-hook"
+    },
+    {
+      "file": "scan-hook-2up",
+      "n": 2,
+      "slug": "scan-hook"
+    },
+    {
+      "file": "scan-hook-3up",
+      "n": 3,
+      "slug": "scan-hook"
+    },
+    {
+      "file": "scan-hook-4up",
+      "n": 4,
+      "slug": "scan-hook"
+    },
+    {
+      "file": "scan-post-1up",
+      "n": 1,
+      "slug": "scan-post"
+    },
+    {
+      "file": "scan-post-2up",
+      "n": 2,
+      "slug": "scan-post"
+    },
+    {
+      "file": "scan-post-4up",
+      "n": 4,
+      "slug": "scan-post"
+    },
+    {
+      "file": "scan-strip-1up",
+      "n": 1,
+      "slug": "scan-strip"
+    },
+    {
+      "file": "scan-strip-2up",
+      "n": 2,
+      "slug": "scan-strip"
+    },
+    {
+      "file": "scan-strip-3up",
+      "n": 3,
+      "slug": "scan-strip"
+    },
+    {
+      "file": "scan-strip-4up",
+      "n": 4,
+      "slug": "scan-strip"
+    }
+  ]
+}

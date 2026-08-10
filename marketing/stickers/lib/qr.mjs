@@ -30,6 +30,19 @@ const EC = 'Q'
 
 export const qrTarget = (slug) => `${BASE}/${slug}`
 
+// Same idea as the type audit in type.mjs: record what got drawn so the
+// caller can reason about it. A QR has a legibility floor too — scale a
+// design down far enough and the type still passes while the symbol has
+// quietly become unscannable.
+let audit = []
+
+export const resetQrAudit = () => {
+  audit = []
+}
+
+/** Sizes, in design units, of every QR drawn since the last reset. */
+export const qrAudit = () => audit.slice()
+
 /**
  * A QR on a light card, sized to fill `size` INCLUDING its quiet zone.
  *
@@ -37,6 +50,7 @@ export const qrTarget = (slug) => `${BASE}/${slug}`
  * zone structural instead of something a later layout tweak can eat.
  */
 export function qrCard({ dark, light, radius = 3, size, slug, x, y }) {
+  audit.push(size)
   const qr = qrcode(0, EC)
   qr.addData(qrTarget(slug))
   qr.make()
