@@ -68,9 +68,11 @@ below 100% or that line closes up.
 
 ## Printing on a thermal label printer
 
-`thermal/` is the same nine designs rendered for a direct thermal head:
-**pure black on white, one sticker design per 4 × 6 label, ganged to fill
-it.**
+`thermal/` is the same nine designs rendered for a direct thermal head.
+Target hardware is the **Munbyn RW403B** — direct thermal, **203 DPI**,
+4 × 6in max media — and the numbers below are sized to that spec rather than
+to a guess. Output is **pure black on white, one sticker design per 4 × 6
+label, ganged to fill it.**
 
 **Print `thermal/<slug>.pdf`, not the SVG** — especially from an iPhone or
 iPad. iOS Safari ignores `@page size` and renders any HTML/SVG print job onto
@@ -112,14 +114,19 @@ Three things drive that table, and none of them are stylistic:
   so the composition holds. That's the Scale column, and it's computed from
   the type actually drawn, not guessed.
 
-203 DPI is the conservative assumption — the common Munbyn head resolution.
-A 300 DPI model prints these strictly better; nothing breaks, the scale
-factors are simply more generous than they need to be, so you get fewer
-stickers per label than that printer could manage. If you know you're on
-300 DPI, drop the `DM Mono` floor in `FLOOR_PT` (lib/profiles.mjs) from 7pt
-to ~5pt and rebuild to gang more per label.
-
 The dashed outline on each is a scissor guide — cut on it and it's gone.
+
+**Printing over Bluetooth from the Munbyn app?** Feed it
+`thermal/<slug>.png`. Those are 812 × 1218 px, which is 4 × 6in at exactly
+203 DPI — one pixel per dot of the RW403B head, already thresholded to one
+bit. Nothing resamples it, so what you proof is what the head lays down.
+Use the PDF for AirPrint / desktop printing, where the page size is what
+needs pinning.
+
+**On a 300 DPI head instead?** These still print, just larger than they
+need to be — raise the resolution assumption by dropping the `DM Mono`
+floor in `FLOOR_PT` (lib/profiles.mjs) from 7pt toward 5pt and rebuild to
+gang more per label.
 
 **For plain tracked QR labels, you may not want this kit at all.**
 `server/qrPdf.js` already serves purpose-built 4×6 PDFs for this printer at

@@ -361,6 +361,9 @@ if (wantPng) {
 
 const widthOf = (svg) => Number(/viewBox="0 0 ([\d.]+)/.exec(svg)[1])
 
+// Fixed timestamp for PDF metadata — see thermalPdf.
+const EPOCH = new Date(0)
+
 let PDFDocument = null
 try {
   ;({ PDFDocument } = await import('pdf-lib'))
@@ -388,6 +391,11 @@ async function thermalPdf(png) {
   const doc = await PDFDocument.create()
   doc.setTitle('Ternpike thermal label')
   doc.setCreator('Ternpike')
+  // pdf-lib stamps wall-clock creation/modification dates, which makes
+  // every rebuild a diff even when no artwork changed. Pin them so the
+  // committed PDFs are reproducible and a real change is visible as one.
+  doc.setCreationDate(EPOCH)
+  doc.setModificationDate(EPOCH)
   const page = doc.addPage([288, 432]) // 4×6in at 72pt/in
   const image = await doc.embedPng(png)
   page.drawImage(image, { height: 432, width: 288, x: 0, y: 0 })

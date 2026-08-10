@@ -12,8 +12,9 @@
 // it, soft opacities for hairlines.
 //
 // ── mono ──
-// Direct thermal label printers (Munbyn RW403B and friends). Three hard
-// constraints, none of them stylistic:
+// Direct thermal label printers. Targeted at the Munbyn RW403B: direct
+// thermal, 203 DPI, 4×6in max media — confirmed against the published
+// spec, not inferred. Three hard constraints, none of them stylistic:
 //
 //   1. One bit per dot. There is no grey — a 40%-opacity hairline is
 //      dithered into speckle, so every opacity collapses to 1.
@@ -26,8 +27,10 @@
 //      entirely below ~11pt. Designs are scaled up per-design until their
 //      smallest run clears it (see `thermalScale`).
 //
-// 203 DPI is the conservative assumption — it's what the common Munbyn
-// models run. A 300 DPI head prints these strictly better.
+// 203 DPI is the RW403B's actual head resolution, so the floors below are
+// sized to the hardware rather than to a guess. A 300 DPI model would
+// print these strictly better — nothing breaks, you'd just fit fewer
+// stickers per label than that printer could manage.
 
 const BLACK = '#000000'
 const WHITE = '#ffffff'
