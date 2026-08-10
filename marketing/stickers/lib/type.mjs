@@ -121,7 +121,9 @@ function layout(font, str, size, letterSpacing) {
     // A missing glyph renders as tofu (or as nothing) on a sticker nobody
     // proofreads at 300 DPI. Fail the build instead.
     if (glyph.index === 0) {
-      throw new Error(`${font.names.fullName?.en || 'font'} has no glyph for ${JSON.stringify(ch)} (in ${JSON.stringify(str)})`)
+      throw new Error(
+        `${fontName(font)} has no glyph for ${JSON.stringify(ch)} (in ${JSON.stringify(str)})`,
+      )
     }
     if (prev) pen += (font.getKerningValue(prev, glyph) / font.unitsPerEm) * size
     const advance = (glyph.advanceWidth / font.unitsPerEm) * size
@@ -131,6 +133,39 @@ function layout(font, str, size, letterSpacing) {
   }
   return { items, width: pen - (str.length ? letterSpacing * size : 0) }
 }
+
+// ── Type audit ───────────────────────────────────────────────────────────
+//
+// Thermal printing has a hard legibility floor that vinyl doesn't: at
+// 203 DPI a 5pt counter fills in and `ternpike.com` becomes a smudge. The
+// audit records the size of every run drawn so the thermal profile can
+// compute how far a design must be scaled up before its *smallest* type
+// clears that floor — rather than someone eyeballing a 300 DPI proof and
+// being surprised by the label.
+//
+// Module-level rather than threaded through every design because the
+// alternative is a recorder argument on all nine `art` signatures for a
+// value only the build loop reads.
+
+let audit = []
+
+export const resetTypeAudit = () => {
+  audit = []
+}
+
+export const typeAudit = () => audit.slice()
+
+// opentype 2.0 nests the name table per platform (`names.windows.fullName`,
+// `names.macintosh.fullName`) rather than flattening it. Reading the flat
+// path silently yields undefined, which sent every face to the default
+// thermal floor and inflated the mono scales.
+export const fontName = (font) =>
+  font.names?.windows?.fullName?.en ??
+  font.names?.macintosh?.fullName?.en ??
+  font.names?.fullName?.en ??
+  'unknown'
+
+const record = (font, size) => audit.push({ family: fontName(font), size })
 
 const originFor = (anchor, x, width) =>
   anchor === 'middle' ? x - width / 2 : anchor === 'end' ? x - width : x
@@ -147,6 +182,7 @@ export function measure(font, str, size, { letterSpacing = 0 } = {}) {
  * convention. `anchor` is 'start' | 'middle' | 'end'.
  */
 export function text(font, str, { anchor = 'start', letterSpacing = 0, size, x, y }) {
+  record(font, size)
   const { items, width } = layout(font, str, size, letterSpacing)
   const ox = originFor(anchor, x, width)
   return items
@@ -167,6 +203,7 @@ export function arcText(
   str,
   { centerDeg, cx, cy, fill, letterSpacing = 0, r, size, flip = false },
 ) {
+  record(font, size)
   const { items, width } = layout(font, str, size, letterSpacing)
 
   const parts = []

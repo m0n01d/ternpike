@@ -2,11 +2,14 @@
 //
 //   node marketing/stickers/build.mjs
 //
-// Emits, from the designs in lib/stickers.mjs:
-//   svg/<slug>.svg     one die-cut sticker each, artwork only, no guides
-//   png/<slug>.png     the same at 300 DPI, for print portals that want raster
-//   sheets/*.svg       US Letter gang sheets with dashed cut guides
-//   ../../docs/screenshots/stickers-*.png   review images for the PR
+// Two output profiles from one set of designs (see lib/profiles.mjs):
+//
+//   svg/<slug>.svg          colour die-cut vinyl — the deliverable
+//   png/<slug>.png          the same at 300 DPI, for raster-only portals
+//   sheets/print-sheet.svg  US Letter gang sheet with dashed cut guides
+//   thermal/<slug>.svg      black-on-white, ganged onto a 4×6 label
+//   thermal/<slug>.png      the same at 203 DPI, hard-thresholded to 1 bit
+//                           — what a direct thermal head actually lays down
 //
 // PNG output needs `sharp`, which is not a repo dependency — it pulls a
 // platform binary and nothing else here rasterizes. Run
@@ -18,8 +21,15 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { KEYLINE, UNITS_PER_INCH } from './lib/shapes.mjs'
-import { C, qrDestination, stickers } from './lib/stickers.mjs'
-import { loadFonts, round, text } from './lib/type.mjs'
+import {
+  BRAND,
+  bindingConstraint,
+  colorProfile,
+  monoProfile,
+  thermalScale,
+} from './lib/profiles.mjs'
+import { qrDestination, stickers } from './lib/stickers.mjs'
+import { loadFonts, resetTypeAudit, round, text, typeAudit } from './lib/type.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const repoRoot = join(here, '..', '..')
@@ -29,22 +39,121 @@ const inches = (units) => round(units / UNITS_PER_INCH)
 // DM Mono has no U+2033 prime, so spell the unit out.
 const label = (s) => `${inches(s.w)}in × ${inches(s.h)}in`
 
-// ── One sticker ──────────────────────────────────────────────────────────
+/**
+ * Render one design's artwork, returning it alongside the type sizes it
+ * used. The thermal profile needs the sizes to work out how far the design
+ * must be scaled up; nothing else looks at them.
+ */
+function renderArt(sticker, fonts, profile) {
+  resetTypeAudit()
+  const body = sticker.art(fonts, sticker.cut, profile).trim()
+  return { body, type: typeAudit() }
+}
+
+// ── One sticker (colour) ─────────────────────────────────────────────────
 
 // width/height in inches so the file carries its physical size: dropped
 // into Illustrator or a print portal it arrives at 1:1 rather than at
 // whatever the importer guesses.
 function stickerSvg(sticker, fonts) {
+  const { body } = renderArt(sticker, fonts, colorProfile)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${inches(sticker.w)}in" height="${inches(sticker.h)}in" viewBox="0 0 ${sticker.w} ${sticker.h}">
   <title>Ternpike — ${sticker.title}</title>
-  <path d="${sticker.cut(0)}" fill="${C.parchment}"/>
-  ${sticker.art(fonts, sticker.cut).trim()}
+  <path d="${sticker.cut(0)}" fill="${colorProfile.keyline}"/>
+  ${body}
 </svg>
 `
 }
 
-// ── Gang sheet ───────────────────────────────────────────────────────────
+// ── Thermal 4×6 label ────────────────────────────────────────────────────
+
+// 4×6in at 100 units/in, less the margin a thermal head can't reach.
+const LABEL = { gap: 12, h: 600, margin: 14, w: 400 }
+
+/**
+ * Lay out as many copies of one design as fit on a 4×6 label, at the scale
+ * its smallest type needs.
+ *
+ * Rotation is tried as well as the upright placement: a 3.2in-wide design
+ * scaled 1.3× overflows a 4in label upright but fits comfortably turned
+ * sideways, and a sideways sticker peels exactly the same.
+ */
+function planLabel(sticker, type) {
+  const wanted = thermalScale(type)
+  const availW = LABEL.w - LABEL.margin * 2
+  const availH = LABEL.h - LABEL.margin * 2
+
+  const fitAt = (scale, rotated) => {
+    const w = (rotated ? sticker.h : sticker.w) * scale
+    const h = (rotated ? sticker.w : sticker.h) * scale
+    const cols = Math.floor((availW + LABEL.gap) / (w + LABEL.gap))
+    const rows = Math.floor((availH + LABEL.gap) / (h + LABEL.gap))
+    return { cols, count: cols * rows, h, rotated, rows, scale, w }
+  }
+
+  const options = [fitAt(wanted, false), fitAt(wanted, true)].filter((o) => o.count > 0)
+  if (options.length > 0) {
+    // Most copies per label wins; upright breaks the tie.
+    options.sort((a, b) => b.count - a.count || Number(a.rotated) - Number(b.rotated))
+    return { ...options[0], shortfall: null }
+  }
+
+  // Nothing fits even once at the legible scale. Fall back to the largest
+  // scale that does fit and say so — a silently shrunk sticker is how you
+  // end up with an unreadable URL.
+  const capped = Math.min(
+    availW / sticker.w,
+    availH / sticker.h,
+    availW / sticker.h,
+    availH / sticker.w,
+  )
+  const rotated = sticker.w > availW * 0.999
+  return { ...fitAt(capped, rotated), shortfall: { capped, wanted } }
+}
+
+function thermalSvg(sticker, fonts) {
+  const { body, type } = renderArt(sticker, fonts, monoProfile)
+  const plan = planLabel(sticker, type)
+
+  const blockW = plan.cols * plan.w + (plan.cols - 1) * LABEL.gap
+  const blockH = plan.rows * plan.h + (plan.rows - 1) * LABEL.gap
+  const originX = (LABEL.w - blockW) / 2
+  const originY = (LABEL.h - blockH) / 2
+  plan.originX = originX
+  plan.originY = originY
+
+  const cells = []
+  for (let r = 0; r < plan.rows; r++) {
+    for (let c = 0; c < plan.cols; c++) {
+      const x = round(originX + c * (plan.w + LABEL.gap))
+      const y = round(originY + r * (plan.h + LABEL.gap))
+      // Rotating clockwise about the cell: local (u,v) lands at
+      // (x + h*scale - v*scale, y + u*scale), so the footprint is h×w.
+      const transform = plan.rotated
+        ? `translate(${round(x + plan.w)} ${y}) rotate(90) scale(${plan.scale})`
+        : `translate(${x} ${y}) scale(${plan.scale})`
+      cells.push(`  <g transform="${transform}">
+    ${body}
+    <path d="${sticker.cut(0)}" fill="none" stroke="#000000" stroke-width="${round(0.6 / plan.scale)}" stroke-dasharray="${round(5 / plan.scale)} ${round(4 / plan.scale)}"/>
+  </g>`)
+    }
+  }
+
+  return {
+    plan,
+    type,
+    svg: `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="4in" height="6in" viewBox="0 0 ${LABEL.w} ${LABEL.h}">
+  <title>Ternpike — ${sticker.title} — 4×6 thermal label</title>
+  <rect width="${LABEL.w}" height="${LABEL.h}" fill="#ffffff"/>
+${cells.join('\n')}
+</svg>
+`,
+  }
+}
+
+// ── Gang sheet (colour, US Letter) ───────────────────────────────────────
 
 const SHEET = { gap: 22, h: 1100, margin: 40, w: 850 }
 
@@ -89,7 +198,7 @@ function pack(items) {
     let shelfY = SHEET.margin
     let shelfH = 0
     let x = SHEET.margin
-    let pool = remaining
+    const pool = remaining
 
     while (pool.length > 0) {
       const idx = pool.findIndex((s) => x + s.w <= right && shelfY + s.h <= floor)
@@ -123,8 +232,8 @@ function sheetSvg(placed, fonts, { index, total }) {
   const art = placed
     .map(
       ({ sticker, x, y }) => `  <g transform="translate(${x} ${y})">
-    <path d="${sticker.cut(0)}" fill="${C.parchment}"/>
-    ${sticker.art(fonts, sticker.cut).trim()}
+    <path d="${sticker.cut(0)}" fill="${colorProfile.keyline}"/>
+    ${renderArt(sticker, fonts, colorProfile).body}
   </g>`,
     )
     .join('\n')
@@ -143,7 +252,7 @@ function sheetSvg(placed, fonts, { index, total }) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="8.5in" height="11in" viewBox="0 0 ${SHEET.w} ${SHEET.h}">
   <title>Ternpike sticker sheet ${index} of ${total}</title>
-  <rect width="${SHEET.w}" height="${SHEET.h}" fill="#ffffff"/>
+  <rect width="${SHEET.w}" height="${SHEET.h}" fill="${colorProfile.sheetBg}"/>
 ${art}
   <g id="cut-guides" fill="none" stroke="#ff00ff" stroke-width="0.6" stroke-dasharray="6 4">
 ${guides}
@@ -155,7 +264,7 @@ ${guides}
 
 // ── Contact sheet (review image) ─────────────────────────────────────────
 
-function contactSheet(fonts) {
+function contactSheet(fonts, { profile, subtitle, title }) {
   const cols = 3
   const cellW = 420
   const cellH = 400
@@ -167,6 +276,11 @@ function contactSheet(fonts) {
   const rows = Math.ceil(stickers.length / cols)
   const w = margin * 2 + cols * cellW + (cols - 1) * pad
   const h = headerH + rows * cellH + (rows - 1) * pad + margin
+  const paper = profile.mono ? '#ffffff' : BRAND.cream
+  const cellBg = profile.mono ? '#f4f4f4' : '#ffffff'
+  const ink = profile.mono ? '#000000' : BRAND.forest
+  const sub = profile.mono ? '#000000' : BRAND.moss
+  const cap = profile.mono ? '#000000' : BRAND.rust
 
   const cells = stickers
     .map((sticker, i) => {
@@ -181,42 +295,38 @@ function contactSheet(fonts) {
       const ay = cy + (artH - sh) / 2 + 20
 
       return `  <g>
-    <rect x="${cx}" y="${cy}" width="${cellW}" height="${cellH}" rx="18" fill="#ffffff" opacity="0.55"/>
+    <rect x="${cx}" y="${cy}" width="${cellW}" height="${cellH}" rx="18" fill="${cellBg}" opacity="0.55"/>
     <g transform="translate(${round(ax)} ${round(ay)}) scale(${round(scale)})">
-      <path d="${sticker.cut(0)}" fill="${C.parchment}"/>
-      ${sticker.art(fonts, sticker.cut).trim()}
+      <path d="${sticker.cut(0)}" fill="${profile.keyline}"/>
+      ${renderArt(sticker, fonts, profile).body}
     </g>
     <path d="${text(fonts['PlayfairDisplay-Bold'], sticker.title, {
       anchor: 'middle',
       size: 24,
       x: cx + cellW / 2,
       y: cy + artH + 74,
-    })}" fill="${C.forest}"/>
+    })}" fill="${ink}"/>
     <path d="${text(fonts['DMMono-Regular'], label(sticker), {
       anchor: 'middle',
       letterSpacing: 0.12,
       size: 13,
       x: cx + cellW / 2,
       y: cy + artH + 100,
-    })}" fill="${C.rust}"/>
+    })}" fill="${cap}"/>
   </g>`
     })
     .join('\n')
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-  <rect width="${w}" height="${h}" fill="${C.cream}"/>
-  <path d="${text(fonts['PlayfairDisplay-Black'], 'Ternpike sticker kit', {
-    size: 62,
-    x: margin,
-    y: 96,
-  })}" fill="${C.forest}"/>
-  <path d="${text(fonts['PlayfairDisplay-Italic'], 'Die-cut vinyl. Vector, outlined, print at actual size.', {
+  <rect width="${w}" height="${h}" fill="${paper}"/>
+  <path d="${text(fonts['PlayfairDisplay-Black'], title, { size: 62, x: margin, y: 96 })}" fill="${ink}"/>
+  <path d="${text(fonts['PlayfairDisplay-Italic'], subtitle, {
     size: 26,
     x: margin + 4,
     y: 136,
-  })}" fill="${C.moss}"/>
-  <path d="M${margin} 158H${w - margin}" stroke="${C.rust}" stroke-width="2"/>
+  })}" fill="${sub}"/>
+  <path d="M${margin} 158H${w - margin}" stroke="${cap}" stroke-width="2"/>
 ${cells}
 </svg>
 `
@@ -229,9 +339,10 @@ const fonts = await loadFonts()
 const svgDir = join(here, 'svg')
 const pngDir = join(here, 'png')
 const sheetDir = join(here, 'sheets')
+const thermalDir = join(here, 'thermal')
 const shotDir = join(repoRoot, 'docs', 'screenshots')
 
-for (const dir of [svgDir, pngDir, sheetDir]) {
+for (const dir of [svgDir, pngDir, sheetDir, thermalDir]) {
   await rm(dir, { force: true, recursive: true })
   await mkdir(dir, { recursive: true })
 }
@@ -246,23 +357,28 @@ if (wantPng) {
   }
 }
 
-// 300 DPI: viewBox units are 1/100in, so 3 px per unit.
-const raster = async (svg, out, pxPerUnit = 3) => {
-  if (!sharp) return
-  await sharp(Buffer.from(svg), { density: 96 * pxPerUnit })
-    .resize({ width: Math.round(widthOf(svg) * pxPerUnit) })
-    .png({ compressionLevel: 9 })
-    .toFile(out)
-}
-
 const widthOf = (svg) => Number(/viewBox="0 0 ([\d.]+)/.exec(svg)[1])
 
+// Viewbox units are 1/100in, so pxPerUnit is DPI/100. `bilevel` reproduces
+// what a thermal head does: no anti-aliasing, no grey, every dot on or off.
+const raster = async (svg, out, pxPerUnit = 3, { bilevel = false } = {}) => {
+  if (!sharp) return
+  let pipe = sharp(Buffer.from(svg), { density: 96 * pxPerUnit }).resize({
+    width: Math.round(widthOf(svg) * pxPerUnit),
+  })
+  if (bilevel) pipe = pipe.greyscale().threshold(128)
+  await pipe.png({ compressionLevel: 9 }).toFile(out)
+}
+
+console.log('colour (die-cut vinyl)')
 for (const sticker of stickers) {
   const svg = stickerSvg(sticker, fonts)
   await writeFile(join(svgDir, `${sticker.slug}.svg`), svg)
   await raster(svg, join(pngDir, `${sticker.slug}.png`))
   const dest = qrDestination(sticker)
-  console.log(`  ${sticker.slug.padEnd(16)} ${label(sticker).padEnd(14)} ${dest ? `QR → ${dest}` : 'url only'}`)
+  console.log(
+    `  ${sticker.slug.padEnd(16)} ${label(sticker).padEnd(14)} ${dest ? `QR → ${dest}` : 'url only'}`,
+  )
 }
 
 const sheets = pack(POOL)
@@ -271,11 +387,69 @@ for (const [i, placed] of sheets.entries()) {
   const name = sheets.length === 1 ? 'print-sheet' : `print-sheet-${i + 1}`
   await writeFile(join(sheetDir, `${name}.svg`), svg)
   await raster(svg, join(shotDir, `stickers-${name}.png`), 1.4)
-  console.log(`  ${name.padEnd(16)} ${placed.length} stickers`)
+  console.log(`  ${name.padEnd(16)} ${placed.length} stickers, US Letter`)
 }
 
-const contact = contactSheet(fonts)
-await writeFile(join(sheetDir, 'contact-sheet.svg'), contact)
-await raster(contact, join(shotDir, 'stickers-contact-sheet.png'), 1)
+// 203 DPI is the conservative Munbyn head resolution; a 300 DPI model
+// prints these strictly better.
+const THERMAL_DPI = 203
 
-console.log(`\n${stickers.length} stickers · ${sheets.length} gang sheet(s) · keyline ${KEYLINE / 100}in`)
+console.log('\nmono (4×6 thermal label, 203 DPI)')
+const thermalPlans = []
+for (const sticker of stickers) {
+  const { plan, svg, type } = thermalSvg(sticker, fonts)
+  await writeFile(join(thermalDir, `${sticker.slug}.svg`), svg)
+  await raster(svg, join(thermalDir, `${sticker.slug}.png`), THERMAL_DPI / 100, {
+    bilevel: true,
+  })
+  const per = `${plan.count} per label`
+  const geometry = `${plan.cols}×${plan.rows}${plan.rotated ? ' rotated' : ''}`
+  let note = ''
+  if (plan.shortfall) {
+    const worst = bindingConstraint(type)
+    note = ` — SHRUNK to ${plan.scale.toFixed(2)}× (needs ${plan.shortfall.wanted}×); "${worst?.family}" at ${worst?.size} will be marginal`
+  }
+  thermalPlans.push({ slug: sticker.slug, ...plan })
+  console.log(
+    `  ${sticker.slug.padEnd(16)} ${String(plan.scale.toFixed(2) + '×').padEnd(7)} ${per.padEnd(14)} ${geometry}${note}`,
+  )
+}
+
+// Cell geometry so verify.mjs can decode ONE sticker per label. A ganged
+// label holds several finder-pattern triples and jsQR resolves none of
+// them — a decoder limitation, not a print defect, but the two look
+// identical from a pass/fail line unless the check crops first.
+await writeFile(
+  join(thermalDir, 'plan.json'),
+  `${JSON.stringify({ dpi: THERMAL_DPI, label: LABEL, designs: thermalPlans }, null, 2)}\n`,
+)
+
+await writeFile(
+  join(sheetDir, 'contact-sheet.svg'),
+  contactSheet(fonts, {
+    profile: colorProfile,
+    subtitle: 'Die-cut vinyl. Vector, outlined, print at actual size.',
+    title: 'Ternpike sticker kit',
+  }),
+)
+await raster(
+  contactSheet(fonts, {
+    profile: colorProfile,
+    subtitle: 'Die-cut vinyl. Vector, outlined, print at actual size.',
+    title: 'Ternpike sticker kit',
+  }),
+  join(shotDir, 'stickers-contact-sheet.png'),
+  1,
+)
+
+const monoContact = contactSheet(fonts, {
+  profile: monoProfile,
+  subtitle: 'The same designs, black on white, for a thermal label printer.',
+  title: 'Thermal profile',
+})
+await writeFile(join(sheetDir, 'contact-sheet-thermal.svg'), monoContact)
+await raster(monoContact, join(shotDir, 'stickers-contact-sheet-thermal.png'), 1, {
+  bilevel: true,
+})
+
+console.log(`\n${stickers.length} designs · 2 profiles · keyline ${KEYLINE / 100}in`)

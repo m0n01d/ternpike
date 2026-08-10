@@ -31,9 +31,12 @@ tell you whether it survives at print size.
 ## What's in here
 
 ```
-svg/<slug>.svg      one sticker each — artwork only, no cut guides
+svg/<slug>.svg      colour, one sticker each — artwork only, no cut guides
 png/<slug>.png      the same at 300 DPI, for portals that only take raster
 sheets/print-sheet.svg    US Letter gang sheet, 11 stickers, dashed cut guides
+thermal/<slug>.svg  black-on-white, ganged onto a 4×6 label — see below
+thermal/<slug>.png  the same at 203 DPI, hard-thresholded to one bit
+thermal/plan.json   per-design scale and cell geometry
 sheets/contact-sheet.svg  the review image above
 ```
 
@@ -61,6 +64,51 @@ no guides at all.
 **Minimum legible size.** The smallest type in the kit is 7pt-equivalent
 (`ternpike.com` on `no-signal` and `wordmark-rust`). Don't scale any sticker
 below 100% or that line closes up.
+
+## Printing on a thermal label printer
+
+`thermal/` is the same nine designs rendered for a direct thermal head
+(Munbyn RW403B and friends): **pure black on white, one sticker design per
+4 × 6 label, ganged to fill it.** Print the SVG (or the PNG) at 100%.
+
+| Design | Scale | Per 4×6 label |
+|---|---|---|
+| `tern-mark` | 1.00× | 6 |
+| `wordmark-rust` | 1.08× | 4 |
+| `no-signal` | 1.30× | 3 |
+| `milepost-zero` | 1.22× | 3 (rotated) |
+| `cabin-or-truck` | 1.30× | 2 |
+| `qr-trailhead` | 1.18× | 2 (rotated) |
+| `badge-tern` | 1.14× | 1 |
+| `receipt` | 1.50× | 1 |
+| `orlando-juneau` | 1.30× | 1 (rotated) |
+
+Three things drive that table, and none of them are stylistic:
+
+- **Ink coverage.** A dark-field design printed as-is is a solid black slab:
+  slow, smeary, and hard on the head. The mono profile turns every field
+  white, so dark designs invert into line art. That's why the badge prints as
+  an outlined ring rather than a filled disc.
+- **No grey.** One bit per dot means a 35%-opacity hairline dithers into
+  speckle. Every opacity collapses to 1, and decoration that relied on
+  receding gets dropped — the route dots behind *Orlando to Juneau* cross the
+  descenders at full black, so the mono profile omits them.
+- **203 DPI has a legibility floor.** Counters fill in below ~7pt mono / 9pt
+  Playfair Bold, and Playfair's hairline serifs vanish below ~11pt. Each
+  design is scaled up until its *smallest* run clears that floor — uniformly,
+  so the composition holds. That's the Scale column, and it's computed from
+  the type actually drawn, not guessed.
+
+203 DPI is the conservative assumption; a 300 DPI head prints these strictly
+better. The dashed outline on each is a scissor guide — cut on it and it's
+gone.
+
+**For plain tracked QR labels, you may not want this kit at all.**
+`server/qrPdf.js` already serves purpose-built 4×6 PDFs for this printer at
+`https://ternpike.com/qr/<slug>/sticker.pdf?size=large|medium|small` — 1, 6,
+or 12 per label, and PDF rather than SVG specifically because iOS Safari
+ignores `@page size` and letterboxes onto US Letter. Use that when you want
+cheap tracked labels; use `thermal/` when you want the actual designs.
 
 ## The QRs are tracked
 
@@ -91,10 +139,17 @@ node marketing/stickers/verify.mjs         # decode every QR out of the PNGs
 ```
 
 **Run `verify.mjs` after any layout change near a QR.** It decodes each symbol
-from the rendered artwork at 300 DPI and again downscaled to 150 px-per-inch —
-deliberately worse than a phone at arm's length. A quiet zone eaten by a
-nudged coordinate produces a picture that looks like a QR and scans like a
-smudge; this is the only check that catches it before the vinyl order.
+three ways: from the colour artwork at 300 DPI, from the same downscaled to
+150 px-per-inch (deliberately worse than a phone at arm's length), and from
+the 1-bit thermal label. A quiet zone eaten by a nudged coordinate produces a
+picture that looks like a QR and scans like a smudge; this is the only check
+that catches it before the print run.
+
+It crops to a single cell before decoding a thermal label, because a ganged
+label carries several finder-pattern triples and jsQR resolves none of them.
+That's a decoder limitation rather than a print defect — but the two are
+indistinguishable from a pass/fail line, which is why the crop uses the real
+cell geometry from `thermal/plan.json` instead of a guess.
 
 Neither dependency is in any `package.json`. Nothing in CI runs this — the
 generated files are committed, and the kit changes about as often as the logo
@@ -107,9 +162,15 @@ Designs live in `lib/stickers.mjs`, one object each. Coordinates are in
 think in when deciding whether a line survives at 2 inches wide. `lib/shapes.mjs`
 holds the silhouettes and the tern mark; `lib/type.mjs` does text→path.
 
-Colours come from `src/theme.css` and are mirrored in `C` at the top of
-`lib/stickers.mjs`. If the brand palette moves, move it there too — a sticker
-in last season's green is worse than no sticker.
+**Designs name roles, never colours** — `p.dark`, `p.onDark`, `p.accent`. A
+profile in `lib/profiles.mjs` decides what each role is worth, which is the
+only reason one set of artwork can be both colour vinyl and thermal line art
+without two copies drifting apart. Reaching for a hex literal in a design
+means the role you want is missing; add it to both profiles instead.
+
+Brand values come from `src/theme.css` and are mirrored in `BRAND` in
+`lib/profiles.mjs`. If the palette moves, move it there too — a sticker in
+last season's green is worse than no sticker.
 
 ### Two traps worth knowing about
 
