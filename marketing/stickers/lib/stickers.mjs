@@ -21,6 +21,7 @@ import {
   receipt,
   roundedRect,
 } from './shapes.mjs'
+import { qrCard, qrTarget } from './qr.mjs'
 import { arcText, text } from './type.mjs'
 
 // Straight from src/theme.css — the sticker kit and the app must not drift
@@ -184,9 +185,10 @@ export const stickers = [
 
   // ── 5. Receipt ───────────────────────────────────────────────────────
   {
-    blurb: '1.6 × 2.6in. Die-cut receipt with a torn edge — the product in one object.',
-    cut: receipt(160, 260, 7),
-    h: 260,
+    blurb: '1.6 × 3.2in. Die-cut receipt with a torn edge — the product in one object.',
+    cut: receipt(160, 320, 7),
+    h: 320,
+    qr: 'receipt',
     slug: 'receipt',
     title: 'Receipt',
     w: 160,
@@ -208,20 +210,6 @@ export const stickers = [
             y: 90 + i * 18,
           })}" fill="${C.forest}"/>`,
         )
-        .join('')
-      // Fixed pattern rather than a hash of anything — it's decorative, and
-      // a stable pattern means a reprint matches the last batch.
-      const bars = [2, 1, 3, 1, 1, 2, 4, 1, 2, 1, 3, 2, 1, 1, 4, 2, 1, 3, 1, 2]
-      let bx = 26
-      const barcode = bars
-        .map((wBar, i) => {
-          const rect =
-            i % 2 === 0
-              ? `<rect x="${bx}" y="210" width="${wBar * 1.6}" height="20" fill="${C.forest}"/>`
-              : ''
-          bx += wBar * 1.6 + 1.6
-          return rect
-        })
         .join('')
       return `
       <path d="${cut(KEYLINE)}" fill="${C.cream}"/>
@@ -253,15 +241,15 @@ export const stickers = [
         letterSpacing: 0.2,
         size: 7,
         x: 81,
-        y: 198,
+        y: 196,
       })}" fill="${C.rust}"/>
-      ${barcode}
+      ${qrCard({ dark: C.forest, light: C.cream, size: 74, slug: 'receipt', x: 43, y: 204 })}
       <path d="${text(f['DMMono-Regular'], 'ternpike.com', {
         anchor: 'middle',
         letterSpacing: 0.14,
         size: 8,
         x: 81,
-        y: 245,
+        y: 296,
       })}" fill="${C.forest}"/>
     `
     },
@@ -269,37 +257,39 @@ export const stickers = [
 
   // ── 6. Orlando → Juneau ──────────────────────────────────────────────
   {
-    blurb: '3.2 × 1.6in. The hero line, with the route plotted behind it.',
+    blurb: '3.2 × 1.6in. The hero line, route plotted behind it, QR on the right.',
     cut: roundedRect(320, 160, 18),
     h: 160,
+    qr: 'route',
     slug: 'orlando-juneau',
     title: 'Orlando to Juneau',
     w: 320,
     art: (f, cut) => `
       <path d="${cut(KEYLINE)}" fill="${C.forest}"/>
-      ${dottedRoute({ bend: 52, fill: C.moss, from: [46, 122], opacity: 0.55, to: [274, 54] })}
-      <circle cx="46" cy="122" r="4" fill="${C.cream}" opacity="0.7"/>
-      <circle cx="274" cy="54" r="5.5" fill="${C.rust}"/>
+      ${dottedRoute({ bend: 42, fill: C.moss, from: [36, 128], opacity: 0.5, to: [190, 42] })}
+      <circle cx="36" cy="128" r="3.5" fill="${C.cream}" opacity="0.7"/>
+      <circle cx="190" cy="42" r="5" fill="${C.rust}"/>
       <path d="${text(f['PlayfairDisplay-Italic'], 'Every dollar,', {
         anchor: 'middle',
-        size: 28,
-        x: 160,
-        y: 74,
+        size: 24,
+        x: 112,
+        y: 66,
       })}" fill="${C.cream}"/>
       <path d="${text(f['PlayfairDisplay-Italic'], 'Orlando to Juneau.', {
         anchor: 'middle',
-        size: 28,
-        x: 160,
-        y: 106,
+        size: 24,
+        x: 112,
+        y: 94,
       })}" fill="${C.cream}"/>
-      ${line(130, 122, 190, 122, C.rust, 1.6)}
+      ${line(84, 110, 140, 110, C.rust, 1.5)}
       <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
         anchor: 'middle',
-        letterSpacing: 0.3,
-        size: 8,
-        x: 161,
-        y: 140,
+        letterSpacing: 0.26,
+        size: 7.5,
+        x: 113,
+        y: 128,
       })}" fill="${C.tan}"/>
+      ${qrCard({ dark: C.forestDeep, light: C.cream, size: 84, slug: 'route', x: 218, y: 38 })}
     `,
   },
 
@@ -369,4 +359,47 @@ export const stickers = [
       })}
     `,
   },
+
+  // ── 9. Trailhead scan card ───────────────────────────────────────────
+  //
+  // The one whose entire job is the scan: kiosk boards, campground
+  // bulletin boards, the back of a gas pump. Everything else in the kit
+  // is a brand object that happens to carry a URL; this is a call to
+  // action that happens to be pretty.
+  {
+    blurb: '2 × 3in. QR-first — 1.5in symbol, for kiosk and bulletin boards.',
+    cut: roundedRect(200, 300, 18),
+    h: 300,
+    qr: 'trailhead',
+    slug: 'qr-trailhead',
+    title: 'Trailhead scan card',
+    w: 200,
+    art: (f, cut) => `
+      <path d="${cut(KEYLINE)}" fill="${C.forest}"/>
+      ${qrCard({ dark: C.forestDeep, light: C.cream, radius: 6, size: 150, slug: 'trailhead', x: 25, y: 24 })}
+      <path d="${text(f['PlayfairDisplay-Black'], 'Ternpike', {
+        anchor: 'middle',
+        size: 32,
+        x: 100,
+        y: 212,
+      })}" fill="${C.cream}"/>
+      <path d="${text(f['PlayfairDisplay-Italic'], 'Track every turn of the road.', {
+        anchor: 'middle',
+        size: 13,
+        x: 100,
+        y: 236,
+      })}" fill="${C.cream}" opacity="0.85"/>
+      ${line(70, 250, 130, 250, C.rust, 1.5)}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.24,
+        size: 9.5,
+        x: 101,
+        y: 272,
+      })}" fill="${C.tan}"/>
+    `,
+  },
 ]
+
+/** Where a design's QR sends a scanner, or null if it carries only a URL. */
+export const qrDestination = (sticker) => (sticker.qr ? qrTarget(sticker.qr) : null)

@@ -18,7 +18,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { KEYLINE, UNITS_PER_INCH } from './lib/shapes.mjs'
-import { C, stickers } from './lib/stickers.mjs'
+import { C, qrDestination, stickers } from './lib/stickers.mjs'
 import { loadFonts, round, text } from './lib/type.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -54,11 +54,12 @@ const POOL = [
   ['badge-tern', 1],
   ['milepost-zero', 1],
   ['receipt', 1],
+  ['qr-trailhead', 1],
   ['orlando-juneau', 1],
   ['cabin-or-truck', 1],
-  ['tern-mark', 4],
+  ['tern-mark', 2],
   ['wordmark-rust', 2],
-  ['no-signal', 2],
+  ['no-signal', 1],
 ]
 
 /**
@@ -109,7 +110,6 @@ function pack(items) {
       placed.push({ sticker, x, y: shelfY })
       x += sticker.w + SHEET.gap
       shelfH = Math.max(shelfH, sticker.h)
-      pool = pool
     }
 
     if (placed.length === 0) throw new Error('sticker too large for the sheet')
@@ -156,11 +156,11 @@ ${guides}
 // ── Contact sheet (review image) ─────────────────────────────────────────
 
 function contactSheet(fonts) {
-  const cols = 4
-  const cellW = 345
-  const cellH = 360
-  const artW = 296
-  const artH = 216
+  const cols = 3
+  const cellW = 420
+  const cellH = 400
+  const artW = 350
+  const artH = 264
   const pad = 26
   const margin = 54
   const headerH = 190
@@ -211,7 +211,7 @@ function contactSheet(fonts) {
     x: margin,
     y: 96,
   })}" fill="${C.forest}"/>
-  <path d="${text(fonts['PlayfairDisplay-Italic'], 'Eight die-cut designs. Vector, outlined, print at actual size.', {
+  <path d="${text(fonts['PlayfairDisplay-Italic'], 'Die-cut vinyl. Vector, outlined, print at actual size.', {
     size: 26,
     x: margin + 4,
     y: 136,
@@ -261,7 +261,8 @@ for (const sticker of stickers) {
   const svg = stickerSvg(sticker, fonts)
   await writeFile(join(svgDir, `${sticker.slug}.svg`), svg)
   await raster(svg, join(pngDir, `${sticker.slug}.png`))
-  console.log(`  ${sticker.slug.padEnd(16)} ${label(sticker)}`)
+  const dest = qrDestination(sticker)
+  console.log(`  ${sticker.slug.padEnd(16)} ${label(sticker).padEnd(14)} ${dest ? `QR → ${dest}` : 'url only'}`)
 }
 
 const sheets = pack(POOL)

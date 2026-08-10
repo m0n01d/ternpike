@@ -1,28 +1,39 @@
 # Ternpike sticker kit
 
-Eight die-cut stickers for handing out — trailhead kiosks, campground boards,
-gas-pump tops, the back of a laptop at a coffee shop with wifi. Every one
-carries `ternpike.com`, so the sticker *is* the funnel.
+Nine die-cut stickers for handing out — trailhead kiosks, campground boards,
+gas-pump tops, the back of a laptop at a coffee shop with wifi.
+
+**Every sticker gets someone to the site.** All nine print `ternpike.com`;
+three also carry a scannable QR. `verify.mjs` enforces both — it decodes each
+QR back out of the rendered pixels and fails the build if a URL-only design
+stops printing its URL.
 
 ![contact sheet](../../docs/screenshots/stickers-contact-sheet.png)
 
-| Slug | Size | What it is |
-|---|---|---|
-| `badge-tern` | 3 × 3in | National-park badge. The flagship — arc-set type, tern, mile-0 line. |
-| `wordmark-rust` | 3.2 × 1.1in | Rust bar wordmark with the tern soaring off the end. Bumper/laptop edge. |
-| `milepost-zero` | 1.4 × 3in | Alaska Highway milepost. Every trip starts at mile zero. |
-| `no-signal` | 2.6 × 1.2in | "No signal, no problem." The offline-first pitch. |
-| `receipt` | 1.6 × 2.6in | Die-cut receipt with a torn edge — the product as an object. |
-| `orlando-juneau` | 3.2 × 1.6in | The hero line, route plotted behind it. |
-| `cabin-or-truck` | 2.8 × 1.5in | The joke sticker. The decision the app exists to inform. |
-| `tern-mark` | 1.5 × 1.5in | Mark plus URL, nothing else. The one you order 500 of. |
+| Slug | Size | Gets you there via | What it is |
+|---|---|---|---|
+| `qr-trailhead` | 2 × 3in | 1.5in QR + URL | QR-first. Kiosk and bulletin boards. |
+| `receipt` | 1.6 × 3.2in | 0.74in QR + URL | Die-cut receipt with a torn edge — the product as an object. |
+| `orlando-juneau` | 3.2 × 1.6in | 0.84in QR + URL | The hero line, route plotted behind it. |
+| `badge-tern` | 3 × 3in | URL | National-park badge. The flagship — arc-set type, tern, mile-0 line. |
+| `wordmark-rust` | 3.2 × 1.1in | URL | Rust bar wordmark with the tern soaring off the end. Bumper/laptop edge. |
+| `milepost-zero` | 1.4 × 3in | URL | Alaska Highway milepost. Every trip starts at mile zero. |
+| `no-signal` | 2.6 × 1.2in | URL | "No signal, no problem." The offline-first pitch. |
+| `cabin-or-truck` | 2.8 × 1.5in | URL | The joke sticker. The decision the app exists to inform. |
+| `tern-mark` | 1.5 × 1.5in | URL | Mark plus URL, nothing else. The one you order 500 of. |
+
+The six URL-only designs are the ones where a QR would either not scan or
+would wreck the composition — `tern-mark` is 1.5in of bird, and a symbol big
+enough to read would leave no bird. If you want one anyway, add
+`qr: '<slug>'` to the design and a `qrCard({...})` call; `verify.mjs` will
+tell you whether it survives at print size.
 
 ## What's in here
 
 ```
 svg/<slug>.svg      one sticker each — artwork only, no cut guides
 png/<slug>.png      the same at 300 DPI, for portals that only take raster
-sheets/print-sheet.svg    US Letter gang sheet, 13 stickers, dashed cut guides
+sheets/print-sheet.svg    US Letter gang sheet, 11 stickers, dashed cut guides
 sheets/contact-sheet.svg  the review image above
 ```
 
@@ -51,23 +62,39 @@ no guides at all.
 (`ternpike.com` on `no-signal` and `wordmark-rust`). Don't scale any sticker
 below 100% or that line closes up.
 
-## Relationship to the QR stickers
+## The QRs are tracked
 
-Separate system, on purpose. `server/qrSvg.js` generates *scannable, tracked*
-labels — `/qr/<slug>` counts every scan and redirects with `?ref=qr-<slug>`.
-Those are 2 × 1in thermal-label stock and exist to measure.
+Every QR points at `https://ternpike.com/qr/<slug>` — the existing redirect in
+`server/qr.js`, not a bare link to the homepage. That route bumps a per-slug
+counter in `QR_KV`, rolls up the scanner's Cloudflare edge geo, and 302s to
+`ternpike.com/?ref=qr-<slug>`.
 
-These are swag. They're prettier, they're die-cut, and they carry a plain URL
-with no attribution. Hand out both: a QR label on the thing you want to
-measure, a vinyl sticker on the thing you want someone to keep.
+Each design has its own slug (`trailhead`, `receipt`, `route`), so
+`GET /admin/qr` answers the question that justifies putting a QR on swag at
+all: **which design actually gets scanned, and where.** Slugs need no
+registration — an unseen slug is counted on first scan.
+
+Change a slug in `lib/stickers.mjs` if you want per-batch attribution instead
+of per-design (`ak24`, `booth-3`). Anything matching `[a-z0-9-]{1,32}` works.
+
+This is the same machinery behind the 2 × 1in thermal labels
+(`server/qrSvg.js`), which still exist and are still the right tool when you
+want a cheap tracked label rather than a keepsake. Hand out both.
 
 ## Regenerating
 
 ```sh
-npm i --no-save opentype.js sharp
+npm i --no-save opentype.js sharp qrcode-generator jsqr
 node marketing/stickers/build.mjs          # SVG + PNG + sheets
 node marketing/stickers/build.mjs --no-png # vectors only, skips sharp
+node marketing/stickers/verify.mjs         # decode every QR out of the PNGs
 ```
+
+**Run `verify.mjs` after any layout change near a QR.** It decodes each symbol
+from the rendered artwork at 300 DPI and again downscaled to 150 px-per-inch —
+deliberately worse than a phone at arm's length. A quiet zone eaten by a
+nudged coordinate produces a picture that looks like a QR and scans like a
+smudge; this is the only check that catches it before the vinyl order.
 
 Neither dependency is in any `package.json`. Nothing in CI runs this — the
 generated files are committed, and the kit changes about as often as the logo
