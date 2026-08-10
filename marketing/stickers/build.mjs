@@ -156,86 +156,157 @@ ${cells.join('\n')}
 }
 
 /**
- * A mixed 4×6 label: an assortment of the scan family rather than N copies
- * of one design.
+ * A numbered 4×6 sheet: whatever mix of designs the pool asks for, packed
+ * at each design's own thermal scale, with a caption in the bottom margin.
  *
- * The per-design labels are right when you know which sticker you want a
- * stack of. This is right when you're packing for a trip and want a bit of
- * everything on one label.
+ * The per-design labels answer "give me a stack of THIS". These answer
+ * "give me stickers about THIS BIG" — which is the question you actually
+ * have standing at the printer, so the set is numbered smallest to largest
+ * and the caption says the size out loud.
  *
- * Shelf packing over pre-scaled boxes — each design carries its own thermal
- * scale, so the boxes are heterogeneous and the simple sticker.w/h packer
- * below can't be reused.
+ * Shelf packing over pre-scaled boxes: designs carry their own thermal
+ * scale, so the boxes are heterogeneous and the sticker.w/h packer below
+ * can't be reused.
  */
-function scanSamplerSvg(fonts, pool) {
+function labelSheet(fonts, { caption, pool }) {
   const availRight = LABEL.w - LABEL.margin
-  const floor = LABEL.h - LABEL.margin
+  const floor = LABEL.h - LABEL.margin - CAPTION_BAND
 
   const boxes = pool.flatMap(([slug, count]) => {
     const sticker = stickers.find((s) => s.slug === slug)
-    if (!sticker) throw new Error(`unknown sticker in scan pool: ${slug}`)
+    if (!sticker) throw new Error(`unknown sticker in sheet pool: ${slug}`)
     const { type } = renderArt(sticker, fonts, monoProfile)
     const scale = thermalScale(type)
     return Array.from({ length: count }, () => ({
-      h: sticker.h * scale,
+      long: Math.max(sticker.w, sticker.h) * scale,
       scale,
       sticker,
-      w: sticker.w * scale,
+      tall: sticker.h * scale,
+      wide: sticker.w * scale,
     }))
   })
-  boxes.sort((a, b) => b.h - a.h || b.w - a.w)
+  boxes.sort((a, b) => b.long - a.long || b.wide - a.wide)
 
-  const placed = []
-  let shelfY = LABEL.margin
-  let shelfH = 0
-  let x = LABEL.margin
-  while (boxes.length > 0) {
-    const idx = boxes.findIndex((b) => x + b.w <= availRight && shelfY + b.h <= floor)
-    if (idx === -1) {
-      const nextY = shelfY + (shelfH === 0 ? 0 : shelfH + LABEL.gap)
-      if (shelfH === 0 || !boxes.some((b) => nextY + b.h <= floor)) break
-      shelfY = nextY
-      shelfH = 0
-      x = LABEL.margin
-      continue
-    }
-    const [box] = boxes.splice(idx, 1)
-    placed.push({ ...box, x, y: shelfY })
-    x += box.w + LABEL.gap
-    shelfH = Math.max(shelfH, box.h)
+  // A turned sticker peels exactly the same, so orientation is free — but
+  // choosing it per-sticker is a local decision that loses globally:
+  // preferring upright fits two 1.3×1.75in posts per shelf and three
+  // shelves, where turning them all sideways fits two per shelf and FOUR.
+  // So pack the sheet twice, once favouring each orientation, and keep
+  // whichever placed more.
+  const orientations = (box, preferRotated) => {
+    const upright = { h: box.tall, rotated: false, w: box.wide }
+    const sideways = { h: box.wide, rotated: true, w: box.tall }
+    return preferRotated ? [sideways, upright] : [upright, sideways]
   }
 
+  const packOnce = (preferRotated) => {
+    const queue = boxes.slice()
+    const out = []
+    let shelfY = LABEL.margin
+    let shelfH = 0
+    let x = LABEL.margin
+    while (queue.length > 0) {
+      let choice = null
+      for (let i = 0; i < queue.length && !choice; i++) {
+        for (const o of orientations(queue[i], preferRotated)) {
+          if (x + o.w <= availRight && shelfY + o.h <= floor) {
+            choice = { ...queue[i], ...o, index: i }
+            break
+          }
+        }
+      }
+      if (!choice) {
+        const nextY = shelfY + (shelfH === 0 ? 0 : shelfH + LABEL.gap)
+        const anyFits = queue.some((b) =>
+          orientations(b, preferRotated).some(
+            (o) => nextY + o.h <= floor && LABEL.margin + o.w <= availRight,
+          ),
+        )
+        if (shelfH === 0 || !anyFits) break
+        shelfY = nextY
+        shelfH = 0
+        x = LABEL.margin
+        continue
+      }
+      queue.splice(choice.index, 1)
+      out.push({ ...choice, x, y: shelfY })
+      x += choice.w + LABEL.gap
+      shelfH = Math.max(shelfH, choice.h)
+    }
+    return out
+  }
+
+  // More placed wins. On a tie, prefer the tidier sheet — one where every
+  // sticker faces the same way — over a mixture, since a mixed shelf
+  // leaves dead space under the shorter orientation.
+  const mixed = (out) => new Set(out.map((o) => o.rotated)).size > 1
+  const upright = packOnce(false)
+  const sideways = packOnce(true)
+  const placed =
+    sideways.length > upright.length ||
+    (sideways.length === upright.length && mixed(upright) && !mixed(sideways))
+      ? sideways
+      : upright
+
   const cells = placed
-    .map(({ scale, sticker, x: bx, y: by }) => `  <g transform="translate(${round(bx)} ${round(by)}) scale(${scale})">
+    .map(({ rotated, scale, sticker, w, x: bx, y: by }) => {
+      // Rotating clockwise about the cell: local (u,v) lands at
+      // (x + w - v*scale, y + u*scale), so the footprint is h×w.
+      const transform = rotated
+        ? `translate(${round(bx + w)} ${round(by)}) rotate(90) scale(${scale})`
+        : `translate(${round(bx)} ${round(by)}) scale(${scale})`
+      return `  <g transform="${transform}">
     ${renderArt(sticker, fonts, monoProfile).body}
     <path d="${sticker.cut(0)}" fill="none" stroke="#000000" stroke-width="${round(0.6 / scale)}" stroke-dasharray="${round(5 / scale)} ${round(4 / scale)}"/>
-  </g>`)
+  </g>`
+    })
     .join('\n')
+
+  const strap = `${caption}  ·  ${placed.length} stickers  ·  print at 100%`
 
   return {
     count: placed.length,
-    dropped: boxes.length,
+    dropped: boxes.length - placed.length,
     svg: `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="4in" height="6in" viewBox="0 0 ${LABEL.w} ${LABEL.h}">
-  <title>Ternpike — scan assortment — 4×6 thermal label</title>
+  <title>Ternpike — ${caption} — 4×6 thermal label</title>
   <rect width="${LABEL.w}" height="${LABEL.h}" fill="#ffffff"/>
 ${cells}
+  <path d="${text(fonts['DMMono-Medium'], strap, {
+    anchor: 'middle',
+    letterSpacing: 0.04,
+    size: 9,
+    x: LABEL.w / 2,
+    y: LABEL.h - 12,
+  })}" fill="#000000"/>
 </svg>
 `,
   }
 }
 
-// What goes on the assortment label. Weighted toward the small ones, which
-// are the ones you actually get through.
-// One of each shape plus extra minis. Sized so the whole pool places —
-// the build prints "whole pool placed", and anything else means this list
-// needs trimming rather than the label needing more room.
-const SCAN_POOL = [
-  ['scan-mini', 2],
-  ['scan-dot', 1],
-  ['scan-hook', 1],
-  ['scan-post', 1],
-  ['scan-strip', 1],
+// Room at the bottom of every sheet for the caption strap. It sits outside
+// the sticker area, so it's scrap once you've cut — but it's what tells you
+// which sheet you're holding after four of them come off the printer.
+const CAPTION_BAND = 12
+
+/**
+ * The numbered set, smallest sticker to largest. Pools are sized so every
+ * sheet places its whole pool — the build says "whole pool placed", and
+ * anything else means a pool needs trimming rather than the label needing
+ * more room.
+ */
+const SHEETS = [
+  { caption: '1 · SMALL · 1.3in square', file: '1-small', pool: [['scan-mini', 8]] },
+  { caption: '2 · ROUND · 1.7in', file: '2-round', pool: [['scan-dot', 6]] },
+  { caption: '3 · TALL · 1.3 x 1.75in', file: '3-tall', pool: [['scan-post', 8]] },
+  {
+    caption: '4 · LARGE · 2.4-2.5in',
+    file: '4-large',
+    pool: [
+      ['scan-hook', 2],
+      ['scan-strip', 3],
+    ],
+  },
 ]
 
 // ── Gang sheet (colour, US Letter) ───────────────────────────────────────
@@ -424,6 +495,7 @@ const svgDir = join(here, 'svg')
 const pngDir = join(here, 'png')
 const sheetDir = join(here, 'sheets')
 const thermalDir = join(here, 'thermal')
+const sheetsDir = join(thermalDir, 'sheets')
 const shotDir = join(repoRoot, 'docs', 'screenshots')
 
 for (const dir of [svgDir, pngDir, sheetDir, thermalDir]) {
@@ -550,21 +622,25 @@ for (const sticker of stickers) {
   )
 }
 
-const sampler = scanSamplerSvg(fonts, SCAN_POOL)
-await writeFile(join(thermalDir, 'scan-assortment.svg'), sampler.svg)
-const samplerPng = await raster(
-  sampler.svg,
-  join(thermalDir, 'scan-assortment.png'),
-  THERMAL_DPI / 100,
-  { bilevel: true },
-)
-if (samplerPng) {
-  const pdf = await thermalPdf(samplerPng)
-  if (pdf) await writeFile(join(thermalDir, 'scan-assortment.pdf'), pdf)
+console.log('\nnumbered 4×6 sheets (pick a sheet, pick a size)')
+await mkdir(sheetsDir, { recursive: true })
+for (const sheet of SHEETS) {
+  const built = labelSheet(fonts, sheet)
+  await writeFile(join(sheetsDir, `${sheet.file}.svg`), built.svg)
+  const png = await raster(
+    built.svg,
+    join(sheetsDir, `${sheet.file}.png`),
+    THERMAL_DPI / 100,
+    { bilevel: true },
+  )
+  if (png) {
+    const pdf = await thermalPdf(png)
+    if (pdf) await writeFile(join(sheetsDir, `${sheet.file}.pdf`), pdf)
+  }
+  console.log(
+    `  ${sheet.file.padEnd(16)} ${sheet.caption.padEnd(22)} ${String(built.count + ' stickers').padEnd(14)} ${built.dropped ? `${built.dropped} DIDN'T FIT` : 'whole pool placed'}`,
+  )
 }
-console.log(
-  `  ${'scan-assortment'.padEnd(16)} mixed   ${String(sampler.count + ' per label').padEnd(14)} ${sampler.dropped ? `${sampler.dropped} didn't fit` : 'whole pool placed'}`,
-)
 
 // Cell geometry so verify.mjs can decode ONE sticker per label. A ganged
 // label holds several finder-pattern triples and jsQR resolves none of

@@ -42,9 +42,34 @@ tell you whether it survives at print size.
 | `scan-strip` | 2.5 × 1in | 0.80in | **6** | "How much have I spent?" — rims, edges, pump handles. |
 | `scan-hook` | 2.4 × 1.3in | 1.04in | **4** | "Stop doing math in your head." beside the code. |
 
-Plus `thermal/scan-assortment.pdf` — one 4 × 6 label with six stickers, one
-of each shape plus an extra mini. That's the one to print when you're packing
-rather than restocking.
+### Pick a sheet, pick a size
+
+`thermal/sheets/` is four numbered 4 × 6 labels, smallest sticker to
+largest. Printing one is how you choose a size — no options to set, no
+scaling to get wrong.
+
+| Sheet | Size | Stickers | Contents |
+|---|---|---|---|
+| `1-small.pdf` | 1.3in square | **8** | `scan-mini` |
+| `2-round.pdf` | 1.7in round | **6** | `scan-dot` |
+| `3-tall.pdf` | 1.3 × 1.75in | **8** | `scan-post` |
+| `4-large.pdf` | 2.4 – 2.5in | **5** | `scan-hook` × 2, `scan-strip` × 3 |
+
+Each carries a caption strap in the bottom margin — `1 · SMALL · 1.3in
+square · 8 stickers · print at 100%` — so a stack of printed labels is
+still sortable. It's outside the sticker area, so it's scrap once you've
+cut.
+
+Stickers are turned sideways where that fits more per sheet: sheets 3 and 4
+are packed rotated because upright fits three shelves and sideways fits
+four. A turned sticker peels exactly the same. Each sheet is packed twice,
+once favouring each orientation, and the better result wins — on a tie the
+tidier all-one-way sheet wins, because a mixed shelf leaves dead space
+under the shorter orientation.
+
+The per-design labels in `thermal/` are still there for when you know which
+design you want a stack of; the numbered sheets are for when you know what
+*size* you want.
 
 Three rules these follow that the kit doesn't, all in service of getting
 scanned by someone who wasn't looking for you:
@@ -105,7 +130,7 @@ sheets/print-sheet.svg    US Letter gang sheet, 11 stickers, dashed cut guides
 thermal/<slug>.pdf  4×6 label, print THIS — exactly 4×6in, no rescaling
 thermal/<slug>.svg  the same as vector, if you want to edit it
 thermal/<slug>.png  the same at 203 DPI, hard-thresholded to one bit
-thermal/scan-assortment.{pdf,svg,png}   mixed 4×6 label, 6 scan stickers
+thermal/sheets/N-*.{pdf,svg,png}   four numbered 4×6 sheets, small → large
 thermal/plan.json   per-design scale and cell geometry
 sheets/contact-sheet.svg  the review image above
 ```

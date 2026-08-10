@@ -101,8 +101,8 @@ const checkFloor = (sticker) => {
 }
 
 /** Exactly 4×6in at 72pt/in, one page. Anything else will be rescaled. */
-const checkPdf = async (slug) => {
-  const doc = await PDFDocument.load(await readFile(join(here, 'thermal', `${slug}.pdf`)))
+const checkPdf = async (file) => {
+  const doc = await PDFDocument.load(await readFile(join(here, 'thermal', `${file}.pdf`)))
   const pages = doc.getPages()
   if (pages.length !== 1) return `${pages.length} pages`
   const { height, width } = pages[0].getSize()
@@ -150,11 +150,13 @@ for (const sticker of stickers) {
   )
 }
 
-// The assortment label isn't a design, so the per-design loop misses it —
-// and it's the one most likely to actually get printed.
-const assortment = await checkPdf('scan-assortment')
-if (assortment) failures++
-console.log(`  ${'scan-assortment'.padEnd(16)} ${assortment ? `FAIL pdf ${assortment}` : 'OK   mixed label, pdf4x6=yes'}`)
+// The numbered sheets aren't designs, so the per-design loop misses them —
+// and they're the ones most likely to actually get printed.
+for (const file of ['1-small', '2-round', '3-tall', '4-large']) {
+  const bad = await checkPdf(join('sheets', file))
+  if (bad) failures++
+  console.log(`  ${`sheet ${file}`.padEnd(16)} ${bad ? `FAIL pdf ${bad}` : 'OK   4x6 sheet, pdf4x6=yes'}`)
+}
 
 const withQr = stickers.filter(qrDestination).length
 console.log(
