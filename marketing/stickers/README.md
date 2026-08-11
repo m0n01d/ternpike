@@ -19,18 +19,22 @@ stops printing its URL.
 | `qr-trailhead` | 2 × 3in | 1.5in QR + URL | QR-first. Kiosk and bulletin boards. |
 | `receipt` | 1.6 × 3.2in | 0.74in QR + URL | Die-cut receipt with a torn edge — the product as an object. |
 | `orlando-juneau` | 3.2 × 1.6in | 0.84in QR + URL | The hero line, route plotted behind it. |
-| `badge-tern` | 3 × 3in | URL | National-park badge. The flagship — arc-set type, tern, mile-0 line. |
-| `wordmark-rust` | 3.2 × 1.1in | URL | Rust bar wordmark with the tern soaring off the end. Bumper/laptop edge. |
-| `milepost-zero` | 1.4 × 3in | URL | Alaska Highway milepost. Every trip starts at mile zero. |
-| `no-signal` | 2.6 × 1.2in | URL | "No signal, no problem." The offline-first pitch. |
-| `cabin-or-truck` | 2.8 × 1.5in | URL | The joke sticker. The decision the app exists to inform. |
-| `tern-mark` | 1.5 × 1.5in | URL | Mark plus URL, nothing else. The one you order 500 of. |
+| `badge-tern` | 3 × 3in | 0.80in QR + URL | National-park badge. The flagship — arc-set type, tern, code in the field. |
+| `wordmark-rust` | 3.8 × 1.1in | 0.88in QR + URL | Bumper wordmark, tern soaring off the end, code on the tail. |
+| `milepost-zero` | 1.4 × 3.2in | 0.92in QR + URL | Alaska Highway milepost. Every trip starts at mile zero. |
+| `cabin-or-truck` | 3.4 × 1.7in | 0.84in QR + URL | The joke sticker. The decision the app exists to inform. |
+| `no-signal` | 2.6 × 1.2in | URL | "Works without signal." See `scan-signal` for the same thing with a code. |
+| `tern-mark` | 1.5 × 1.5in | URL | Mark plus URL, nothing else. See `scan-frame` for the scannable version. |
 
-The six URL-only designs are the ones where a QR would either not scan or
-would wreck the composition — `tern-mark` is 1.5in of bird, and a symbol big
-enough to read would leave no bird. If you want one anyway, add
-`qr: '<slug>'` to the design and a `qrCard({...})` call; `verify.mjs` will
-tell you whether it survives at print size.
+Only two designs stay URL-only, and both have a scannable twin in the scan
+family rather than a compromised code jammed into them: `tern-mark` is 1.5in
+of bird and a readable symbol would leave no bird (`scan-frame` is that
+sticker with a code), and putting one on `no-signal` would just reproduce
+`scan-signal`.
+
+Three of the four that gained a code grew to make room — a QR under about
+0.8in stops being something a phone picks up casually, so the sticker gives
+way rather than the symbol.
 
 ## The scan family
 

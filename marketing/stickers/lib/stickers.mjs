@@ -67,9 +67,10 @@ export const stickers = [
   // ── 1. Park badge ────────────────────────────────────────────────────
   {
     family: 'kit',
-    blurb: '3in round. The flagship — national-park badge, arc-set type.',
+    blurb: '3in round. The flagship — national-park badge with a code in the field.',
     cut: circle(300),
     h: 300,
+    qr: 'badge',
     slug: 'badge-tern',
     title: 'Tern badge',
     w: 300,
@@ -100,94 +101,78 @@ export const stickers = [
         <path d="M33 150l7-7 7 7-7 7z"/>
         <path d="M253 150l7-7 7 7-7 7z"/>
       </g>
-      ${bird({ dark: p.markDark, light: p.onDark, scale: 1.2, x: 150, y: 112 })}
+      ${bird({ dark: p.markDark, light: p.onDark, scale: 0.95, x: 150, y: 92 })}
       <path d="${text(f['PlayfairDisplay-Black'], COPY.brand, {
         anchor: 'middle',
-        size: 40,
+        size: 32,
         x: 150,
-        y: 172,
+        y: 140,
       })}" fill="${p.onDark}"/>
-      ${line(104, 184, 196, 184, p.accent, 1.6)}
-      <path d="${text(
-        f['DMMono-Medium'],
-        // Growing "MADE ON THE ALASKA HIGHWAY" to clear the floor pushes it
-        // outside the inner ring, so a small print takes the shorter
-        // fragment. Both come from footer.legal.
-        ctx.scale < 1 ? COPY.alaskaHighwayCaps : COPY.madeOnCaps,
-        {
-          anchor: 'middle',
-          letterSpacing: 0.1,
-          size: smallest(ctx, 8.5),
-          x: 150,
-          y: 200,
-        },
-      )}" fill="${p.onDarkSoft}"/>
+      ${line(112, 150, 188, 150, p.accent, 1.6)}
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 3, size: 80, slug: 'badge', x: 110, y: 160 })}
     `,
   },
 
   // ── 2. Wordmark bar ──────────────────────────────────────────────────
   {
     family: 'kit',
-    blurb: '3.2 × 1.1in. Bumper/laptop-edge wordmark with the tern soaring off the end.',
-    cut: roundedRect(320, 110, 20),
+    blurb: '3.8 × 1.1in. Bumper wordmark, tern soaring off the end, code on the tail.',
+    cut: roundedRect(380, 110, 20),
     h: 110,
+    qr: 'bar',
     slug: 'wordmark-rust',
     title: 'Wordmark bar',
-    w: 320,
-    art: (f, cut, p) => `
+    w: 380,
+    art: (f, cut, p, ctx) => `
       <path d="${cut(KEYLINE)}" fill="${p.brand}"/>
       <path d="${cut(15)}" fill="none" stroke="${p.onDark}" stroke-width="1" opacity="${p.dim(0.45)}"/>
-      <path d="${text(f['PlayfairDisplay-Black'], COPY.brand, { size: 46, x: 28, y: 64 })}" fill="${p.onDark}"/>
+      <path d="${text(f['PlayfairDisplay-Black'], COPY.brand, { size: 38, x: 26, y: 60 })}" fill="${p.onDark}"/>
       <path d="${text(f['DMMono-Medium'], 'ternpike.com', {
         letterSpacing: 0.2,
-        size: 9,
-        x: 30,
-        y: 86,
+        size: smallest(ctx, 9),
+        x: 28,
+        y: 84,
       })}" fill="${p.onDark}" opacity="${p.dim(0.85)}"/>
-      ${bird({ dark: p.markDark, light: p.onDark, scale: 0.62, x: 268, y: 50 })}
+      ${bird({ dark: p.markDark, light: p.onDark, scale: 0.5, x: 242, y: 46 })}
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 3, size: 88, slug: 'bar', x: 276, y: 11 })}
     `,
   },
 
   // ── 3. Milepost ──────────────────────────────────────────────────────
   {
     family: 'kit',
-    blurb: '1.4 × 3in. Highway milepost — every trip starts at mile zero.',
-    cut: milepost(140, 300),
-    h: 300,
+    blurb: '1.4 × 3.2in. Highway milepost — every trip starts at mile zero.',
+    cut: milepost(140, 320),
+    h: 320,
+    qr: 'mile',
     slug: 'milepost-zero',
     title: 'Milepost',
     w: 140,
     art: (f, cut, p, ctx) => `
       <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
       <path d="${cut(16)}" fill="none" stroke="${p.onDark}" stroke-width="1.1" opacity="${p.dim(0.35)}"/>
-      ${bird({ dark: p.markDark, light: p.onDark, scale: 0.44, x: 70, y: 50 })}
+      ${bird({ dark: p.markDark, light: p.onDark, scale: 0.4, x: 70, y: 44 })}
       <path d="${text(f['DMMono-Medium'], 'MILE', {
         anchor: 'middle',
         letterSpacing: 0.34,
-        size: 13,
-        x: 74,
-        y: 104,
+        size: 12,
+        x: 73,
+        y: 92,
       })}" fill="${p.onDarkSoft}"/>
       <path d="${text(f['PlayfairDisplay-Black'], '0', {
         anchor: 'middle',
-        size: 82,
+        size: 66,
         x: 70,
-        y: 186,
+        y: 158,
       })}" fill="${p.onDark}"/>
-      ${line(42, 204, 98, 204, p.accent, 1.8)}
-      <path d="${text(f['DMMono-Medium'], COPY.brand.toUpperCase(), {
-        anchor: 'middle',
-        letterSpacing: 0.26,
-        size: 11,
-        x: 74,
-        y: 230,
-      })}" fill="${p.onDark}"/>
+      ${line(42, 172, 98, 172, p.accent, 1.8)}
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 3, size: 92, slug: 'mile', x: 24, y: 182 })}
       <path d="${text(f['DMMono-Regular'], 'ternpike.com', {
         anchor: 'middle',
         letterSpacing: 0.1,
         size: smallest(ctx, 8),
         x: 71,
-        y: 268,
+        y: 298,
       })}" fill="${p.onDark}" opacity="${p.dim(0.6)}"/>
     `,
   },
@@ -326,42 +311,44 @@ export const stickers = [
   // ── 7. Cabin or truck ────────────────────────────────────────────────
   {
     family: 'kit',
-    blurb: '2.8 × 1.5in oval. The joke sticker — the decision the app exists to inform.',
-    cut: ellipse(280, 150),
-    h: 150,
+    blurb: '3.4 × 1.7in oval. The joke sticker — the decision the app exists to inform.',
+    cut: ellipse(340, 170),
+    h: 170,
+    qr: 'cabin',
     slug: 'cabin-or-truck',
     title: 'Cabin or truck',
-    w: 280,
+    w: 340,
     art: (f, cut, p, ctx) => `
       <path d="${cut(KEYLINE)}" fill="${p.warm}"/>
       <path d="${cut(15)}" fill="none" stroke="${p.onLight}" stroke-width="1.1" opacity="${p.dim(0.5)}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 3, size: 84, slug: 'cabin', x: 36, y: 43 })}
       <path d="${text(f['PlayfairDisplay-Italic'], sentence(COPY.cabin), {
         anchor: 'middle',
-        size: 22,
-        x: 140,
-        y: 62,
+        size: 20,
+        x: 232,
+        y: 68,
       })}" fill="${p.onLight}"/>
-      ${line(96, 78, 122, 78, p.accent, 1.2)}
+      ${line(178, 88, 204, 88, p.accent, 1.2)}
       <path d="${text(f['DMMono-Medium'], 'OR', {
         anchor: 'middle',
         letterSpacing: 0.3,
         size: smallest(ctx, 8),
-        x: 141,
-        y: 81,
+        x: 233,
+        y: 91,
       })}" fill="${p.accent}"/>
-      ${line(158, 78, 184, 78, p.accent, 1.2)}
+      ${line(260, 88, 286, 88, p.accent, 1.2)}
       <path d="${text(f['PlayfairDisplay-Italic'], COPY.truck.replace(/^or /, ''), {
         anchor: 'middle',
-        size: 22,
-        x: 140,
-        y: 106,
+        size: 20,
+        x: 232,
+        y: 116,
       })}" fill="${p.onLight}"/>
       <path d="${text(f['DMMono-Regular'], 'ternpike.com', {
         anchor: 'middle',
         letterSpacing: 0.16,
         size: smallest(ctx, 7.5),
-        x: 141,
-        y: 126,
+        x: 233,
+        y: 140,
       })}" fill="${p.onLight}" opacity="${p.dim(0.65)}"/>
     `,
   },

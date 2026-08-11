@@ -7,11 +7,6 @@
       "slug": "badge-tern"
     },
     {
-      "file": "badge-tern-2up",
-      "n": 2,
-      "slug": "badge-tern"
-    },
-    {
       "file": "wordmark-rust-2up",
       "n": 2,
       "slug": "wordmark-rust"
@@ -24,6 +19,11 @@
     {
       "file": "milepost-zero-1up",
       "n": 1,
+      "slug": "milepost-zero"
+    },
+    {
+      "file": "milepost-zero-2up",
+      "n": 2,
       "slug": "milepost-zero"
     },
     {
@@ -77,18 +77,8 @@
       "slug": "cabin-or-truck"
     },
     {
-      "file": "cabin-or-truck-2up",
-      "n": 2,
-      "slug": "cabin-or-truck"
-    },
-    {
       "file": "cabin-or-truck-3up",
       "n": 3,
-      "slug": "cabin-or-truck"
-    },
-    {
-      "file": "cabin-or-truck-4up",
-      "n": 4,
       "slug": "cabin-or-truck"
     },
     {
