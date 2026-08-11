@@ -38,8 +38,10 @@ import { COPY } from './copy.mjs'
 import { qrCard, qrTarget } from './qr.mjs'
 import { arcText, text } from './type.mjs'
 
-// 7pt in design units, with a hair of slack for the 2dp scale rounding.
+// Thermal floors in design units, with a hair of slack for the 2dp scale
+// rounding: 7pt for mono, 9pt for Playfair Bold.
 const FLOOR_UNITS = 9.9
+const SERIF_FLOOR_UNITS = 12.7
 
 /**
  * Size for a sticker's smallest line, given the scale it's about to print
@@ -49,7 +51,8 @@ const FLOOR_UNITS = 9.9
  * 203 DPI floor. That's what lets a design offer a smaller print instead
  * of refusing one.
  */
-const smallest = (ctx, base) => Math.max(base, FLOOR_UNITS / Math.min(ctx.scale, 4))
+const smallest = (ctx, base, floor = FLOOR_UNITS) =>
+  Math.max(base, floor / Math.min(ctx.scale, 4))
 
 /** Capitalise a fragment lifted from the middle of a sentence. */
 const sentence = (s) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -600,6 +603,166 @@ export const stickers = [
       })}" fill="${p.onLight}"/>
     `,
   },
-]
-/** Where a design's QR sends a scanner, or null if it carries only a URL. */
+
+  // ── 15. Three steps ──────────────────────────────────────────────────
+  {
+    family: 'scan',
+    blurb: '1.7 × 2.2in. The how-it-works headline, QR above it.',
+    cut: roundedRect(170, 220, 12),
+    h: 220,
+    qr: 'sleep',
+    slug: 'scan-sleep',
+    title: 'Three steps',
+    w: 170,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 116, slug: 'sleep', x: 27, y: 14 })}
+      ${COPY.sleepLines
+        .map(
+          (part, i) => `<path d="${text(f['PlayfairDisplay-Bold'], part, {
+        anchor: 'middle',
+        size: smallest(ctx, 14, SERIF_FLOOR_UNITS),
+        x: 85,
+        y: 155 + i * 20,
+      })}" fill="${p.onLight}"/>`,
+        )
+        .join('\n      ')}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.1,
+        size: smallest(ctx, 10),
+        x: 85,
+        y: 200,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 16. Now I know ───────────────────────────────────────────────────
+  //
+  // The origin story's closing line and its shortest. Reads like something
+  // a person said, which is rarer on a sticker than a slogan.
+  {
+    family: 'scan',
+    blurb: '1.7 × 1.75in. The origin story in four words.',
+    cut: roundedRect(170, 175, 12),
+    h: 175,
+    qr: 'know',
+    slug: 'scan-know',
+    title: 'Now I know',
+    w: 170,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 100, slug: 'know', x: 35, y: 14 })}
+      <path d="${text(f['PlayfairDisplay-Bold'], COPY.know, {
+        anchor: 'middle',
+        size: smallest(ctx, 13, SERIF_FLOOR_UNITS),
+        x: 85,
+        y: 136,
+      })}" fill="${p.onLight}"/>
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.1,
+        size: smallest(ctx, 10),
+        x: 85,
+        y: 158,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 17. Actually free ────────────────────────────────────────────────
+  {
+    family: 'scan',
+    blurb: '2.5 × 1.2in. The free-tier row from the comparison table.',
+    cut: roundedRect(250, 120, 12),
+    h: 120,
+    qr: 'free',
+    slug: 'scan-free',
+    title: 'Actually free',
+    w: 250,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 100, slug: 'free', x: 11, y: 10 })}
+      ${COPY.freeLines
+        .map(
+          (part, i) => `<path d="${text(f['PlayfairDisplay-Bold'], part, {
+        size: smallest(ctx, 13, SERIF_FLOOR_UNITS),
+        x: 124,
+        y: 44 + i * 20,
+      })}" fill="${p.onLight}"/>`,
+        )
+        .join('\n      ')}
+      ${line(124, 78, 190, 78, p.accent, 1.5)}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        letterSpacing: 0.08,
+        size: smallest(ctx, 10),
+        x: 124,
+        y: 98,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 18. Join the waitlist ────────────────────────────────────────────
+  //
+  // The only design that asks for the thing directly. Everything else is a
+  // hook or a mark; this one is the site's own button.
+  {
+    family: 'scan',
+    blurb: '2.4 × 1in. The site\'s call to action, nothing else.',
+    cut: roundedRect(240, 100, 12),
+    h: 100,
+    qr: 'join',
+    slug: 'scan-waitlist',
+    title: 'Join the waitlist',
+    w: 240,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 80, slug: 'join', x: 11, y: 10 })}
+      <path d="${text(f['PlayfairDisplay-Bold'], COPY.waitlist, {
+        size: smallest(ctx, 15, SERIF_FLOOR_UNITS),
+        x: 102,
+        y: 46,
+      })}" fill="${p.onLight}"/>
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        letterSpacing: 0.12,
+        size: smallest(ctx, 10),
+        x: 102,
+        y: 72,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 19. How much is left ─────────────────────────────────────────────
+  {
+    family: 'scan',
+    blurb: '1.6 × 1.9in. The origin story\'s second question — pairs with scan-strip.',
+    cut: roundedRect(160, 190, 12),
+    h: 190,
+    qr: 'left',
+    slug: 'scan-left',
+    title: 'How much is left',
+    w: 160,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 100, slug: 'left', x: 30, y: 16 })}
+      ${COPY.leftLines
+        .map(
+          (part, i) => `<path d="${text(f['PlayfairDisplay-Bold'], part, {
+        anchor: 'middle',
+        size: smallest(ctx, 14, SERIF_FLOOR_UNITS),
+        x: 80,
+        y: 140 + i * 18,
+      })}" fill="${p.onLight}"/>`,
+        )
+        .join('\n      ')}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.1,
+        size: smallest(ctx, 10),
+        x: 80,
+        y: 178,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+]/** Where a design's QR sends a scanner, or null if it carries only a URL. */
 export const qrDestination = (sticker) => (sticker.qr ? qrTarget(sticker.qr) : null)
+

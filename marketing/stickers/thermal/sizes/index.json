@@ -205,6 +205,86 @@
       "file": "scan-strip-4up",
       "n": 4,
       "slug": "scan-strip"
+    },
+    {
+      "file": "scan-sleep-1up",
+      "n": 1,
+      "slug": "scan-sleep"
+    },
+    {
+      "file": "scan-sleep-2up",
+      "n": 2,
+      "slug": "scan-sleep"
+    },
+    {
+      "file": "scan-sleep-4up",
+      "n": 4,
+      "slug": "scan-sleep"
+    },
+    {
+      "file": "scan-know-1up",
+      "n": 1,
+      "slug": "scan-know"
+    },
+    {
+      "file": "scan-know-2up",
+      "n": 2,
+      "slug": "scan-know"
+    },
+    {
+      "file": "scan-know-4up",
+      "n": 4,
+      "slug": "scan-know"
+    },
+    {
+      "file": "scan-free-1up",
+      "n": 1,
+      "slug": "scan-free"
+    },
+    {
+      "file": "scan-free-3up",
+      "n": 3,
+      "slug": "scan-free"
+    },
+    {
+      "file": "scan-free-4up",
+      "n": 4,
+      "slug": "scan-free"
+    },
+    {
+      "file": "scan-waitlist-1up",
+      "n": 1,
+      "slug": "scan-waitlist"
+    },
+    {
+      "file": "scan-waitlist-2up",
+      "n": 2,
+      "slug": "scan-waitlist"
+    },
+    {
+      "file": "scan-waitlist-3up",
+      "n": 3,
+      "slug": "scan-waitlist"
+    },
+    {
+      "file": "scan-waitlist-4up",
+      "n": 4,
+      "slug": "scan-waitlist"
+    },
+    {
+      "file": "scan-left-1up",
+      "n": 1,
+      "slug": "scan-left"
+    },
+    {
+      "file": "scan-left-2up",
+      "n": 2,
+      "slug": "scan-left"
+    },
+    {
+      "file": "scan-left-4up",
+      "n": 4,
+      "slug": "scan-left"
     }
   ]
 }

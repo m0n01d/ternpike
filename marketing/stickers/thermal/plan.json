@@ -188,6 +188,71 @@
       "shortfall": null,
       "originX": 38,
       "originY": 44
+    },
+    {
+      "slug": "scan-sleep",
+      "cols": 2,
+      "count": 4,
+      "h": 220,
+      "rotated": false,
+      "rows": 2,
+      "scale": 1,
+      "w": 170,
+      "shortfall": null,
+      "originX": 24,
+      "originY": 74
+    },
+    {
+      "slug": "scan-know",
+      "cols": 2,
+      "count": 6,
+      "h": 175,
+      "rotated": false,
+      "rows": 3,
+      "scale": 1,
+      "w": 170,
+      "shortfall": null,
+      "originX": 24,
+      "originY": 25.5
+    },
+    {
+      "slug": "scan-free",
+      "cols": 1,
+      "count": 4,
+      "h": 120,
+      "rotated": false,
+      "rows": 4,
+      "scale": 1,
+      "w": 250,
+      "shortfall": null,
+      "originX": 75,
+      "originY": 42
+    },
+    {
+      "slug": "scan-waitlist",
+      "cols": 3,
+      "count": 6,
+      "h": 240,
+      "rotated": true,
+      "rows": 2,
+      "scale": 1,
+      "w": 100,
+      "shortfall": null,
+      "originX": 38,
+      "originY": 54
+    },
+    {
+      "slug": "scan-left",
+      "cols": 2,
+      "count": 4,
+      "h": 190,
+      "rotated": false,
+      "rows": 2,
+      "scale": 1,
+      "w": 160,
+      "shortfall": null,
+      "originX": 34,
+      "originY": 104
     }
   ]
 }

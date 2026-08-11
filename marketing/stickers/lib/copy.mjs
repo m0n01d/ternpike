@@ -129,6 +129,27 @@ export const COPY = {
     'I spent?',
   ]),
 
+  /** "Three steps. Then get some sleep." — broken where the site breaks it. */
+  sleepLines: brLines('howItWorks.headlineHtml'),
+
+  /** The origin story's last line, and its shortest. */
+  know: line('origin.paragraphs.3'),
+
+  /** The comparison table's free-tier row. */
+  freeLines: wrap(line('comparison.columns.1.rows.3.text'), [
+    "Free tier that's",
+    'actually free',
+  ]),
+
+  /** The site's own call to action. */
+  waitlist: line('nav.cta.label'),
+
+  /** The origin story's second question, companion to the first. */
+  leftLines: wrap(fragment('origin.paragraphs.0', 'How much is left?'), [
+    'How much',
+    'is left?',
+  ]),
+
   /** Lifted from step three: "…splurge on a cabin or sleep in the truck." */
   cabin: fragment('howItWorks.steps.2.body', 'splurge on a cabin'),
   truck: fragment('howItWorks.steps.2.body', 'or sleep in the truck'),
