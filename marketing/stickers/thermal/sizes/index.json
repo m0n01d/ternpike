@@ -285,6 +285,66 @@
       "file": "scan-left-4up",
       "n": 4,
       "slug": "scan-left"
+    },
+    {
+      "file": "scan-frame-1up",
+      "n": 1,
+      "slug": "scan-frame"
+    },
+    {
+      "file": "scan-frame-2up",
+      "n": 2,
+      "slug": "scan-frame"
+    },
+    {
+      "file": "scan-frame-4up",
+      "n": 4,
+      "slug": "scan-frame"
+    },
+    {
+      "file": "scan-peak-1up",
+      "n": 1,
+      "slug": "scan-peak"
+    },
+    {
+      "file": "scan-peak-2up",
+      "n": 2,
+      "slug": "scan-peak"
+    },
+    {
+      "file": "scan-peak-4up",
+      "n": 4,
+      "slug": "scan-peak"
+    },
+    {
+      "file": "scan-pin-1up",
+      "n": 1,
+      "slug": "scan-pin"
+    },
+    {
+      "file": "scan-pin-3up",
+      "n": 3,
+      "slug": "scan-pin"
+    },
+    {
+      "file": "scan-pin-4up",
+      "n": 4,
+      "slug": "scan-pin"
+    },
+    {
+      "file": "scan-signal-1up",
+      "n": 1,
+      "slug": "scan-signal"
+    },
+    {
+      "file": "scan-signal-3up",
+      "n": 3,
+      "slug": "scan-signal"
+    },
+    {
+      "file": "scan-signal-4up",
+      "n": 4,
+      "slug": "scan-signal"
     }
   ]
 }

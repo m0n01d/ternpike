@@ -101,9 +101,15 @@ scanned by someone who wasn't looking for you:
   Bold ≥ 13). Every scan design reports `1.00×` — no scale-up, so the label
   gangs the maximum. Designing above the floor is free; scaling up to reach
   it costs stickers per label.
-- **A reason to scan.** A bare QR gets ignored. `scan-hook` and `scan-strip`
-  lead with a hook — the waitlist headline and the question the origin story
-  opens with — because curiosity is what converts a glance.
+- **A reason to scan.** A bare QR gets ignored. Half the family leads with a
+  hook — the waitlist headline, the questions the origin story opens with —
+  because curiosity is what converts a glance.
+- **Something to look at.** The other half leads with a mark: the tern,
+  a mountain range, a map pin, the crossed-signal glyph. And `scan-mini` and
+  `scan-frame` put rust viewfinder brackets around the code, which is the
+  cheapest possible way to say "point your camera here" without spending a
+  word on it. `lib/shapes.mjs` holds them all — they're solid fills and thick
+  strokes on purpose, since a 1-bit thermal head turns a fine outline to mush.
 
 Each design has its own QR slug (`mini`, `dot`, `hook`, `post`, `strip`), so
 `GET /admin/qr` tells you which shape and which line actually earn scans —

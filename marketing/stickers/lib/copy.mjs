@@ -141,6 +141,9 @@ export const COPY = {
     'actually free',
   ]),
 
+  /** The comparison table's GPS row. */
+  gpsLines: wrap(line('comparison.columns.1.rows.1.text'), ['GPS pin on', 'every expense']),
+
   /** The site's own call to action. */
   waitlist: line('nav.cta.label'),
 

@@ -30,9 +30,12 @@ import {
   circle,
   ellipse,
   milepost,
+  mountains,
   noSignal,
+  pin,
   receipt,
   roundedRect,
+  scanBrackets,
 } from './shapes.mjs'
 import { COPY } from './copy.mjs'
 import { qrCard, qrTarget } from './qr.mjs'
@@ -485,7 +488,7 @@ export const stickers = [
   // ── 10. Scan mini ────────────────────────────────────────────────────
   {
     family: 'scan',
-    blurb: '1.3in square. Smallest useful scan target — 8 per 4×6 label.',
+    blurb: '1.3in square. Bracketed code, 8 per 4×6 label — the workhorse.',
     cut: roundedRect(130, 130, 12),
     h: 130,
     qr: 'mini',
@@ -494,6 +497,7 @@ export const stickers = [
     w: 130,
     art: (f, cut, p) => `
       <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${scanBrackets({ h: 98, len: 14, stroke: p.accent, w: 98, weight: 2.2, x: 16, y: 8 })}
       ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 88, slug: 'mini', x: 21, y: 13 })}
       <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
         anchor: 'middle',
@@ -763,6 +767,126 @@ export const stickers = [
       })}" fill="${p.onLight}"/>
     `,
   },
-]/** Where a design's QR sends a scanner, or null if it carries only a URL. */
+  // ── 20. Scan frame ───────────────────────────────────────────────────
+  //
+  // Tern on top, code in a viewfinder. No sentence at all — the brackets
+  // do the asking, which is the one thing a plain code can't.
+  {
+    family: 'scan',
+    blurb: '1.6 × 2in. Tern over a bracketed code. Brand-forward, wordless.',
+    cut: roundedRect(160, 200, 12),
+    h: 200,
+    qr: 'frame',
+    slug: 'scan-frame',
+    title: 'Scan frame',
+    w: 160,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${bird({ dark: p.markDark, light: p.onLight, scale: 0.46, x: 80, y: 22 })}
+      ${scanBrackets({ h: 116, len: 17, stroke: p.accent, w: 116, weight: 2.6, x: 22, y: 40 })}
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 100, slug: 'frame', x: 30, y: 48 })}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.1,
+        size: smallest(ctx, 10),
+        x: 80,
+        y: 180,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 21. Alaska range ─────────────────────────────────────────────────
+  {
+    family: 'scan',
+    blurb: '1.7 × 2in. Mountain range over the code — the most place-specific one.',
+    cut: roundedRect(170, 200, 12),
+    h: 200,
+    qr: 'peak',
+    slug: 'scan-peak',
+    title: 'Alaska range',
+    w: 170,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${mountains({ fill: p.onLight, h: 42, w: 130, x: 20, y: 16 })}
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 100, slug: 'peak', x: 35, y: 68 })}
+      <path d="${text(f['DMMono-Medium'], COPY.alaskaHighwayCaps, {
+        anchor: 'middle',
+        letterSpacing: 0.1,
+        size: smallest(ctx, 10),
+        x: 85,
+        y: 188,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 22. GPS pin ──────────────────────────────────────────────────────
+  {
+    family: 'scan',
+    blurb: '2.5 × 1.2in. Map pin and the GPS row from the comparison table.',
+    cut: roundedRect(250, 120, 12),
+    h: 120,
+    qr: 'gps',
+    slug: 'scan-pin',
+    title: 'GPS pin',
+    w: 250,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 104, slug: 'gps', x: 10, y: 8 })}
+      ${pin({ cx: 134, cy: 44, fill: p.accent, hole: p.light, r: 10 })}
+      ${COPY.gpsLines
+        .map(
+          (part, i) => `<path d="${text(f['PlayfairDisplay-Bold'], part, {
+        size: smallest(ctx, 13, SERIF_FLOOR_UNITS),
+        x: 154,
+        y: 44 + i * 20,
+      })}" fill="${p.onLight}"/>`,
+        )
+        .join('\n      ')}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        letterSpacing: 0.08,
+        size: smallest(ctx, 10),
+        x: 154,
+        y: 98,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 23. No signal, with the icon ─────────────────────────────────────
+  //
+  // The kit sticker of the same name is 2.6in of type. This is the icon
+  // doing the work at a size you can spare on a bin.
+  {
+    family: 'scan',
+    blurb: '2.6 × 1.2in. The crossed-signal mark beside the code.',
+    cut: roundedRect(260, 120, 12),
+    h: 120,
+    qr: 'offline',
+    slug: 'scan-signal',
+    title: 'No signal icon',
+    w: 260,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 104, slug: 'offline', x: 10, y: 8 })}
+      ${noSignal({ cx: 138, cy: 46, slash: p.accent, stroke: p.onLight, weight: 3 })}
+      ${COPY.offlineLines
+        .map(
+          (part, i) => `<path d="${text(f['PlayfairDisplay-Bold'], part, {
+        size: smallest(ctx, 13, SERIF_FLOOR_UNITS),
+        x: 166,
+        y: 44 + i * 20,
+      })}" fill="${p.onLight}"/>`,
+        )
+        .join('\n      ')}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        letterSpacing: 0.08,
+        size: smallest(ctx, 10),
+        x: 166,
+        y: 98,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+]
+
+/** Where a design's QR sends a scanner, or null if it carries only a URL. */
 export const qrDestination = (sticker) => (sticker.qr ? qrTarget(sticker.qr) : null)
 

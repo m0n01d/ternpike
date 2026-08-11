@@ -253,6 +253,58 @@
       "shortfall": null,
       "originX": 34,
       "originY": 104
+    },
+    {
+      "slug": "scan-frame",
+      "cols": 2,
+      "count": 4,
+      "h": 200,
+      "rotated": false,
+      "rows": 2,
+      "scale": 1,
+      "w": 160,
+      "shortfall": null,
+      "originX": 34,
+      "originY": 94
+    },
+    {
+      "slug": "scan-peak",
+      "cols": 2,
+      "count": 4,
+      "h": 200,
+      "rotated": false,
+      "rows": 2,
+      "scale": 1,
+      "w": 170,
+      "shortfall": null,
+      "originX": 24,
+      "originY": 94
+    },
+    {
+      "slug": "scan-pin",
+      "cols": 1,
+      "count": 4,
+      "h": 120,
+      "rotated": false,
+      "rows": 4,
+      "scale": 1,
+      "w": 250,
+      "shortfall": null,
+      "originX": 75,
+      "originY": 42
+    },
+    {
+      "slug": "scan-signal",
+      "cols": 1,
+      "count": 4,
+      "h": 120,
+      "rotated": false,
+      "rows": 4,
+      "scale": 1,
+      "w": 260,
+      "shortfall": null,
+      "originX": 70,
+      "originY": 42
     }
   ]
 }

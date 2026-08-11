@@ -118,3 +118,46 @@ export function noSignal({ cx, cy, slash, stroke, weight = 3.4 }) {
     <path d="M${r2(cx - 18)} ${r2(cy + 12)}L${r2(cx + 18)} ${r2(cy - 22)}" stroke="${slash}" stroke-width="${weight + 0.6}" stroke-linecap="round"/>
   </g>`
 }
+
+/**
+ * Viewfinder corner marks around a QR.
+ *
+ * A code sitting alone on white reads as decoration. Bracketing it is the
+ * cheapest possible way to say "point your camera here" without spending a
+ * word on it, and it survives 1-bit thermal at any size the QR does.
+ */
+export function scanBrackets({ h, len = 15, stroke, w, weight = 2.4, x, y }) {
+  const corners = [
+    `M${r2(x + len)} ${r2(y)}H${r2(x)}V${r2(y + len)}`,
+    `M${r2(x + w - len)} ${r2(y)}H${r2(x + w)}V${r2(y + len)}`,
+    `M${r2(x + len)} ${r2(y + h)}H${r2(x)}V${r2(y + h - len)}`,
+    `M${r2(x + w - len)} ${r2(y + h)}H${r2(x + w)}V${r2(y + h - len)}`,
+  ]
+  return `<g fill="none" stroke="${stroke}" stroke-width="${weight}" stroke-linecap="square">${corners
+    .map((d) => `<path d="${d}"/>`)
+    .join('')}</g>`
+}
+
+/** A three-peak range. Solid, because a 1-bit outline at this size fills in. */
+export function mountains({ fill, h, w, x, y }) {
+  const px = (t) => r2(x + w * t)
+  const py = (t) => r2(y + h * t)
+  return `<path d="M${r2(x)} ${py(1)}L${px(0.16)} ${py(0.42)}L${px(0.28)} ${py(0.66)}L${px(0.49)} ${py(0)}L${px(0.66)} ${py(0.48)}L${px(0.78)} ${py(0.26)}L${r2(x + w)} ${py(1)}Z" fill="${fill}"/>`
+}
+
+/**
+ * Map pin, tip at (cx, cy).
+ *
+ * Junction points sit at a true 40° off horizontal from the head's centre,
+ * so the body meets the circle tangentially instead of kinking — visible at
+ * 1.5in even though it sounds like pedantry.
+ */
+export function pin({ cx, cy, fill, hole, r }) {
+  const headY = cy - r * 1.7
+  const jx = r * Math.cos((40 * Math.PI) / 180)
+  const jy = r * Math.sin((40 * Math.PI) / 180)
+  return `<g>
+    <path d="M${r2(cx)} ${r2(cy)}L${r2(cx - jx)} ${r2(headY + jy)}A${r2(r)} ${r2(r)} 0 1 1 ${r2(cx + jx)} ${r2(headY + jy)}Z" fill="${fill}"/>
+    <circle cx="${r2(cx)}" cy="${r2(headY)}" r="${r2(r * 0.38)}" fill="${hole}"/>
+  </g>`
+}
