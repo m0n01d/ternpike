@@ -153,6 +153,10 @@ export const COPY = {
     'is left?',
   ]),
 
+  /** The hero headline's two endpoints, for the Sign Post Forest boards. */
+  orlandoCaps: fragment('hero.headline', 'Orlando').toUpperCase(),
+  juneauCaps: fragment('hero.headline', 'Juneau').toUpperCase(),
+
   /** The origin story's sign-off. */
   attribution: line('origin.attribution'),
 

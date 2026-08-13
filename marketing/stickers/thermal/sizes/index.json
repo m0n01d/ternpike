@@ -390,6 +390,56 @@
       "file": "postcard-2up",
       "n": 2,
       "slug": "postcard"
+    },
+    {
+      "file": "big-dipper-1up",
+      "n": 1,
+      "slug": "big-dipper"
+    },
+    {
+      "file": "big-dipper-2up",
+      "n": 2,
+      "slug": "big-dipper"
+    },
+    {
+      "file": "bear-paw-1up",
+      "n": 1,
+      "slug": "bear-paw"
+    },
+    {
+      "file": "bear-paw-2up",
+      "n": 2,
+      "slug": "bear-paw"
+    },
+    {
+      "file": "sign-forest-1up",
+      "n": 1,
+      "slug": "sign-forest"
+    },
+    {
+      "file": "sign-forest-2up",
+      "n": 2,
+      "slug": "sign-forest"
+    },
+    {
+      "file": "midnight-sun-1up",
+      "n": 1,
+      "slug": "midnight-sun"
+    },
+    {
+      "file": "midnight-sun-2up",
+      "n": 2,
+      "slug": "midnight-sun"
+    },
+    {
+      "file": "midnight-sun-3up",
+      "n": 3,
+      "slug": "midnight-sun"
+    },
+    {
+      "file": "midnight-sun-4up",
+      "n": 4,
+      "slug": "midnight-sun"
     }
   ]
 }

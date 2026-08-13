@@ -370,6 +370,58 @@
       "shortfall": null,
       "originX": 30,
       "originY": 74
+    },
+    {
+      "slug": "big-dipper",
+      "cols": 1,
+      "count": 2,
+      "h": 280,
+      "rotated": false,
+      "rows": 2,
+      "scale": 1,
+      "w": 220,
+      "shortfall": null,
+      "originX": 90,
+      "originY": 14
+    },
+    {
+      "slug": "bear-paw",
+      "cols": 1,
+      "count": 2,
+      "h": 210,
+      "rotated": false,
+      "rows": 2,
+      "scale": 1,
+      "w": 210,
+      "shortfall": null,
+      "originX": 95,
+      "originY": 84
+    },
+    {
+      "slug": "sign-forest",
+      "cols": 1,
+      "count": 2,
+      "h": 220,
+      "rotated": true,
+      "rows": 2,
+      "scale": 1,
+      "w": 300,
+      "shortfall": null,
+      "originX": 50,
+      "originY": 74
+    },
+    {
+      "slug": "midnight-sun",
+      "cols": 1,
+      "count": 3,
+      "h": 140,
+      "rotated": false,
+      "rows": 3,
+      "scale": 1,
+      "w": 320,
+      "shortfall": null,
+      "originX": 40,
+      "originY": 78
     }
   ]
 }

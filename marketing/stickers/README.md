@@ -54,6 +54,18 @@ all parameterised by inset like the rest, so keyline and cut guide stay in
 agreement. The diamond's tips move inward by inset·√2 — offsetting a 45°
 edge shifts its vertices along the diagonal, not the axis.
 
+## The Alaska family
+
+For the road the app was built on — each one something you'd actually see
+from the Alaska Highway.
+
+| Slug | Size | Per 4×6 | What it is |
+|---|---|---|---|
+| `big-dipper` | 2.2 × 2.8in | **2** | The state flag's eight stars, Polaris top right, code below. |
+| `bear-paw` | 2.1in round | **2** | Bear paw over the code — the polite kind of bear sign. |
+| `sign-forest` | 2.2 × 3in | **2** | Watson Lake's Sign Post Forest: ORLANDO one way, JUNEAU the other, one board is the QR. The city names are fragments of `hero.headline`. |
+| `midnight-sun` | 3.2 × 1.4in | **3** | Low sun over the range, "MADE ON THE ALASKA HIGHWAY". |
+
 ## The scan family
 
 | Slug | Size | QR | Per 4×6 label | What it is |

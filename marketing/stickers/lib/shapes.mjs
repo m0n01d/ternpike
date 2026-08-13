@@ -219,3 +219,53 @@ export const arrowSign = (w, h, head = 90) => (inset) => {
   return `M${r2(l + cr)} ${r2(t)}H${r2(nx)}L${r2(r - tipR * 1.6)} ${r2(cy - tipR)}Q${r2(r)} ${r2(cy)} ${r2(r - tipR * 1.6)} ${r2(cy + tipR)}L${r2(nx)} ${r2(b)}H${r2(l + cr)}Q${r2(l)} ${r2(b)} ${r2(l)} ${r2(b - cr)}V${r2(t + cr)}Q${r2(l)} ${r2(t)} ${r2(l + cr)} ${r2(t)}Z`
 }
 
+/** Five-point star, point-up. The Alaska flag is eight of these. */
+export function star5({ cx, cy, fill, r }) {
+  const pts = []
+  for (let i = 0; i < 10; i++) {
+    const rad = (Math.PI / 5) * i - Math.PI / 2
+    const rr = i % 2 === 0 ? r : r * 0.4
+    pts.push(`${r2(cx + rr * Math.cos(rad))} ${r2(cy + rr * Math.sin(rad))}`)
+  }
+  return `<path d="M${pts.join('L')}Z" fill="${fill}"/>`
+}
+
+/**
+ * Bear paw print: heel pad plus four toes. Filled shapes, not outlines —
+ * at sticker scale the black areas are small enough that a thermal head
+ * lays them down cleanly, and an outlined paw reads as a diagram.
+ */
+export function pawPrint({ cx, cy, fill, scale = 1 }) {
+  const toe = (dx, dy, rot) =>
+    `<ellipse cx="${r2(cx + dx * scale)}" cy="${r2(cy + dy * scale)}" rx="${r2(11 * scale)}" ry="${r2(14 * scale)}" transform="rotate(${rot} ${r2(cx + dx * scale)} ${r2(cy + dy * scale)})" fill="${fill}"/>`
+  return `<g>
+    <ellipse cx="${r2(cx)}" cy="${r2(cy)}" rx="${r2(27 * scale)}" ry="${r2(20 * scale)}" fill="${fill}"/>
+    ${toe(-39, -20, -28)}${toe(-14, -31, -10)}${toe(14, -31, 10)}${toe(39, -20, 28)}
+  </g>`
+}
+
+/** Low sun with rays — outlined, so it survives 1-bit next to solid hills. */
+export function sunburst({ cx, cy, r, stroke, weight = 2.2 }) {
+  const rays = []
+  for (let i = 0; i < 8; i++) {
+    const rad = (Math.PI / 4) * i
+    const x1 = cx + (r + 5) * Math.cos(rad)
+    const y1 = cy + (r + 5) * Math.sin(rad)
+    const x2 = cx + (r + 12) * Math.cos(rad)
+    const y2 = cy + (r + 12) * Math.sin(rad)
+    rays.push(`<path d="M${r2(x1)} ${r2(y1)}L${r2(x2)} ${r2(y2)}"/>`)
+  }
+  return `<g fill="none" stroke="${stroke}" stroke-width="${weight}" stroke-linecap="round">
+    <circle cx="${r2(cx)}" cy="${r2(cy)}" r="${r2(r)}"/>
+    ${rays.join('')}
+  </g>`
+}
+
+/** Direction-sign board with a pointed end, Sign Post Forest style. */
+export function arrowBoard({ dir = 'right', h, w, x, y }) {
+  const a = h * 0.45
+  return dir === 'right'
+    ? `M${r2(x)} ${r2(y)}H${r2(x + w - a)}L${r2(x + w)} ${r2(y + h / 2)}L${r2(x + w - a)} ${r2(y + h)}H${r2(x)}Z`
+    : `M${r2(x + w)} ${r2(y)}H${r2(x + a)}L${r2(x)} ${r2(y + h / 2)}L${r2(x + a)} ${r2(y + h)}H${r2(x + w)}Z`
+}
+

@@ -681,6 +681,7 @@ await writeFile(
 const kit = stickers.filter((s) => s.family === 'kit')
 const scan = stickers.filter((s) => s.family === 'scan')
 const road = stickers.filter((s) => s.family === 'road')
+const alaska = stickers.filter((s) => s.family === 'alaska')
 
 // Built after the size sheets so it reuses their geometry exactly — the
 // pack is the same pages, collated.
@@ -725,6 +726,16 @@ const contacts = [
       subset: kit,
       subtitle: 'The same designs, black on white, for a thermal label printer.',
       title: 'Thermal profile',
+    },
+  },
+  {
+    bilevel: true,
+    file: 'contact-sheet-alaska',
+    opts: {
+      profile: monoProfile,
+      subset: alaska,
+      subtitle: 'Big Dipper, bear paw, Sign Post Forest, midnight sun.',
+      title: 'Alaska',
     },
   },
   {

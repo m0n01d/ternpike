@@ -36,9 +36,13 @@ import {
   noSignal,
   pin,
   receipt,
+  arrowBoard,
+  pawPrint,
   roundedRect,
   scanBrackets,
   shield,
+  star5,
+  sunburst,
 } from './shapes.mjs'
 import { COPY } from './copy.mjs'
 import { qrCard, qrTarget } from './qr.mjs'
@@ -1082,6 +1086,155 @@ export const stickers = [
         <path d="M214 180H322"/>
         <path d="M214 198H322"/>
       </g>
+    `,
+  },
+
+  // ══ Alaska family ════════════════════════════════════════════════════
+  //
+  // For the road the app was built on. The Big Dipper off the state flag,
+  // a bear paw, the Watson Lake Sign Post Forest, the midnight sun — each
+  // one something you'd actually see from the Alaska Highway.
+
+  // ── 29. Big Dipper ───────────────────────────────────────────────────
+  //
+  // Eight stars of gold — the state flag's constellation, Polaris top
+  // right. Star positions eyeballed from the flag, not surveyed.
+  {
+    family: 'alaska',
+    blurb: '2.2 × 2.8in. The state flag constellation over the code.',
+    cut: roundedRect(220, 280, 14),
+    h: 280,
+    qr: 'dipper',
+    slug: 'big-dipper',
+    title: 'Big Dipper',
+    w: 220,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.dark}"/>
+      ${[
+        [38, 120, 9],
+        [74, 102, 9],
+        [44, 164, 9],
+        [86, 142, 9],
+        [112, 116, 9],
+        [134, 88, 9],
+        [158, 64, 9],
+        [182, 32, 13],
+      ]
+        .map(([sx, sy, sr]) => star5({ cx: sx, cy: sy, fill: p.onDark, r: sr }))
+        .join('')}
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 80, slug: 'dipper', x: 70, y: 182 })}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.06,
+        size: smallest(ctx, 10),
+        x: 110,
+        y: 268,
+      })}" fill="${p.onDarkSoft}"/>
+    `,
+  },
+
+  // ── 30. Bear paw ─────────────────────────────────────────────────────
+  {
+    family: 'alaska',
+    blurb: '2.1in round. Bear paw over the code — the polite kind of bear sign.',
+    cut: circle(210),
+    h: 210,
+    qr: 'paw',
+    slug: 'bear-paw',
+    title: 'Bear paw',
+    w: 210,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      <circle cx="105" cy="105" r="89" fill="none" stroke="${p.onLight}" stroke-width="1.4" opacity="${p.dim(0.5)}"/>
+      ${pawPrint({ cx: 105, cy: 58, fill: p.onLight, scale: 0.92 })}
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 76, slug: 'paw', x: 67, y: 88 })}
+      ${arcText(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        centerDeg: 180,
+        cx: 105,
+        cy: 105,
+        fill: p.onLight,
+        flip: true,
+        letterSpacing: 0.14,
+        r: 76,
+        size: 10,
+      })}
+    `,
+  },
+
+  // ── 31. Sign Post Forest ─────────────────────────────────────────────
+  //
+  // Watson Lake's landmark, scaled to a sticker: boards pointing at the
+  // hero headline's two endpoints, and one board that's a QR. The city
+  // names are fragments of hero.headline, same guard as everything else.
+  {
+    family: 'alaska',
+    blurb: '2.2 × 3in. The Sign Post Forest — Orlando one way, Juneau the other.',
+    cut: roundedRect(220, 300, 14),
+    h: 300,
+    qr: 'forest',
+    slug: 'sign-forest',
+    title: 'Sign Post Forest',
+    w: 220,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      <rect x="103" y="20" width="14" height="224" fill="${p.onLight}" opacity="${p.dim(0.85)}"/>
+      <path d="${arrowBoard({ dir: 'right', h: 36, w: 166, x: 26, y: 30 })}" fill="${p.card}" stroke="${p.onLight}" stroke-width="2"/>
+      <path d="${text(f['DMMono-Medium'], COPY.orlandoCaps, {
+        anchor: 'middle',
+        letterSpacing: 0.12,
+        size: smallest(ctx, 12),
+        x: 100,
+        y: 54,
+      })}" fill="${p.onLight}"/>
+      <path d="${arrowBoard({ dir: 'left', h: 36, w: 166, x: 28, y: 82 })}" fill="${p.card}" stroke="${p.onLight}" stroke-width="2"/>
+      <path d="${text(f['DMMono-Medium'], COPY.juneauCaps, {
+        anchor: 'middle',
+        letterSpacing: 0.12,
+        size: smallest(ctx, 12),
+        x: 120,
+        y: 106,
+      })}" fill="${p.onLight}"/>
+      <rect x="60" y="134" width="100" height="100" fill="${p.card}" stroke="${p.onLight}" stroke-width="2"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 0, size: 84, slug: 'forest', x: 68, y: 142 })}
+      <path d="${text(f['DMMono-Medium'], COPY.alaskaHighwayCaps, {
+        anchor: 'middle',
+        letterSpacing: 0.08,
+        size: smallest(ctx, 10),
+        x: 110,
+        y: 262,
+      })}" fill="${p.accent}"/>
+      <path d="${text(f['DMMono-Regular'], 'ternpike.com', {
+        anchor: 'middle',
+        letterSpacing: 0.08,
+        size: smallest(ctx, 10),
+        x: 110,
+        y: 284,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 32. Midnight sun ─────────────────────────────────────────────────
+  {
+    family: 'alaska',
+    blurb: '3.2 × 1.4in. Low sun over the range — June on the Alaska Highway.',
+    cut: roundedRect(320, 140, 14),
+    h: 140,
+    qr: 'sun',
+    slug: 'midnight-sun',
+    title: 'Midnight sun',
+    w: 320,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      ${sunburst({ cx: 58, cy: 46, r: 15, stroke: p.accent })}
+      ${mountains({ fill: p.onLight, h: 44, w: 172, x: 22, y: 48 })}
+      <path d="${text(f['DMMono-Medium'], COPY.madeOnCaps, {
+        anchor: 'middle',
+        letterSpacing: 0,
+        size: smallest(ctx, 10),
+        x: 107,
+        y: 120,
+      })}" fill="${p.onLight}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 104, slug: 'sun', x: 202, y: 18 })}
     `,
   },
 ]
