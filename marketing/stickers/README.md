@@ -46,6 +46,30 @@ way rather than the symbol.
 | `scan-strip` | 2.5 × 1in | 0.80in | **6** | "How much have I spent?" — rims, edges, pump handles. |
 | `scan-hook` | 2.4 × 1.3in | 1.04in | **4** | "Stop doing math in your head." beside the code. |
 
+### The trip pack
+
+`thermal/trip-pack.pdf` — **one file, five 4 × 6 pages, 15 stickers.** Print
+it once and you have the road set: the badge, the wordmark bar, the milepost,
+the cabin oval and the receipt.
+
+| Page | Design | Size | Count |
+|---|---|---|---|
+| 1 | `badge-tern` | 3.72in round | 1 |
+| 2 | `wordmark-rust` | 3.7 × 1.1in | 4 |
+| 3 | `milepost-zero` | 1.3 × 3in | 4 |
+| 4 | `cabin-or-truck` | 3.6 × 1.8in | 3 |
+| 5 | `receipt` | 1.8 × 3.6in | 3 |
+
+Each page uses the count that yields the most stickers, which is **not** the
+per-design label in `thermal/`. Those scale a design *up* to its legible
+size — right when you want it full size, wrong when you want a lot of them.
+`wordmark-rust` is 2 per label there and 4 here; `milepost-zero` the same.
+Only the badge can't improve: a 3in circle is one to a page however you turn
+it.
+
+Edit `TRIP_PACK` in `build.mjs` to change what's in it — `[slug, count]`
+pairs, in page order.
+
 ### Print any design bigger or smaller
 
 A label printer has one page size, so "print it bigger" has to mean "print
@@ -161,6 +185,7 @@ sheets/print-sheet.svg    US Letter gang sheet, 11 stickers, dashed cut guides
 thermal/<slug>.pdf  4×6 label, print THIS — exactly 4×6in, no rescaling
 thermal/<slug>.svg  the same as vector, if you want to edit it
 thermal/<slug>.png  the same at 203 DPI, hard-thresholded to one bit
+thermal/trip-pack.pdf              one file, 5 pages, the road set
 thermal/sizes/<slug>-Nup.pdf       every design at every workable size
 thermal/sizes/index.json           what got generated
 thermal/plan.json   per-design scale and cell geometry

@@ -259,6 +259,25 @@ ${cells.join('\n')}
 `
 }
 
+// ── Trip pack ────────────────────────────────────────────────────────────
+//
+// One file, one print job: the designs actually being taken on the road,
+// each on its own 4×6 page at the count that yields the most stickers.
+//
+// The per-design labels in thermal/ scale a design UP to its legible size,
+// which is right when you want it at full size and wrong when you want a
+// lot of them — wordmark-rust is 2 per label there and 4 here, milepost the
+// same. Only the badge can't improve: a 3in circle is one to a page however
+// you turn it.
+
+const TRIP_PACK = [
+  ['badge-tern', 1],
+  ['wordmark-rust', 4],
+  ['milepost-zero', 4],
+  ['cabin-or-truck', 3],
+  ['receipt', 3],
+]
+
 // ── Gang sheet (colour, US Letter) ───────────────────────────────────────
 
 const SHEET = { gap: 22, h: 1100, margin: 40, w: 850 }
@@ -491,18 +510,31 @@ try {
  * same object.
  */
 async function thermalPdf(png) {
+  return thermalPdfPages([png], 'Ternpike thermal label')
+}
+
+/**
+ * One PDF, one 4×6 page per bitmap.
+ *
+ * Multi-page matters for the trip pack: five separate files is five
+ * separate print jobs to line up on a phone, where one file is a single
+ * "print" with the whole set behind it.
+ */
+async function thermalPdfPages(pngs, title) {
   if (!PDFDocument) return null
   const doc = await PDFDocument.create()
-  doc.setTitle('Ternpike thermal label')
+  doc.setTitle(title)
   doc.setCreator('Ternpike')
   // pdf-lib stamps wall-clock creation/modification dates, which makes
   // every rebuild a diff even when no artwork changed. Pin them so the
   // committed PDFs are reproducible and a real change is visible as one.
   doc.setCreationDate(EPOCH)
   doc.setModificationDate(EPOCH)
-  const page = doc.addPage([288, 432]) // 4×6in at 72pt/in
-  const image = await doc.embedPng(png)
-  page.drawImage(image, { height: 432, width: 288, x: 0, y: 0 })
+  for (const png of pngs) {
+    const page = doc.addPage([288, 432]) // 4×6in at 72pt/in
+    const image = await doc.embedPng(png)
+    page.drawImage(image, { height: 432, width: 288, x: 0, y: 0 })
+  }
   return Buffer.from(await doc.save())
 }
 
@@ -648,6 +680,30 @@ await writeFile(
 
 const kit = stickers.filter((s) => s.family === 'kit')
 const scan = stickers.filter((s) => s.family === 'scan')
+
+// Built after the size sheets so it reuses their geometry exactly — the
+// pack is the same pages, collated.
+if (sharp) {
+  const pages = []
+  const manifest = []
+  for (const [slug, step] of TRIP_PACK) {
+    const sticker = stickers.find((x) => x.slug === slug)
+    if (!sticker) throw new Error(`unknown sticker in TRIP_PACK: ${slug}`)
+    const plan = bestGrid(sticker, step)
+    const png = await rasterBuffer(sizeSheet(fonts, sticker, step, plan), THERMAL_DPI / 100, {
+      bilevel: true,
+    })
+    pages.push(png)
+    manifest.push(
+      `${slug} ${step}-up ${inches(sticker.w * plan.scale)}x${inches(sticker.h * plan.scale)}in`,
+    )
+  }
+  const pack = await thermalPdfPages(pages, 'Ternpike trip pack')
+  if (pack) await writeFile(join(thermalDir, 'trip-pack.pdf'), pack)
+  const total = TRIP_PACK.reduce((n, [, step]) => n + step, 0)
+  console.log(`\ntrip pack · ${pages.length} pages · ${total} stickers`)
+  for (const entry of manifest) console.log(`  ${entry}`)
+}
 
 const contacts = [
   {

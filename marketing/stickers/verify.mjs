@@ -102,15 +102,20 @@ const checkFloor = (sticker) => {
     : `${worst.family} at ${rendered.toFixed(2)}pt < ${floor}pt`
 }
 
-/** Exactly 4×6in at 72pt/in, one page. Anything else will be rescaled. */
-const checkPdf = async (file) => {
+/** Every page exactly 4×6in at 72pt/in. Anything else will be rescaled. */
+const checkPdf = async (file, expectedPages = 1) => {
   const doc = await PDFDocument.load(await readFile(join(here, 'thermal', `${file}.pdf`)))
   const pages = doc.getPages()
-  if (pages.length !== 1) return `${pages.length} pages`
-  const { height, width } = pages[0].getSize()
-  return width === 288 && height === 432
-    ? null
-    : `${(width / 72).toFixed(2)}×${(height / 72).toFixed(2)}in`
+  if (pages.length !== expectedPages) return `${pages.length} pages, expected ${expectedPages}`
+  const bad = pages
+    .map((page, i) => {
+      const { height, width } = page.getSize()
+      return width === 288 && height === 432
+        ? null
+        : `p${i + 1} ${(width / 72).toFixed(2)}×${(height / 72).toFixed(2)}in`
+    })
+    .filter(Boolean)
+  return bad.length > 0 ? bad.join(', ') : null
 }
 
 for (const sticker of stickers) {
@@ -166,6 +171,12 @@ if (badSheets.length > 0) failures++
 console.log(
   `  ${'size sheets'.padEnd(16)} ${badSheets.length ? `FAIL ${badSheets.join(', ')}` : `OK   ${sizes.sheets.length} sheets, all pdf4x6=yes`}`,
 )
+
+// The trip pack is the file most likely to be printed unattended, and a
+// page at the wrong size gets silently scaled to fit.
+const pack = await checkPdf('trip-pack', 5)
+if (pack) failures++
+console.log(`  ${'trip-pack'.padEnd(16)} ${pack ? `FAIL ${pack}` : 'OK   5 pages, all 4x6in'}`)
 
 const withQr = stickers.filter(qrDestination).length
 console.log(
