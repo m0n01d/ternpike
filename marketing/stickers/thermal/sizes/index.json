@@ -1,0 +1,445 @@
+{
+  "minQrInches": 0.75,
+  "sheets": [
+    {
+      "file": "badge-tern-1up",
+      "n": 1,
+      "slug": "badge-tern"
+    },
+    {
+      "file": "wordmark-rust-2up",
+      "n": 2,
+      "slug": "wordmark-rust"
+    },
+    {
+      "file": "wordmark-rust-4up",
+      "n": 4,
+      "slug": "wordmark-rust"
+    },
+    {
+      "file": "milepost-zero-1up",
+      "n": 1,
+      "slug": "milepost-zero"
+    },
+    {
+      "file": "milepost-zero-2up",
+      "n": 2,
+      "slug": "milepost-zero"
+    },
+    {
+      "file": "milepost-zero-3up",
+      "n": 3,
+      "slug": "milepost-zero"
+    },
+    {
+      "file": "milepost-zero-4up",
+      "n": 4,
+      "slug": "milepost-zero"
+    },
+    {
+      "file": "no-signal-1up",
+      "n": 1,
+      "slug": "no-signal"
+    },
+    {
+      "file": "no-signal-3up",
+      "n": 3,
+      "slug": "no-signal"
+    },
+    {
+      "file": "no-signal-4up",
+      "n": 4,
+      "slug": "no-signal"
+    },
+    {
+      "file": "receipt-1up",
+      "n": 1,
+      "slug": "receipt"
+    },
+    {
+      "file": "receipt-3up",
+      "n": 3,
+      "slug": "receipt"
+    },
+    {
+      "file": "orlando-juneau-1up",
+      "n": 1,
+      "slug": "orlando-juneau"
+    },
+    {
+      "file": "orlando-juneau-3up",
+      "n": 3,
+      "slug": "orlando-juneau"
+    },
+    {
+      "file": "cabin-or-truck-1up",
+      "n": 1,
+      "slug": "cabin-or-truck"
+    },
+    {
+      "file": "cabin-or-truck-3up",
+      "n": 3,
+      "slug": "cabin-or-truck"
+    },
+    {
+      "file": "tern-mark-1up",
+      "n": 1,
+      "slug": "tern-mark"
+    },
+    {
+      "file": "tern-mark-2up",
+      "n": 2,
+      "slug": "tern-mark"
+    },
+    {
+      "file": "tern-mark-4up",
+      "n": 4,
+      "slug": "tern-mark"
+    },
+    {
+      "file": "qr-trailhead-1up",
+      "n": 1,
+      "slug": "qr-trailhead"
+    },
+    {
+      "file": "qr-trailhead-2up",
+      "n": 2,
+      "slug": "qr-trailhead"
+    },
+    {
+      "file": "qr-trailhead-4up",
+      "n": 4,
+      "slug": "qr-trailhead"
+    },
+    {
+      "file": "scan-mini-1up",
+      "n": 1,
+      "slug": "scan-mini"
+    },
+    {
+      "file": "scan-mini-2up",
+      "n": 2,
+      "slug": "scan-mini"
+    },
+    {
+      "file": "scan-mini-4up",
+      "n": 4,
+      "slug": "scan-mini"
+    },
+    {
+      "file": "scan-dot-1up",
+      "n": 1,
+      "slug": "scan-dot"
+    },
+    {
+      "file": "scan-dot-2up",
+      "n": 2,
+      "slug": "scan-dot"
+    },
+    {
+      "file": "scan-dot-4up",
+      "n": 4,
+      "slug": "scan-dot"
+    },
+    {
+      "file": "scan-hook-1up",
+      "n": 1,
+      "slug": "scan-hook"
+    },
+    {
+      "file": "scan-hook-2up",
+      "n": 2,
+      "slug": "scan-hook"
+    },
+    {
+      "file": "scan-hook-3up",
+      "n": 3,
+      "slug": "scan-hook"
+    },
+    {
+      "file": "scan-hook-4up",
+      "n": 4,
+      "slug": "scan-hook"
+    },
+    {
+      "file": "scan-post-1up",
+      "n": 1,
+      "slug": "scan-post"
+    },
+    {
+      "file": "scan-post-2up",
+      "n": 2,
+      "slug": "scan-post"
+    },
+    {
+      "file": "scan-post-4up",
+      "n": 4,
+      "slug": "scan-post"
+    },
+    {
+      "file": "scan-strip-1up",
+      "n": 1,
+      "slug": "scan-strip"
+    },
+    {
+      "file": "scan-strip-2up",
+      "n": 2,
+      "slug": "scan-strip"
+    },
+    {
+      "file": "scan-strip-3up",
+      "n": 3,
+      "slug": "scan-strip"
+    },
+    {
+      "file": "scan-strip-4up",
+      "n": 4,
+      "slug": "scan-strip"
+    },
+    {
+      "file": "scan-sleep-1up",
+      "n": 1,
+      "slug": "scan-sleep"
+    },
+    {
+      "file": "scan-sleep-2up",
+      "n": 2,
+      "slug": "scan-sleep"
+    },
+    {
+      "file": "scan-sleep-4up",
+      "n": 4,
+      "slug": "scan-sleep"
+    },
+    {
+      "file": "scan-know-1up",
+      "n": 1,
+      "slug": "scan-know"
+    },
+    {
+      "file": "scan-know-2up",
+      "n": 2,
+      "slug": "scan-know"
+    },
+    {
+      "file": "scan-know-4up",
+      "n": 4,
+      "slug": "scan-know"
+    },
+    {
+      "file": "scan-free-1up",
+      "n": 1,
+      "slug": "scan-free"
+    },
+    {
+      "file": "scan-free-3up",
+      "n": 3,
+      "slug": "scan-free"
+    },
+    {
+      "file": "scan-free-4up",
+      "n": 4,
+      "slug": "scan-free"
+    },
+    {
+      "file": "scan-waitlist-1up",
+      "n": 1,
+      "slug": "scan-waitlist"
+    },
+    {
+      "file": "scan-waitlist-2up",
+      "n": 2,
+      "slug": "scan-waitlist"
+    },
+    {
+      "file": "scan-waitlist-3up",
+      "n": 3,
+      "slug": "scan-waitlist"
+    },
+    {
+      "file": "scan-waitlist-4up",
+      "n": 4,
+      "slug": "scan-waitlist"
+    },
+    {
+      "file": "scan-left-1up",
+      "n": 1,
+      "slug": "scan-left"
+    },
+    {
+      "file": "scan-left-2up",
+      "n": 2,
+      "slug": "scan-left"
+    },
+    {
+      "file": "scan-left-4up",
+      "n": 4,
+      "slug": "scan-left"
+    },
+    {
+      "file": "scan-frame-1up",
+      "n": 1,
+      "slug": "scan-frame"
+    },
+    {
+      "file": "scan-frame-2up",
+      "n": 2,
+      "slug": "scan-frame"
+    },
+    {
+      "file": "scan-frame-4up",
+      "n": 4,
+      "slug": "scan-frame"
+    },
+    {
+      "file": "scan-peak-1up",
+      "n": 1,
+      "slug": "scan-peak"
+    },
+    {
+      "file": "scan-peak-2up",
+      "n": 2,
+      "slug": "scan-peak"
+    },
+    {
+      "file": "scan-peak-4up",
+      "n": 4,
+      "slug": "scan-peak"
+    },
+    {
+      "file": "scan-pin-1up",
+      "n": 1,
+      "slug": "scan-pin"
+    },
+    {
+      "file": "scan-pin-3up",
+      "n": 3,
+      "slug": "scan-pin"
+    },
+    {
+      "file": "scan-pin-4up",
+      "n": 4,
+      "slug": "scan-pin"
+    },
+    {
+      "file": "scan-signal-1up",
+      "n": 1,
+      "slug": "scan-signal"
+    },
+    {
+      "file": "scan-signal-3up",
+      "n": 3,
+      "slug": "scan-signal"
+    },
+    {
+      "file": "scan-signal-4up",
+      "n": 4,
+      "slug": "scan-signal"
+    },
+    {
+      "file": "route-shield-1up",
+      "n": 1,
+      "slug": "route-shield"
+    },
+    {
+      "file": "route-shield-2up",
+      "n": 2,
+      "slug": "route-shield"
+    },
+    {
+      "file": "caution-diamond-1up",
+      "n": 1,
+      "slug": "caution-diamond"
+    },
+    {
+      "file": "caution-diamond-2up",
+      "n": 2,
+      "slug": "caution-diamond"
+    },
+    {
+      "file": "license-plate-1up",
+      "n": 1,
+      "slug": "license-plate"
+    },
+    {
+      "file": "license-plate-3up",
+      "n": 3,
+      "slug": "license-plate"
+    },
+    {
+      "file": "googie-arrow-1up",
+      "n": 1,
+      "slug": "googie-arrow"
+    },
+    {
+      "file": "googie-arrow-2up",
+      "n": 2,
+      "slug": "googie-arrow"
+    },
+    {
+      "file": "googie-arrow-3up",
+      "n": 3,
+      "slug": "googie-arrow"
+    },
+    {
+      "file": "postcard-1up",
+      "n": 1,
+      "slug": "postcard"
+    },
+    {
+      "file": "postcard-2up",
+      "n": 2,
+      "slug": "postcard"
+    },
+    {
+      "file": "big-dipper-1up",
+      "n": 1,
+      "slug": "big-dipper"
+    },
+    {
+      "file": "big-dipper-2up",
+      "n": 2,
+      "slug": "big-dipper"
+    },
+    {
+      "file": "bear-paw-1up",
+      "n": 1,
+      "slug": "bear-paw"
+    },
+    {
+      "file": "bear-paw-2up",
+      "n": 2,
+      "slug": "bear-paw"
+    },
+    {
+      "file": "sign-forest-1up",
+      "n": 1,
+      "slug": "sign-forest"
+    },
+    {
+      "file": "sign-forest-2up",
+      "n": 2,
+      "slug": "sign-forest"
+    },
+    {
+      "file": "midnight-sun-1up",
+      "n": 1,
+      "slug": "midnight-sun"
+    },
+    {
+      "file": "midnight-sun-2up",
+      "n": 2,
+      "slug": "midnight-sun"
+    },
+    {
+      "file": "midnight-sun-3up",
+      "n": 3,
+      "slug": "midnight-sun"
+    },
+    {
+      "file": "midnight-sun-4up",
+      "n": 4,
+      "slug": "midnight-sun"
+    }
+  ]
+}
