@@ -335,6 +335,61 @@
       "file": "scan-signal-4up",
       "n": 4,
       "slug": "scan-signal"
+    },
+    {
+      "file": "route-shield-1up",
+      "n": 1,
+      "slug": "route-shield"
+    },
+    {
+      "file": "route-shield-2up",
+      "n": 2,
+      "slug": "route-shield"
+    },
+    {
+      "file": "caution-diamond-1up",
+      "n": 1,
+      "slug": "caution-diamond"
+    },
+    {
+      "file": "caution-diamond-2up",
+      "n": 2,
+      "slug": "caution-diamond"
+    },
+    {
+      "file": "license-plate-1up",
+      "n": 1,
+      "slug": "license-plate"
+    },
+    {
+      "file": "license-plate-3up",
+      "n": 3,
+      "slug": "license-plate"
+    },
+    {
+      "file": "googie-arrow-1up",
+      "n": 1,
+      "slug": "googie-arrow"
+    },
+    {
+      "file": "googie-arrow-2up",
+      "n": 2,
+      "slug": "googie-arrow"
+    },
+    {
+      "file": "googie-arrow-3up",
+      "n": 3,
+      "slug": "googie-arrow"
+    },
+    {
+      "file": "postcard-1up",
+      "n": 1,
+      "slug": "postcard"
+    },
+    {
+      "file": "postcard-2up",
+      "n": 2,
+      "slug": "postcard"
     }
   ]
 }

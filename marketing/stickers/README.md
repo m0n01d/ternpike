@@ -36,6 +36,24 @@ Three of the four that gained a code grew to make room — a QR under about
 0.8in stops being something a phone picks up casually, so the sticker gives
 way rather than the symbol.
 
+## The roadside family
+
+Route 66 furniture — the shapes America already reads at a glance. The
+die-cut silhouette carries the joke; the QR cashes it.
+
+| Slug | Size | Per 4×6 | What it is |
+|---|---|---|---|
+| `route-shield` | 2.2 × 2.4in | **2** | US route shield with the code where the number goes. |
+| `caution-diamond` | 2.5in diamond | **2** | "WORKS WITHOUT SIGNAL" as a road warning sign. |
+| `license-plate` | 3.6 × 1.8in | **3** | TERNPIKE as the plate number, tagline as the state slogan, QR as the registration tag. Bolt holes included. |
+| `googie-arrow` | 3.4 × 1.4in | **3** | Mid-century motel-sign arrow, bulbs and all. Stick it pointing at something — the head is empty on purpose. |
+| `postcard` | 3.4 × 2.2in | **2** | Hero line as the message, "— Dwight" signing off, QR where the stamp goes, postmark cancelling it. |
+
+Three new silhouettes in `lib/shapes.mjs` (`shield`, `diamond`, `arrowSign`),
+all parameterised by inset like the rest, so keyline and cut guide stay in
+agreement. The diamond's tips move inward by inset·√2 — offsetting a 45°
+edge shifts its vertices along the diagonal, not the axis.
+
 ## The scan family
 
 | Slug | Size | QR | Per 4×6 label | What it is |

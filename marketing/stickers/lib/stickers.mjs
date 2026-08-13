@@ -26,8 +26,10 @@
 
 import {
   KEYLINE,
+  arrowSign,
   bird,
   circle,
+  diamond,
   ellipse,
   milepost,
   mountains,
@@ -36,6 +38,7 @@ import {
   receipt,
   roundedRect,
   scanBrackets,
+  shield,
 } from './shapes.mjs'
 import { COPY } from './copy.mjs'
 import { qrCard, qrTarget } from './qr.mjs'
@@ -45,6 +48,8 @@ import { arcText, text } from './type.mjs'
 // rounding: 7pt for mono, 9pt for Playfair Bold.
 const FLOOR_UNITS = 9.9
 const SERIF_FLOOR_UNITS = 12.7
+// Playfair Italic's hairlines fail earlier still: 11pt.
+const ITALIC_FLOOR_UNITS = 15.3
 
 /**
  * Size for a sticker's smallest line, given the scale it's about to print
@@ -870,6 +875,213 @@ export const stickers = [
         x: 166,
         y: 98,
       })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ══ Roadside family ══════════════════════════════════════════════════
+  //
+  // Route 66 furniture: the shapes America already reads at a glance —
+  // route shields, caution diamonds, license plates, googie arrows,
+  // postcards. The die-cut silhouette carries the joke; the QR cashes it.
+
+  // ── 24. Route shield ─────────────────────────────────────────────────
+  {
+    family: 'road',
+    blurb: '2.2 × 2.4in. US route shield with the code where the number goes.',
+    cut: shield(220, 240),
+    h: 240,
+    qr: 'shield',
+    slug: 'route-shield',
+    title: 'Route shield',
+    w: 220,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      <path d="${cut(15)}" fill="none" stroke="${p.onLight}" stroke-width="3"/>
+      <path d="${text(f['PlayfairDisplay-Bold'], COPY.brand, {
+        anchor: 'middle',
+        size: smallest(ctx, 24, SERIF_FLOOR_UNITS),
+        x: 110,
+        y: 56,
+      })}" fill="${p.onLight}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 84, slug: 'shield', x: 68, y: 70 })}
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.06,
+        size: smallest(ctx, 10),
+        x: 110,
+        y: 178,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 25. Caution diamond ──────────────────────────────────────────────
+  {
+    family: 'road',
+    blurb: '2.5in diamond. The offline feature as a road warning sign.',
+    cut: diamond(250),
+    h: 250,
+    qr: 'caution',
+    slug: 'caution-diamond',
+    title: 'Caution diamond',
+    w: 250,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.warm}"/>
+      <path d="${cut(16)}" fill="none" stroke="${p.onLight}" stroke-width="3"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 80, slug: 'caution', x: 85, y: 52 })}
+      <path d="${text(f['DMMono-Medium'], COPY.offlineCaps, {
+        anchor: 'middle',
+        letterSpacing: 0.06,
+        size: smallest(ctx, 10),
+        x: 125,
+        y: 160,
+      })}" fill="${p.onLight}"/>
+      <path d="${text(f['DMMono-Regular'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.04,
+        size: smallest(ctx, 10),
+        x: 125,
+        y: 182,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 26. License plate ────────────────────────────────────────────────
+  //
+  // The brand name is the plate number, the tagline is the state slogan,
+  // and the registration sticker is a QR. Bolt holes included.
+  {
+    family: 'road',
+    blurb: '3.6 × 1.8in. License plate — TERNPIKE as the number, QR as the tag.',
+    cut: roundedRect(360, 180, 16),
+    h: 180,
+    qr: 'plate',
+    slug: 'license-plate',
+    title: 'License plate',
+    w: 360,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      <path d="${cut(14)}" fill="none" stroke="${p.onLight}" stroke-width="2.4"/>
+      <circle cx="38" cy="30" r="5" fill="none" stroke="${p.onLight}" stroke-width="1.8"/>
+      <circle cx="326" cy="30" r="5" fill="none" stroke="${p.onLight}" stroke-width="1.8"/>
+      <path d="${text(f['DMMono-Medium'], COPY.alaskaHighwayCaps, {
+        anchor: 'middle',
+        letterSpacing: 0.14,
+        size: smallest(ctx, 10),
+        x: 180,
+        y: 40,
+      })}" fill="${p.accent}"/>
+      <path d="${text(f['DMMono-Medium'], COPY.brand.toUpperCase(), {
+        anchor: 'middle',
+        letterSpacing: 0.05,
+        size: 34,
+        x: 138,
+        y: 112,
+      })}" fill="${p.onLight}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 80, slug: 'plate', x: 248, y: 50 })}
+      <path d="${text(f['DMMono-Medium'], COPY.taglineCaps, {
+        anchor: 'middle',
+        letterSpacing: 0.02,
+        size: smallest(ctx, 10),
+        x: 138,
+        y: 158,
+      })}" fill="${p.onLight}"/>
+    `,
+  },
+
+  // ── 27. Googie arrow ─────────────────────────────────────────────────
+  //
+  // Mid-century motel-sign arrow, bulbs and all. Stick it pointing at
+  // something — the head is empty on purpose.
+  {
+    family: 'road',
+    blurb: '3.4 × 1.4in. Motel-sign arrow with bulb dots. Point it at things.',
+    cut: arrowSign(340, 140),
+    h: 140,
+    qr: 'arrow',
+    slug: 'googie-arrow',
+    title: 'Googie arrow',
+    w: 340,
+    art: (f, cut, p, ctx) => {
+      const bulbs = [20, 120]
+        .flatMap((y) => [28, 62, 96, 130, 164, 198, 232].map((x) => [x, y]))
+        .concat([[262, 36], [262, 104], [288, 52], [288, 88], [308, 70]])
+        .map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.4" fill="${p.onDark}"/>`)
+        .join('')
+      return `
+      <path d="${cut(KEYLINE)}" fill="${p.brand}"/>
+      <path d="${cut(13)}" fill="none" stroke="${p.onDark}" stroke-width="1.6" opacity="${p.dim(0.6)}"/>
+      ${bulbs}
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 80, slug: 'arrow', x: 24, y: 30 })}
+      <path d="${text(f['PlayfairDisplay-Black'], COPY.brand, {
+        anchor: 'middle',
+        size: smallest(ctx, 22, SERIF_FLOOR_UNITS),
+        x: 176,
+        y: 66,
+      })}" fill="${p.onDark}"/>
+      <path d="${text(f['DMMono-Medium'], 'TERNPIKE.COM', {
+        anchor: 'middle',
+        letterSpacing: 0.06,
+        size: smallest(ctx, 10),
+        x: 176,
+        y: 92,
+      })}" fill="${p.onDark}"/>
+    `
+    },
+  },
+
+  // ── 28. Postcard ─────────────────────────────────────────────────────
+  //
+  // The hero headline as the message, Dwight's sign-off from the origin
+  // story, and the QR where the stamp goes — postmark cancelling it.
+  {
+    family: 'road',
+    blurb: '3.4 × 2.2in. Postcard — hero line as the message, QR as the stamp.',
+    cut: roundedRect(340, 220, 10),
+    h: 220,
+    qr: 'postcard',
+    slug: 'postcard',
+    title: 'Postcard',
+    w: 340,
+    art: (f, cut, p, ctx) => `
+      <path d="${cut(KEYLINE)}" fill="${p.light}"/>
+      <path d="${cut(13)}" fill="none" stroke="${p.onLightSoft}" stroke-width="1" opacity="${p.dim(0.7)}"/>
+      <path d="M204 20V202" stroke="${p.onLightSoft}" stroke-width="1.2" opacity="${p.dim(0.8)}"/>
+      ${COPY.heroLines
+        .map(
+          (part, i) => `<path d="${text(f['PlayfairDisplay-Italic'], part, {
+        anchor: 'middle',
+        size: smallest(ctx, 17, ITALIC_FLOOR_UNITS),
+        x: 106,
+        y: 56 + i * 27,
+      })}" fill="${p.onLight}"/>`,
+        )
+        .join('\n      ')}
+      <path d="${text(f['PlayfairDisplay-Italic'], COPY.attribution, {
+        anchor: 'end',
+        size: smallest(ctx, 16, ITALIC_FLOOR_UNITS),
+        x: 188,
+        y: 160,
+      })}" fill="${p.onLight}"/>
+      <path d="${text(f['DMMono-Regular'], 'ternpike.com', {
+        letterSpacing: 0.1,
+        size: smallest(ctx, 10),
+        x: 20,
+        y: 200,
+      })}" fill="${p.onLight}"/>
+      <rect x="224" y="12" width="96" height="96" fill="none" stroke="${p.onLightSoft}"
+            stroke-width="1.2" stroke-dasharray="4 3" opacity="${p.dim(0.8)}"/>
+      ${qrCard({ dark: p.cardInk, light: p.card, radius: 2, size: 84, slug: 'postcard', x: 230, y: 18 })}
+      <circle cx="238" cy="132" r="13" fill="none" stroke="${p.onLightSoft}" stroke-width="1.4" opacity="${p.dim(0.85)}"/>
+      <g fill="none" stroke="${p.onLightSoft}" stroke-width="1.4" opacity="${p.dim(0.85)}">
+        <path d="M258 126q8 -5 16 0t16 0t16 0"/>
+        <path d="M258 133q8 -5 16 0t16 0t16 0"/>
+        <path d="M258 140q8 -5 16 0t16 0t16 0"/>
+      </g>
+      <g stroke="${p.onLightSoft}" stroke-width="1.2" opacity="${p.dim(0.8)}">
+        <path d="M214 162H322"/>
+        <path d="M214 180H322"/>
+        <path d="M214 198H322"/>
+      </g>
     `,
   },
 ]

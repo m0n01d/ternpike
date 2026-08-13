@@ -153,6 +153,9 @@ export const COPY = {
     'is left?',
   ]),
 
+  /** The origin story's sign-off. */
+  attribution: line('origin.attribution'),
+
   /** Lifted from step three: "…splurge on a cabin or sleep in the truck." */
   cabin: fragment('howItWorks.steps.2.body', 'splurge on a cabin'),
   truck: fragment('howItWorks.steps.2.body', 'or sleep in the truck'),

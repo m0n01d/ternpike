@@ -161,3 +161,61 @@ export function pin({ cx, cy, fill, hole, r }) {
     <circle cx="${r2(cx)}" cy="${r2(headY)}" r="${r2(r * 0.38)}" fill="${hole}"/>
   </g>`
 }
+
+/**
+ * US-route-style shield: flat top with rounded shoulders, sides tucking to
+ * a soft point at the bottom. The controls all ride the inset-shifted box,
+ * so the keyline tracks the silhouette closely enough for a cutter.
+ */
+export const shield = (w, h) => (inset) => {
+  const l = inset
+  const r = w - inset
+  const t = inset
+  const b = h - inset
+  const cx = w / 2
+  const cr = Math.max(0, 16 - inset)
+  const waist = t + (b - t) * 0.45
+  const bulge = waist + (b - waist) * 0.55
+  return `M${r2(l + cr)} ${r2(t)}H${r2(r - cr)}Q${r2(r)} ${r2(t)} ${r2(r)} ${r2(t + cr)}V${r2(waist)}C${r2(r)} ${r2(bulge)} ${r2(cx + (r - cx) * 0.45)} ${r2(b - 18)} ${r2(cx + 7)} ${r2(b - 5)}Q${r2(cx)} ${r2(b)} ${r2(cx - 7)} ${r2(b - 5)}C${r2(cx - (cx - l) * 0.45)} ${r2(b - 18)} ${r2(l)} ${r2(bulge)} ${r2(l)} ${r2(waist)}V${r2(t + cr)}Q${r2(l)} ${r2(t)} ${r2(l + cr)} ${r2(t)}Z`
+}
+
+/**
+ * Warning-sign diamond: a 45° square with softened tips. Offsetting a 45°
+ * edge inward by `inset` moves each vertex inward by inset·√2 along its
+ * axis, which is why the tips use that factor rather than the raw inset.
+ */
+export const diamond = (size) => (inset) => {
+  const c = size / 2
+  const eff = c - inset * Math.SQRT2
+  const k = Math.max(0, 9 - inset) * Math.SQRT1_2
+  return (
+    `M${r2(c - k)} ${r2(c - eff + k)}` +
+    `Q${r2(c)} ${r2(c - eff)} ${r2(c + k)} ${r2(c - eff + k)}` +
+    `L${r2(c + eff - k)} ${r2(c - k)}` +
+    `Q${r2(c + eff)} ${r2(c)} ${r2(c + eff - k)} ${r2(c + k)}` +
+    `L${r2(c + k)} ${r2(c + eff - k)}` +
+    `Q${r2(c)} ${r2(c + eff)} ${r2(c - k)} ${r2(c + eff - k)}` +
+    `L${r2(c - eff + k)} ${r2(c + k)}` +
+    `Q${r2(c - eff)} ${r2(c)} ${r2(c - eff + k)} ${r2(c - k)}` +
+    `Z`
+  )
+}
+
+/**
+ * Googie arrow pointing right: rounded-corner body, pentagon head, soft
+ * tip. The head slope's inward offset is approximated as 1.65× the inset
+ * (1/sin of the slope angle for these proportions) — close enough for a
+ * 0.07in keyline, nowhere near close enough for machining.
+ */
+export const arrowSign = (w, h, head = 90) => (inset) => {
+  const l = inset
+  const t = inset
+  const b = h - inset
+  const r = w - inset * 1.65
+  const cy = h / 2
+  const nx = w - head
+  const cr = Math.max(0, 12 - inset)
+  const tipR = Math.max(0, 8 - inset)
+  return `M${r2(l + cr)} ${r2(t)}H${r2(nx)}L${r2(r - tipR * 1.6)} ${r2(cy - tipR)}Q${r2(r)} ${r2(cy)} ${r2(r - tipR * 1.6)} ${r2(cy + tipR)}L${r2(nx)} ${r2(b)}H${r2(l + cr)}Q${r2(l)} ${r2(b)} ${r2(l)} ${r2(b - cr)}V${r2(t + cr)}Q${r2(l)} ${r2(t)} ${r2(l + cr)} ${r2(t)}Z`
+}
+

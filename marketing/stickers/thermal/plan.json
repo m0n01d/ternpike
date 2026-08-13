@@ -305,6 +305,71 @@
       "shortfall": null,
       "originX": 70,
       "originY": 42
+    },
+    {
+      "slug": "route-shield",
+      "cols": 1,
+      "count": 2,
+      "h": 240,
+      "rotated": false,
+      "rows": 2,
+      "scale": 1,
+      "w": 220,
+      "shortfall": null,
+      "originX": 90,
+      "originY": 54
+    },
+    {
+      "slug": "caution-diamond",
+      "cols": 1,
+      "count": 2,
+      "h": 250,
+      "rotated": false,
+      "rows": 2,
+      "scale": 1,
+      "w": 250,
+      "shortfall": null,
+      "originX": 75,
+      "originY": 44
+    },
+    {
+      "slug": "license-plate",
+      "cols": 1,
+      "count": 3,
+      "h": 180,
+      "rotated": false,
+      "rows": 3,
+      "scale": 1,
+      "w": 360,
+      "shortfall": null,
+      "originX": 20,
+      "originY": 18
+    },
+    {
+      "slug": "googie-arrow",
+      "cols": 1,
+      "count": 3,
+      "h": 140,
+      "rotated": false,
+      "rows": 3,
+      "scale": 1,
+      "w": 340,
+      "shortfall": null,
+      "originX": 30,
+      "originY": 78
+    },
+    {
+      "slug": "postcard",
+      "cols": 1,
+      "count": 2,
+      "h": 220,
+      "rotated": false,
+      "rows": 2,
+      "scale": 1,
+      "w": 340,
+      "shortfall": null,
+      "originX": 30,
+      "originY": 74
     }
   ]
 }
