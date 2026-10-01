@@ -6,6 +6,12 @@ Local-first trip expense tracker — scan receipts, log expenses, see totals per
 
 The landing page at [ternpike.com](https://ternpike.com).
 
+<img src="docs/screenshots/ternpike-app-ledger.png" width="240" alt="Ternpike ledger: running total for the Alaska Highway Adventure trip, with expenses grouped by day">
+<img src="docs/screenshots/ternpike-app-add-expense.png" width="240" alt="Ternpike add-expense form: amount, category buttons, date and payment method">
+<img src="docs/screenshots/ternpike-app-stats.png" width="240" alt="Ternpike stats: total spent, daily burn, average per entry, top categories">
+
+The app on seeded mock data: ledger, add expense and stats.
+
 ## Stack
 
 - Elm 0.19.1 — `src/Main.elm` plus `src/Pages/`, `src/UI/`, `src/Data/`, `src/Types.elm`, `src/Helpers.elm`
