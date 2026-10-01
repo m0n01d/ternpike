@@ -2,6 +2,10 @@
 
 Local-first trip expense tracker — scan receipts, log expenses, see totals per trip.
 
+<img src="docs/screenshots/ternpike-landing-hero.png" width="600" alt="Ternpike landing page: Every dollar, from Orlando to Juneau, over a sagebrush ridge with a camper van">
+
+The landing page at [ternpike.com](https://ternpike.com).
+
 ## Stack
 
 - Elm 0.19.1 — `src/Main.elm` plus `src/Pages/`, `src/UI/`, `src/Data/`, `src/Types.elm`, `src/Helpers.elm`
