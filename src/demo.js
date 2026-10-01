@@ -1,7 +1,9 @@
 // Demo runtime for /demo — replaces attachPouch.
 //
-// Subscribes to pouchOut and answers the two reads Elm makes on boot
-// (GetAllTrips, GetTripExpenses) from the in-memory seed in demo-data.js.
+// Subscribes to pouchOut and answers the reads Elm makes (GetAllTrips,
+// GetAllTripExpenses, GetTripExpenses) from the in-memory seed in
+// demo-data.js. Every read that marks a trip as loading must get a
+// TripExpensesFetched reply, or that trip stays on "LOADING…" forever.
 // All writes (PutDoc, ChangeOptions, sync, etc.) are silently dropped:
 // the demo is read-only. The first SyncState push triggers Elm's
 // "first-settle" handler, which fires GetAllTrips.
@@ -9,6 +11,16 @@
 import { demoSeed } from './demo-data.js'
 
 export function attachDemo(app) {
+  const sendTripExpenses = (tripId) => {
+    app.ports.pouchIn.send({
+      tag: 'TripExpensesFetched',
+      tripId,
+      expenses: demoSeed.expensesByTrip[tripId] || {},
+      amendments: {},
+      voids: {},
+    })
+  }
+
   app.ports.pouchOut.subscribe((msg) => {
     switch (msg && msg.tag) {
       case 'GetAllTrips': {
@@ -16,14 +28,16 @@ export function attachDemo(app) {
         break
       }
       case 'GetTripExpenses': {
-        const expenses = demoSeed.expensesByTrip[msg.tripId] || {}
-        app.ports.pouchIn.send({
-          tag: 'TripExpensesFetched',
-          tripId: msg.tripId,
-          expenses,
-          amendments: {},
-          voids: {},
-        })
+        sendTripExpenses(msg.tripId)
+        break
+      }
+      case 'GetAllTripExpenses': {
+        // Bulk startup load (#445). Mirrors pouch.js: one reply per
+        // requested trip, empty bundle included, so Elm's loadingTrips
+        // set drains for every trip.
+        for (const req of msg.requests || []) {
+          sendTripExpenses(req.tripId)
+        }
         break
       }
       default:

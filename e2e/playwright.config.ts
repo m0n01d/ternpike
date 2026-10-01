@@ -4,9 +4,9 @@ const isCI = !!process.env.CI
 
 export default defineConfig({
   testDir: './specs',
-  // verify.spec.ts runs in the dedicated backend-free e2e/verify.config.ts — keep
-  // it out of the heavy full-stack harness so the two don't overlap.
-  testIgnore: '**/verify.spec.ts',
+  // verify.spec.ts and demo.spec.ts run in the backend-free e2e/verify.config.ts — keep
+  // them out of the heavy full-stack harness so the two don't overlap.
+  testIgnore: ['**/verify.spec.ts', '**/demo.spec.ts'],
   forbidOnly: isCI,
   fullyParallel: false,
   globalSetup: require.resolve('./global-setup.ts'),

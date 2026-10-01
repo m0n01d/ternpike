@@ -14,7 +14,7 @@ const repoRoot = path.resolve(__dirname, '..')
 // skips attachPouch for them, so a plain `vite preview` of dist/ is all we need.
 export default defineConfig({
   testDir: './specs',
-  testMatch: '**/verify.spec.ts',
+  testMatch: ['**/verify.spec.ts', '**/demo.spec.ts'],
   forbidOnly: isCI,
   fullyParallel: true,
   outputDir: path.join(repoRoot, 'e2e/.results-verify'),
